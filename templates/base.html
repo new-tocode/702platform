@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}竞赛社团平台{% endblock %}</title>
+    <style>
+        body { font-family: sans-serif; max-width: 960px; margin: 2rem auto; padding: 0 1rem; line-height: 1.6; }
+        nav { display: flex; gap: 1rem; align-items: center; border-bottom: 1px solid #ddd; padding-bottom: 1rem; margin-bottom: 2rem; }
+        nav form { margin-left: auto; }
+        .card { border: 1px solid #ddd; border-radius: .5rem; padding: 1.5rem; margin: 1rem 0; }
+        .messages { padding: 0; list-style: none; }
+        .messages li { background: #eef8ee; padding: .75rem; margin: .5rem 0; }
+        .errorlist { color: #a00; }
+        label { display: block; margin-top: 1rem; font-weight: 600; }
+        input { width: 100%; max-width: 28rem; padding: .5rem; box-sizing: border-box; }
+        button { margin-top: 1rem; padding: .5rem 1rem; cursor: pointer; }
+        .muted { color: #666; }
+        .media-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
+        figure { margin: 0; }
+        figure img, figure video { display: block; width: 100%; max-height: 480px; object-fit: contain; background: #f5f5f5; }
+        figcaption { color: #666; margin-top: .35rem; }
+    </style>
+</head>
+<body>
+    <nav>
+        <a href="{% url 'accounts:home' %}">首页</a>
+        <a href="{% url 'content:about' %}">社团简介</a>
+        <a href="{% url 'content:awards' %}">历年获奖</a>
+        <a href="{% url 'content:showcase' %}">成员风采</a>
+        <a href="{% url 'notices:public_list' %}">公开通知</a>
+        {% if user.is_authenticated %}
+            <a href="{% url 'accounts:member_home' %}">成员中心</a>
+            <a href="{% url 'member_notices:internal_list' %}">内部通知</a>
+            <a href="{% url 'accounts:profile' %}">个人信息</a>
+            <form method="post" action="{% url 'accounts:logout' %}">
+                {% csrf_token %}
+                <button type="submit">退出</button>
+            </form>
+        {% else %}
+            <a href="{% url 'accounts:login' %}">成员登录</a>
+        {% endif %}
+    </nav>
+
+    {% if messages %}
+        <ul class="messages">
+            {% for message in messages %}
+                <li class="{{ message.tags }}">{{ message }}</li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+
+    {% block content %}{% endblock %}
+</body>
+</html>

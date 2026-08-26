@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block title %}成员中心 - 竞赛社团平台{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h1>成员中心</h1>
+    <p>你好，{{ user.profile.full_name|default:user.username }}。</p>
+    <p>阶段 1 已提供账号登录、强制改密和个人信息维护；其他业务入口将在后续阶段接入。</p>
+    <ul>
+        <li><a href="{% url 'member_notices:internal_list' %}">查看内部通知</a></li>
+        <li><a href="{% url 'notices:public_list' %}">查看公开通知</a></li>
+        <li><a href="{% url 'accounts:profile' %}">维护个人信息</a></li>
+        <li><a href="{% url 'accounts:password_change' %}">修改密码</a></li>
+    </ul>
+</div>
+{% endblock %}

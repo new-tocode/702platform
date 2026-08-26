@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block title %}首页 - 竞赛社团平台{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h1>竞赛社团管理平台</h1>
+    <p>公开门户和成员管理功能正在分阶段建设。</p>
+    <h2>最新公开通知</h2>
+    {% if latest_public_notices %}
+        <ul>
+            {% for notice in latest_public_notices %}
+                <li>
+                    {% if notice.is_pinned %}<strong>[置顶]</strong> {% endif %}
+                    <a href="{% url 'notices:public_detail' notice.pk %}">{{ notice.title }}</a>
+                    <span class="muted">{{ notice.published_at|date:"Y-m-d H:i" }}</span>
+                </li>
+            {% endfor %}
+        </ul>
+        <p><a href="{% url 'notices:public_list' %}">查看全部公开通知</a></p>
+    {% else %}
+        <p class="muted">暂时没有公开通知。</p>
+    {% endif %}
+    {% if not user.is_authenticated %}
+        <p><a href="{% url 'accounts:login' %}">成员登录</a>：账号由管理员统一发放，不开放公开注册。</p>
+    {% else %}
+        <p><a href="{% url 'accounts:member_home' %}">进入成员中心</a>。</p>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% load rendering %}
+
+{% block title %}成员风采 - 竞赛社团平台{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h1>成员风采</h1>
+    {% if showcases %}
+        <div class="media-grid">
+            {% for showcase in showcases %}
+                <article class="card">
+                    {% if showcase.photo %}
+                        {% if showcase.photo.kind == "image" %}
+                            <img src="{{ showcase.photo.file.url }}" alt="{{ showcase.photo.caption }}" style="max-width:100%;">
+                        {% elif showcase.photo.kind == "video" %}
+                            <video controls preload="metadata" style="max-width:100%;">
+                                <source src="{{ showcase.photo.file.url }}">
+                                您的浏览器不支持视频播放。
+                            </video>
+                        {% endif %}
+                    {% endif %}
+                    <h2>{{ showcase.member.profile.full_name|default:showcase.member.username }}</h2>
+                    {% if showcase.intro %}<div>{{ showcase.intro|render_markdown }}</div>{% endif %}
+                </article>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="muted">暂时没有成员风采内容。</p>
+    {% endif %}
+</div>
+{% endblock %}

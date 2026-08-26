@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Local environment
+.venv/
+.env
+
+# Django runtime
+*.sqlite3
+staticfiles/
+mediafiles/uploads/
+logs/*.log
+
+# Editors
+.vscode/
+.idea/
+
+# Archive supplied separately
+社团评审系统_发布版.zip

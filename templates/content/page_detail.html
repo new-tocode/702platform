@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% load rendering %}
+
+{% block title %}{{ page.title }} - 竞赛社团平台{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h1>{{ page.title }}</h1>
+    <div>{{ page.content|render_markdown }}</div>
+    {% include "includes/media.html" with media_files=page.attachments.all %}
+</div>
+{% endblock %}

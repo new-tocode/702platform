@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% load rendering %}
+
+{% block title %}历年获奖 - 竞赛社团平台{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h1>历年获奖</h1>
+    {% if awards %}
+        {% for award in awards %}
+            <article class="card">
+                <h2>{{ award.year }} · {{ award.title }}</h2>
+                <p class="muted">赛事：{{ award.competition }}{% if award.level %} · 级别：{{ award.level }}{% endif %}</p>
+                {% if award.winners %}<p>获奖人/团队：{{ award.winners|render_markdown }}</p>{% endif %}
+                {% include "includes/media.html" with media_files=award.attachments.all %}
+            </article>
+        {% endfor %}
+    {% else %}
+        <p class="muted">暂时没有获奖记录。</p>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,20 @@
+{% if media_files %}
+    <div class="media-grid">
+        {% for media in media_files %}
+            {% if media.kind == "image" %}
+                <figure>
+                    <img src="{{ media.file.url }}" alt="{{ media.caption }}" style="max-width:100%;">
+                    {% if media.caption %}<figcaption>{{ media.caption }}</figcaption>{% endif %}
+                </figure>
+            {% elif media.kind == "video" %}
+                <figure>
+                    <video controls preload="metadata" style="max-width:100%;">
+                        <source src="{{ media.file.url }}">
+                        您的浏览器不支持视频播放。
+                    </video>
+                    {% if media.caption %}<figcaption>{{ media.caption }}</figcaption>{% endif %}
+                </figure>
+            {% endif %}
+        {% endfor %}
+    </div>
+{% endif %}
