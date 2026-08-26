@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block title %}成员登录 - 竞赛社团平台{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h1>成员登录</h1>
+    <p class="muted">账号由管理员统一发放，不开放自行注册。</p>
+    <form method="post">
+        {% csrf_token %}
+        {{ form.non_field_errors }}
+        {% for field in form %}
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {{ field.errors }}
+        {% endfor %}
+        {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+        <button type="submit">登录</button>
+    </form>
+</div>
+{% endblock %}

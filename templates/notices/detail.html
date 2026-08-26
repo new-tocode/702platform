@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% load rendering %}
+
+{% block title %}{{ notice.title }} - 竞赛社团平台{% endblock %}
+
+{% block content %}
+<div class="card">
+    <p><a href="{% url back_url_name %}">{{ back_label }}</a></p>
+    {% if notice.is_pinned %}<p><strong>置顶通知</strong></p>{% endif %}
+    <h1>{{ notice.title }}</h1>
+    <p class="muted">
+        发布时间：{{ notice.published_at|date:"Y-m-d H:i" }}
+        · 发布人：{{ notice.published_by.profile.full_name|default:notice.published_by.username }}
+    </p>
+    <div>{{ notice.content|render_markdown }}</div>
+    {% include "includes/media.html" with media_files=notice.attachments.all %}
+</div>
+{% endblock %}

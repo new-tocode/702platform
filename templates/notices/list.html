@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_title }} - 竞赛社团平台{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h1>{{ page_title }}</h1>
+    {% if notices %}
+        <ul>
+            {% for notice in notices %}
+                <li>
+                    {% if notice.is_pinned %}<strong>[置顶]</strong> {% endif %}
+                    <a href="{% url detail_namespace|add:':'|add:detail_name notice.pk %}">{{ notice.title }}</a>
+                    <span class="muted">{{ notice.published_at|date:"Y-m-d H:i" }}</span>
+                </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p class="muted">{{ empty_message }}</p>
+    {% endif %}
+</div>
+{% endblock %}
