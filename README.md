@@ -14,12 +14,15 @@ Django 单体应用，采用服务端渲染，当前已实现账号、通知、�
 - 图片/视频媒体库（类型、大小、签名校验）
 - 项目组管理和组长竞赛报名（权限、成员归属、截止时间、重复报名控制）
 - 设备台账和借用登记（库存事务、归还和记录权限）
+- 操作入口注册表（成员中心与顶栏由注册表动态生成，按权限过滤）
+- 数据库审计日志（关键写操作留痕，后台只读查询）
 - 详细请求与认证日志：`logs/django.log`
 - 阶段一验收标准：`docs/acceptance-phase1.md`
 - 阶段二验收标准：`docs/acceptance-phase2.md`
 - 阶段三验收标准：`docs/acceptance-phase3.md`
 - 阶段四验收标准：`docs/acceptance-phase4.md`
 - 阶段五验收标准：`docs/acceptance-phase5.md`
+- 阶段六验收标准：`docs/acceptance-phase6.md`
 - 通知用户组验收标准：`docs/acceptance-notice-groups.md`
 - 逐命令运行与配置说明：`docs/project-guide.md`
 - 总体架构：`docs/architecture.md`
@@ -101,6 +104,19 @@ python3 -m venv .venv
 ```
 
 阶段五详细标准见 `docs/acceptance-phase5.md`，覆盖设备库存、借用、归还、成员记录隔离、管理员代归还和事务一致性。
+
+## 阶段六验收
+
+```bash
+.venv/bin/python -m compileall -q config accounts notices content media projects competitions equipment core manage.py
+.venv/bin/python manage.py check
+.venv/bin/python manage.py makemigrations --check --dry-run
+.venv/bin/python manage.py migrate --check
+.venv/bin/python manage.py test core --verbosity 2
+.venv/bin/python manage.py test --verbosity 1
+```
+
+阶段六详细标准见 `docs/acceptance-phase6.md`，覆盖操作入口注册表、权限过滤、Admin 标题定制、审计日志持久化和只读审计后台。
 
 ## 日志
 

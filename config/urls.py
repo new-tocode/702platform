@@ -1,3 +1,4 @@
+from config import admin as platform_admin  # noqa: F401
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin

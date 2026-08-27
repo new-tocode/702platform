@@ -8,6 +8,8 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
+from core.models import AuditLog
+
 from .models import Notice
 
 
@@ -204,6 +206,9 @@ class NoticeAdminAcceptanceTests(TestCase):
         self.assertEqual(notice.scope, Notice.INTERNAL)
         self.assertEqual(list(notice.visible_groups.all()), [self.allowed_group])
         self.assertTrue(notice.is_pinned)
+        audit = AuditLog.objects.get(action="notices.create")
+        self.assertEqual(audit.user, self.admin)
+        self.assertEqual(audit.target_id, str(notice.pk))
 
     def test_admin_cannot_publish_internal_notice_without_visible_group(self):
         response = self.client.post(

@@ -2,7 +2,7 @@
 
 本文档说明当前 Django 项目的目录、依赖、启动命令、测试命令、环境变量和管理员操作。命令默认在项目根目录 `/home/alen/work/702platform` 执行。
 
-> 当前实现对应开发阶段 5：项目骨架、账号登录、管理员发放账号、强制首次改密、个人资料维护、公开/内部通知、公开展示内容、媒体库、项目组、竞赛报名、设备台账与借用登记。设备借用通过事务维护库存，成员只可处理自己的记录，管理员可查看和代归还。站内消息将在后续阶段实现。
+> 当前实现对应开发阶段 6：项目骨架、账号登录、管理员发放账号、强制首次改密、个人资料维护、公开/内部通知、公开展示内容、媒体库、项目组、竞赛报名、设备台账与借用登记，以及操作入口注册表、管理后台体验和数据库审计日志。成员中心与顶部导航由注册表动态生成入口，关键写操作写入 `AuditLog`，后台只读查看。站内消息可作为后续扩展。
 
 ---
 
@@ -16,6 +16,7 @@
 ├── config/                           # Django 项目配置包
 │   ├── settings.py                   # 全局配置和环境变量读取
 │   ├── urls.py                       # 根路由
+│   ├── admin.py                      # Admin 站点标题定制
 │   ├── middleware.py                 # 请求日志、强制改密
 │   ├── logging.py                    # 日志格式化器
 │   ├── asgi.py                       # ASGI 部署入口
@@ -56,6 +57,15 @@
 │   ├── views.py                      # 设备、借用记录、归还页面
 │   ├── admin.py                      # 后台设备维护和代归还
 │   └── tests.py                      # 阶段五验收测试
+├── core/                             # 平台核心应用
+│   ├── registry.py                   # 操作入口注册表
+│   ├── models.py                     # AuditLog 审计日志
+│   ├── audit.py                      # 统一审计记录函数
+│   ├── context_processors.py         # 向模板注入成员操作入口
+│   ├── admin.py                      # 只读审计后台
+│   ├── apps.py                       # AppConfig、审计入口注册
+│   ├── migrations/                   # 数据库迁移
+│   └── tests.py                      # 阶段六验收测试
 ├── templates/                        # 服务端渲染模板
 ├── static/                           # 开发静态文件目录
 ├── mediafiles/                       # 上传媒体存储目录（MEDIA_ROOT）
@@ -67,6 +77,7 @@
 │   ├── acceptance-phase3.md          # 阶段三验收标准
 │   ├── acceptance-phase4.md          # 阶段四验收标准
 │   ├── acceptance-phase5.md          # 阶段五验收标准
+│   ├── acceptance-phase6.md          # 阶段六验收标准
 │   └── project-guide.md             # 本说明文档
 └── db.sqlite3                        # 本地开发数据库，首次 migrate 后生成
 ```
@@ -509,7 +520,16 @@ Markdown 正文会先转换为 HTML，再用 Bleach 白名单过滤；脚本和�
 - 借用、归还都经过数据库事务和行锁；不可借时不创建记录，重复归还不重复回补库存。
 - 管理员在 `/admin/equipment/equipment/` 维护设备；借用记录只能通过归还操作改变状态，不能手工新增或删除。
 
-### 7.6 用户认证固定配置
+阶段六平台入口与审计：
+
+- 成员中心和改进顶栏的“操作入口”由 `core.registry` 驱动，不再需要手工同步多个模板。
+- 各业务 app 在 `AppConfig.ready()` 注册入口；入口附带排序、Django 权限、仅管理员或自定义业务可见条件。
+- 未登录、尚未完成首次改密或未通过权限条件的用户不会看到对应入口；后端接口权限仍然必须独立校验。
+- 关键写操作（创建/修改账号、发布通知、维护内容/媒体/项目组/竞赛/设备、竞赛报名、设备借还与成员改密/改资料）会写入 `AuditLog`。
+- 审计记录可在 `/admin/core/auditlog/` 只读查询，不允许新增、修改或删除；详情是 JSON，且不记录密码或敏感请求数据。
+- Admin 站点标题已定制为“竞赛社团平台管理后台”。
+
+### 7.7 用户认证固定配置
 
 以下不是环境变量，而是当前代码的架构约束：
 
@@ -532,6 +552,31 @@ Markdown 正文会先转换为 HTML，再用 Bleach 白名单过滤；脚本和�
 ```
 
 阶段四详细标准见 `docs/acceptance-phase4.md`，覆盖项目组、组长权限、竞赛发布、报名成员校验、截止时间和重复报名控制。
+
+## 阶段五验收
+
+```bash
+.venv/bin/python manage.py check
+.venv/bin/python manage.py makemigrations --check --dry-run
+.venv/bin/python manage.py migrate
+.venv/bin/python manage.py test equipment --verbosity 2
+.venv/bin/python manage.py test --verbosity 1
+```
+
+阶段五详细标准见 `docs/acceptance-phase5.md`，覆盖设备台账、借用、归还、库存一致性、成员记录隔离、管理员代归还和事务保护。
+
+## 阶段六验收
+
+```bash
+.venv/bin/python -m compileall -q config accounts notices content media projects competitions equipment core manage.py
+.venv/bin/python manage.py check
+.venv/bin/python manage.py makemigrations --check --dry-run
+.venv/bin/python manage.py migrate --check
+.venv/bin/python manage.py test core --verbosity 2
+.venv/bin/python manage.py test --verbosity 1
+```
+
+阶段六详细标准见 `docs/acceptance-phase6.md`，覆盖操作入口注册表、权限过滤、Admin 标题定制、审计日志持久化、只读审计后台和全量回归。
 
 ## 8. 日志与调试
 

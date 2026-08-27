@@ -4,6 +4,8 @@ import logging
 
 from django.contrib import admin
 
+from core.audit import record_audit
+
 from .forms import NoticeAdminForm
 from .models import Notice
 
@@ -63,6 +65,13 @@ class NoticeAdmin(admin.ModelAdmin):
         if not change:
             obj.published_by = request.user
         super().save_model(request, obj, form, change)
+        record_audit(
+            action="notices.create" if not change else "notices.update",
+            user=request.user,
+            target=obj,
+            detail={"scope": obj.scope, "is_pinned": obj.is_pinned},
+            request=request,
+        )
         logger.info(
             "admin.notice.save operator=%s notice_id=%s title=%s scope=%s pinned=%s created=%s",
             request.user.get_username(),

@@ -7,6 +7,8 @@ from django.core.exceptions import PermissionDenied
 from django.http import HttpResponseRedirect
 from django.urls import path, reverse
 
+from core.audit import record_audit
+
 from .forms import EquipmentAdminForm
 from .models import Equipment, EquipmentBorrow
 from .services import BorrowAlreadyReturned, return_borrow
@@ -33,6 +35,17 @@ class EquipmentAdmin(admin.ModelAdmin):
 
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
+        record_audit(
+            action="equipment.create" if not change else "equipment.update",
+            user=request.user,
+            target=obj,
+            detail={
+                "total_count": obj.total_count,
+                "available_count": obj.available_count,
+                "is_active": obj.is_active,
+            },
+            request=request,
+        )
         logger.info(
             "admin.equipment.save operator=%s equipment_id=%s name=%s total=%s available=%s active=%s created=%s",
             request.user.get_username(),
@@ -96,11 +109,18 @@ class EquipmentBorrowAdmin(admin.ModelAdmin):
         already_returned_count = 0
         for borrow_id in queryset.values_list("pk", flat=True):
             try:
-                return_borrow(borrow_id=borrow_id, actor=request.user)
+                returned_borrow = return_borrow(borrow_id=borrow_id, actor=request.user)
             except BorrowAlreadyReturned:
                 already_returned_count += 1
             else:
                 returned_count += 1
+                record_audit(
+                    action="equipment.return.admin",
+                    user=request.user,
+                    target=returned_borrow,
+                    detail={"equipment_id": returned_borrow.equipment_id},
+                    request=request,
+                )
         if returned_count:
             self.message_user(
                 request,
@@ -129,10 +149,17 @@ class EquipmentBorrowAdmin(admin.ModelAdmin):
         if request.method != "POST":
             raise PermissionDenied
         try:
-            return_borrow(borrow_id=object_id, actor=request.user)
+            returned_borrow = return_borrow(borrow_id=object_id, actor=request.user)
         except BorrowAlreadyReturned:
             self.message_user(request, "该记录已经归还。", messages.WARNING)
         else:
+            record_audit(
+                action="equipment.return.admin",
+                user=request.user,
+                target=returned_borrow,
+                detail={"equipment_id": returned_borrow.equipment_id},
+                request=request,
+            )
             self.message_user(request, "设备已归还。", messages.SUCCESS)
         return HttpResponseRedirect(
             reverse("admin:equipment_equipmentborrow_changelist"),

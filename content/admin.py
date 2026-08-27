@@ -4,6 +4,8 @@ import logging
 
 from django.contrib import admin
 
+from core.audit import record_audit
+
 from .models import Award, ContentPage, Showcase
 
 
@@ -22,6 +24,13 @@ class ContentPageAdmin(admin.ModelAdmin):
 
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
+        record_audit(
+            action="content.page.create" if not change else "content.page.update",
+            user=request.user,
+            target=obj,
+            detail={"slug": obj.slug, "is_published": obj.is_published},
+            request=request,
+        )
         logger.info(
             "admin.content_page.save operator=%s page_id=%s slug=%s published=%s created=%s",
             request.user.get_username(),
@@ -44,6 +53,13 @@ class AwardAdmin(admin.ModelAdmin):
 
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
+        record_audit(
+            action="content.award.create" if not change else "content.award.update",
+            user=request.user,
+            target=obj,
+            detail={"year": obj.year},
+            request=request,
+        )
         logger.info(
             "admin.award.save operator=%s award_id=%s title=%s year=%s created=%s",
             request.user.get_username(),
@@ -65,6 +81,13 @@ class ShowcaseAdmin(admin.ModelAdmin):
 
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
+        record_audit(
+            action="content.showcase.create" if not change else "content.showcase.update",
+            user=request.user,
+            target=obj,
+            detail={"member_id": obj.member_id, "is_active": obj.is_active},
+            request=request,
+        )
         logger.info(
             "admin.showcase.save operator=%s showcase_id=%s member_id=%s active=%s created=%s",
             request.user.get_username(),
