@@ -133,13 +133,23 @@ def home(request):
 
 @login_required
 def member_home(request):
+    from projects.models import ProjectGroup
+
+    is_competition_manager = request.user.is_staff or ProjectGroup.objects.filter(
+        leader=request.user,
+    ).exists()
     logger.debug(
-        "member.home.view username=%s user_id=%s",
+        "member.home.view username=%s user_id=%s competition_manager=%s",
         request.user.get_username(),
         request.user.pk,
+        is_competition_manager,
         extra={"request_id": getattr(request, "request_id", "-")},
     )
-    return render(request, "accounts/member_home.html")
+    return render(
+        request,
+        "accounts/member_home.html",
+        {"is_competition_manager": is_competition_manager},
+    )
 
 
 @login_required

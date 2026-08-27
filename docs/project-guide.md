@@ -2,7 +2,7 @@
 
 本文档说明当前 Django 项目的目录、依赖、启动命令、测试命令、环境变量和管理员操作。命令默认在项目根目录 `/home/alen/work/702platform` 执行。
 
-> 当前实现对应开发阶段 3：项目骨架、账号登录、管理员发放账号、强制首次改密、个人资料维护、公开/内部通知，以及公开展示内容和媒体库。展示模块支持社团简介、历年获奖、成员风采，媒体库支持图片/视频上传校验。项目组、竞赛、设备和站内消息将在后续阶段实现。
+> 当前实现对应开发阶段 5：项目骨架、账号登录、管理员发放账号、强制首次改密、个人资料维护、公开/内部通知、公开展示内容、媒体库、项目组、竞赛报名、设备台账与借用登记。设备借用通过事务维护库存，成员只可处理自己的记录，管理员可查看和代归还。站内消息将在后续阶段实现。
 
 ---
 
@@ -49,6 +49,13 @@
 │   ├── validators.py                 # 类型、大小、签名校验
 │   ├── admin.py                      # 管理员上传配置
 │   └── tests.py                      # 媒体验证测试
+├── equipment/                        # 设备台账和借用应用
+│   ├── models.py                     # Equipment、EquipmentBorrow
+│   ├── services.py                   # 事务化借用/归还和库存更新
+│   ├── forms.py                      # 借用和设备 Admin 表单
+│   ├── views.py                      # 设备、借用记录、归还页面
+│   ├── admin.py                      # 后台设备维护和代归还
+│   └── tests.py                      # 阶段五验收测试
 ├── templates/                        # 服务端渲染模板
 ├── static/                           # 开发静态文件目录
 ├── mediafiles/                       # 上传媒体存储目录（MEDIA_ROOT）
@@ -58,6 +65,8 @@
 │   ├── acceptance-phase1.md          # 阶段一验收标准
 │   ├── acceptance-phase2.md          # 阶段二验收标准
 │   ├── acceptance-phase3.md          # 阶段三验收标准
+│   ├── acceptance-phase4.md          # 阶段四验收标准
+│   ├── acceptance-phase5.md          # 阶段五验收标准
 │   └── project-guide.md             # 本说明文档
 └── db.sqlite3                        # 本地开发数据库，首次 migrate 后生成
 ```
@@ -481,7 +490,26 @@ export DJANGO_DB_NAME="/var/lib/competition-club/db.sqlite3"
 
 Markdown 正文会先转换为 HTML，再用 Bleach 白名单过滤；脚本和样式块会被移除，避免把管理员输入直接作为 HTML 执行。
 
-### 7.5 用户认证固定配置
+阶段四项目组和竞赛功能：
+
+- `/member/projects/`：已登录成员查看项目组、组长和成员。
+- `/member/competitions/`：组长和管理员查看竞赛列表。
+- `/member/competitions/<id>/register/`：组长为自己的项目组报名，管理员可为任意项目组报名。
+- 项目组组长自动纳入该组成员。
+- 报名表的项目组和成员选项由前端联动过滤，但后端会再次校验权限和成员归属。
+- 同一项目组对同一竞赛只能报名一次。
+- 竞赛关闭或超过报名截止时间后不能报名。
+
+阶段五设备功能：
+
+- `/member/equipment/`：查看启用设备和可借数量。
+- `/member/equipment/<id>/borrow/`：登记借用，计划归还日期不得早于今天。
+- `/member/borrows/`：普通成员查看自己的记录；管理员查看全部记录。
+- `/member/borrows/<id>/return/`：本人或管理员登记归还。
+- 借用、归还都经过数据库事务和行锁；不可借时不创建记录，重复归还不重复回补库存。
+- 管理员在 `/admin/equipment/equipment/` 维护设备；借用记录只能通过归还操作改变状态，不能手工新增或删除。
+
+### 7.6 用户认证固定配置
 
 以下不是环境变量，而是当前代码的架构约束：
 
@@ -492,6 +520,18 @@ Markdown 正文会先转换为 HTML，再用 Bleach 白名单过滤；脚本和�
 - `AUTH_PASSWORD_VALIDATORS`：启用属性相似度、最小长度、常见密码和纯数字密码检查。
 
 ---
+
+## 阶段四验收
+
+```bash
+.venv/bin/python manage.py check
+.venv/bin/python manage.py makemigrations --check --dry-run
+.venv/bin/python manage.py migrate
+.venv/bin/python manage.py test projects competitions --verbosity 2
+.venv/bin/python manage.py test --verbosity 1
+```
+
+阶段四详细标准见 `docs/acceptance-phase4.md`，覆盖项目组、组长权限、竞赛发布、报名成员校验、截止时间和重复报名控制。
 
 ## 8. 日志与调试
 

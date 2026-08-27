@@ -1,0 +1,10 @@
+from django.urls import path
+
+from . import views
+
+
+app_name = "projects"
+
+urlpatterns = [
+    path("", views.group_list, name="group_list"),
+]

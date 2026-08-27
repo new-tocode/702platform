@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}借用记录 - 竞赛社团平台{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h1>{% if user.is_staff %}全部借用记录{% else %}我的借用记录{% endif %}</h1>
+    {% if borrows %}
+        <div style="overflow-x:auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>设备</th>
+                        {% if user.is_staff %}<th>借用人</th>{% endif %}
+                        <th>借用日期</th>
+                        <th>计划归还</th>
+                        <th>状态</th>
+                        <th>实际归还</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for borrow in borrows %}
+                        <tr>
+                            <td>{{ borrow.equipment.name }}</td>
+                            {% if user.is_staff %}<td>{{ borrow.borrower.profile.full_name|default:borrow.borrower.username }}</td>{% endif %}
+                            <td>{{ borrow.borrow_date|date:"Y-m-d" }}</td>
+                            <td>{{ borrow.planned_return_date|date:"Y-m-d" }}</td>
+                            <td>{{ borrow.get_status_display }}</td>
+                            <td>{{ borrow.actual_return_date|date:"Y-m-d"|default:"—" }}</td>
+                            <td>
+                                {% if borrow.status == "borrowed" and user.is_staff or borrow.status == "borrowed" and borrow.borrower_id == user.pk %}
+                                    <form method="post" action="{% url 'equipment_borrows:return' borrow.pk %}">
+                                        {% csrf_token %}
+                                        <button type="submit">登记归还</button>
+                                    </form>
+                                {% else %}—{% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <p class="muted">暂无借用记录。</p>
+    {% endif %}
+</div>
+{% endblock %}

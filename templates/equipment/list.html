@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block title %}设备借用 - 竞赛社团平台{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h1>设备借用</h1>
+    {% if equipment %}
+        {% for item in equipment %}
+            <article class="card">
+                <h2>{{ item.name }}</h2>
+                {% if item.category %}<p>分类：{{ item.category }}</p>{% endif %}
+                <p>可借数量：{{ item.available_count }} / {{ item.total_count }}</p>
+                {% if item.description %}<div>{{ item.description|linebreaks }}</div>{% endif %}
+                {% if item.available_count > 0 %}
+                    <p><a href="{% url 'equipment:borrow' item.pk %}">登记借用</a></p>
+                {% else %}
+                    <p class="muted">当前无可借数量。</p>
+                {% endif %}
+            </article>
+        {% endfor %}
+    {% else %}
+        <p class="muted">暂时没有可用设备。</p>
+    {% endif %}
+</div>
+{% endblock %}

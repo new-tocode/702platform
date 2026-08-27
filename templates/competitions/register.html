@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}{{ competition.title }}报名 - 竞赛社团平台{% endblock %}
+
+{% block content %}
+<div class="card">
+    <p><a href="{% url 'competitions:list' %}">返回竞赛列表</a></p>
+    <h1>{{ competition.title }}</h1>
+    <p class="muted">
+        报名截止：{{ competition.deadline|date:"Y-m-d H:i" }}
+        {% if competition.team_size %} · 人数要求：{{ competition.team_size }}{% endif %}
+    </p>
+    <div>{{ competition.description|linebreaks }}</div>
+
+    <h2>登记报名</h2>
+    <form method="post">
+        {% csrf_token %}
+        {{ form.non_field_errors }}
+
+        <label for="{{ form.group.id_for_label }}">{{ form.group.label }}</label>
+        {{ form.group }}
+        {{ form.group.errors }}
+
+        <label for="{{ form.members.id_for_label }}">{{ form.members.label }}</label>
+        <select name="members" id="{{ form.members.id_for_label }}" multiple size="8">
+            {% for member, group_ids in member_options %}
+                <option value="{{ member.pk }}" data-group-ids="{{ group_ids }}">
+                    {{ member.profile.full_name|default:member.username }}
+                </option>
+            {% empty %}
+                <option disabled>暂无可选成员</option>
+            {% endfor %}
+        </select>
+        <p class="muted">{{ form.members.help_text }}</p>
+        {{ form.members.errors }}
+
+        <label for="{{ form.remark.id_for_label }}">{{ form.remark.label }}</label>
+        {{ form.remark }}
+        {{ form.remark.errors }}
+
+        <button type="submit">提交报名登记</button>
+    </form>
+</div>
+
+<script>
+(function () {
+    const groupSelect = document.getElementById("{{ form.group.id_for_label }}");
+    const membersSelect = document.getElementById("{{ form.members.id_for_label }}");
+    if (!groupSelect || !membersSelect) return;
+
+    function filterMembers() {
+        const groupId = groupSelect.value;
+        Array.from(membersSelect.options).forEach(function (option) {
+            const groupIds = (option.dataset.groupIds || "").split(",").filter(Boolean);
+            const visible = !groupId || groupIds.includes(groupId);
+            option.hidden = !visible;
+            if (!visible) option.selected = false;
+        });
+    }
+
+    groupSelect.addEventListener("change", filterMembers);
+    filterMembers();
+})();
+</script>
+{% endblock %}
