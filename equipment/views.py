@@ -7,6 +7,8 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_http_methods, require_POST
 
+from core.audit import record_audit
+
 from .forms import EquipmentBorrowForm
 from .models import Equipment, EquipmentBorrow
 from .services import (
@@ -43,7 +45,7 @@ def equipment_borrow(request, pk):
 
     if request.method == "POST" and form.is_valid():
         try:
-            create_borrow(
+            borrow = create_borrow(
                 equipment_id=equipment.pk,
                 borrower=request.user,
                 planned_return_date=form.cleaned_data["planned_return_date"],
@@ -59,6 +61,13 @@ def equipment_borrow(request, pk):
                 extra={"request_id": getattr(request, "request_id", "-")},
             )
         else:
+            record_audit(
+                action="equipment.borrow",
+                user=request.user,
+                target=borrow,
+                detail={"equipment_id": equipment.pk},
+                request=request,
+            )
             messages.success(request, f"已登记借用：{equipment.name}。")
             return redirect("equipment_borrows:list")
     elif request.method == "POST":
@@ -113,5 +122,12 @@ def borrow_return(request, pk):
     except BorrowAlreadyReturned:
         messages.warning(request, "该设备借用记录已经归还。")
     else:
+        record_audit(
+            action="equipment.return",
+            user=request.user,
+            target=borrow,
+            detail={"equipment_id": borrow.equipment_id},
+            request=request,
+        )
         messages.success(request, f"已登记归还：{borrow.equipment.name}。")
     return redirect("equipment_borrows:list")

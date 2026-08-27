@@ -8,6 +8,8 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
+from core.models import AuditLog
+
 from .models import Equipment, EquipmentBorrow
 from .services import BorrowAlreadyReturned, EquipmentUnavailable, create_borrow, return_borrow
 
@@ -94,6 +96,9 @@ class EquipmentAcceptanceTests(TestCase):
         self.assertEqual(borrow.equipment, self.equipment)
         self.assertEqual(borrow.status, EquipmentBorrow.BORROWED)
         self.assertIsNone(borrow.actual_return_date)
+        audit = AuditLog.objects.get(action="equipment.borrow")
+        self.assertEqual(audit.user, self.member)
+        self.assertEqual(audit.target_id, str(borrow.pk))
 
     def test_out_of_stock_equipment_cannot_be_borrowed(self):
         self.equipment.available_count = 0

@@ -4,6 +4,8 @@ import logging
 
 from django.contrib import admin
 
+from core.audit import record_audit
+
 from .forms import CompetitionRegistrationAdminForm
 from .models import Competition, CompetitionRegistration
 
@@ -56,6 +58,13 @@ class CompetitionAdmin(admin.ModelAdmin):
         if not change:
             obj.published_by = request.user
         super().save_model(request, obj, form, change)
+        record_audit(
+            action="competitions.create" if not change else "competitions.update",
+            user=request.user,
+            target=obj,
+            detail={"is_open": obj.is_open, "deadline": obj.deadline.isoformat()},
+            request=request,
+        )
         logger.info(
             "admin.competition.save operator=%s competition_id=%s title=%s open=%s deadline=%s created=%s",
             request.user.get_username(),
@@ -92,6 +101,17 @@ class CompetitionRegistrationAdmin(admin.ModelAdmin):
         if not change:
             obj.registered_by = request.user
         super().save_model(request, obj, form, change)
+        record_audit(
+            action=(
+                "competitions.registration.admin_create"
+                if not change
+                else "competitions.registration.admin_update"
+            ),
+            user=request.user,
+            target=obj,
+            detail={"competition_id": obj.competition_id, "group_id": obj.group_id},
+            request=request,
+        )
         logger.info(
             "admin.competition_registration.save operator=%s registration_id=%s competition_id=%s group_id=%s created=%s",
             request.user.get_username(),

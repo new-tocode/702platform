@@ -93,7 +93,7 @@
 | `competitions` | 竞赛信息发布 + 组长报名登记 |
 | `equipment` | 设备台账 + 借用登记（借/还状态） |
 | `media` | 媒体库：图片/视频统一上传、校验、引用 |
-| `core` | 公共工具、操作入口注册表、审计日志（可选） |
+| `core` | 公共工具、操作入口注册表、审计日志 |
 
 每个新业务模块 = 新增一个 Django app + 注册操作入口，主面板代码无需改动（见 §9）。
 
@@ -244,12 +244,22 @@ EquipmentBorrow
 - 成员仅可查看和归还自己的借用记录；管理员可查看全部记录并代归还。
 - 归还操作在事务内锁定借用记录和设备，状态改为 `returned` 后才回补库存；重复归还不会重复回补。
 
-### 6.7 core（可选）
+### 6.7 core
 
 ```
-AuditLog（如需审计）
-  - user / action / target / detail / created_at
+AuditLog（审计日志）
+  - user           FK(User)  操作者（可空，用户删除后保留记录）
+  - action         操作名
+  - target_type    目标类型（app_label.model_name）
+  - target_id      目标 ID
+  - detail         JSON  结构化非敏感信息
+  - request_id     关联请求 ID
+  - ip_address     请求来源 IP
+  - created_at     发生时间
 ```
+
+- 审计记录只能追加：Admin 只读，不允许新增、修改、删除。
+- 所有 `record_audit()` 调用方只传入非敏感结构化信息，不得记录密码、Cookie 或完整请求数据。
 
 ### 6.8 media（媒体库）
 
@@ -324,27 +334,28 @@ Django 原生支持「组级」权限，**对象级**需自定义：
 - **媒体服务**：上传落 MEDIA 目录，生产环境由 Nginx 直接静态服务（含 Range 支持便于视频拖动播放），不经过 Python 进程；视频要求 MP4(H.264)/WebM 保证浏览器直放。
 - **富文本安全**：Markdown 服务端渲染后用 `bleach` 白名单过滤，禁止内联脚本；图片引用仅允许本平台 MEDIA URL（或显式白名单域名）。
 - **配置安全**：`DEBUG=False`、`SECRET_KEY` 走环境变量、安全 Cookie（`SESSION_COOKIE_HTTPONLY`、生产走 HTTPS）。
-- **审计**：核心写操作（发布/登记/借还）建议记录操作者与时间（可在 `core.AuditLog` 落库）。
+- **审计**：核心写操作（发布/登记/借还/改密/改资料）通过 `core.audit.record_audit()` 写入 `AuditLog`，只记录非敏感结构化信息，后台只读查询。
 
 ---
 
-## 9. 操作入口可扩展机制（重点设计）
+## 9. 操作入口可扩展机制（已实现）
 
-成员界面上的「操作入口」是平台的扩展点，设计为**注册表驱动**：
+成员界面上的「操作入口」是平台的扩展点，已实现为 `core.registry` 注册表驱动：
 
 ```
 core / registry.py
-  - register_entry(app_label, name, url_name, required_perm=None)
-  - get_entries_for_user(user)   # 过滤出当前用户有权限的入口
+  - register_entry(key, label, description, url_name, required_permission=None,
+                   visible_when=None, staff_only=False, sort_order=100)
+  - get_entries_for_user(user)   # 按登录/改密状态、Django 权限、自定义条件和 URL 有效性过滤
+  - OperationEntry.url          # 由 url_name 反解生成链接
 ```
 
-- 各 app 在启动时（`AppConfig.ready()`）向注册表登记自己的入口，如：
-  - 「查看/修改个人信息」→ `/member/profile/`，需登录
-  - 「查看项目组」→ `/member/projects/`
-  - 「竞赛报名」→ `/member/competitions/`，需 `组长` 或 `管理员`
-  - 「设备借用」→ `/member/equipment/`
-- 成员面板渲染：`{% for entry in entries %}` 生成入口卡片，**面板代码不感知具体模块**。
-- **新增一个业务模块 = 新建 app + 注册入口**，主面板零改动。未来加「场地借用」「报销登记」即按此模式扩展。
+- 各业务 app 在 `AppConfig.ready()` 向注册表登记自己的入口，例如「个人信息」「内部通知」「项目组」「竞赛报名」「设备借用」「借用记录」「审计日志」。
+- 重复 key 注册是幂等的（覆盖旧定义），开发自动重载不会产生重复条目。
+- 成员中心与顶部导航都遍历 `operation_entries` 渲染入口，面板代码不感知具体模块。
+- 可见性同时支持：未登录拦截、`must_change_password` 拦截、`required_permission` Django 权限、`staff_only` 管理员限制、以及 `visible_when` 自定义业务条件（如“仅组长/管理员”）。
+- 模板隐藏入口只影响展示；后端接口权限校验仍然独立存在，不能依赖前端隐藏。
+- 新增业务模块只需在 app 注册入口，主面板与导航模板无需改动。
 
 ---
 
@@ -408,6 +419,8 @@ core / registry.py
 | 5 | equipment 设备 + 借用登记 | 借用/归还状态流转正确 |
 | 6 | 操作面板注册表机制 + 后台定制 + 安全加固（XSS/CSRF/审计） | 面板由注册表驱动，新增模块零改面板 |
 
+> 阶段 1-6 已实现并通过对应验收；阶段 7 及以后为可选的后续扩展。
+
 ---
 
 ## 13. 待定项 / 后续可选项
@@ -416,6 +429,5 @@ core / registry.py
 - **视频容量与转码**：本期直传 MP4 不转码；若视频量大，后续引入 ffmpeg 转码/多码率或切对象存储。
 - **媒体大小上限**：图片 ≤10MB、视频 ≤500MB 为默认建议值，可按服务器带宽/磁盘实际调整。
 - **站内消息 / 通知提醒**：报名成功、设备到期提醒是否需要（可后续用简单站内消息实现）。
-- **审计日志**：核心写操作是否需要完整审计（影响 `core.AuditLog` 是否实现）。
 - **DRF API**：本期仅预留，是否提前为小程序/校园对接提供只读 API。
 - **部署**：由用户自行处理（Gunicorn + Nginx + HTTPS + 备份），需保证 `requirements.txt`、环境变量配置与部署说明（README 或 docs/deploy.md）可独立完成。

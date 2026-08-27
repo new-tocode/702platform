@@ -13,6 +13,8 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_http_methods
 from django.views.generic.edit import FormView
 
+from core.audit import record_audit
+
 from .forms import (
     FirstPasswordChangeForm,
     MemberPasswordChangeForm,
@@ -89,6 +91,13 @@ class PasswordChangeView(FormView):
             user.must_change_password = False
             user.save(update_fields=["must_change_password"])
         update_session_auth_hash(self.request, user)
+        record_audit(
+            action="accounts.password.change",
+            user=user,
+            target=user,
+            detail={"forced_flow": was_forced},
+            request=self.request,
+        )
         logger.info(
             "auth.password_change.success username=%s user_id=%s forced_flow=%s",
             user.get_username(),
@@ -133,23 +142,13 @@ def home(request):
 
 @login_required
 def member_home(request):
-    from projects.models import ProjectGroup
-
-    is_competition_manager = request.user.is_staff or ProjectGroup.objects.filter(
-        leader=request.user,
-    ).exists()
     logger.debug(
-        "member.home.view username=%s user_id=%s competition_manager=%s",
+        "member.home.view username=%s user_id=%s",
         request.user.get_username(),
         request.user.pk,
-        is_competition_manager,
         extra={"request_id": getattr(request, "request_id", "-")},
     )
-    return render(
-        request,
-        "accounts/member_home.html",
-        {"is_competition_manager": is_competition_manager},
-    )
+    return render(request, "accounts/member_home.html")
 
 
 @login_required
@@ -170,6 +169,13 @@ def profile(request):
         if form.is_valid():
             with transaction.atomic():
                 saved_profile = form.save()
+            record_audit(
+                action="accounts.profile.update",
+                user=request.user,
+                target=saved_profile,
+                detail={"fields": list(form.changed_data)},
+                request=request,
+            )
             logger.info(
                 "profile.update.success username=%s user_id=%s profile_id=%s",
                 request.user.get_username(),

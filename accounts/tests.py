@@ -4,6 +4,8 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
+from core.models import AuditLog
+
 from .forms import AdminUserChangeForm, AdminUserCreationForm, ProfileForm
 
 
@@ -105,6 +107,15 @@ class MemberAuthenticationAcceptanceTests(TestCase):
         self.assertFalse(self.user.must_change_password)
         self.assertTrue(self.user.check_password("New-Password-456!"))
         self.assertEqual(self.client.get(reverse("accounts:member_home")).status_code, 200)
+
+    def test_password_change_writes_safe_audit_event(self):
+        self.complete_first_password_change()
+
+        audit = AuditLog.objects.get(action="accounts.password.change")
+        self.assertEqual(audit.user, self.user)
+        self.assertEqual(audit.target_id, str(self.user.pk))
+        self.assertEqual(audit.detail, {"forced_flow": True})
+        self.assertNotIn("New-Password-456!", str(audit.detail))
 
     def test_forced_user_can_only_use_password_change_and_logout(self):
         self.login_with_initial_password()

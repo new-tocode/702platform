@@ -6,17 +6,16 @@
 <div class="card">
     <h1>成员中心</h1>
     <p>你好，{{ user.profile.full_name|default:user.username }}。</p>
-    <p>阶段 1 已提供账号登录、强制改密和个人信息维护；其他业务入口将在后续阶段接入。</p>
-    <ul>
-        <li><a href="{% url 'member_notices:internal_list' %}">查看内部通知</a></li>
-        <li><a href="{% url 'notices:public_list' %}">查看公开通知</a></li>
-        <li><a href="{% url 'accounts:profile' %}">维护个人信息</a></li>
-        <li><a href="{% url 'accounts:password_change' %}">修改密码</a></li>
-        <li><a href="{% url 'equipment:list' %}">设备借用</a></li>
-        <li><a href="{% url 'equipment_borrows:list' %}">我的借用记录</a></li>
-        {% if is_competition_manager %}
-            <li><a href="{% url 'competitions:list' %}">竞赛报名</a></li>
-        {% endif %}
-    </ul>
+    <p>平台业务入口会根据你的账号权限自动显示。</p>
+    <div class="operation-grid">
+        {% for entry in operation_entries %}
+            <a class="operation-card" href="{{ entry.url }}">
+                <strong>{{ entry.label }}</strong>
+                <span>{{ entry.description }}</span>
+            </a>
+        {% empty %}
+            <p class="muted">当前没有可用的业务入口。</p>
+        {% endfor %}
+    </div>
 </div>
 {% endblock %}

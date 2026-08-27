@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     "projects.apps.ProjectsConfig",
     "competitions.apps.CompetitionsConfig",
     "equipment.apps.EquipmentConfig",
+    "core.apps.CoreConfig",
 ]
 
 MIDDLEWARE = [
@@ -73,6 +74,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "competitions.context_processors.competition_navigation",
+                "core.context_processors.operation_entries",
             ],
         },
     },
@@ -206,6 +208,11 @@ LOGGING = {
             "propagate": False,
         },
         "equipment": {
+            "handlers": ["console", "file"],
+            "level": "DEBUG",
+            "propagate": False,
+        },
+        "core": {
             "handlers": ["console", "file"],
             "level": "DEBUG",
             "propagate": False,

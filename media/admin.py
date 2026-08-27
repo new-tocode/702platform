@@ -4,6 +4,8 @@ import logging
 
 from django.contrib import admin
 
+from core.audit import record_audit
+
 from .models import MediaFile
 
 
@@ -58,6 +60,13 @@ class MediaFileAdmin(admin.ModelAdmin):
         if not change:
             obj.uploader = request.user
         super().save_model(request, obj, form, change)
+        record_audit(
+            action="media.create" if not change else "media.update",
+            user=request.user,
+            target=obj,
+            detail={"kind": obj.kind, "file_size": obj.file_size},
+            request=request,
+        )
         logger.info(
             "admin.media.save operator=%s media_id=%s filename=%s kind=%s size=%s created=%s",
             request.user.get_username(),

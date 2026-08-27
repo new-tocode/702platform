@@ -19,9 +19,14 @@
         .media-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
         figure { margin: 0; }
         figure img, figure video { display: block; width: 100%; max-height: 480px; object-fit: contain; background: #f5f5f5; }
+        figcaption { color: #666; margin-top: .35rem; }
         table { width: 100%; border-collapse: collapse; }
         th, td { border: 1px solid #ddd; padding: .55rem; text-align: left; vertical-align: top; }
         th { background: #f5f5f5; }
+        .operation-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin: 1rem 0; }
+        .operation-card { display: flex; flex-direction: column; gap: .3rem; border: 1px solid #ddd; border-radius: .5rem; padding: 1rem; text-decoration: none; color: inherit; }
+        .operation-card:hover { background: #f7f7f7; }
+        .operation-card span { color: #666; font-size: .9rem; }
     </style>
 </head>
 <body>
@@ -33,14 +38,9 @@
         <a href="{% url 'notices:public_list' %}">公开通知</a>
         {% if user.is_authenticated %}
             <a href="{% url 'accounts:member_home' %}">成员中心</a>
-            <a href="{% url 'projects:group_list' %}">项目组</a>
-            <a href="{% url 'equipment:list' %}">设备借用</a>
-            <a href="{% url 'equipment_borrows:list' %}">我的借用</a>
-            {% if can_manage_competitions %}
-                <a href="{% url 'competitions:list' %}">竞赛报名</a>
-            {% endif %}
-            <a href="{% url 'member_notices:internal_list' %}">内部通知</a>
-            <a href="{% url 'accounts:profile' %}">个人信息</a>
+            {% for entry in operation_entries %}
+                <a href="{{ entry.url }}">{{ entry.label }}</a>
+            {% endfor %}
             <form method="post" action="{% url 'accounts:logout' %}">
                 {% csrf_token %}
                 <button type="submit">退出</button>

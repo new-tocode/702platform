@@ -12,6 +12,8 @@ from django.shortcuts import get_object_or_404, redirect, render
 
 from projects.models import ProjectGroup
 
+from core.audit import record_audit
+
 from .forms import CompetitionRegistrationForm
 from .models import Competition, CompetitionRegistration
 from .permissions import is_competition_manager
@@ -121,6 +123,17 @@ def competition_register(request, pk):
                     extra={"request_id": getattr(request, "request_id", "-")},
                 )
             else:
+                record_audit(
+                    action="competitions.registration",
+                    user=request.user,
+                    target=registration,
+                    detail={
+                        "competition_id": competition.pk,
+                        "group_id": group.pk,
+                        "member_count": members.count(),
+                    },
+                    request=request,
+                )
                 logger.info(
                     "competition.registration.success registration_id=%s competition_id=%s group_id=%s member_count=%s username=%s",
                     registration.pk,

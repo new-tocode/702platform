@@ -5,6 +5,8 @@ import logging
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 
+from core.audit import record_audit
+
 from .forms import (
     AdminPasswordChangeForm,
     AdminUserChangeForm,
@@ -90,6 +92,13 @@ class UserAdmin(DjangoUserAdmin):
         super().save_model(request, obj, form, change)
         if hasattr(form, "save_profile"):
             form.save_profile(obj)
+        record_audit(
+            action="accounts.user.create" if not change else "accounts.user.update",
+            user=request.user,
+            target=obj,
+            detail={"must_change_password": obj.must_change_password},
+            request=request,
+        )
         logger.info(
             "admin.user.save operator=%s target=%s target_id=%s created=%s must_change_password=%s",
             request.user.get_username(),
