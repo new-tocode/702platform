@@ -12,10 +12,14 @@ Django 单体应用，采用服务端渲染，当前已实现账号、通知、�
 - 公开通知和内部通知（管理员发布、范围隔离、置顶排序、用户组可见性）
 - 公开展示内容（社团简介、历年获奖、成员风采）
 - 图片/视频媒体库（类型、大小、签名校验）
+- 项目组管理和组长竞赛报名（权限、成员归属、截止时间、重复报名控制）
+- 设备台账和借用登记（库存事务、归还和记录权限）
 - 详细请求与认证日志：`logs/django.log`
 - 阶段一验收标准：`docs/acceptance-phase1.md`
 - 阶段二验收标准：`docs/acceptance-phase2.md`
 - 阶段三验收标准：`docs/acceptance-phase3.md`
+- 阶段四验收标准：`docs/acceptance-phase4.md`
+- 阶段五验收标准：`docs/acceptance-phase5.md`
 - 通知用户组验收标准：`docs/acceptance-notice-groups.md`
 - 逐命令运行与配置说明：`docs/project-guide.md`
 - 总体架构：`docs/architecture.md`
@@ -73,6 +77,30 @@ python3 -m venv .venv
 ```
 
 阶段三详细标准见 `docs/acceptance-phase3.md`，覆盖公开栏目、未发布内容隔离、图片/视频上传校验、媒体关联、Markdown 安全渲染和管理员维护。
+
+## 阶段四验收
+
+```bash
+.venv/bin/python manage.py check
+.venv/bin/python manage.py makemigrations --check --dry-run
+.venv/bin/python manage.py migrate
+.venv/bin/python manage.py test projects competitions --verbosity 2
+.venv/bin/python manage.py test --verbosity 1
+```
+
+阶段四详细标准见 `docs/acceptance-phase4.md`，覆盖项目组、组长权限、竞赛发布、报名成员校验、截止时间和重复报名控制。
+
+## 阶段五验收
+
+```bash
+.venv/bin/python manage.py check
+.venv/bin/python manage.py makemigrations --check --dry-run
+.venv/bin/python manage.py migrate
+.venv/bin/python manage.py test equipment --verbosity 2
+.venv/bin/python manage.py test --verbosity 1
+```
+
+阶段五详细标准见 `docs/acceptance-phase5.md`，覆盖设备库存、借用、归还、成员记录隔离、管理员代归还和事务一致性。
 
 ## 日志
 

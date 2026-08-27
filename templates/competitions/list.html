@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block title %}竞赛报名 - 竞赛社团平台{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h1>竞赛报名</h1>
+    {% if competitions %}
+        {% for competition in competitions %}
+            <article class="card">
+                <h2>{{ competition.title }}</h2>
+                <p class="muted">
+                    报名截止：{{ competition.deadline|date:"Y-m-d H:i" }}
+                    {% if competition.team_size %} · 人数要求：{{ competition.team_size }}{% endif %}
+                </p>
+                <div>{{ competition.description|linebreaks }}</div>
+                {% if competition.is_registration_open %}
+                    <p><a href="{% url 'competitions:register' competition.pk %}">为项目组登记报名</a></p>
+                {% elif competition.is_open %}
+                    <p class="muted">报名已截止。</p>
+                {% else %}
+                    <p class="muted">报名未开放。</p>
+                {% endif %}
+            </article>
+        {% endfor %}
+    {% else %}
+        <p class="muted">暂时没有竞赛信息。</p>
+    {% endif %}
+</div>
+{% endblock %}

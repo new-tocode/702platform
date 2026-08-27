@@ -9,6 +9,16 @@ urlpatterns = [
     path("", include(("accounts.urls", "accounts"), namespace="accounts")),
     path("notices/", include(("notices.urls", "notices"), namespace="notices")),
     path("", include(("content.urls", "content"), namespace="content")),
+    path("member/projects/", include(("projects.urls", "projects"), namespace="projects")),
+    path(
+        "member/competitions/",
+        include(("competitions.urls", "competitions"), namespace="competitions"),
+    ),
+    path("member/equipment/", include(("equipment.urls", "equipment"), namespace="equipment")),
+    path(
+        "member/borrows/",
+        include(("equipment.borrow_urls", "equipment_borrows"), namespace="equipment_borrows"),
+    ),
     path(
         "member/notices/",
         include(

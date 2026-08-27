@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block title %}项目组 - 竞赛社团平台{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h1>项目组</h1>
+    {% if groups %}
+        {% for group in groups %}
+            <article class="card">
+                <h2>{{ group.name }}</h2>
+                <p>组长：{{ group.leader.profile.full_name|default:group.leader.username }}</p>
+                {% if group.description %}<div>{{ group.description|linebreaks }}</div>{% endif %}
+                <p>成员：</p>
+                <ul>
+                    {% for member in group.members.all %}
+                        <li>{{ member.profile.full_name|default:member.username }}</li>
+                    {% empty %}
+                        <li class="muted">暂无成员</li>
+                    {% endfor %}
+                </ul>
+            </article>
+        {% endfor %}
+    {% else %}
+        <p class="muted">暂时没有项目组。</p>
+    {% endif %}
+</div>
+{% endblock %}

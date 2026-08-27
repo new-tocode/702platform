@@ -12,6 +12,11 @@
         <li><a href="{% url 'notices:public_list' %}">查看公开通知</a></li>
         <li><a href="{% url 'accounts:profile' %}">维护个人信息</a></li>
         <li><a href="{% url 'accounts:password_change' %}">修改密码</a></li>
+        <li><a href="{% url 'equipment:list' %}">设备借用</a></li>
+        <li><a href="{% url 'equipment_borrows:list' %}">我的借用记录</a></li>
+        {% if is_competition_manager %}
+            <li><a href="{% url 'competitions:list' %}">竞赛报名</a></li>
+        {% endif %}
     </ul>
 </div>
 {% endblock %}

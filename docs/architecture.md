@@ -178,9 +178,10 @@ Showcase（成员风采）
 ProjectGroup
   - name           组名
   - leader         FK(User)  组长（一个）
-  - members        M2M(User) 组员
+  - members        M2M(User) 组员（保存时自动确保组长也在成员列表中）
   - description    简介
   - created_at
+  - updated_at
 ```
 
 ### 6.5 competitions
@@ -195,6 +196,7 @@ Competition
   - published_by   FK(User)  发布人（仅管理员）
   - published_at
   - created_at
+  - updated_at
 
 CompetitionRegistration
   - competition    FK(Competition)
@@ -203,10 +205,14 @@ CompetitionRegistration
   - members        M2M(User) 参赛成员（从组内选择）
   - remark         备注
   - created_at
+  - updated_at
   - 唯一约束：(competition, group) —— 每组每赛只登记一次
 ```
 
-- 管理员发布竞赛信息；组长为所属项目组登记报名（对象级权限校验，见 §7）。
+- 管理员发布竞赛信息；组长只能为自己负责的项目组登记报名，管理员可以为任意项目组登记（对象级权限校验，见 §7）。
+- 报名成员只能从所选项目组成员中选择；项目组组长自动属于该组成员。
+- 同一项目组对同一竞赛只能登记一次，由 `(competition, group)` 唯一约束保证。
+- 报名必须在 `is_open=True` 且未超过 `deadline` 时提交。
 - 无审批流：登记即生效。
 
 ### 6.6 equipment
@@ -216,22 +222,27 @@ Equipment
   - name           设备名称
   - category       分类（文本）
   - total_count    总量
-  - available_count 当前可借数量
+  - available_count 当前可借数量（必须 ≤ 总量，且不得小于已借出数量约束）
   - description    说明
   - is_active      是否上架
+  - created_at
+  - updated_at
 
 EquipmentBorrow
   - equipment      FK(Equipment)
   - borrower       FK(User)  借用人
   - borrow_date    借用日期
   - planned_return_date  计划归还日期
-  - actual_return_date   实际归还日期（可空）
-  - status         已借用 | 已归还
+  - actual_return_date   实际归还日期（已归还时必填）
+  - status         borrowed（已借用）| returned（已归还）
   - remark         备注
   - created_at
+  - updated_at
 ```
 
-- 无审批：成员直接登记借用，设备 `available_count` 相应扣减；归还时更新状态并回补数量。
+- 无审批：成员直接登记借用；服务在数据库事务内锁定设备记录、创建借用记录并扣减 `available_count`。
+- 成员仅可查看和归还自己的借用记录；管理员可查看全部记录并代归还。
+- 归还操作在事务内锁定借用记录和设备，状态改为 `returned` 后才回补库存；重复归还不会重复回补。
 
 ### 6.7 core（可选）
 
@@ -296,6 +307,7 @@ Django 原生支持「组级」权限，**对象级**需自定义：
 - `can_register_group(competition, user)`：校验 `user` 是该竞赛某报名组的组长，或 `user` 为管理员。
 - `can_view_borrow(borrow, user)`：借用记录本人可见，管理员可见全部。
 - `can_edit_profile(profile, user)`：仅本人或管理员。
+- **项目组报名权限**：组长仅能为 `group.leader == user` 的项目组登记；管理员可为任意项目组登记。报名成员必须属于所选项目组。
 - **通知用户组可见性**：内部通知通过 `Notice.visible_groups` 绑定 Django `Group`；用户属于任一绑定组即可查看，未命中时列表不返回、详情返回 404。Admin 表单要求内部通知至少绑定一个用户组，并禁止公开通知绑定用户组。
 
 建议封装为通用的 mixin / helper（如 `core.permissions`），或引入 `django-guardian` 做对象权限（本期简单场景优先用自定义 helper）。
@@ -361,8 +373,11 @@ core / registry.py
 | `/member/password/` | 修改密码 | 本人 |
 | `/member/projects/` | 我的/全部项目组 | 登录 |
 | `/member/competitions/` | 竞赛列表 + 报名（组长入口） | 组长/管理员 |
+| `/member/competitions/<id>/register/` | 为项目组登记竞赛报名 | 组长仅自己的组/管理员 |
 | `/member/equipment/` | 设备列表 + 借用登记 | 登录 |
-| `/member/borrows/` | 我的借用记录 | 本人 |
+| `/member/equipment/<id>/borrow/` | 登记借用单个设备 | 登录 |
+| `/member/borrows/` | 我的借用记录（管理员查看全部） | 登录 |
+| `/member/borrows/<id>/return/` | 登记归还（本人或管理员） | 本人/管理员 |
 
 ### 10.3 管理后台
 
@@ -375,8 +390,8 @@ core / registry.py
 
 1. **登录**：管理员创建账号（初始密码，建议设为学号/工号）→ 成员首次登录 → **强制修改密码**（`must_change_password` 置 False）→ 之后可修改资料。
 2. **公告分发**：管理员发布 `scope` 明确的公告 → 公开版进首页/公开列表，内部版进成员界面。
-3. **竞赛报名**：管理员发布竞赛（`is_open=True`）→ 组长进入竞赛页 → 校验 `leader == user` → 选择组内成员提交登记 → 唯一约束防重复。
-4. **设备借用**：成员查看设备列表 → 登记借用（数量扣减）→ 归还时更新 `status` 并回补数量 → 管理员可查看全部记录。
+3. **竞赛报名**：管理员发布竞赛（`is_open=True`）→ 组长进入竞赛页 → 只能选择自己的项目组 → 选择组内成员 → 校验截止时间、成员归属和重复报名 → 提交登记；管理员可为任意项目组登记。
+4. **设备借用**：成员查看启用设备 → 填写计划归还日期登记借用 → 事务锁定设备并扣减可借数量 → 成员或管理员登记归还 → 状态更新为 `returned` 并在同一事务回补数量；无审批流。
 5. **密码找回**：无自助找回，成员忘密码 → 管理员在 Admin 中重置。
 6. **媒体上传**：管理员在 Admin 上传图片/视频 → 存入媒体库（MediaFile）→ 由简介、获奖、风采、通知等内容模型引用并公开展示；Markdown 正文经白名单过滤，Django 与 Nginx 双重限制大小与类型。
 
