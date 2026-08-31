@@ -1,0 +1,26 @@
+[Unit]
+Description=Competition club platform (gunicorn)
+After=network.target
+
+[Service]
+Type=notify
+User=club
+Group=club
+WorkingDirectory=/opt/702platform
+EnvironmentFile=/opt/702platform/env.sh
+ExecStart=/opt/702platform/.venv/bin/gunicorn config.wsgi:application \
+    --bind 127.0.0.1:8000 \
+    --workers 3 \
+    --timeout 120 \
+    --access-logfile - \
+    --error-logfile -
+Restart=on-failure
+RestartSec=3
+# 安全加固：应用进程只保留必要权限
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/opt/702platform
+
+[Install]
+WantedBy=multi-user.target
