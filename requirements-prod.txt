@@ -1,0 +1,3 @@
+# 生产环境增量依赖（基础依赖见 requirements.txt，两者一起安装）
+gunicorn>=23.0,<24
+psycopg[binary]>=3.2,<4

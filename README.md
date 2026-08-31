@@ -25,6 +25,9 @@ Django 单体应用，采用服务端渲染，当前已实现账号、通知、�
 - 阶段六验收标准：`docs/acceptance-phase6.md`
 - 通知用户组验收标准：`docs/acceptance-notice-groups.md`
 - 逐命令运行与配置说明：`docs/project-guide.md`
+- 快速测试部署：`docs/deploy.md`
+- 生产部署与更新手册：`docs/deploy-production.md`
+- 生产部署工件：`deploy/`（发布脚本、systemd unit、Nginx 模板、备份脚本）
 - 总体架构：`docs/architecture.md`
 
 现有的 `社团评审系统_发布版.zip` 是单独保留的历史压缩包，不参与当前 Django 项目运行。

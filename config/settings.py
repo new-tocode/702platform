@@ -93,6 +93,18 @@ DATABASES = {
     }
 }
 
+# PostgreSQL connection options only apply when a PostgreSQL engine is
+# selected; the SQLite default stays zero-configuration.
+if "postgres" in DATABASES["default"]["ENGINE"]:
+    DATABASES["default"].update(
+        {
+            "USER": os.environ.get("DJANGO_DB_USER", ""),
+            "PASSWORD": os.environ.get("DJANGO_DB_PASSWORD", ""),
+            "HOST": os.environ.get("DJANGO_DB_HOST", "127.0.0.1"),
+            "PORT": os.environ.get("DJANGO_DB_PORT", "5432"),
+        }
+    )
+
 
 AUTH_USER_MODEL = "accounts.User"
 LOGIN_URL = "accounts:login"
@@ -136,6 +148,18 @@ SESSION_COOKIE_SECURE = env_bool("DJANGO_SESSION_COOKIE_SECURE", False)
 CSRF_COOKIE_SECURE = env_bool("DJANGO_CSRF_COOKIE_SECURE", False)
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "DENY"
+
+# Reverse proxy / HTTPS support (all optional, off by default).
+# Set DJANGO_PROXY_SSL_HEADER=1 only when Nginx (or an equivalent trusted
+# proxy) terminates TLS and always sets X-Forwarded-Proto itself.
+if env_bool("DJANGO_PROXY_SSL_HEADER", False):
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",")
+    if origin.strip()
+]
 
 
 LOG_DIR = BASE_DIR / "logs"

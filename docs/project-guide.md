@@ -78,7 +78,14 @@
 │   ├── acceptance-phase4.md          # 阶段四验收标准
 │   ├── acceptance-phase5.md          # 阶段五验收标准
 │   ├── acceptance-phase6.md          # 阶段六验收标准
+│   ├── deploy.md                     # 快速测试部署说明
+│   ├── deploy-production.md          # 生产部署与更新手册
 │   └── project-guide.md             # 本说明文档
+├── deploy/                           # 生产部署工件
+│   ├── deploy.sh                     # 发布脚本（备份→切版本→测试→迁移→重启）
+│   ├── backup.sh                     # 每日备份脚本（cron 调用）
+│   ├── club702.service               # systemd unit 模板
+│   └── nginx-club702.conf            # Nginx 站点模板
 └── db.sqlite3                        # 本地开发数据库，首次 migrate 后生成
 ```
 
