@@ -1,0 +1,16 @@
+[Unit]
+Description=702platform 数据库与媒体每日备份（由 club702-backup.timer 触发）
+After=network.target postgresql.service
+
+[Service]
+Type=oneshot
+User=@@APP_USER@@
+Group=@@APP_USER@@
+WorkingDirectory=@@APP_DIR@@
+EnvironmentFile=@@APP_DIR@@/env.sh
+ExecStart=@@APP_DIR@@/deploy/backup.sh
+# 备份出去的结果写在 APP_DIR/backups，需要真正读写的路径
+ReadWritePaths=@@APP_DIR@@/backups @@APP_DIR@@/mediafiles
+
+[Install]
+WantedBy=multi-user.target
