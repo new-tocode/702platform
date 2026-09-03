@@ -1,156 +1,121 @@
 # 生产环境部署与更新手册
 
-本文档是**生产级标准**的部署与运维手册。只做服务器上快速测试的，请看 `docs/deploy.md`（快速测试部署）。
+本文档是**生产级标准**的部署与运维手册。核心思路：
 
-适用形态：单台 Linux 服务器，PostgreSQL + gunicorn + Nginx + HTTPS，代码只从 git tag 发布。
+- **一次部署脚本** `deploy/install.sh`：环境检测 → 配置检测 → 全自动搭建（建库、迁移、超管、systemd 服务、Nginx、备份定时器、健康检查）。
+- **检测到环境或配置不符合就中止**，脚本绝不会自动下载或安装任何软件——缺什么、怎么补，提示都写明白了。
+- 数据库**默认 PostgreSQL**，数据库名/用户/密码/密钥/超管等系统信息全部用 `<尖括号>` 占位符，由部署者填写；端口等应用信息才给默认值。
+- 快速测试部署请见 `docs/deploy.md`。
 
-> 约定：部署目录 `/opt/702platform`，运行账号 `club`，域名以 `club.example.com` 示例，systemd 服务名 `club702`。实际部署时替换为真实值。
+适用形态：单台 Linux 服务器，PostgreSQL + gunicorn + Nginx + systemd + HTTPS。
 
----
-
-## 0. 原则
-
-| 原则 | 落地方式 |
-|---|---|
-| 唯一事实来源 | 服务器上只从 git 取代码（打 tag 的发布版），不在服务器手改任何文件 |
-| 可重复 | 首次部署与每次更新走同一套脚本 `deploy/deploy.sh` |
-| 可回滚 | 每次发布打 git tag；回滚 = checkout 上一个 tag + `migrate` + 重启 |
-| 先备份再动库 | `deploy.sh` 在切换版本前自动备份数据库与媒体 |
-| 迁移纪律 | `makemigrations` 只在开发机执行并随代码提交；服务器永远只跑 `migrate` |
+> 约定：部署目录 `/opt/702platform`（示例），域名以 `club.example.com` 示例，服务名 `club702`。实际按环境替换。
 
 ---
 
-## 1. 首次部署
+## 1. 首次部署（一次脚本，共 10 步自动完成）
 
-### 1.1 服务器基础环境
+### 1.1 前置：把依赖环境准备好（脚本只检测，不替你装）
 
 ```bash
-# 专用运行账号（不要用 root 跑应用）
-sudo useradd -m -s /bin/bash club
-
-# 防火墙：只放行必要端口
-sudo ufw allow 22,80,443/tcp
-
-# 基础软件
+# 以 root 或 sudo 执行
 sudo apt update
-sudo apt install nginx postgresql git
+sudo apt install nginx postgresql python3 python3-venv python3-pip git
 ```
 
-Python 需要 3.10+（本项目在 3.13 验证）。若系统 Python 过旧：
+### 1.2 部署专用户（脚本要求 DEPLOY_SYSTEM_USER 真实存在）
 
 ```bash
-sudo apt install python3.13 python3.13-venv
+sudo useradd -m -s /bin/bash club      # 例：系统用户 club
 ```
 
-### 1.2 PostgreSQL
-
-```bash
-sudo -u postgres psql <<'SQL'
-CREATE USER club702 WITH PASSWORD '换成随机长密码';
-CREATE DATABASE club702 OWNER club702;
-SQL
-```
-
-把密码记下来，下一步写进 `env.sh`。生成随机串：
-
-```bash
-.venv 不存在时可用: openssl rand -base64 36
-```
-
-### 1.3 获取代码并安装依赖
+### 1.3 获取代码（服务器只从 git 取，可追溯）
 
 ```bash
 sudo mkdir -p /opt/702platform && sudo chown club:club /opt/702platform
 sudo -iu club
-git clone <你的仓库地址> /opt/702platform
 cd /opt/702platform
+git clone <你的仓库地址> .   # 或已有裸仓库 push 后 clone
+```
 
+### 1.4 创建虚拟环境并安装依赖
+
+```bash
 python3 -m venv .venv
 .venv/bin/python -m pip install --upgrade pip
 .venv/bin/python -m pip install -r requirements.txt -r requirements-prod.txt
 ```
 
-> 仓库在私有位置时的替代做法：本地 `git push` 到服务器上的裸仓库（`git init --bare /opt/702platform.git`），或 `git bundle` 拷贝后 `git clone`。仓库地址本身不要求公网可达。
-
-### 1.4 配置 env.sh（权限必须 600）
+### 1.5 配置 env.sh（复制模板并填写占位符）
 
 ```bash
-cat > env.sh <<'EOF'
-export DJANGO_SECRET_KEY="openssl-rand-base64-36-生成的随机串"
-export DJANGO_DEBUG="0"
-export DJANGO_ALLOWED_HOSTS="club.example.com"
-export DJANGO_SESSION_COOKIE_SECURE="1"
-export DJANGO_CSRF_COOKIE_SECURE="1"
-export DJANGO_PROXY_SSL_HEADER="1"
-export DJANGO_CSRF_TRUSTED_ORIGINS="https://club.example.com"
-export DJANGO_DB_ENGINE="django.db.backends.postgresql"
-export DJANGO_DB_NAME="club702"
-export DJANGO_DB_USER="club702"
-export DJANGO_DB_PASSWORD="第 1.2 步的数据库密码"
-export DJANGO_DB_HOST="127.0.0.1"
-export DJANGO_DB_PORT="5432"
-EOF
+cp deploy/env.template env.sh
 chmod 600 env.sh
+vi env.sh
 ```
 
-配置项说明：
+`env.sh` 中这几类必须替换 `<尖括号>`：
 
-| 变量 | 作用 |
-|---|---|
-| `DJANGO_SECRET_KEY` | 必须随机、必须保密，泄露需轮换（会使所有会话失效） |
-| `DJANGO_DEBUG=0` | 关闭调试页；`check --deploy` 的前提 |
-| `DJANGO_ALLOWED_HOSTS` | Host 校验，不带协议和端口 |
-| `DJANGO_PROXY_SSL_HEADER=1` | 信任 Nginx 传入的 `X-Forwarded-Proto`（仅当 TLS 由 Nginx 终止时开启） |
-| `DJANGO_CSRF_TRUSTED_ORIGINS` | HTTPS 下表单提交的 Origin 校验，带协议 `https://` |
+| 配置项 | 填写示例 | 说明 |
+|---|---|---|
+| `DJANGO_SECRET_KEY` | `openssl rand -base64 36` 的输出 | 密钥，泄露需轮换 |
+| `DJANGO_ALLOWED_HOSTS` | `club.example.com` | Host 校验，不带协议端口，逗号分隔 |
+| `DJANGO_DB_NAME` | `club702` | 数据库名（脚本自动创建） |
+| `DJANGO_DB_USER` | `club702` | 数据库账号（脚本自动创建） |
+| `DJANGO_DB_PASSWORD` | 随机长串 | 数据库密码 |
+| `DJANGO_SUPERUSER_USERNAME` / `_EMAIL` / `_PASSWORD` | `admin` / 邮箱 / 随机串 | 首次部署自动创建的超管 |
+| `DEPLOY_SERVER_NAME` | `club.example.com` | Nginx `server_name` 与健康检查入口 |
+| `DEPLOY_SYSTEM_USER` | `club` | 运行应用与备份的 Linux 系统用户 |
 
-### 1.5 初始化数据库和管理员
+有默认值、一般不改的项：
+
+| 配置项 | 默认值 | 说明 |
+|---|---|---|
+| `DJANGO_DB_ENGINE` | `django.db.backends.postgresql` | **默认就 PostgreSQL** |
+| `DJANGO_APP_HOST` / `DJANGO_APP_PORT` | `127.0.0.1` / `8000` | gunicorn 监听地址/端口 |
+| `DJANGO_DB_HOST` / `DJANGO_DB_PORT` | `127.0.0.1` / `5432` | PostgreSQL 地址/端口 |
+| `DJANGO_BACKUP_SCHEDULE` | `daily` | **备份频次**（systemd OnCalendar 语法） |
+| `DJANGO_BACKUP_RETAIN` | `14` | 备份保留份数 |
+| `DJANGO_DEBUG` / Cookie / Proxy 项 | 安全默认 | HTTPS 就绪后按需改动 |
+
+### 1.6 运行首次部署脚本（会自动完成建库、迁移、超管、服务、Nginx、备份定时、健康检查）
 
 ```bash
-source env.sh
-.venv/bin/python manage.py migrate
-.venv/bin/python manage.py createsuperuser
+cd /opt/702platform
+sudo ./deploy/install.sh
 ```
 
-- 全新空库，管理员需要重新创建；普通成员账号在 `/admin/` 发放。
-- 自检：`.venv/bin/python manage.py check --deploy`，生产配置下不应有严重警告。
+脚本会依次：
 
-### 1.6 静态文件、Nginx、HTTPS
+1. 校验 env.sh 无残留占位符（有则列出并中止）
+2. 检测依赖环境：python3≥3.10、venv、Django/DRF/bleach/markdown/Pillow/psycopg/gunicorn、systemd、Nginx、PostgreSQL、备份频次是否为合法 systemd 日历表达式、部署用户存在
+   —— **任何一项不满足：打印缺少什么 + 补什么命令，然后中止**，绝不自动安装
+3. 创建数据库角色与数据库（PostgreSQL，幂等）
+4. `migrate`、`collectstatic`
+5. 幂等创建超级管理员
+6. 注册 `club702.service`（应用）与 `club702-backup.{service,timer}`（备份定时器），`enable --now` 启动
+7. 生成 Nginx 站点 `sites-available/club702` 并 `nginx -t` + reload
+8. 健康检查（`curl -H "Host: <server_name>" http://127.0.0.1:8000/`）
+
+### 1.7 HTTPS（certbot 自动改写 Nginx 并续期）
 
 ```bash
-.venv/bin/python manage.py collectstatic --noinput
-
-# Nginx
-sudo cp deploy/nginx-club702.conf /etc/nginx/sites-available/club702
-sudo vi /etc/nginx/sites-available/club702      # 把 server_name 改为实际域名
-sudo ln -s /etc/nginx/sites-available/club702 /etc/nginx/sites-enabled/
-sudo nginx -t && sudo systemctl reload nginx
-
-# HTTPS（certbot 会自动改写 Nginx 配置加入 443 与跳转）
 sudo apt install certbot python3-certbot-nginx
 sudo certbot --nginx -d club.example.com
 ```
 
-### 1.7 进程托管（systemd）
+启用 HTTPS 后回到 `env.sh` 打开以下安全项，并 `systemctl restart club702`：
 
 ```bash
-# 确认 unit 内的 User/路径与服务名一致后：
-sudo cp deploy/club702.service /etc/systemd/system/club702.service
-sudo systemctl daemon-reload
-sudo systemctl enable --now club702
-sudo systemctl status club702
+DJANGO_SESSION_COOKIE_SECURE=1
+DJANGO_CSRF_COOKIE_SECURE=1
+DJANGO_PROXY_SSL_HEADER=1
+DJANGO_CSRF_TRUSTED_ORIGINS=https://club.example.com
 ```
 
-### 1.8 上线自检
+### 1.8 上线自检（走一遍业务冒烟）
 
-```bash
-curl -i https://club.example.com/            # 期望 200，响应头含 X-Request-ID
-curl -I http://club.example.com/             # 期望 301 跳转到 https
-journalctl -u club702 -n 20                  # 进程日志无异常
-```
-
-浏览器按 `docs/deploy.md` 第 9 节的业务清单冒烟（公开页、强制改密、内部通知分组可见、竞赛报名、设备借还、审计日志只读）。
-
-**当天完成第一份备份**：配置 cron（见第 3 节），手动跑一次 `sudo /opt/702platform/deploy/backup.sh` 确认 `backups/` 出现两个文件。
+`docs/deploy.md` 第 9 节的业务清单：公开页、强制改密、内部通知分组可见性、竞赛报名、设备借还、审计日志只读。浏览器访问 `http://<server_name>/`。
 
 ---
 
@@ -159,67 +124,82 @@ journalctl -u club702 -n 20                  # 进程日志无异常
 ### 2.1 打 tag（开发机）
 
 ```bash
-# 在 main 分支确认全量测试通过后
 git tag -a v1.0.1 -m "发布说明"
-git push <remote> main --tags     # 或对服务器裸仓库: git push /opt/702platform.git main --tags
+git push <remote> main --tags
 ```
 
-tag 命名：`v主.次.修订`。修订位+1 = bug 修复；次位+1 = 新功能；主位+1 = 不兼容变更。每次发布一条 `-m` 说明，作为 CHANGELOG。
+命名 `v主.次.修订`：修订位+1=修复；次位+1=新功能；主位+1=不兼容变更。
 
 ### 2.2 发布（服务器，一条命令）
 
 ```bash
 cd /opt/702platform
-./deploy/deploy.sh v1.0.1
+sudo -u club bash -c './deploy/deploy.sh v1.0.1'   # club = DEPLOY_SYSTEM_USER
 ```
 
-脚本自动完成六步：**备份 → checkout tag → 装依赖 → 服务器上跑全量测试 → migrate + collectstatic → 重启 + 健康检查**。任何一步失败即中止，生产数据未动。
-
-> 第 4 步在服务器上跑 `manage.py test`：Django 使用临时测试库，等于用服务器真实环境验证了新代码与迁移文件，通过后才真正 `migrate` 生产库。
+脚本自动完成：备份数据库与媒体（保留 RETAIN 份）→ checkout tag → 升级依赖 → migrate + collectstatic → 重启 → 健康检查。任何一步失败中止。
 
 ### 2.3 回滚
 
 ```bash
 cd /opt/702platform
-source env.sh
+set -a; source env.sh; set +a
 git checkout v1.0.0
 .venv/bin/python manage.py migrate --noinput
-sudo systemctl restart club702
+systemctl restart club702
 ```
 
 - 代码层回滚通常不需要动数据库（迁移纪律保证上一版兼容当前库）。
-- 若迁移本身造成数据问题：`gunzip -c backups/db-<发布前时间戳>.sql.gz | psql -U club702 club702`（恢复前先停服）。所以**发布前那份备份至少保留到下一次发布成功之后**——脚本按份数保留，不会提前清掉它。
+- 迁移本身出问题：`gunzip -c backups/db-<发布前>.sql.gz | PGPASSWORD=... psql -U $DJANGO_DB_USER $DJANGO_DB_NAME`（恢复前先停服）。发布前那份备份保留 RETAIN 份内不会提前清掉。
 
-### 2.4 破坏性迁移的两段式纪律
+### 2.4 破坏性迁移两段式纪律
 
-删字段/删表/改字段类型不要与依赖旧字段的功能放在同一次发布：
-
-- 本次发布：加新列、代码双写新旧字段；
-- 下次发布：确认稳定后删旧列。
-
-这样任何一版代码都与当版数据库兼容，回滚不需要恢复数据。
+删字段/删表/改类型不要与依赖旧字段的功能同一次发布：先加新列+双写，下次发布再删旧列。保证任何一版代码与当版数据库兼容。
 
 ---
 
-## 3. 备份与恢复
+## 3. 备份（systemd timer 驱动）
 
-### 3.1 每日备份（cron）
+### 3.1 为什么备份不用 cron、也不放进应用服务
 
-```bash
-sudo crontab -e
-# 加入一行（凌晨 3:30 执行）:
-30 3 * * * /opt/702platform/deploy/backup.sh >> /opt/702platform/logs/backup.log 2>&1
-```
+- **应用服务 `club702.service` 是常驻 gunicorn 进程**，不能塞备份逻辑——那是"需要周期性触发的一次性任务"，放进常驻进程会让定时与阻塞逻辑纠缠。
+- 正确拆法：独立的 **`club702-backup.service`（oneshot）+ `club702-backup.timer`（定时触发）**，与 cron 相比：统一由 systemd 管理、`systemctl list-timers` 可查、能设置 `Persistent=true`（关机的错过的备份开机后补跑）。
 
-保留 14 份；`backups/` 建议同步到异地（脚本末尾留了 rsync 接口）。
-
-### 3.2 恢复演练（每季度一次）
+### 3.2 频次配置与查看
 
 ```bash
-# 在测试环境验证备份可用，而不是等事故才发现备份坏了
-gunzip -c backups/db-daily-XXXX.sql.gz | psql -U club702 <测试库名>
-tar -xzf backups/media-daily-XXXX.tar.gz -C <测试目录>
+# 频次就是 env.sh 里的 DJANGO_BACKUP_SCHEDULE（systemd OnCalendar 语法）
+#   默认 daily            -> 每天 00:00
+#   每天 3 点              -> *-*-* 03:00:00
+#   周一到周五 2 点        -> Mon..Fri *-*-* 02:00:00
+#   每小时                -> hourly
+#   每 30 分钟            -> *:0/30
+
+systemctl list-timers | grep club702        # 下次触发时间
+systemctl status club702-backup.timer
 ```
+
+改频次后重载：
+
+```bash
+sed -i 's|^DJANGO_BACKUP_SCHEDULE=.*|DJANGO_BACKUP_SCHEDULE=*-*-* 03:00:00|' env.sh
+systemctl restart club702-backup.timer      # 重新读取 timer 配置
+```
+
+### 3.3 手动备份与恢复
+
+```bash
+sudo -u club bash -c "cd /opt/702platform && source env.sh && ./deploy/backup.sh"
+
+# 恢复数据库
+gunzip -c backups/db-XXXX.sql.gz | PGPASSWORD=... psql -U club702 club702
+# 恢复媒体
+tar -xzf backups/media-XXXX.tar.gz -C /opt/702platform
+```
+
+保留份数由 `DJANGO_BACKUP_RETAIN` 控制（默认 14）。`backups/` 建议异地同步（脚本结尾留了 rsync 示意）。
+
+恢复演练（季度一次）：在测试环境解压即验证备份可用。
 
 ---
 
@@ -227,12 +207,11 @@ tar -xzf backups/media-daily-XXXX.tar.gz -C <测试目录>
 
 | 事项 | 做法 |
 |---|---|
-| 应用日志 | `logs/django.log`（10MB×5 轮转）；按 `X-Request-ID` 检索单次请求 |
-| 进程日志 | `journalctl -u club702 -f` |
+| 应用日志 | `journalctl -u club702 -f`；应用内部日志 `logs/django.log` |
 | 服务状态 | `systemctl status club702` |
-| 证书续期 | certbot 自动（`systemctl list-timers | grep certbot` 可验证） |
-| 拨测监控 | 外部服务打 `https://club.example.com/` 即可，小规模不必上 Prometheus |
-| 磁盘 | `df -h` 关注 `mediafiles/`（视频单个上限 500MB）与 `backups/` |
+| 证书续期 | certbot 自动（`systemctl list-timers | grep certbot` 验证） |
+| 拨测 | 外部打 `https://club.example.com/`（小规模就够，不必上 Prometheus） |
+| 磁盘 | 关注 `mediafiles/`（视频单个≤500MB）、`backups/`、`logs/` |
 
 ---
 
@@ -240,11 +219,20 @@ tar -xzf backups/media-daily-XXXX.tar.gz -C <测试目录>
 
 | 项 | 快速测试 | 生产 |
 |---|---|---|
-| 数据库 | SQLite（文件） | PostgreSQL |
-| 应用服务器 | runserver | gunicorn + systemd |
+| 数据库 | SQLite（默认） | **PostgreSQL（默认）** |
+| 应用进程 | runserver | gunicorn + systemd |
 | 静态/媒体 | Django 自带 | Nginx 直出 |
-| HTTPS | 无（HTTP） | certbot 自动签发续期 |
-| 代码来源 | tar 包 | git tag |
-| 测试 | 本机已测 | 服务器上发布前全量回归 |
-| 备份 | 无 | 每日自动 + 发布前自动 |
-| 密钥 | env.sh（DEBUG=1） | env.sh 600 权限（DEBUG=0 + HTTPS Cookie） |
+| HTTPS | 无 | certbot 自动 |
+| 部署方式 | 手动逐条命令 | **`./deploy/install.sh` 一次完成** |
+| 配置 | 环境变量直接给 | env.sh 占位符 + 校验 + 中止 |
+| 备份 | 无 | systemd timer 每日自动 |
+| 系统信息 | 全部换成真实值 | 占位符 `<...>` 必须替换才放行 |
+
+---
+
+## 6. install.sh 检测策略问答
+
+- **脚本会自己下载安装吗？** 不会。任何缺失项只打印"缺什么 + 怎么补"，然后退出，等待部署者补齐后重跑。
+- **占位符没替换会怎样？** `grep` 逐项扫出所有仍为 `<...>` 的配置，逐个列出并中止。
+- **重复运行安全吗？** 安全。创建数据库角色/库、建超管都做了幂等判断。
+- **备份必须和系统服务同机吗？** 备份 timer 依赖本机 `pg_dump` 与媒体目录，单服务器形态下就在本机；异地拷贝可加 rsync。

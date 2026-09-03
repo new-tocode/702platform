@@ -1,0 +1,10 @@
+[Unit]
+Description=702platform 每日备份定时器（频次由 env.sh 的 DJANGO_BACKUP_SCHEDULE 控制）
+
+[Timer]
+OnCalendar=@@BACKUP_SCHEDULE@@
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

@@ -82,9 +82,13 @@
 │   ├── deploy-production.md          # 生产部署与更新手册
 │   └── project-guide.md             # 本说明文档
 ├── deploy/                           # 生产部署工件
-│   ├── deploy.sh                     # 发布脚本（备份→切版本→测试→迁移→重启）
-│   ├── backup.sh                     # 每日备份脚本（cron 调用）
-│   ├── club702.service               # systemd unit 模板
+│   ├── env.template                  # 配置模板（PostgreSQL 默认，系统信息用占位符）
+│   ├── install.sh                    # 首次部署脚本（检测→建库→迁移→超管→服务→Nginx→备份）
+│   ├── deploy.sh                     # 版本更新脚本（备份→切tag→迁移→重启→健康检查）
+│   ├── backup.sh                     # 数据库/媒体备份脚本（由 systemd timer 触发）
+│   ├── club702.service               # 应用 systemd unit 模板
+│   ├── club702-backup.service        # 备份 oneshot 服务模板
+│   ├── club702-backup.timer          # 备份定时器模板（频次来自 env.sh）
 │   └── nginx-club702.conf            # Nginx 站点模板
 └── db.sqlite3                        # 本地开发数据库，首次 migrate 后生成
 ```
