@@ -58,7 +58,7 @@ set +a
 for var in DJANGO_SECRET_KEY DJANGO_ALLOWED_HOSTS DJANGO_DB_ENGINE DJANGO_DB_NAME \
            DJANGO_DB_USER DJANGO_DB_PASSWORD DJANGO_SUPERUSER_USERNAME \
            DJANGO_SUPERUSER_EMAIL DJANGO_SUPERUSER_PASSWORD \
-           DEPLOY_SERVER_NAME DEPLOY_SYSTEM_USER DJANGO_BACKUP_SCHEDULE; do
+           DEPLOY_DOMAIN DEPLOY_PUBLIC_IP DEPLOY_SYSTEM_USER DJANGO_BACKUP_SCHEDULE; do
     if [[ -z "${!var:-}" ]]; then
         fail "env.sh 缺少必需配置项 $var（请参照 deploy/env.template）"
         exit 1
@@ -72,7 +72,6 @@ need_cmd() {
         MISSING+=("缺少系统命令 $1（$2）")
     fi
 }
-need_cmd python3        "如 Ubuntu: sudo apt install python3 python3-venv"
 need_cmd systemctl      "systemd 未启用，本部署依赖 systemd"
 need_cmd nginx          "如 Ubuntu: sudo apt install nginx"
 need_cmd psql           "PostgreSQL 客户端，如 Ubuntu: sudo apt install postgresql-client"
@@ -81,20 +80,18 @@ need_cmd sudo           "本脚本需要 sudo 权限"
 
 # PostgreSQL 服务本身
 need_cmd postgres       "PostgreSQL 服务端未安装，如 Ubuntu: sudo apt install postgresql"
-
-# Python 版本 >= 3.10
-if command -v python3 >/dev/null 2>&1; then
-    PY_VER="$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
-    if ! python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)'; then
+# Python 版本 >= 3.10（仅使用项目虚拟环境；不检测/不使用系统 python）
+if [[ ! -x "$APP_DIR/.venv/bin/python" ]]; then
+    MISSING+=("缺少虚拟环境 $APP_DIR/.venv（请先执行: python3 -m venv .venv）")
+else
+    PY_VER="$("$APP_DIR/.venv/bin/python" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+    if ! "$APP_DIR/.venv/bin/python" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)'; then
         MISSING+=("Python 版本过低($PY_VER)，需要 >= 3.10")
     fi
 fi
 
-# 项目虚拟环境与依赖（不自动 pip install，只检测）
-if [[ ! -x "$APP_DIR/.venv/bin/python" ]]; then
-    MISSING+=("缺少虚拟环境 $APP_DIR/.venv（请先执行: python3 -m venv .venv）")
-fi
-for pkg in Django rest_framework bleach markdown PIL psycopg gunicorn; do
+# 项目依赖（不自动 pip install，只检测）
+for pkg in django rest_framework bleach markdown PIL psycopg gunicorn; do
     if ! "$APP_DIR/.venv/bin/python" -c "import $pkg" >/dev/null 2>&1; then
         MISSING+=("Python 依赖未安装: $pkg（请先执行: $APP_DIR/.venv/bin/python -m pip install -r requirements.txt -r requirements-prod.txt）")
     fi
@@ -127,16 +124,51 @@ case "$DJANGO_DB_ENGINE" in
   *postgres*)
     info "确保 PostgreSQL 服务运行中"
     if ! systemctl is-active postgresql >/dev/null 2>&1; then
-        systemctl start postgresql || true
+        # RHEL 系服务名按主版本命名（如 postgresql-16.service）
+        systemctl start postgresql 2>/dev/null \
+            || systemctl start "$(systemctl list-unit-files --type=service 2>/dev/null | awk '/^postgresql-[0-9]+\.service/ {print $1; exit}')" 2>/dev/null \
+            || true
     fi
 
-    info "确保数据库角色 $DJANGO_DB_USER 存在"
+    # Django 5.2 要求 PostgreSQL >= 14
+    info "检查 PostgreSQL 版本（Django 5.2 要求 >= 14）"
+    PG_VER_NUM="$(sudo -u postgres psql -tAc 'SHOW server_version_num' 2>/dev/null | tr -d '[:space:]' || true)"
+    if [[ -z "$PG_VER_NUM" ]]; then
+        warn "无法读取 PostgreSQL 版本号，跳过版本检查（请确认 server 版本 >= 14）"
+    else
+        PG_MAJOR=$((PG_VER_NUM / 10000))
+        if (( PG_MAJOR < 14 )); then
+            fail "PostgreSQL 版本过低（主版本 $PG_MAJOR，Django 5.2 要求 >= 14），请先升级 PostgreSQL 再运行本脚本"
+            fail "升级参考: 添加 PGDG 官方源（https://www.postgresql.org/download/linux/）后安装 PostgreSQL 16"
+            exit 1
+        elif (( PG_MAJOR < 16 )); then
+            warn "PostgreSQL $PG_MAJOR 可满足 Django 5.2（>= 14），但建议升级到 16 以获得更佳支持与性能"
+        else
+            ok "PostgreSQL $PG_MAJOR 满足要求（>= 14）"
+        fi
+    fi
+
+    # 会话认证统一 scram-sha-256：密码以 scram 存储，pg_hba 对本地 TCP 也要求 scram
+    info "确保数据库角色 $DJANGO_DB_USER 存在（密码 scram-sha-256 存储）"
     if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='$DJANGO_DB_USER'" | grep -q 1; then
         # CREATEDB: 允许 Django 测试(`manage.py test`)创建临时测试库
-        sudo -u postgres psql -c "CREATE ROLE \"$DJANGO_DB_USER\" LOGIN CREATEDB PASSWORD '$DJANGO_DB_PASSWORD'"
+        sudo -u postgres psql -c "SET password_encryption = 'scram-sha-256'; CREATE ROLE \"$DJANGO_DB_USER\" LOGIN CREATEDB PASSWORD '$DJANGO_DB_PASSWORD'"
         ok "已创建数据库角色 $DJANGO_DB_USER"
     else
-        info "数据库角色 $DJANGO_DB_USER 已存在，跳过"
+        # 已存在则按当前 env 密码重设，确保以 scram 加密存储
+        sudo -u postgres psql -c "SET password_encryption = 'scram-sha-256'; ALTER ROLE \"$DJANGO_DB_USER\" PASSWORD '$DJANGO_DB_PASSWORD'"
+        info "数据库角色 $DJANGO_DB_USER 已存在，密码已按 scram-sha-256 刷新"
+    fi
+
+    # pg_hba.conf：本地 TCP(127.0.0.1 / ::1) 认证方法统一改为 scram-sha-256 并重载
+    HBA_FILE="$(sudo -u postgres psql -tAc 'SHOW hba_file' 2>/dev/null | tr -d '[:space:]' || true)"
+    if [[ -n "$HBA_FILE" && -f "$HBA_FILE" ]]; then
+        sudo sed -E -i 's|^[[:space:]]*(host[[:space:]]+all[[:space:]]+all[[:space:]]+127\.0\.0\.1/32[[:space:]]+)[a-zA-Z0-9_-]+$|\1scram-sha-256|' "$HBA_FILE"
+        sudo sed -E -i 's|^[[:space:]]*(host[[:space:]]+all[[:space:]]+all[[:space:]]+::1/128[[:space:]]+)[a-zA-Z0-9_-]+$|\1scram-sha-256|' "$HBA_FILE"
+        sudo -u postgres psql -c 'SELECT pg_reload_conf()' >/dev/null 2>&1 || true
+        ok "pg_hba.conf 已启用 scram-sha-256 认证"
+    else
+        warn "无法定位 pg_hba.conf，请手工确认 127.0.0.1/::1 使用 scram-sha-256 认证"
     fi
 
     info "确保数据库 $DJANGO_DB_NAME 存在"
@@ -187,15 +219,25 @@ info "收集静态文件"
 run_as_app .venv/bin/python manage.py collectstatic --noinput >/dev/null
 ok "静态文件已收集到 staticfiles/"
 
+# 备份目录（club702-backup.service 的 ReadWritePaths 依赖它存在，缺失会导致服务 226/NAMESPACE 启动失败）
+info "确保备份目录存在"
+sudo mkdir -p "$APP_DIR/backups"
+sudo chown "$DEPLOY_SYSTEM_USER:$DEPLOY_SYSTEM_USER" "$APP_DIR/backups"
+ok "备份目录就绪: $APP_DIR/backups"
+
 # ---------- 8. 注册 systemd 服务 ----------
 info "注册 systemd 服务与备份定时器"
 
+# server_name 使用「域名 + 公网IP」两项（env.sh 必填）
+NGINX_SERVER_NAME="$DEPLOY_DOMAIN $DEPLOY_PUBLIC_IP"
 RENDER=(
     -e "s|@@APP_DIR@@|$APP_DIR|g"
     -e "s|@@APP_USER@@|$DEPLOY_SYSTEM_USER|g"
     -e "s|@@APP_HOST@@|$DJANGO_APP_HOST|g"
     -e "s|@@APP_PORT@@|$DJANGO_APP_PORT|g"
-    -e "s|@@SERVER_NAME@@|$DEPLOY_SERVER_NAME|g"
+    -e "s|@@SERVER_NAME@@|$NGINX_SERVER_NAME|g"
+    -e "s|@@SSL_CERT_PATH@@|${SSL_CERT_PATH:-}|g"
+    -e "s|@@SSL_KEY_PATH@@|${SSL_KEY_PATH:-}|g"
     -e "s|@@BACKUP_SCHEDULE@@|$DJANGO_BACKUP_SCHEDULE|g"
     -e "s|@@BACKUP_RETAIN@@|$DJANGO_BACKUP_RETAIN|g"
     -e "s|@@VENV@@|$APP_DIR/.venv|g"
@@ -215,11 +257,48 @@ systemctl enable --now club702.service
 systemctl enable --now club702-backup.timer
 ok "已启用 club702.service（应用）与 club702-backup.timer（每日备份）"
 
-# ---------- 9. 配置 Nginx ----------
+# ---------- 9. 配置 Nginx（先识别系统类型，再选择配置文件路径） ----------
 info "配置 Nginx"
-apply_template "$APP_DIR/deploy/nginx-club702.conf" "/etc/nginx/sites-available/club702" 644
-if [[ ! -e "/etc/nginx/sites-enabled/club702" ]]; then
-    ln -s /etc/nginx/sites-available/club702 /etc/nginx/sites-enabled/club702
+OS_ID="unknown"
+if [[ -r /etc/os-release ]]; then
+    OS_ID="$(awk -F= '/^ID=/{gsub(/["\r]/,"",$2); print $2}' /etc/os-release)"
+fi
+case "$OS_ID" in
+  debian|ubuntu)
+      NGINX_CONF_DIR=/etc/nginx/sites-available
+      NGINX_ENABLE_DIR=/etc/nginx/sites-enabled
+      sudo mkdir -p "$NGINX_CONF_DIR" "$NGINX_ENABLE_DIR"
+      NGINX_CONF="$NGINX_CONF_DIR/club702"
+      NGINX_ENLINK="$NGINX_ENABLE_DIR/club702"
+      ;;
+  centos|rhel|rocky|almalinux|fedora|anolis|alinux|alibaba)
+      NGINX_CONF_DIR=/etc/nginx/conf.d
+      NGINX_ENABLE_DIR=
+      NGINX_CONF="$NGINX_CONF_DIR/club702.conf"
+      NGINX_ENLINK=
+      ;;
+  *)
+      warn "未能识别系统类型（os-release ID=$OS_ID），默认按 Debian 系处理（sites-available/sites-enabled）"
+      NGINX_CONF_DIR=/etc/nginx/sites-available
+      NGINX_ENABLE_DIR=/etc/nginx/sites-enabled
+      sudo mkdir -p "$NGINX_CONF_DIR" "$NGINX_ENABLE_DIR"
+      NGINX_CONF="$NGINX_CONF_DIR/club702"
+      NGINX_ENLINK="$NGINX_ENABLE_DIR/club702"
+      ;;
+esac
+info "Nginx 配置路径: $NGINX_CONF"
+
+apply_template "$APP_DIR/deploy/nginx-club702.conf" "$NGINX_CONF" 644
+# HTTPS 块：env.sh 提供 SSL_CERT_PATH/SSL_KEY_PATH 时保留（监听 443），否则删除（仅 HTTP 80）
+if [[ -n "${SSL_CERT_PATH:-}" && -n "${SSL_KEY_PATH:-}" ]]; then
+    sed -i 's|^[[:space:]]*@@HTTPS_BLOCK_START@@[[:space:]]*$||; s|^[[:space:]]*@@HTTPS_BLOCK_END@@[[:space:]]*$||' "$NGINX_CONF"
+    ok "HTTPS 已启用：监听 443（证书: $SSL_CERT_PATH）"
+else
+    sed -i '/^[[:space:]]*@@HTTPS_BLOCK_START@@[[:space:]]*$/,/^[[:space:]]*@@HTTPS_BLOCK_END@@[[:space:]]*$/d' "$NGINX_CONF"
+    warn "未配置 SSL_CERT_PATH/SSL_KEY_PATH，仅监听 HTTP 80"
+fi
+if [[ -n "$NGINX_ENLINK" && ! -e "$NGINX_ENLINK" ]]; then
+    ln -s "$NGINX_CONF" "$NGINX_ENLINK"
 fi
 if ! nginx -t >/dev/null 2>&1; then
     fail "Nginx 配置测试失败："
@@ -233,7 +312,7 @@ ok "Nginx 配置已生效"
 info "健康检查"
 sleep 3
 HTTP_CODE="$(curl -s -o /dev/null -w '%{http_code}' \
-    -H "Host: $DEPLOY_SERVER_NAME" \
+    -H "Host: $DEPLOY_PUBLIC_IP" \
     "http://${DJANGO_APP_HOST:-127.0.0.1}:${DJANGO_APP_PORT:-8000}/" || true)"
 if [[ "$HTTP_CODE" == "200" ]]; then
     ok "应用健康检查通过 (HTTP $HTTP_CODE)"
@@ -249,8 +328,8 @@ ${GRN}============================================${RST}
   应用服务 : systemctl status club702
   备份定时 : systemctl list-timers | grep club702
   手动备份 : /opt 下执行 backups/ 相关脚本
-  访问入口 : http://${DEPLOY_SERVER_NAME}/
-  管理后台 : http://${DEPLOY_SERVER_NAME}/admin/
+  访问入口 : http://${DEPLOY_DOMAIN}/
+  管理后台 : http://${DEPLOY_DOMAIN}/admin/
   日志     : journalctl -u club702 -f
 
   后续发布新版本: git checkout <新tag> 后执行 ./deploy/deploy.sh <新tag>
