@@ -19,3 +19,5 @@ logs/*.log
 
 # Archive supplied separately
 社团评审系统_发布版.zip
+env.sh
+backups/
