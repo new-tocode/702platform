@@ -1,6 +1,6 @@
 [Unit]
 Description=Competition club platform (gunicorn)
-After=network.target postgresql.service
+After=network.target @@PG_SERVICE@@
 
 [Service]
 Type=notify

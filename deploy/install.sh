@@ -72,6 +72,27 @@ need_cmd() {
         MISSING+=("缺少系统命令 $1（$2）")
     fi
 }
+
+# PostgreSQL 工具不一定在默认 PATH：RHEL/PGDG 装在 /usr/pgsql-<ver>/bin，且只为
+# psql/pg_dump 等建了 /usr/bin alternatives，pg_isready/postgres 往往取不到。
+# 这里自动探测 PG 的 bin 目录并前置到 PATH，避免把已安装的组件误报成缺失。
+if ! command -v pg_isready >/dev/null 2>&1 || ! command -v psql >/dev/null 2>&1 \
+   || ! command -v postgres >/dev/null 2>&1; then
+    PG_BIN=""
+    # 高版本目录优先（sort -rV），确保取到与 server 匹配的工具
+    # shellcheck disable=SC2046
+    for d in $(ls -d /usr/pgsql-*/bin /usr/lib/postgresql/*/bin /usr/local/pgsql/bin /opt/pgsql*/bin 2>/dev/null | sort -rV); do
+        if [[ -x "$d/pg_isready" || -x "$d/psql" || -x "$d/postgres" ]]; then
+            PG_BIN="$d"
+            break
+        fi
+    done
+    if [[ -n "$PG_BIN" ]]; then
+        export PATH="$PG_BIN:$PATH"
+        info "已将 PostgreSQL 工具目录加入 PATH: $PG_BIN"
+    fi
+fi
+
 need_cmd systemctl      "systemd 未启用，本部署依赖 systemd"
 need_cmd nginx          "如 Ubuntu: sudo apt install nginx"
 need_cmd psql           "PostgreSQL 客户端，如 Ubuntu: sudo apt install postgresql-client"
@@ -122,12 +143,20 @@ ok "依赖环境检查通过"
 # ---------- 4. 数据库就绪（默认 PostgreSQL） ----------
 case "$DJANGO_DB_ENGINE" in
   *postgres*)
+    # 探测 PostgreSQL 的 systemd 服务单元名（随发行版与 PG 版本而变，故不硬编码）:
+    #   Debian/Ubuntu → postgresql.service（官方包提供的 meta 单元）
+    #   RHEL/PGDG     → postgresql-<主版本>.service（如 postgresql-16.service）
+    PG_SERVICE="$(systemctl list-unit-files --type=service --no-pager 2>/dev/null \
+        | awk '/^postgresql\.service[[:space:]]/ {deb=$1} /^postgresql-[0-9]+\.service[[:space:]]/ {if (!ver) ver=$1} END {print (deb ? deb : ver)}')"
+    if [[ -z "$PG_SERVICE" ]]; then
+        PG_SERVICE="postgresql.service"
+        warn "未探测到 PostgreSQL 服务单元，回退为 $PG_SERVICE（可用 systemctl list-unit-files | grep postgres 核对）"
+    fi
+    info "PostgreSQL 服务单元: $PG_SERVICE"
+
     info "确保 PostgreSQL 服务运行中"
-    if ! systemctl is-active postgresql >/dev/null 2>&1; then
-        # RHEL 系服务名按主版本命名（如 postgresql-16.service）
-        systemctl start postgresql 2>/dev/null \
-            || systemctl start "$(systemctl list-unit-files --type=service 2>/dev/null | awk '/^postgresql-[0-9]+\.service/ {print $1; exit}')" 2>/dev/null \
-            || true
+    if ! systemctl is-active "$PG_SERVICE" >/dev/null 2>&1; then
+        systemctl start "$PG_SERVICE" 2>/dev/null || true
     fi
 
     # Django 5.2 要求 PostgreSQL >= 14
@@ -241,6 +270,7 @@ RENDER=(
     -e "s|@@BACKUP_SCHEDULE@@|$DJANGO_BACKUP_SCHEDULE|g"
     -e "s|@@BACKUP_RETAIN@@|$DJANGO_BACKUP_RETAIN|g"
     -e "s|@@VENV@@|$APP_DIR/.venv|g"
+    -e "s|@@PG_SERVICE@@|${PG_SERVICE:-postgresql.service}|g"
 )
 
 apply_template() {

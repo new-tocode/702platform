@@ -1,6 +1,6 @@
 [Unit]
 Description=702platform 数据库与媒体每日备份（由 club702-backup.timer 触发）
-After=network.target postgresql.service
+After=network.target @@PG_SERVICE@@
 
 [Service]
 Type=oneshot
