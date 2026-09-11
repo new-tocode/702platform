@@ -1,10 +1,13 @@
 """Acceptance tests for equipment inventory, borrowing, returning and permissions."""
 
+import threading
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
-from django.test import TestCase
+from django.db import connection
+from django.test import TestCase, TransactionTestCase, skipUnlessDBFeature
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 
@@ -301,3 +304,95 @@ class EquipmentAcceptanceTests(TestCase):
         self.client.force_login(self.member)
         member_response = self.client.get("/admin/equipment/equipment/")
         self.assertEqual(member_response.status_code, 302)
+
+
+@skipUnlessDBFeature("has_select_for_update")
+class ConcurrentEquipmentBorrowTests(TransactionTestCase):
+    """并发借用：验证 select_for_update 行锁防止库存超借。
+
+    本类只在支持行级锁的后端运行（PostgreSQL）。SQLite 的
+    has_select_for_update 为 False，Django 会静默剥离 FOR UPDATE 子句
+    （见 django/db/models/sql/compiler.py），并发语义退化为整库写锁，
+    因此这类场景必须用 PostgreSQL 才能覆盖。
+    """
+
+    def setUp(self):
+        self.member_a = User.objects.create_user(
+            username="concurrent-member-a",
+            password="Concurrent-A-123!",
+        )
+        self.member_b = User.objects.create_user(
+            username="concurrent-member-b",
+            password="Concurrent-B-123!",
+        )
+        self.equipment = Equipment.objects.create(
+            name="并发争抢设备",
+            category="测试",
+            total_count=1,
+            available_count=1,
+        )
+
+    def borrow(self, user):
+        return create_borrow(
+            equipment_id=self.equipment.pk,
+            borrower=user,
+            planned_return_date=timezone.localdate() + timedelta(days=3),
+            remark="并发测试",
+            actor=user,
+        )
+
+    def test_borrow_service_acquires_row_lock(self):
+        """create_borrow 发出的 SQL 必须带 FOR UPDATE 行锁子句。"""
+        with CaptureQueriesContext(connection) as captured:
+            self.borrow(self.member_a)
+
+        statements = [query["sql"].upper() for query in captured.captured_queries]
+        self.assertTrue(
+            any("FOR UPDATE" in statement for statement in statements),
+            msg=f"未发现 FOR UPDATE 行锁，实际 SQL: {statements}",
+        )
+
+    def test_concurrent_borrow_does_not_oversubscribe(self):
+        """两个并发请求争抢最后一件设备时，只能有一个成功。"""
+        outcome = []
+        errors = []
+        barrier = threading.Barrier(2)
+
+        def attempt(user):
+            try:
+                barrier.wait(timeout=10)  # 让两个线程尽量同时发起借用
+                self.borrow(user)
+                outcome.append("borrowed")
+            except EquipmentUnavailable:
+                outcome.append("unavailable")
+            except Exception as exc:  # noqa: BLE001 - 收集后在主线程断言
+                errors.append(f"{type(exc).__name__}: {exc}")
+            finally:
+                # 线程内的连接不会自动回收，显式关闭避免泄漏
+                connection.close()
+
+        threads = [
+            threading.Thread(target=attempt, args=(user,))
+            for user in (self.member_a, self.member_b)
+        ]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(timeout=30)
+
+        self.assertEqual(errors, [], msg=f"并发借用出现异常: {errors}")
+        self.assertEqual(
+            sorted(outcome),
+            ["borrowed", "unavailable"],
+            msg=f"期望恰好一个成功、一个库存不足，实际: {outcome}",
+        )
+
+        self.equipment.refresh_from_db()
+        self.assertEqual(self.equipment.available_count, 0)
+        self.assertEqual(
+            EquipmentBorrow.objects.filter(
+                equipment=self.equipment,
+                status=EquipmentBorrow.BORROWED,
+            ).count(),
+            1,
+        )
