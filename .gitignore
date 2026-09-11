@@ -19,5 +19,8 @@ logs/*.log
 
 # Archive supplied separately
 社团评审系统_发布版.zip
+
+# 环境配置：env.sh 为服务器部署配置，env.local.sh 为本地开发配置
 env.sh
+env.local.sh
 backups/
