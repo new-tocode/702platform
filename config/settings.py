@@ -76,6 +76,7 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
                 "competitions.context_processors.competition_navigation",
                 "core.context_processors.operation_entries",
+                "core.context_processors.nav_section",
             ],
         },
     },

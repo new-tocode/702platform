@@ -1,13 +1,15 @@
 """Stage 1 acceptance tests for accounts and forced password changes."""
 
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Group
+from django.contrib.auth.models import AnonymousUser, Group
 from django.test import TestCase
 from django.urls import reverse
 
 from core.models import AuditLog
+from projects.models import ProjectGroup
 
 from .forms import AdminUserChangeForm, AdminUserCreationForm, ProfileForm
+from .roles import describe_member
 
 
 User = get_user_model()
@@ -204,6 +206,66 @@ class MemberAuthenticationAcceptanceTests(TestCase):
         combined_logs = "\n".join(captured.output)
         self.assertIn("auth.login.failure", combined_logs)
         self.assertNotIn("never-log-this-password", combined_logs)
+
+
+class MemberRoleDisplayAcceptanceTests(TestCase):
+    """成员中心显示当前身份；口径见 accounts/roles.py。"""
+
+    def setUp(self):
+        self.member = User.objects.create_user(
+            username="role-member",
+            password="Member-Password-123!",
+        )
+        self.contact = User.objects.create_user(
+            username="role-contact",
+            password="Contact-Password-123!",
+        )
+        self.staff = User.objects.create_user(
+            username="role-staff",
+            password="Staff-Password-123!",
+        )
+        self.staff.is_staff = True
+        for user in (self.member, self.contact, self.staff):
+            user.must_change_password = False
+            user.save(update_fields=["must_change_password", "is_staff"])
+        self.group = ProjectGroup.objects.create(name="角色测试组", leader=self.contact)
+
+    def assert_role_cell(self, response, role):
+        # 页脚也有「管理员」等字样，因此断言精确到身份单元格本身。
+        self.assertContains(response, f'<div class="v text">{role}</div>')
+
+    def test_anonymous_is_described_as_guest(self):
+        self.assertEqual(describe_member(AnonymousUser()), "游客")
+
+    def test_member_without_group_is_described_as_no_group(self):
+        self.client.force_login(self.member)
+
+        response = self.client.get(reverse("accounts:member_home"))
+
+        self.assertContains(response, "当前身份")
+        self.assert_role_cell(response, "未加入项目组")
+
+    def test_group_member_is_described_as_group_member(self):
+        self.group.members.add(self.member)
+        self.client.force_login(self.member)
+
+        response = self.client.get(reverse("accounts:member_home"))
+
+        self.assert_role_cell(response, "项目组成员")
+
+    def test_contact_is_described_as_project_contact(self):
+        self.client.force_login(self.contact)
+
+        response = self.client.get(reverse("accounts:member_home"))
+
+        self.assert_role_cell(response, "项目组联系人")
+
+    def test_staff_is_described_as_admin(self):
+        self.client.force_login(self.staff)
+
+        response = self.client.get(reverse("accounts:member_home"))
+
+        self.assert_role_cell(response, "管理员")
 
 
 class AdminProvisioningAcceptanceTests(TestCase):

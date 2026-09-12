@@ -1,12 +1,31 @@
 {% extends "base.html" %}
 {% load rendering %}
 
-{% block title %}{{ page.title }} - 竞赛社团平台{% endblock %}
+{% block title %}{% if page %}{{ page.title }}{% else %}社团简介{% endif %} - 竞赛社团管理平台{% endblock %}
 
 {% block content %}
-<div class="card">
-    <h1>{{ page.title }}</h1>
-    <div>{{ page.content|render_markdown }}</div>
-    {% include "includes/media.html" with media_files=page.attachments.all %}
+<div class="wrap">
+    <div class="pagehead">
+        <div class="path">
+            <a href="{% url 'accounts:home' %}">/</a>
+            <span>/</span>
+            <span>社团简介</span>
+        </div>
+        <div class="head-row">
+            <div>
+                <h1>{% if page %}{{ page.title }}{% else %}社团简介{% endif %}</h1>
+                {% if page %}<div class="sub">更新于 {{ page.updated_at|date:"Y-m-d" }}</div>{% endif %}
+            </div>
+        </div>
+    </div>
+
+    {% if page %}
+        <div class="frame reveal">
+            <div class="prose">{{ page.content|render_markdown }}</div>
+            {% include "includes/media.html" with media_files=page.attachments.all %}
+        </div>
+    {% else %}
+        <div class="empty">社团简介尚未发布，请等待管理员在后台添加。</div>
+    {% endif %}
 </div>
 {% endblock %}

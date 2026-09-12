@@ -1,0 +1,124 @@
+/*
+ * Django Admin 蓝图配色。
+ * 只覆盖 Django 自带的设计变量与少量结构，保持后台的可预期性；
+ * 与前台 static/css/app.css 共用同一组色值，两边不出现第二套风格。
+ */
+
+:root,
+html[data-theme="light"] {
+  --primary: #12508f;
+  --secondary: #0c3d6e;
+  --accent: #e9f1f9;
+  --primary-fg: #ffffff;
+
+  --body-fg: #0f1a24;
+  --body-bg: #ffffff;
+  --body-quiet-color: #54636f;
+  --body-medium-color: #54636f;
+  --body-loud-color: #0f1a24;
+
+  --header-color: #ffffff;
+  --header-branding-color: #ffffff;
+  --header-bg: #12508f;
+  --header-link-color: #ffffff;
+
+  --breadcrumbs-fg: #0c3d6e;
+  --breadcrumbs-link-fg: #0c3d6e;
+  --breadcrumbs-bg: #e9f1f9;
+
+  --link-fg: #12508f;
+  --link-hover-color: #0c3d6e;
+  --link-selected-fg: #0e7c86;
+
+  --hairline-color: #ccd9e4;
+  --border-color: #ccd9e4;
+  --error-fg: #9e3a32;
+
+  --message-success-bg: #e6f3f3;
+  --message-warning-bg: #faf1e3;
+  --message-error-bg: #fbf0ef;
+
+  --darkened-bg: #f7fafc;
+  --selected-bg: #e9f1f9;
+  --selected-row: #f7fafc;
+
+  --button-fg: #ffffff;
+  --button-bg: #12508f;
+  --button-hover-bg: #0c3d6e;
+  --default-button-bg: #0c3d6e;
+  --default-button-hover-bg: #12508f;
+  --close-button-bg: #86929e;
+  --close-button-hover-bg: #54636f;
+  --delete-button-bg: #9e3a32;
+  --delete-button-hover-bg: #7d2c26;
+}
+
+html[data-theme="dark"] {
+  --primary: #4a86c8;
+  --secondary: #0c3d6e;
+  --accent: #d7e6f5;
+  --primary-fg: #0f1a24;
+
+  --body-fg: #e4ecf3;
+  --body-bg: #101a24;
+  --body-quiet-color: #9aa8b4;
+  --body-medium-color: #b6c3cd;
+  --body-loud-color: #ffffff;
+
+  --header-color: #e4ecf3;
+  --header-branding-color: #d7e6f5;
+  --header-bg: #0c3d6e;
+  --header-link-color: #e4ecf3;
+
+  --breadcrumbs-fg: #b6c3cd;
+  --breadcrumbs-link-fg: #d7e6f5;
+  --breadcrumbs-bg: #16232f;
+
+  --link-fg: #7cb0e0;
+  --link-hover-color: #a8cdf0;
+  --link-selected-fg: #6fc7cf;
+
+  --hairline-color: #24333f;
+  --border-color: #2b3d4b;
+  --error-fg: #f0a9a2;
+
+  --message-success-bg: #14322f;
+  --message-warning-bg: #33280f;
+  --message-error-bg: #3a1f1d;
+
+  --darkened-bg: #16232f;
+  --selected-bg: #1d2f3d;
+  --selected-row: #18262f;
+
+  --button-fg: #0f1a24;
+  --button-bg: #7cb0e0;
+  --button-hover-bg: #a8cdf0;
+  --default-button-bg: #6fc7cf;
+  --default-button-hover-bg: #8fd7dd;
+  --close-button-bg: #5a6b78;
+  --close-button-hover-bg: #74868f;
+  --delete-button-bg: #c2564c;
+  --delete-button-hover-bg: #d4736a;
+}
+
+/* 与前台一致的中文字体顺序；后台不改动布局，只统一字体与标记形状 */
+body,
+input,
+textarea,
+select,
+button {
+  font-family: "Noto Sans SC", -apple-system, BlinkMacSystemFont, "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Source Han Sans SC",
+    "WenQuanYi Micro Hei", sans-serif;
+}
+
+#site-name a {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.module h2,
+.module caption,
+.inline-group h2 {
+  font-weight: 600;
+}

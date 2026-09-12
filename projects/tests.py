@@ -259,3 +259,52 @@ class ProjectGroupAcceptanceTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 403)
+
+    def test_contact_renders_manage_page_with_all_sections(self):
+        """管理页必须真的渲染得出来：此前没有任何测试 GET 过它。"""
+        self.client.force_login(self.leader)
+
+        response = self.client.get(
+            reverse("projects:group_manage", args=(self.group.pk,))
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "管理「机器人组」")
+        for section in ("入组申请", "成员", "项目组介绍", "项目书", "提交审核", "转让联系人"):
+            self.assertContains(response, section)
+
+    def test_manage_page_lists_pending_request_and_real_proposal_file(self):
+        GroupJoinRequest.objects.create(
+            group=self.group,
+            applicant=self.no_group_user,
+            message="希望加入机器人组。",
+        )
+        self.group.proposal = "project_proposals/2026/09/开题报告.docx"
+        self.group.save(update_fields=["proposal"])
+        self.client.force_login(self.leader)
+
+        response = self.client.get(
+            reverse("projects:group_manage", args=(self.group.pk,))
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.no_group_user.username)
+        self.assertContains(response, "希望加入机器人组。")
+        # 角标与文件名取自真实路径，不是写死的占位符
+        self.assertContains(response, "开题报告.docx")
+        self.assertContains(response, "DOCX")
+        self.assertNotContains(response, ">DOC</span>")
+
+    def test_group_detail_derives_extension_from_proposal_filename(self):
+        self.group.proposal = "project_proposals/2026/09/开题报告.pdf"
+        self.group.save(update_fields=["proposal"])
+        self.client.force_login(self.leader)
+
+        response = self.client.get(
+            reverse("projects:group_detail", args=(self.group.pk,))
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "开题报告.pdf")
+        self.assertContains(response, "PDF")
+        self.assertNotContains(response, ">DOC</span>")

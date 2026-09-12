@@ -20,6 +20,7 @@
 │   ├── logging.py / asgi.py / wsgi.py
 ├── accounts/                         # 账号与成员资料
 │   ├── models.py                     # User（含 must_change_password、is_reviewer）、Profile
+│   ├── roles.py                      # 身份展示口径（管理员／联系人／成员／无组）
 │   ├── forms.py / views.py / urls.py / admin.py
 │   ├── signals.py                    # Profile 自动创建、认证日志
 │   └── tests.py
@@ -62,15 +63,30 @@
 ├── core/                             # 平台核心
 │   ├── registry.py                   # 操作入口注册表
 │   ├── models.py / audit.py          # AuditLog 与统一审计函数
-│   ├── context_processors.py         # 向模板注入成员操作入口
+│   ├── context_processors.py         # 注入操作入口与顶栏当前栏目
+│   ├── stats.py                      # 首页概览计数
+│   ├── templatetags/files.py         # 文件路径过滤器（文件名 / 扩展名）
 │   └── tests.py
 ├── templates/  static/  mediafiles/  logs/
+├── static/css/app.css                # 全站设计系统（唯一视觉来源）
+├── static/css/admin.css              # Django Admin 配色，与 app.css 同色值
 ├── docs/                              # architecture.md / development.md / deploy.md
 ├── deploy/                            # 部署工件：install.sh / deploy.sh / backup.sh / *.service / *.timer / nginx / env.template
 └── env.local.sh                       # 本地开发配置（.gitignore 忽略）
 ```
 
 本机生成内容（`.venv/`、`__pycache__/`、`logs/`、`mediafiles/`、`staticfiles/`、`env*.sh`）不提交版本库，规则见 `.gitignore`。根目录 `社团评审系统_发布版.zip` 是历史压缩包，不参与运行。
+
+### 1.1 样式与模板约定
+
+页面外观集中在 `static/css/app.css`，模板不写行内样式、不写 `<style>`：
+
+- **令牌**：颜色、字体、宽度都取自文件顶部的 `:root` 变量；调整配色只改这一处。
+- **骨架类**：`topbar` / `pagehead`+`path` / `spec`（页面级数字条）/ `panel`+`panel-head`+`panel-body` / `frame` / `split`（左右分栏）/ `col-narrow`、`col-center`（窄栏与居中）。
+- **组件类**：`btn`（`-primary`/`-danger`/`-sm`/`-block`）、`chip`（`-pin`/`-ok`/`-warn`/`-off`/`-on`）、`table-wrap`、`field`、`dl`、`prose`（Markdown 渲染结果）、`entries`/`entry`、`todo`、`queue`/`qitem`、`rounds`、`empty`、`flash`。
+- **字体**：只用系统字体栈（Noto Sans SC → 苹方 → 微软雅黑），不加载外部字体；等宽字只用于编号、日期、文件规格这类真值，不做装饰。
+- **动效**：`.reveal` 只在页面载入时编排一次淡入，并遵守 `prefers-reduced-motion`；不要给每个区块加逐条动画。
+- 表单控件由元素选择器统一着色，新增字段无需加 class。`templates/django/forms/widgets/clearable_file_input.html` 覆盖了 Django 的文件控件默认模板，与 `app.css` 的 `.file-current` 一族配套。
 
 ## 2. 依赖
 
@@ -169,7 +185,7 @@ source env.local.sh
 |---|---|
 | `accounts` | 管理员发放账号/重置密码；首次登录强制改密、改密后解锁；资料维护；无注册、无自助找回；审计与日志不含明文密码；非 staff 不能进后台 |
 | `notices` | `public`/`internal`/`contacts` 三种范围隔离；`internal` 按 auth 用户组、`contacts` 按项目组联系人；置顶排序；公开路由不泄漏内部/联系人通知；未授权详情 404；未改密拦截 |
-| `content` / `media` | 已发布才公开、未发布 404；Markdown 经 bleach 白名单；图片/视频扩展名+大小+签名校验 |
+| `content` / `media` | 已发布才公开；按 slug 直连的未发布页 404，而顶栏固定入口 `/about/` 未发布时显示空状态；Markdown 经 bleach 白名单；图片/视频扩展名+大小+签名校验 |
 | `projects` | 联系人由 `leader` 计算；无组员看全部可申请、组员只看自己的组、联系人看全部并管理自己的组；申请→审核入组；拒绝后可重申；移除成员；联系人转让后原联系人保留为成员；改组介绍；非联系人管理页 403 |
 | `competitions` | 竞赛列表所有登录成员可见；仅项目组联系人报名（限自己的组）；参赛成员与竞赛组长须属该组且组长在参赛成员内；重复报名/截止校验；报名修改与放弃；跨组越权拒绝 |
 | `equipment` | 借用限项目组成员（入口隐藏 + 视图 403）；库存事务 + 行锁不超借；仅见本人记录；归还回补、重复归还不重复回补；管理员代还；被移出组后仍可归还 |

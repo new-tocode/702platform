@@ -28,8 +28,24 @@ def page_detail(request, slug):
 
 
 def about(request):
-    """Keep /about/ as the friendly shortcut for the about ContentPage."""
-    return page_detail(request, "about")
+    """Keep /about/ as the friendly shortcut for the about ContentPage.
+
+    /about/ 是顶栏固定入口，新建站点上还没有这份内容时给出空状态而不是 404：
+    导航项不该在内容尚未录入时直接报错。未发布的草稿同样按「没有内容」处理，
+    其正文不会出现在响应里。按 slug 直接访问的 page_detail 仍然保持 404 语义。
+    """
+    page = (
+        ContentPage.objects.prefetch_related("attachments")
+        .filter(slug="about", is_published=True)
+        .first()
+    )
+    logger.info(
+        "content.about.view published=%s user=%s",
+        page is not None,
+        request.user.get_username() if request.user.is_authenticated else "anonymous",
+        extra={"request_id": getattr(request, "request_id", "-")},
+    )
+    return render(request, "content/about.html", {"page": page})
 
 
 def awards(request):

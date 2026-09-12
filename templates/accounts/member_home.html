@@ -1,21 +1,55 @@
 {% extends "base.html" %}
 
-{% block title %}成员中心 - 竞赛社团平台{% endblock %}
+{% block title %}成员中心 - 竞赛社团管理平台{% endblock %}
 
 {% block content %}
-<div class="card">
-    <h1>成员中心</h1>
-    <p>你好，{{ user.profile.full_name|default:user.username }}。</p>
-    <p>平台业务入口会根据你的账号权限自动显示。</p>
-    <div class="operation-grid">
-        {% for entry in operation_entries %}
-            <a class="operation-card" href="{{ entry.url }}">
-                <strong>{{ entry.label }}</strong>
-                <span>{{ entry.description }}</span>
-            </a>
-        {% empty %}
-            <p class="muted">当前没有可用的业务入口。</p>
-        {% endfor %}
+<div class="wrap">
+    <div class="pagehead">
+        <div class="path"><span>/member</span><span>{{ user.username }}</span></div>
+        <div class="head-row">
+            <div>
+                <h1>成员中心</h1>
+                <div class="sub">你好，{{ user.profile.full_name|default:user.username }}。可用入口按当前账号权限显示。</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="spec reveal">
+        <div>
+            <div class="k">当前身份</div>
+            <div class="v text">{{ member_role }}</div>
+        </div>
+        <div>
+            <div class="k">当前账号</div>
+            <div class="v mono">{{ user.username }}</div>
+        </div>
+        <div>
+            <div class="k">可用入口</div>
+            <div class="v">{{ operation_entries|length }}<small>个</small></div>
+        </div>
+        <div>
+            <div class="k">评审资格</div>
+            <div class="v mono">{% if user.is_reviewer %}有{% else %}无{% endif %}</div>
+        </div>
+    </div>
+
+    <div class="panel reveal">
+        <div class="panel-head">
+            <h2>可用入口</h2>
+            <span class="count">{{ operation_entries|length }} entries</span>
+        </div>
+        <div class="panel-body">
+            <div class="entries">
+                {% for entry in operation_entries %}
+                    <a class="entry" href="{{ entry.url }}">
+                        <span class="label">{{ entry.label }}</span>
+                        <span class="desc">{{ entry.description }}</span>
+                    </a>
+                {% empty %}
+                    <div class="empty">当前没有可用的业务入口。</div>
+                {% endfor %}
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}

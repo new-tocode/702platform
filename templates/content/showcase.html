@@ -1,32 +1,47 @@
 {% extends "base.html" %}
 {% load rendering %}
 
-{% block title %}成员风采 - 竞赛社团平台{% endblock %}
+{% block title %}成员风采 - 竞赛社团管理平台{% endblock %}
 
 {% block content %}
-<div class="card">
-    <h1>成员风采</h1>
+<div class="wrap">
+    <div class="pagehead">
+        <div class="path">
+            <a href="{% url 'accounts:home' %}">/</a>
+            <span>/</span>
+            <span>成员风采</span>
+        </div>
+        <div class="head-row">
+            <div>
+                <h1>成员风采</h1>
+                {% if showcases %}<div class="sub">共 {{ showcases|length }} 位成员</div>{% endif %}
+            </div>
+        </div>
+    </div>
+
     {% if showcases %}
-        <div class="media-grid">
+        <div class="entries">
             {% for showcase in showcases %}
-                <article class="card">
+                <article class="entry reveal">
                     {% if showcase.photo %}
                         {% if showcase.photo.kind == "image" %}
-                            <img src="{{ showcase.photo.file.url }}" alt="{{ showcase.photo.caption }}" style="max-width:100%;">
+                            <img src="{{ showcase.photo.file.url }}" alt="{{ showcase.photo.caption }}">
                         {% elif showcase.photo.kind == "video" %}
-                            <video controls preload="metadata" style="max-width:100%;">
+                            <video controls preload="metadata">
                                 <source src="{{ showcase.photo.file.url }}">
                                 您的浏览器不支持视频播放。
                             </video>
                         {% endif %}
                     {% endif %}
-                    <h2>{{ showcase.member.profile.full_name|default:showcase.member.username }}</h2>
-                    {% if showcase.intro %}<div>{{ showcase.intro|render_markdown }}</div>{% endif %}
+                    <span class="label">{{ showcase.member.profile.full_name|default:showcase.member.username }}</span>
+                    {% if showcase.intro %}
+                        <div class="prose">{{ showcase.intro|render_markdown }}</div>
+                    {% endif %}
                 </article>
             {% endfor %}
         </div>
     {% else %}
-        <p class="muted">暂时没有成员风采内容。</p>
+        <div class="empty">暂时没有成员风采内容。</div>
     {% endif %}
 </div>
 {% endblock %}

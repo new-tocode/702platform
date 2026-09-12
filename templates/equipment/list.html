@@ -1,26 +1,57 @@
 {% extends "base.html" %}
 
-{% block title %}设备借用 - 竞赛社团平台{% endblock %}
+{% block title %}设备借用 - 竞赛社团管理平台{% endblock %}
 
 {% block content %}
-<div class="card">
-    <h1>设备借用</h1>
+<div class="wrap">
+    <div class="pagehead">
+        <div class="path">
+            <a href="{% url 'accounts:member_home' %}">/member</a>
+            <span>/</span>
+            <span>equipment</span>
+        </div>
+        <div class="head-row">
+            <div>
+                <h1>设备借用</h1>
+                <div class="sub">项目组成员可登记借用；库存以登记时的可用数量为准。</div>
+            </div>
+        </div>
+    </div>
+
     {% if equipment %}
-        {% for item in equipment %}
-            <article class="card">
-                <h2>{{ item.name }}</h2>
-                {% if item.category %}<p>分类：{{ item.category }}</p>{% endif %}
-                <p>可借数量：{{ item.available_count }} / {{ item.total_count }}</p>
-                {% if item.description %}<div>{{ item.description|linebreaks }}</div>{% endif %}
-                {% if item.available_count > 0 %}
-                    <p><a href="{% url 'equipment:borrow' item.pk %}">登记借用</a></p>
-                {% else %}
-                    <p class="muted">当前无可借数量。</p>
-                {% endif %}
-            </article>
-        {% endfor %}
+        <div class="table-wrap reveal">
+            <table>
+                <thead>
+                    <tr>
+                        <th>设备</th>
+                        <th>分类</th>
+                        <th class="num right">可借 / 总数</th>
+                        <th class="right">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in equipment %}
+                        <tr>
+                            <td>
+                                <div class="t">{{ item.name }}</div>
+                                {% if item.description %}<div class="muted">{{ item.description|linebreaksbr }}</div>{% endif %}
+                            </td>
+                            <td>{{ item.category|default:"—" }}</td>
+                            <td class="num right">{{ item.available_count }} / {{ item.total_count }}</td>
+                            <td class="right">
+                                {% if item.available_count > 0 %}
+                                    <a class="btn btn-primary btn-sm" href="{% url 'equipment:borrow' item.pk %}">登记借用</a>
+                                {% else %}
+                                    <span class="muted">当前没有可借数量</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     {% else %}
-        <p class="muted">暂时没有可用设备。</p>
+        <div class="empty">暂时没有可用设备。</div>
     {% endif %}
 </div>
 {% endblock %}

@@ -1,22 +1,53 @@
 {% extends "base.html" %}
 
-{% block title %}登记设备借用 - 竞赛社团平台{% endblock %}
+{% block title %}登记设备借用 - 竞赛社团管理平台{% endblock %}
 
 {% block content %}
-<div class="card">
-    <p><a href="{% url 'equipment:list' %}">返回设备列表</a></p>
-    <h1>登记借用：{{ equipment.name }}</h1>
-    <p>当前可借数量：{{ equipment.available_count }} / {{ equipment.total_count }}</p>
-    <form method="post">
-        {% csrf_token %}
-        {{ form.non_field_errors }}
-        {% for field in form %}
-            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
-            {{ field }}
-            {% if field.help_text %}<p class="muted">{{ field.help_text }}</p>{% endif %}
-            {{ field.errors }}
-        {% endfor %}
-        <button type="submit">提交借用登记</button>
-    </form>
+<div class="wrap">
+    <div class="pagehead">
+        <div class="path">
+            <a href="{% url 'equipment:list' %}">/member/equipment</a>
+            <span>/</span>
+            <span>#{{ equipment.pk }}</span>
+        </div>
+        <div class="head-row">
+            <div>
+                <h1>登记借用：{{ equipment.name }}</h1>
+                <div class="sub">提交后库存立即扣减，归还时回补。</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="spec reveal">
+        <div>
+            <div class="k">可借 / 总数</div>
+            <div class="v mono">{{ equipment.available_count }} / {{ equipment.total_count }}</div>
+        </div>
+        <div>
+            <div class="k">分类</div>
+            <div class="v mono">{{ equipment.category|default:"未分类" }}</div>
+        </div>
+    </div>
+
+    <div class="col-narrow">
+        <div class="frame reveal">
+            <form method="post">
+                {% csrf_token %}
+                {{ form.non_field_errors }}
+                {% for field in form %}
+                    <div class="field">
+                        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.help_text %}<p class="help">{{ field.help_text }}</p>{% endif %}
+                        {{ field.errors }}
+                    </div>
+                {% endfor %}
+                <div class="form-actions">
+                    <button class="btn btn-primary" type="submit">提交借用登记</button>
+                    <a class="btn" href="{% url 'equipment:list' %}">返回设备列表</a>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 {% endblock %}
