@@ -7,7 +7,7 @@
     <style>
         body { font-family: sans-serif; max-width: 960px; margin: 2rem auto; padding: 0 1rem; line-height: 1.6; }
         nav { display: flex; gap: 1rem; align-items: center; border-bottom: 1px solid #ddd; padding-bottom: 1rem; margin-bottom: 2rem; }
-        nav form { margin-left: auto; }
+        .nav-end { display: flex; gap: 1rem; align-items: center; margin-left: auto; }
         .card { border: 1px solid #ddd; border-radius: .5rem; padding: 1.5rem; margin: 1rem 0; }
         .messages { padding: 0; list-style: none; }
         .messages li { background: #eef8ee; padding: .75rem; margin: .5rem 0; }
@@ -38,13 +38,15 @@
         <a href="{% url 'notices:public_list' %}">公开通知</a>
         {% if user.is_authenticated %}
             <a href="{% url 'accounts:member_home' %}">成员中心</a>
-            {% for entry in operation_entries %}
-                <a href="{{ entry.url }}">{{ entry.label }}</a>
-            {% endfor %}
-            <form method="post" action="{% url 'accounts:logout' %}">
-                {% csrf_token %}
-                <button type="submit">退出</button>
-            </form>
+            <div class="nav-end">
+                {% if user.is_staff %}
+                    <a href="{% url 'admin:index' %}">管理后台</a>
+                {% endif %}
+                <form method="post" action="{% url 'accounts:logout' %}">
+                    {% csrf_token %}
+                    <button type="submit">退出</button>
+                </form>
+            </div>
         {% else %}
             <a href="{% url 'accounts:login' %}">成员登录</a>
         {% endif %}
