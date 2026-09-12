@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block title %}评审 - 竞赛社团平台{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h1>我的评审</h1>
+
+    <h2>待评审</h2>
+    {% for assignment in pending %}
+        <article class="card">
+            <p>
+                <strong>{{ assignment.submission.group.name }}</strong>
+                · 第 {{ assignment.submission.round }} 轮送审
+            </p>
+            <p class="muted">提交时间：{{ assignment.submission.submitted_at|date:"Y-m-d H:i" }}</p>
+            {% if assignment.submission.message %}
+                <div>{{ assignment.submission.message|linebreaks }}</div>
+            {% endif %}
+            <p>
+                <a href="{% url 'projects:group_detail' assignment.submission.group.pk %}">进入项目组详情并评审</a>
+            </p>
+        </article>
+    {% empty %}
+        <p class="muted">暂无待评审的项目书。</p>
+    {% endfor %}
+
+    <h2>已完成</h2>
+    {% for assignment in completed %}
+        <article class="card">
+            <p>
+                <strong>{{ assignment.submission.group.name }}</strong>
+                · 第 {{ assignment.submission.round }} 轮
+                · 结论：{{ assignment.get_decision_display }}
+            </p>
+            <p class="muted">完成时间：{{ assignment.completed_at|date:"Y-m-d H:i" }}</p>
+        </article>
+    {% empty %}
+        <p class="muted">暂无已完成的评审。</p>
+    {% endfor %}
+</div>
+{% endblock %}
