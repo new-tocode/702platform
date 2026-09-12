@@ -25,6 +25,11 @@ class User(AbstractUser):
         verbose_name="首次登录需改密",
         help_text="管理员发放或重置密码后保持启用，用户成功改密后自动关闭。",
     )
+    is_reviewer = models.BooleanField(
+        "评审资格",
+        default=False,
+        help_text="启用后可进入“评审”应用，审阅分配到自己的项目书并给出评审意见。",
+    )
 
     objects = UserManager()
 

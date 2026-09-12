@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block title %}{{ group.name }} - 竞赛社团平台{% endblock %}
+
+{% block content %}
+<div class="card">
+    <p><a href="{% url 'projects:group_list' %}">返回项目组列表</a></p>
+    <h1>{{ group.name }}</h1>
+    <p>联系人：{{ group.leader.profile.full_name|default:group.leader.username }}</p>
+    {% if group.description %}<div>{{ group.description|linebreaks }}</div>{% endif %}
+    {% if can_manage %}
+        <p><a href="{% url 'projects:group_manage' group.pk %}">管理项目组</a></p>
+    {% endif %}
+
+    <h2>成员</h2>
+    <ul>
+        {% for member in group.members.all %}
+            <li>
+                {{ member.profile.full_name|default:member.username }}
+                {% if member.pk == group.leader_id %}（联系人）{% endif %}
+            </li>
+        {% empty %}
+            <li class="muted">暂无成员</li>
+        {% endfor %}
+    </ul>
+
+    <h2>项目书</h2>
+    {% if group.proposal %}
+        <p><a href="{% url 'projects:group_proposal_download' group.pk %}">下载当前项目书</a></p>
+    {% else %}
+        <p class="muted">尚未上传项目书。</p>
+    {% endif %}
+
+    <h2>评审状态</h2>
+    {% if latest_submission %}
+        <p>
+            第 {{ latest_submission.round }} 轮：
+            <strong>{{ latest_submission.get_status_display }}</strong>
+            {% if latest_submission.status == "approved" %}
+                · 方案已通过，可按此推进项目。
+            {% elif latest_submission.status == "needs_revision" %}
+                · 请根据评审意见修改项目书后重新提交。
+            {% endif %}
+        </p>
+    {% else %}
+        <p class="muted">尚未提交评审。</p>
+    {% endif %}
+</div>
+
+{% if my_assignment %}
+    <div class="card">
+        <h2>我的评审</h2>
+        <p>请先下载本轮项目书，阅读后填写评审意见与决定。</p>
+        <p><a href="{% url 'projects:group_proposal_download' group.pk %}">下载项目书</a></p>
+        <form method="post" action="{% url 'reviews:complete' my_assignment.pk %}">
+            {% csrf_token %}
+            {{ review_form.non_field_errors }}
+            <label>{{ review_form.decision.label_tag }}</label>
+            {{ review_form.decision }}
+            {{ review_form.decision.errors }}
+            <label for="{{ review_form.comment.id_for_label }}">{{ review_form.comment.label }}</label>
+            {{ review_form.comment }}
+            {{ review_form.comment.errors }}
+            <button type="submit">完成评审</button>
+        </form>
+    </div>
+{% endif %}
+
+<div class="card">
+    <h2>评审记录</h2>
+    {% for submission in submissions %}
+        <article class="card">
+            <p>
+                <strong>第 {{ submission.round }} 轮</strong>
+                · {{ submission.get_status_display }}
+                · 提交于 {{ submission.submitted_at|date:"Y-m-d H:i" }}
+            </p>
+            {% if submission.message %}<div>{{ submission.message|linebreaks }}</div>{% endif %}
+            <p>
+                提交人：{{ submission.submitted_by.profile.full_name|default:submission.submitted_by.username }}
+            </p>
+            <ul>
+                {% for assignment in submission.assignments.all %}
+                    <li>
+                        评审人 {{ forloop.counter }} —
+                        {% if assignment.is_completed %}
+                            结论：<strong>{{ assignment.get_decision_display }}</strong>；意见：{{ assignment.comment|default:"—" }}
+                        {% else %}
+                            <span class="muted">待评审</span>
+                        {% endif %}
+                    </li>
+                {% empty %}
+                    <li class="muted">暂无评审任务。</li>
+                {% endfor %}
+            </ul>
+        </article>
+    {% empty %}
+        <p class="muted">暂无评审记录。</p>
+    {% endfor %}
+</div>
+{% endblock %}
