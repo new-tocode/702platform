@@ -1,6 +1,7 @@
 """Stage 1 acceptance tests for accounts and forced password changes."""
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.test import TestCase
 from django.urls import reverse
 
@@ -284,3 +285,23 @@ class AdminProvisioningAcceptanceTests(TestCase):
         self.client.force_login(member)
         member_admin_response = self.client.get("/admin/")
         self.assertEqual(member_admin_response.status_code, 302)
+
+    def test_admin_group_pages_load_and_list_group_members(self):
+        member = User.objects.create_user(
+            username="member-in-group",
+            password="Initial-Password-789!",
+        )
+        member.profile.full_name = "组内成员"
+        member.profile.save(update_fields=["full_name"])
+        group = Group.objects.create(name="测试用户组")
+        member.groups.add(group)
+
+        list_response = self.client.get(reverse("admin:auth_group_changelist"))
+        change_response = self.client.get(
+            reverse("admin:auth_group_change", args=(group.pk,))
+        )
+
+        self.assertEqual(list_response.status_code, 200)
+        self.assertContains(list_response, "测试用户组")
+        self.assertEqual(change_response.status_code, 200)
+        self.assertContains(change_response, "组内成员")

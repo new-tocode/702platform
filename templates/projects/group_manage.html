@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}管理 {{ group.name }} - 竞赛社团平台{% endblock %}
+
+{% block content %}
+<div class="card">
+    <p><a href="{% url 'projects:group_list' %}">返回项目组列表</a></p>
+    <h1>管理「{{ group.name }}」</h1>
+    <p class="muted">联系人：{{ group.leader.profile.full_name|default:group.leader.username }}</p>
+
+    <h2>入组申请</h2>
+    {% for join_request in join_requests %}
+        <div class="card">
+            <p>
+                <strong>{{ join_request.applicant.profile.full_name|default:join_request.applicant.username }}</strong>
+                <span class="muted">{{ join_request.created_at|date:"Y-m-d H:i" }}</span>
+            </p>
+            {% if join_request.message %}<div>{{ join_request.message|linebreaks }}</div>{% endif %}
+            <form method="post" action="{% url 'projects:group_request_decide' group.pk join_request.pk 'approve' %}" style="display:inline">
+                {% csrf_token %}
+                <button type="submit">通过</button>
+            </form>
+            <form method="post" action="{% url 'projects:group_request_decide' group.pk join_request.pk 'reject' %}" style="display:inline">
+                {% csrf_token %}
+                <button type="submit">拒绝</button>
+            </form>
+        </div>
+    {% empty %}
+        <p class="muted">暂无待审核申请。</p>
+    {% endfor %}
+
+    <h2>成员</h2>
+    <ul>
+        {% for member in members %}
+            <li>
+                {{ member.profile.full_name|default:member.username }}
+                {% if member.pk == group.leader_id %}
+                    <span class="muted">（联系人）</span>
+                {% else %}
+                    <form method="post" action="{% url 'projects:group_member_remove' group.pk member.pk %}" style="display:inline">
+                        {% csrf_token %}
+                        <button type="submit">移出</button>
+                    </form>
+                {% endif %}
+            </li>
+        {% endfor %}
+    </ul>
+
+    <h2>项目书与送审</h2>
+    {% if group.proposal %}
+        <p><a href="{% url 'projects:group_proposal_download' group.pk %}">下载当前项目书</a></p>
+    {% endif %}
+    <form method="post" action="{% url 'projects:group_proposal_update' group.pk %}" enctype="multipart/form-data">
+        {% csrf_token %}
+        <label for="{{ proposal_form.proposal.id_for_label }}">{{ proposal_form.proposal.label }}</label>
+        {{ proposal_form.proposal }}
+        {{ proposal_form.proposal.errors }}
+        <p class="muted">{{ proposal_form.proposal.help_text }}</p>
+        <button type="submit">上传 / 更新项目书</button>
+    </form>
+
+    <h3>提交审核</h3>
+    {% if latest_submission %}
+        <p class="muted">
+            最近一轮：第 {{ latest_submission.round }} 轮 · {{ latest_submission.get_status_display }}
+        </p>
+    {% endif %}
+    <form method="post" action="{% url 'projects:group_submit_review' group.pk %}">
+        {% csrf_token %}
+        <label for="submit-message">提交说明</label>
+        <textarea name="message" id="submit-message" rows="3"
+                  placeholder="例如：申请开题、申请参加 XX 竞赛"></textarea>
+        <button type="submit">提交审核</button>
+    </form>
+    <p class="muted">提交后会随机分配给两名评审人；两人都通过后，本项目组方案即通过。</p>
+
+    <h2>修改项目组介绍</h2>
+    <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="description">
+        {{ description_form.description }}
+        {{ description_form.description.errors }}
+        <button type="submit">保存介绍</button>
+    </form>
+
+    <h2>转让联系人</h2>
+    {% if transfer_form.fields.new_contact.queryset %}
+        <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="transfer">
+            {{ transfer_form.new_contact }}
+            {{ transfer_form.new_contact.errors }}
+            <p class="muted">{{ transfer_form.new_contact.help_text }}</p>
+            <button type="submit">转让</button>
+        </form>
+    {% else %}
+        <p class="muted">暂无可转让的成员。</p>
+    {% endif %}
+</div>
+{% endblock %}

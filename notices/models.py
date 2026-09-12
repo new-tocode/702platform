@@ -11,9 +11,11 @@ from media.models import MediaFile
 class Notice(models.Model):
     PUBLIC = "public"
     INTERNAL = "internal"
+    CONTACTS = "contacts"
     SCOPE_CHOICES = (
         (PUBLIC, "公开"),
         (INTERNAL, "内部"),
+        (CONTACTS, "仅联系人可见"),
     )
 
     title = models.CharField("标题", max_length=200)
@@ -30,7 +32,7 @@ class Notice(models.Model):
         blank=True,
         related_name="visible_notices",
         verbose_name="可查看用户组",
-        help_text="内部通知必须至少选择一个用户组；属于任一所选用户组的成员可以查看。",
+        help_text="仅“内部”通知需要选择用户组；属于任一所选用户组的成员可以查看。“公开”和“仅联系人可见”通知无需选择。",
     )
     attachments = models.ManyToManyField(
         MediaFile,

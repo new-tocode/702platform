@@ -6,7 +6,7 @@ from django.contrib import admin
 
 from core.audit import record_audit
 
-from .models import ProjectGroup
+from .models import GroupJoinRequest, ProjectContact, ProjectGroup
 
 
 logger = logging.getLogger(__name__)
@@ -70,3 +70,71 @@ class ProjectGroupAdmin(admin.ModelAdmin):
             not change,
             extra={"request_id": getattr(request, "request_id", "-")},
         )
+
+
+@admin.register(ProjectContact)
+class ProjectContactAdmin(admin.ModelAdmin):
+    """Read-only list of every project-group contact at a glance."""
+
+    list_display = (
+        "username",
+        "profile_name",
+        "contact_groups",
+        "is_active",
+        "is_staff",
+    )
+    search_fields = ("username", "profile__full_name", "led_project_groups__name")
+    ordering = ("username",)
+    list_select_related = ("profile",)
+
+    def get_queryset(self, request):
+        return (
+            super()
+            .get_queryset(request)
+            .filter(led_project_groups__isnull=False)
+            .distinct()
+            .select_related("profile")
+            .prefetch_related("led_project_groups")
+        )
+
+    @admin.display(description="姓名", ordering="profile__full_name")
+    def profile_name(self, obj):
+        return obj.profile.full_name
+
+    @admin.display(description="负责的项目组")
+    def contact_groups(self, obj):
+        names = [group.name for group in obj.led_project_groups.all()]
+        return "、".join(names) or "—"
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(GroupJoinRequest)
+class GroupJoinRequestAdmin(admin.ModelAdmin):
+    """Oversight list for membership applications reviewed by contacts."""
+
+    list_display = ("group", "applicant", "status", "created_at", "decided_by", "decided_at")
+    list_filter = ("status", "created_at")
+    search_fields = ("group__name", "applicant__username", "applicant__profile__full_name")
+    list_select_related = ("group", "applicant", "decided_by")
+    readonly_fields = (
+        "group",
+        "applicant",
+        "message",
+        "status",
+        "decided_by",
+        "decided_at",
+        "created_at",
+        "updated_at",
+    )
+    date_hierarchy = "created_at"
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False

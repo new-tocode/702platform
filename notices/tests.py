@@ -9,6 +9,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.models import AuditLog
+from projects.models import ProjectGroup
 
 from .models import Notice
 
@@ -44,6 +45,16 @@ class NoticeVisibilityAcceptanceTests(TestCase):
         )
         self.no_group_member.must_change_password = False
         self.no_group_member.save(update_fields=["must_change_password"])
+        self.contact = User.objects.create_user(
+            username="notice-contact",
+            password="Contact-Password-123!",
+        )
+        self.contact.must_change_password = False
+        self.contact.save(update_fields=["must_change_password"])
+        self.contact_group = ProjectGroup.objects.create(
+            name="通知项目组",
+            leader=self.contact,
+        )
         now = timezone.now()
         self.public_notice = Notice.objects.create(
             title="校园公开公告",
@@ -60,6 +71,13 @@ class NoticeVisibilityAcceptanceTests(TestCase):
             published_at=now - timedelta(minutes=1),
         )
         self.internal_notice.visible_groups.add(self.allowed_group)
+        self.contacts_notice = Notice.objects.create(
+            title="仅联系人公告",
+            content="只有项目组联系人才可以看到。",
+            scope=Notice.CONTACTS,
+            published_by=self.admin,
+            published_at=now,
+        )
 
     def test_anonymous_can_view_public_list_and_detail(self):
         response = self.client.get(reverse("notices:public_list"))
@@ -141,6 +159,38 @@ class NoticeVisibilityAcceptanceTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, self.internal_notice.title)
+
+    def test_project_contact_can_view_contacts_notice(self):
+        self.client.force_login(self.contact)
+
+        list_response = self.client.get(reverse("member_notices:internal_list"))
+        detail_response = self.client.get(
+            reverse("member_notices:internal_detail", args=(self.contacts_notice.pk,))
+        )
+
+        self.assertEqual(list_response.status_code, 200)
+        self.assertContains(list_response, self.contacts_notice.title)
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertContains(detail_response, self.contacts_notice.content)
+
+    def test_non_contact_cannot_view_contacts_notice(self):
+        self.client.force_login(self.member)
+
+        list_response = self.client.get(reverse("member_notices:internal_list"))
+        detail_response = self.client.get(
+            reverse("member_notices:internal_detail", args=(self.contacts_notice.pk,))
+        )
+
+        self.assertEqual(list_response.status_code, 200)
+        self.assertNotContains(list_response, self.contacts_notice.title)
+        self.assertEqual(detail_response.status_code, 404)
+
+    def test_public_route_never_exposes_contacts_notice(self):
+        response = self.client.get(
+            reverse("notices:public_detail", args=(self.contacts_notice.pk,))
+        )
+
+        self.assertEqual(response.status_code, 404)
 
     def test_forced_member_cannot_bypass_password_change_on_internal_route(self):
         self.member.must_change_password = True
@@ -242,8 +292,42 @@ class NoticeAdminAcceptanceTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "公开通知不需要选择可查看用户组")
+        self.assertContains(response, "只有内部通知才需要选择可查看用户组")
         self.assertFalse(Notice.objects.filter(title="范围冲突的公开通知").exists())
+
+    def test_admin_can_publish_contacts_notice_without_group(self):
+        response = self.client.post(
+            reverse("admin:notices_notice_add"),
+            {
+                "title": "仅联系人通知",
+                "content": "只发给项目组联系人的通知。",
+                "scope": Notice.CONTACTS,
+                "is_pinned": "",
+                "_save": "保存",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(Notice.objects.filter(title="仅联系人通知").exists())
+
+    def test_admin_cannot_assign_groups_to_contacts_notice(self):
+        response = self.client.post(
+            reverse("admin:notices_notice_add"),
+            {
+                "title": "范围冲突的联系人通知",
+                "content": "不应保存。",
+                "scope": Notice.CONTACTS,
+                "visible_groups": [self.allowed_group.pk],
+                "is_pinned": "",
+                "_save": "保存",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "只有内部通知才需要选择可查看用户组")
+        self.assertFalse(
+            Notice.objects.filter(title="范围冲突的联系人通知").exists()
+        )
 
     def test_member_cannot_open_notice_admin(self):
         member = User.objects.create_user(

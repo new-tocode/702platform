@@ -41,6 +41,7 @@ class OperationRegistryAcceptanceTests(TestCase):
                 "notices.internal",
                 "projects.groups",
                 "competitions.registration",
+                "reviews.queue",
                 "equipment.borrow",
                 "equipment.records",
                 "core.audit",
@@ -56,7 +57,7 @@ class OperationRegistryAcceptanceTests(TestCase):
                 "accounts.password",
                 "notices.internal",
                 "projects.groups",
-                "equipment.borrow",
+                "competitions.registration",
                 "equipment.records",
             },
         )
@@ -96,11 +97,37 @@ class OperationRegistryAcceptanceTests(TestCase):
     def test_admin_sees_registered_audit_entry(self):
         self.client.force_login(self.admin)
 
-        response = self.client.get(reverse("accounts:home"))
+        response = self.client.get(reverse("accounts:member_home"))
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "审计日志")
         self.assertContains(response, reverse("admin:core_auditlog_changelist"))
+
+    def test_admin_backend_link_is_visible_to_staff_member(self):
+        staff = User.objects.create_user(
+            username="registry-staff",
+            password="Staff-Password-123!",
+        )
+        staff.is_staff = True
+        staff.must_change_password = False
+        staff.save(update_fields=["is_staff", "must_change_password"])
+
+        self.client.force_login(staff)
+
+        response = self.client.get(reverse("accounts:member_home"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse("admin:index"))
+        self.assertContains(response, "管理后台")
+
+    def test_admin_backend_link_is_hidden_from_regular_member(self):
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse("accounts:member_home"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, reverse("admin:index"))
+        self.assertNotContains(response, "管理后台")
 
     def test_member_home_renders_registered_operation_cards(self):
         self.client.force_login(self.user)
@@ -108,10 +135,11 @@ class OperationRegistryAcceptanceTests(TestCase):
         response = self.client.get(reverse("accounts:member_home"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "设备借用")
         self.assertContains(response, "借用记录")
         self.assertContains(response, "项目组")
-        self.assertNotContains(response, "竞赛报名")
+        self.assertContains(response, "竞赛信息")
+        # A member with no project group cannot see the borrowing entry.
+        self.assertNotContains(response, "设备借用")
 
     def tearDown(self):
         # Remove test-only entries while keeping AppConfig registrations intact

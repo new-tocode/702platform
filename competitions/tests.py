@@ -65,7 +65,17 @@ class CompetitionAcceptanceTests(TestCase):
             published_by=self.admin,
         )
 
-    def test_leader_can_view_competitions_and_registration_entry(self):
+    def _register(self):
+        registration = CompetitionRegistration.objects.create(
+            competition=self.competition,
+            group=self.group,
+            registered_by=self.leader,
+            team_leader=self.leader,
+        )
+        registration.members.set([self.leader, self.member])
+        return registration
+
+    def test_contact_can_view_competitions_and_registration_entry(self):
         self.client.force_login(self.leader)
 
         response = self.client.get(reverse("competitions:list"))
@@ -77,56 +87,52 @@ class CompetitionAcceptanceTests(TestCase):
             reverse("competitions:register", args=(self.competition.pk,)),
         )
 
-    def test_leader_can_view_competitions_and_registration_entry(self):
-        self.client.force_login(self.leader)
+    def test_regular_member_can_view_competitions_without_register_entry(self):
+        self.client.force_login(self.member)
 
         response = self.client.get(reverse("competitions:list"))
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, self.competition.title)
-        self.assertContains(
+        self.assertNotContains(
             response,
             reverse("competitions:register", args=(self.competition.pk,)),
         )
 
-    def test_competition_entry_is_visible_in_top_navigation_for_leader(self):
-        self.client.force_login(self.leader)
+    def test_competition_entry_is_visible_in_member_center_for_all_members(self):
+        self.client.force_login(self.member)
 
         response = self.client.get(reverse("accounts:member_home"))
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'href="/member/competitions/"')
-        self.assertContains(response, "竞赛报名")
+        self.assertContains(response, "竞赛信息")
 
-    def test_competition_entry_is_visible_in_top_navigation_for_admin(self):
+    def test_competition_entry_is_not_shown_in_top_navigation(self):
         self.client.force_login(self.admin)
 
         response = self.client.get(reverse("accounts:home"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'href="/member/competitions/"')
-        self.assertContains(response, "竞赛报名")
+        self.assertNotContains(response, 'href="/member/competitions/"')
+        self.assertNotContains(response, "竞赛信息")
 
-    def test_competition_entry_is_hidden_from_regular_member_and_visitor(self):
-        member_response = self.client.get(reverse("accounts:home"))
-        self.assertNotContains(member_response, "竞赛报名")
-        self.assertNotContains(member_response, 'href="/member/competitions/"')
-
-        self.client.force_login(self.member)
-        member_response = self.client.get(reverse("accounts:member_home"))
-        self.assertNotContains(member_response, "竞赛报名")
-        self.assertNotContains(member_response, 'href="/member/competitions/"')
-
-    def test_anonymous_is_redirected_and_regular_member_is_forbidden(self):
+    def test_anonymous_redirected_and_member_may_view_but_not_register(self):
         anonymous_response = self.client.get(reverse("competitions:list"))
         self.assertEqual(anonymous_response.status_code, 302)
         self.assertIn(reverse("accounts:login"), anonymous_response["Location"])
 
         self.client.force_login(self.member)
-        member_response = self.client.get(reverse("competitions:list"))
-        self.assertEqual(member_response.status_code, 403)
+        self.assertEqual(
+            self.client.get(reverse("competitions:list")).status_code,
+            200,
+        )
+        register_response = self.client.get(
+            reverse("competitions:register", args=(self.competition.pk,))
+        )
+        self.assertEqual(register_response.status_code, 403)
 
-    def test_leader_can_register_own_group_with_group_members(self):
+    def test_contact_can_register_own_group_with_group_members(self):
         self.client.force_login(self.leader)
 
         response = self.client.post(
@@ -134,6 +140,7 @@ class CompetitionAcceptanceTests(TestCase):
             {
                 "group": self.group.pk,
                 "members": [self.leader.pk, self.member.pk],
+                "team_leader": self.leader.pk,
                 "remark": "按计划参赛。",
             },
         )
@@ -144,12 +151,13 @@ class CompetitionAcceptanceTests(TestCase):
             group=self.group,
         )
         self.assertEqual(registration.registered_by, self.leader)
+        self.assertEqual(registration.team_leader, self.leader)
         self.assertEqual(
             set(registration.members.values_list("pk", flat=True)),
             {self.leader.pk, self.member.pk},
         )
 
-    def test_leader_cannot_register_another_group(self):
+    def test_contact_cannot_register_another_group(self):
         self.client.force_login(self.leader)
 
         response = self.client.post(
@@ -157,6 +165,7 @@ class CompetitionAcceptanceTests(TestCase):
             {
                 "group": self.other_group.pk,
                 "members": [self.other_leader.pk, self.other_member.pk],
+                "team_leader": self.other_leader.pk,
                 "remark": "越权尝试。",
             },
         )
@@ -175,6 +184,7 @@ class CompetitionAcceptanceTests(TestCase):
             {
                 "group": self.group.pk,
                 "members": [self.leader.pk, self.other_member.pk],
+                "team_leader": self.leader.pk,
             },
         )
 
@@ -182,11 +192,44 @@ class CompetitionAcceptanceTests(TestCase):
         self.assertTrue(response.context["form"].errors["members"])
         self.assertFalse(CompetitionRegistration.objects.exists())
 
+    def test_team_leader_must_be_a_group_member(self):
+        self.client.force_login(self.leader)
+
+        response = self.client.post(
+            reverse("competitions:register", args=(self.competition.pk,)),
+            {
+                "group": self.group.pk,
+                "members": [self.leader.pk],
+                "team_leader": self.other_member.pk,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["form"].errors["team_leader"])
+        self.assertFalse(CompetitionRegistration.objects.exists())
+
+    def test_team_leader_must_be_among_selected_members(self):
+        self.client.force_login(self.leader)
+
+        response = self.client.post(
+            reverse("competitions:register", args=(self.competition.pk,)),
+            {
+                "group": self.group.pk,
+                "members": [self.member.pk],
+                "team_leader": self.leader.pk,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["form"].errors["team_leader"])
+        self.assertFalse(CompetitionRegistration.objects.exists())
+
     def test_same_group_cannot_register_twice(self):
         self.client.force_login(self.leader)
         data = {
             "group": self.group.pk,
             "members": [self.leader.pk, self.member.pk],
+            "team_leader": self.leader.pk,
         }
 
         first_response = self.client.post(
@@ -224,10 +267,72 @@ class CompetitionAcceptanceTests(TestCase):
             {
                 "group": self.group.pk,
                 "members": [self.leader.pk],
+                "team_leader": self.leader.pk,
             },
         )
         self.assertEqual(response.status_code, 302)
         self.assertFalse(CompetitionRegistration.objects.exists())
+
+    def test_contact_can_edit_registration(self):
+        registration = self._register()
+        self.client.force_login(self.leader)
+
+        response = self.client.post(
+            reverse("competitions:registration_edit", args=(registration.pk,)),
+            {
+                "group": self.group.pk,
+                "members": [self.member.pk],
+                "team_leader": self.member.pk,
+                "remark": "更换参赛成员。",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        registration.refresh_from_db()
+        self.assertEqual(registration.team_leader, self.member)
+        self.assertEqual(registration.registered_by, self.leader)
+        self.assertEqual(
+            set(registration.members.values_list("pk", flat=True)),
+            {self.member.pk},
+        )
+
+    def test_other_contact_cannot_edit_registration(self):
+        registration = self._register()
+        self.client.force_login(self.other_leader)
+
+        response = self.client.get(
+            reverse("competitions:registration_edit", args=(registration.pk,))
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_contact_can_withdraw_registration(self):
+        registration = self._register()
+        self.client.force_login(self.leader)
+
+        response = self.client.post(
+            reverse("competitions:registration_withdraw", args=(registration.pk,))
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(
+            CompetitionRegistration.objects.filter(pk=registration.pk).exists()
+        )
+
+    def test_contact_sees_registration_actions_in_list(self):
+        registration = self._register()
+        self.client.force_login(self.leader)
+
+        response = self.client.get(reverse("competitions:list"))
+
+        self.assertContains(
+            response,
+            reverse("competitions:registration_edit", args=(registration.pk,)),
+        )
+        self.assertContains(
+            response,
+            reverse("competitions:registration_withdraw", args=(registration.pk,)),
+        )
 
     def test_admin_can_register_any_group(self):
         self.client.force_login(self.admin)
@@ -237,12 +342,14 @@ class CompetitionAcceptanceTests(TestCase):
             {
                 "group": self.other_group.pk,
                 "members": [self.other_leader.pk, self.other_member.pk],
+                "team_leader": self.other_member.pk,
             },
         )
 
         self.assertEqual(response.status_code, 302)
         registration = CompetitionRegistration.objects.get(group=self.other_group)
         self.assertEqual(registration.registered_by, self.admin)
+        self.assertEqual(registration.team_leader, self.other_member)
 
     def test_admin_can_publish_competition_and_publisher_is_recorded(self):
         self.client.force_login(self.admin)

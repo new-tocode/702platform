@@ -14,7 +14,7 @@ class ProjectsConfig(AppConfig):
         register_entry(
             key="projects.groups",
             label="项目组",
-            description="查看项目组、组长和成员",
+            description="查看项目组、联系人和成员",
             url_name="projects:group_list",
             sort_order=40,
         )

@@ -17,9 +17,9 @@ class NoticeAdminForm(forms.ModelForm):
                 "visible_groups",
                 "内部通知必须至少选择一个可查看用户组。",
             )
-        if scope == Notice.PUBLIC and visible_groups:
+        if scope in (Notice.PUBLIC, Notice.CONTACTS) and visible_groups:
             self.add_error(
                 "visible_groups",
-                "公开通知不需要选择可查看用户组。",
+                "只有内部通知才需要选择可查看用户组。",
             )
         return cleaned_data

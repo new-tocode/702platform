@@ -1,30 +1,55 @@
 {% extends "base.html" %}
 
-{% block title %}竞赛报名 - 竞赛社团平台{% endblock %}
+{% block title %}竞赛信息 - 竞赛社团平台{% endblock %}
 
 {% block content %}
 <div class="card">
-    <h1>竞赛报名</h1>
-    {% if competitions %}
-        {% for competition in competitions %}
-            <article class="card">
-                <h2>{{ competition.title }}</h2>
-                <p class="muted">
-                    报名截止：{{ competition.deadline|date:"Y-m-d H:i" }}
-                    {% if competition.team_size %} · 人数要求：{{ competition.team_size }}{% endif %}
-                </p>
-                <div>{{ competition.description|linebreaks }}</div>
-                {% if competition.is_registration_open %}
-                    <p><a href="{% url 'competitions:register' competition.pk %}">为项目组登记报名</a></p>
-                {% elif competition.is_open %}
-                    <p class="muted">报名已截止。</p>
+    <h1>竞赛信息</h1>
+    {% for row in competition_rows %}
+        <article class="card">
+            <h2>{{ row.competition.title }}</h2>
+            <p class="muted">
+                报名截止：{{ row.competition.deadline|date:"Y-m-d H:i" }}
+                {% if row.competition.team_size %} · 人数要求：{{ row.competition.team_size }}{% endif %}
+            </p>
+            <div>{{ row.competition.description|linebreaks }}</div>
+
+            {% for registration in row.registrations %}
+                <div class="card">
+                    <p>
+                        已报名项目组：{{ registration.group.name }}
+                        {% if registration.team_leader %}
+                            · 竞赛组长：{{ registration.team_leader.profile.full_name|default:registration.team_leader.username }}
+                        {% endif %}
+                    </p>
+                    {% if row.competition.is_registration_open %}
+                        <p>
+                            <a href="{% url 'competitions:registration_edit' registration.pk %}">修改报名信息</a>
+                        </p>
+                        <form method="post" action="{% url 'competitions:registration_withdraw' registration.pk %}" style="display:inline">
+                            {% csrf_token %}
+                            <button type="submit">放弃报名</button>
+                        </form>
+                    {% else %}
+                        <p class="muted">报名已截止，无法修改或放弃。</p>
+                    {% endif %}
+                </div>
+            {% endfor %}
+
+            {% if row.competition.is_registration_open %}
+                {% if can_manage_competitions %}
+                    <p><a href="{% url 'competitions:register' row.competition.pk %}">为项目组登记报名</a></p>
                 {% else %}
-                    <p class="muted">报名未开放。</p>
+                    <p class="muted">报名开放中，仅项目组联系人可报名。</p>
                 {% endif %}
-            </article>
-        {% endfor %}
-    {% else %}
+            {% elif row.competition.is_open %}
+                <p class="muted">报名已截止。</p>
+            {% else %}
+                <p class="muted">报名未开放。</p>
+            {% endif %}
+        </article>
+    {% empty %}
         <p class="muted">暂时没有竞赛信息。</p>
-    {% endif %}
+    {% endfor %}
 </div>
 {% endblock %}

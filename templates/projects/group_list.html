@@ -5,24 +5,39 @@
 {% block content %}
 <div class="card">
     <h1>项目组</h1>
-    {% if groups %}
-        {% for group in groups %}
-            <article class="card">
-                <h2>{{ group.name }}</h2>
-                <p>组长：{{ group.leader.profile.full_name|default:group.leader.username }}</p>
-                {% if group.description %}<div>{{ group.description|linebreaks }}</div>{% endif %}
-                <p>成员：</p>
-                <ul>
-                    {% for member in group.members.all %}
-                        <li>{{ member.profile.full_name|default:member.username }}</li>
-                    {% empty %}
-                        <li class="muted">暂无成员</li>
-                    {% endfor %}
-                </ul>
-            </article>
-        {% endfor %}
-    {% else %}
+    {% for row in group_rows %}
+        <article class="card">
+            <h2>
+                {{ row.group.name }}
+                {% if row.status_label %}<span class="muted">[{{ row.status_label }}]</span>{% endif %}
+            </h2>
+            <p>联系人：{{ row.group.leader.profile.full_name|default:row.group.leader.username }}</p>
+            {% if row.group.description %}<div>{{ row.group.description|linebreaks }}</div>{% endif %}
+            <p>成员（{{ row.group.member_count }}）：</p>
+            <ul>
+                {% for member in row.group.members.all %}
+                    <li>{{ member.profile.full_name|default:member.username }}</li>
+                {% empty %}
+                    <li class="muted">暂无成员</li>
+                {% endfor %}
+            </ul>
+            <p>
+                {% if row.can_view %}
+                    <a href="{% url 'projects:group_detail' row.group.pk %}">查看详情</a>
+                {% endif %}
+                {% if row.can_manage %}
+                    · <a href="{% url 'projects:group_manage' row.group.pk %}">管理项目组</a>
+                {% elif row.is_member %}
+                    · <span class="muted">已加入</span>
+                {% elif row.has_pending %}
+                    · <span class="muted">申请审核中</span>
+                {% else %}
+                    · <a href="{% url 'projects:group_apply' row.group.pk %}">申请加入</a>
+                {% endif %}
+            </p>
+        </article>
+    {% empty %}
         <p class="muted">暂时没有项目组。</p>
-    {% endif %}
+    {% endfor %}
 </div>
 {% endblock %}
