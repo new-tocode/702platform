@@ -3,3 +3,4 @@ djangorestframework>=3.16,<3.17
 bleach>=6.2,<7
 markdown>=3.8,<4
 Pillow>=11.3,<12
+psycopg[binary]>=3.2,<4
