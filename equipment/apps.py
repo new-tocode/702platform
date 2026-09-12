@@ -10,12 +10,14 @@ class EquipmentConfig(AppConfig):
 
     def ready(self):
         from core.registry import register_entry
+        from projects.permissions import can_use_equipment
 
         register_entry(
             key="equipment.borrow",
             label="设备借用",
             description="查看可用设备并登记借用",
             url_name="equipment:list",
+            visible_when=can_use_equipment,
             sort_order=60,
         )
         register_entry(

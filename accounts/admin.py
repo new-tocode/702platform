@@ -3,7 +3,10 @@
 import logging
 
 from django.contrib import admin
+from django.contrib.auth.admin import GroupAdmin as DjangoGroupAdmin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
+from django.contrib.auth.models import Group
+from django.db.models import Count
 
 from core.audit import record_audit
 
@@ -42,6 +45,7 @@ class UserAdmin(DjangoUserAdmin):
                     "is_active",
                     "is_staff",
                     "is_superuser",
+                    "is_reviewer",
                     "groups",
                     "user_permissions",
                 ),
@@ -77,9 +81,17 @@ class UserAdmin(DjangoUserAdmin):
         "profile_name",
         "must_change_password",
         "is_staff",
+        "is_reviewer",
         "is_active",
     )
-    list_filter = ("must_change_password", "is_staff", "is_superuser", "is_active", "groups")
+    list_filter = (
+        "must_change_password",
+        "is_staff",
+        "is_superuser",
+        "is_reviewer",
+        "is_active",
+        "groups",
+    )
     search_fields = ("username", "email", "profile__full_name")
     list_select_related = ("profile",)
 
@@ -108,3 +120,41 @@ class UserAdmin(DjangoUserAdmin):
             obj.must_change_password,
             extra={"request_id": getattr(request, "request_id", "-")},
         )
+
+
+admin.site.unregister(Group)
+
+
+@admin.register(Group)
+class GroupAdmin(DjangoGroupAdmin):
+    """Extend the built-in group admin with a read-only member overview."""
+
+    list_display = ("name", "member_count")
+    search_fields = ("name", "user__username", "user__profile__full_name")
+    fieldsets = (
+        (None, {"fields": ("name", "permissions")}),
+        ("组内用户", {"fields": ("members_overview",)}),
+    )
+    readonly_fields = ("members_overview",)
+
+    def get_queryset(self, request):
+        return (
+            super()
+            .get_queryset(request)
+            .annotate(_member_count=Count("user", distinct=True))
+            .prefetch_related("user_set__profile")
+        )
+
+    @admin.display(description="用户数", ordering="_member_count")
+    def member_count(self, obj):
+        return obj._member_count
+
+    @admin.display(description="属于该组的用户")
+    def members_overview(self, obj):
+        if not obj.pk:
+            return "保存后可查看组内用户。"
+        names = [
+            user.profile.full_name or user.username
+            for user in obj.user_set.all()
+        ]
+        return "、".join(names) or "（暂无用户）"

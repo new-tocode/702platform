@@ -4,10 +4,12 @@ import logging
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_http_methods, require_POST
 
 from core.audit import record_audit
+from projects.permissions import can_use_equipment
 
 from .forms import EquipmentBorrowForm
 from .models import Equipment, EquipmentBorrow
@@ -22,9 +24,22 @@ from .services import (
 logger = logging.getLogger(__name__)
 
 
+def _require_equipment_access(request):
+    """Borrowing is limited to project-group members (and administrators)."""
+    if not can_use_equipment(request.user):
+        logger.warning(
+            "equipment.permission.denied username=%s path=%s",
+            request.user.get_username(),
+            request.path,
+            extra={"request_id": getattr(request, "request_id", "-")},
+        )
+        raise PermissionDenied
+
+
 @login_required
 @require_http_methods(["GET"])
 def equipment_list(request):
+    _require_equipment_access(request)
     equipment = Equipment.objects.filter(is_active=True).order_by(
         "category", "name", "id"
     )
@@ -40,6 +55,7 @@ def equipment_list(request):
 @login_required
 @require_http_methods(["GET", "POST"])
 def equipment_borrow(request, pk):
+    _require_equipment_access(request)
     equipment = get_object_or_404(Equipment, pk=pk, is_active=True)
     form = EquipmentBorrowForm(equipment, data=request.POST or None)
 

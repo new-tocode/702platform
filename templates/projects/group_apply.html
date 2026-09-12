@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block title %}申请加入 {{ group.name }} - 竞赛社团平台{% endblock %}
+
+{% block content %}
+<div class="card">
+    <p><a href="{% url 'projects:group_list' %}">返回项目组列表</a></p>
+    <h1>申请加入「{{ group.name }}」</h1>
+    <p class="muted">联系人：{{ group.leader.profile.full_name|default:group.leader.username }}</p>
+    <form method="post">
+        {% csrf_token %}
+        {{ form.non_field_errors }}
+
+        <label for="{{ form.message.id_for_label }}">{{ form.message.label }}</label>
+        {{ form.message }}
+        {{ form.message.errors }}
+
+        <button type="submit">提交申请</button>
+    </form>
+</div>
+{% endblock %}

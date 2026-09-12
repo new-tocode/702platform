@@ -6,12 +6,13 @@ from datetime import timedelta
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import connection
-from django.test import TestCase, TransactionTestCase, skipUnlessDBFeature
+from django.test import TestCase, TransactionTestCase
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 
 from core.models import AuditLog
+from projects.models import ProjectGroup
 
 from .models import Equipment, EquipmentBorrow
 from .services import BorrowAlreadyReturned, EquipmentUnavailable, create_borrow, return_borrow
@@ -38,6 +39,17 @@ class EquipmentAcceptanceTests(TestCase):
         )
         self.other_member.must_change_password = False
         self.other_member.save(update_fields=["must_change_password"])
+        self.contact = User.objects.create_user(
+            username="equipment-contact",
+            password="Contact-Password-123!",
+        )
+        self.contact.must_change_password = False
+        self.contact.save(update_fields=["must_change_password"])
+        self.group = ProjectGroup.objects.create(
+            name="设备项目组",
+            leader=self.contact,
+        )
+        self.group.members.add(self.member, self.other_member)
         self.equipment = Equipment.objects.create(
             name="开发笔记本",
             category="计算设备",
@@ -71,6 +83,49 @@ class EquipmentAcceptanceTests(TestCase):
         self.assertContains(response, self.equipment.name)
         self.assertNotContains(response, self.inactive_equipment.name)
         self.assertContains(response, "2 / 2")
+
+    def test_member_without_project_group_cannot_borrow(self):
+        no_group = User.objects.create_user(
+            username="equipment-nogroup",
+            password="No-Group-123!",
+        )
+        no_group.must_change_password = False
+        no_group.save(update_fields=["must_change_password"])
+        self.client.force_login(no_group)
+
+        list_response = self.client.get(reverse("equipment:list"))
+        borrow_response = self.client.get(
+            reverse("equipment:borrow", args=(self.equipment.pk,))
+        )
+
+        self.assertEqual(list_response.status_code, 403)
+        self.assertEqual(borrow_response.status_code, 403)
+
+        home_response = self.client.get(reverse("accounts:member_home"))
+        self.assertNotContains(home_response, "设备借用")
+        # Borrow records remain reachable so existing loans can be returned.
+        self.assertContains(home_response, "借用记录")
+
+    def test_removed_member_can_still_return_borrowed_equipment(self):
+        borrow = create_borrow(
+            equipment_id=self.equipment.pk,
+            borrower=self.member,
+            planned_return_date=timezone.localdate() + timedelta(days=2),
+            remark="被移出组后归还",
+            actor=self.member,
+        )
+        self.group.members.remove(self.member)
+        self.client.force_login(self.member)
+
+        list_response = self.client.get(reverse("equipment:list"))
+        return_response = self.client.post(
+            reverse("equipment_borrows:return", args=(borrow.pk,))
+        )
+
+        self.assertEqual(list_response.status_code, 403)
+        self.assertEqual(return_response.status_code, 302)
+        borrow.refresh_from_db()
+        self.assertEqual(borrow.status, EquipmentBorrow.RETURNED)
 
     def test_anonymous_cannot_view_or_borrow_equipment(self):
         list_response = self.client.get(reverse("equipment:list"))
@@ -306,14 +361,10 @@ class EquipmentAcceptanceTests(TestCase):
         self.assertEqual(member_response.status_code, 302)
 
 
-@skipUnlessDBFeature("has_select_for_update")
 class ConcurrentEquipmentBorrowTests(TransactionTestCase):
     """并发借用：验证 select_for_update 行锁防止库存超借。
 
-    本类只在支持行级锁的后端运行（PostgreSQL）。SQLite 的
-    has_select_for_update 为 False，Django 会静默剥离 FOR UPDATE 子句
-    （见 django/db/models/sql/compiler.py），并发语义退化为整库写锁，
-    因此这类场景必须用 PostgreSQL 才能覆盖。
+    本应用只使用 PostgreSQL，行级锁始终可用，因此这类场景在测试中必然覆盖。
     """
 
     def setUp(self):

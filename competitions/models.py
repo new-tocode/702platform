@@ -64,6 +64,15 @@ class CompetitionRegistration(models.Model):
         related_name="competition_registrations_created",
         verbose_name="登记人",
     )
+    team_leader = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="led_competition_registrations",
+        verbose_name="竞赛组长",
+        help_text="由联系人在所选项目组成员中指定，可以是联系人本人。",
+    )
     members = models.ManyToManyField(
         settings.AUTH_USER_MODEL,
         related_name="competition_registrations",

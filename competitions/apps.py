@@ -10,13 +10,11 @@ class CompetitionsConfig(AppConfig):
 
     def ready(self):
         from core.registry import register_entry
-        from .permissions import is_competition_manager
 
         register_entry(
             key="competitions.registration",
-            label="竞赛报名",
-            description="查看竞赛并为项目组登记报名",
+            label="竞赛信息",
+            description="查看竞赛信息；项目组联系人可为项目组报名",
             url_name="competitions:list",
-            visible_when=is_competition_manager,
             sort_order=50,
         )

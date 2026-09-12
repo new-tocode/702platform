@@ -59,6 +59,8 @@ class NoticeAdmin(admin.ModelAdmin):
 
     @admin.display(description="可查看用户组")
     def visible_groups_display(self, obj):
+        if obj.scope == Notice.CONTACTS:
+            return "全部项目组联系人"
         return ", ".join(obj.visible_groups.values_list("name", flat=True)) or "—"
 
     def save_model(self, request, obj, form, change):

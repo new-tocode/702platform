@@ -3,17 +3,17 @@
 import logging
 
 from django.contrib.auth.decorators import login_required
-from django.db.models import Q
 from django.shortcuts import get_object_or_404, render
 
 from .models import Notice
+from .visibility import member_visible_notices, public_visible_notices
 
 
 logger = logging.getLogger(__name__)
 
 
 def public_list(request):
-    notices = Notice.objects.filter(scope=Notice.PUBLIC).select_related("published_by")
+    notices = public_visible_notices().select_related("published_by")
     logger.info(
         "notice.list.view scope=public count=%s user=%s",
         notices.count(),
@@ -56,17 +56,9 @@ def public_detail(request, pk):
     )
 
 
-def internal_visible_to_user(user):
-    """Return internal notices visible to a completed member's groups."""
-    return Notice.objects.filter(
-        scope=Notice.INTERNAL,
-        visible_groups__in=user.groups.all(),
-    ).distinct()
-
-
 @login_required
 def internal_list(request):
-    notices = internal_visible_to_user(request.user).select_related("published_by")
+    notices = member_visible_notices(request.user).select_related("published_by")
     logger.info(
         "notice.list.view scope=internal count=%s user=%s",
         notices.count(),
@@ -89,7 +81,7 @@ def internal_list(request):
 @login_required
 def internal_detail(request, pk):
     notice = get_object_or_404(
-        internal_visible_to_user(request.user).select_related("published_by"),
+        member_visible_notices(request.user).select_related("published_by"),
         pk=pk,
     )
     logger.info(
