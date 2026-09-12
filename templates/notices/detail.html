@@ -1,18 +1,37 @@
 {% extends "base.html" %}
 {% load rendering %}
 
-{% block title %}{{ notice.title }} - 竞赛社团平台{% endblock %}
+{% block title %}{{ notice.title }} - 竞赛社团管理平台{% endblock %}
 
 {% block content %}
-<div class="card">
-    <p><a href="{% url back_url_name %}">{{ back_label }}</a></p>
-    {% if notice.is_pinned %}<p><strong>置顶通知</strong></p>{% endif %}
-    <h1>{{ notice.title }}</h1>
-    <p class="muted">
-        发布时间：{{ notice.published_at|date:"Y-m-d H:i" }}
-        · 发布人：{{ notice.published_by.profile.full_name|default:notice.published_by.username }}
-    </p>
-    <div>{{ notice.content|render_markdown }}</div>
-    {% include "includes/media.html" with media_files=notice.attachments.all %}
+<div class="wrap">
+    <div class="pagehead">
+        <div class="path">
+            <a href="{% url back_url_name %}">{{ back_label }}</a>
+            <span>/</span>
+            <span>#{{ notice.pk }}</span>
+        </div>
+        <div class="head-row">
+            <div>
+                <h1>{{ notice.title }}</h1>
+                <div class="sub">
+                    {% if notice.is_pinned %}<span class="chip chip-pin">置顶通知</span> {% endif %}
+                    发布时间 {{ notice.published_at|date:"Y-m-d H:i" }} ·
+                    发布人 {{ notice.published_by.profile.full_name|default:notice.published_by.username }}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="stack">
+        <div class="frame reveal">
+            <div class="prose">{{ notice.content|render_markdown }}</div>
+            {% include "includes/media.html" with media_files=notice.attachments.all %}
+        </div>
+
+        <div class="btn-row">
+            <a class="btn" href="{% url back_url_name %}">{{ back_label }}</a>
+        </div>
+    </div>
 </div>
 {% endblock %}

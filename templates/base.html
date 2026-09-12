@@ -1,65 +1,62 @@
-<!doctype html>
+{% load static %}<!doctype html>
 <html lang="zh-CN">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}竞赛社团平台{% endblock %}</title>
-    <style>
-        body { font-family: sans-serif; max-width: 960px; margin: 2rem auto; padding: 0 1rem; line-height: 1.6; }
-        nav { display: flex; gap: 1rem; align-items: center; border-bottom: 1px solid #ddd; padding-bottom: 1rem; margin-bottom: 2rem; }
-        .nav-end { display: flex; gap: 1rem; align-items: center; margin-left: auto; }
-        .card { border: 1px solid #ddd; border-radius: .5rem; padding: 1.5rem; margin: 1rem 0; }
-        .messages { padding: 0; list-style: none; }
-        .messages li { background: #eef8ee; padding: .75rem; margin: .5rem 0; }
-        .errorlist { color: #a00; }
-        label { display: block; margin-top: 1rem; font-weight: 600; }
-        input { width: 100%; max-width: 28rem; padding: .5rem; box-sizing: border-box; }
-        button { margin-top: 1rem; padding: .5rem 1rem; cursor: pointer; }
-        .muted { color: #666; }
-        .media-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
-        figure { margin: 0; }
-        figure img, figure video { display: block; width: 100%; max-height: 480px; object-fit: contain; background: #f5f5f5; }
-        figcaption { color: #666; margin-top: .35rem; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { border: 1px solid #ddd; padding: .55rem; text-align: left; vertical-align: top; }
-        th { background: #f5f5f5; }
-        .operation-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin: 1rem 0; }
-        .operation-card { display: flex; flex-direction: column; gap: .3rem; border: 1px solid #ddd; border-radius: .5rem; padding: 1rem; text-decoration: none; color: inherit; }
-        .operation-card:hover { background: #f7f7f7; }
-        .operation-card span { color: #666; font-size: .9rem; }
-    </style>
+    <title>{% block title %}竞赛社团管理平台{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'css/app.css' %}">
+    {% block extra_head %}{% endblock %}
 </head>
 <body>
-    <nav>
-        <a href="{% url 'accounts:home' %}">首页</a>
-        <a href="{% url 'content:about' %}">社团简介</a>
-        <a href="{% url 'content:awards' %}">历年获奖</a>
-        <a href="{% url 'content:showcase' %}">成员风采</a>
-        <a href="{% url 'notices:public_list' %}">公开通知</a>
-        {% if user.is_authenticated %}
-            <a href="{% url 'accounts:member_home' %}">成员中心</a>
-            <div class="nav-end">
-                {% if user.is_staff %}
-                    <a href="{% url 'admin:index' %}">管理后台</a>
+    <header class="topbar">
+        <div class="wrap">
+            <a class="brand" href="{% url 'accounts:home' %}">
+                <span class="brand-mark">702</span>
+                <span>
+                    <span class="brand-name">竞赛社团平台</span>
+                    <span class="brand-code">CLUB-702</span>
+                </span>
+            </a>
+            <nav class="nav">
+                <a href="{% url 'accounts:home' %}"{% if nav_section == "home" %} aria-current="page"{% endif %}>首页</a>
+                <a href="{% url 'content:about' %}"{% if nav_section == "about" %} aria-current="page"{% endif %}>社团简介</a>
+                <a href="{% url 'content:awards' %}"{% if nav_section == "awards" %} aria-current="page"{% endif %}>历年获奖</a>
+                <a href="{% url 'content:showcase' %}"{% if nav_section == "showcase" %} aria-current="page"{% endif %}>成员风采</a>
+                <a href="{% url 'notices:public_list' %}"{% if nav_section == "notices" %} aria-current="page"{% endif %}>公开通知</a>
+            </nav>
+            <div class="topbar-end">
+                {% if user.is_authenticated %}
+                    <a href="{% url 'accounts:member_home' %}"{% if nav_section == "member" %} aria-current="page"{% endif %}>成员中心</a>
+                    {% if user.is_staff %}<a href="{% url 'admin:index' %}">管理后台</a>{% endif %}
+                    <form method="post" action="{% url 'accounts:logout' %}">
+                        {% csrf_token %}
+                        <button class="linkbtn" type="submit">退出</button>
+                    </form>
+                {% else %}
+                    <a href="{% url 'accounts:login' %}">成员登录</a>
                 {% endif %}
-                <form method="post" action="{% url 'accounts:logout' %}">
-                    {% csrf_token %}
-                    <button type="submit">退出</button>
-                </form>
             </div>
-        {% else %}
-            <a href="{% url 'accounts:login' %}">成员登录</a>
+        </div>
+    </header>
+
+    <main class="main">
+        {% if messages %}
+            <div class="wrap">
+                <ul class="flash">
+                    {% for message in messages %}
+                        <li class="{{ message.tags }}">{{ message }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
         {% endif %}
-    </nav>
+        {% block content %}{% endblock %}
+    </main>
 
-    {% if messages %}
-        <ul class="messages">
-            {% for message in messages %}
-                <li class="{{ message.tags }}">{{ message }}</li>
-            {% endfor %}
-        </ul>
-    {% endif %}
-
-    {% block content %}{% endblock %}
+    <footer class="foot">
+        <div class="wrap">
+            <span>竞赛社团管理平台</span>
+            <span>账号由管理员统一发放，不开放公开注册</span>
+        </div>
+    </footer>
 </body>
 </html>

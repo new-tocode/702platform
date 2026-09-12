@@ -1,20 +1,42 @@
 {% extends "base.html" %}
 
-{% block title %}个人信息 - 竞赛社团平台{% endblock %}
+{% block title %}个人信息 - 竞赛社团管理平台{% endblock %}
 
 {% block content %}
-<div class="card">
-    <h1>个人信息</h1>
-    <form method="post">
-        {% csrf_token %}
-        {{ form.non_field_errors }}
-        {% for field in form %}
-            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
-            {{ field }}
-            {{ field.help_text }}
-            {{ field.errors }}
-        {% endfor %}
-        <button type="submit">保存信息</button>
-    </form>
+<div class="wrap">
+    <div class="pagehead">
+        <div class="path">
+            <a href="{% url 'accounts:member_home' %}">/member</a>
+            <span>/</span>
+            <span>profile</span>
+        </div>
+        <div class="head-row">
+            <div>
+                <h1>个人信息</h1>
+                <div class="sub">维护姓名、学号、院系与联系方式。</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-narrow">
+        <div class="frame reveal">
+            <form method="post">
+                {% csrf_token %}
+                {{ form.non_field_errors }}
+                {% for field in form %}
+                    <div class="field">
+                        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.help_text %}<p class="help">{{ field.help_text }}</p>{% endif %}
+                        {{ field.errors }}
+                    </div>
+                {% endfor %}
+                <div class="form-actions">
+                    <button class="btn btn-primary" type="submit">保存信息</button>
+                    <a class="btn" href="{% url 'accounts:member_home' %}">返回成员中心</a>
+                </div>
+            </form>
+        </div>
+    </div>
 </div>
 {% endblock %}

@@ -1,12 +1,27 @@
 {% extends "base.html" %}
 {% load rendering %}
 
-{% block title %}{{ page.title }} - 竞赛社团平台{% endblock %}
+{% block title %}{{ page.title }} - 竞赛社团管理平台{% endblock %}
 
 {% block content %}
-<div class="card">
-    <h1>{{ page.title }}</h1>
-    <div>{{ page.content|render_markdown }}</div>
-    {% include "includes/media.html" with media_files=page.attachments.all %}
+<div class="wrap">
+    <div class="pagehead">
+        <div class="path">
+            <a href="{% url 'accounts:home' %}">/</a>
+            <span>/</span>
+            <span>{{ page.slug }}</span>
+        </div>
+        <div class="head-row">
+            <div>
+                <h1>{{ page.title }}</h1>
+                <div class="sub">更新于 {{ page.updated_at|date:"Y-m-d" }}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="frame reveal">
+        <div class="prose">{{ page.content|render_markdown }}</div>
+        {% include "includes/media.html" with media_files=page.attachments.all %}
+    </div>
 </div>
 {% endblock %}

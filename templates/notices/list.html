@@ -1,22 +1,48 @@
 {% extends "base.html" %}
 
-{% block title %}{{ page_title }} - 竞赛社团平台{% endblock %}
+{% block title %}{{ page_title }} - 竞赛社团管理平台{% endblock %}
 
 {% block content %}
-<div class="card">
-    <h1>{{ page_title }}</h1>
-    {% if notices %}
-        <ul>
-            {% for notice in notices %}
-                <li>
-                    {% if notice.is_pinned %}<strong>[置顶]</strong> {% endif %}
-                    <a href="{% url detail_namespace|add:':'|add:detail_name notice.pk %}">{{ notice.title }}</a>
-                    <span class="muted">{{ notice.published_at|date:"Y-m-d H:i" }}</span>
-                </li>
-            {% endfor %}
-        </ul>
-    {% else %}
-        <p class="muted">{{ empty_message }}</p>
-    {% endif %}
+<div class="wrap">
+    <div class="pagehead">
+        <div class="path">
+            <a href="{% url 'accounts:home' %}">/</a>
+            <span>/</span>
+            <span>{{ page_title }}</span>
+        </div>
+        <div class="head-row">
+            <div>
+                <h1>{{ page_title }}</h1>
+                {% if notices %}<div class="sub">共 {{ notices|length }} 条</div>{% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="table-wrap reveal">
+        <table>
+            <thead>
+                <tr>
+                    <th class="num">发布日期</th>
+                    <th>标题</th>
+                    <th class="num right">范围</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for notice in notices %}
+                    <tr>
+                        <td class="num">{{ notice.published_at|date:"Y-m-d H:i" }}</td>
+                        <td>
+                            <a class="t" href="{% url detail_namespace|add:':'|add:detail_name notice.pk %}">{% if notice.is_pinned %}<span class="chip chip-pin">置顶</span> {% endif %}{{ notice.title }}</a>
+                        </td>
+                        <td class="num right">{{ notice.scope }}</td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="3"><div class="empty">{{ empty_message }}</div></td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
 {% endblock %}

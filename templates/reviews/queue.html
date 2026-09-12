@@ -1,42 +1,98 @@
 {% extends "base.html" %}
 
-{% block title %}评审 - 竞赛社团平台{% endblock %}
+{% block title %}评审 - 竞赛社团管理平台{% endblock %}
 
 {% block content %}
-<div class="card">
-    <h1>我的评审</h1>
+<div class="wrap">
+    <div class="pagehead">
+        <div class="path">
+            <a href="{% url 'accounts:member_home' %}">/member</a>
+            <span>/</span>
+            <span>reviews</span>
+        </div>
+        <div class="head-row">
+            <div>
+                <h1>我的评审</h1>
+                <div class="sub">审阅分配给你的项目书并给出评审意见；评审人身份对项目组匿名。</div>
+            </div>
+        </div>
+    </div>
 
-    <h2>待评审</h2>
-    {% for assignment in pending %}
-        <article class="card">
-            <p>
-                <strong>{{ assignment.submission.group.name }}</strong>
-                · 第 {{ assignment.submission.round }} 轮送审
-            </p>
-            <p class="muted">提交时间：{{ assignment.submission.submitted_at|date:"Y-m-d H:i" }}</p>
-            {% if assignment.submission.message %}
-                <div>{{ assignment.submission.message|linebreaks }}</div>
-            {% endif %}
-            <p>
-                <a href="{% url 'projects:group_detail' assignment.submission.group.pk %}">进入项目组详情并评审</a>
-            </p>
-        </article>
-    {% empty %}
-        <p class="muted">暂无待评审的项目书。</p>
-    {% endfor %}
+    <div class="spec reveal">
+        <div>
+            <div class="k">待评审</div>
+            <div class="v {% if pending %}warn{% endif %}">{{ pending|length }}<small>份</small></div>
+        </div>
+        <div>
+            <div class="k">已完成</div>
+            <div class="v">{{ completed|length }}<small>份</small></div>
+        </div>
+    </div>
 
-    <h2>已完成</h2>
-    {% for assignment in completed %}
-        <article class="card">
-            <p>
-                <strong>{{ assignment.submission.group.name }}</strong>
-                · 第 {{ assignment.submission.round }} 轮
-                · 结论：{{ assignment.get_decision_display }}
-            </p>
-            <p class="muted">完成时间：{{ assignment.completed_at|date:"Y-m-d H:i" }}</p>
-        </article>
-    {% empty %}
-        <p class="muted">暂无已完成的评审。</p>
-    {% endfor %}
+    <div class="split">
+        <div class="panel reveal">
+            <div class="panel-head">
+                <h2>待评审</h2>
+                <span class="count">{{ pending|length }} pending</span>
+            </div>
+            <div class="panel-body tight">
+                <div class="queue">
+                    {% for assignment in pending %}
+                        <div class="qitem">
+                            <span class="idx">R{{ assignment.submission.round }}</span>
+                            <div class="grow">
+                                <div>
+                                    <span class="who">{{ assignment.submission.group.name }}</span>
+                                    <span class="when">{{ assignment.submission.submitted_at|date:"Y-m-d H:i" }}</span>
+                                </div>
+                                {% if assignment.submission.message %}
+                                    <div class="msg">{{ assignment.submission.message|linebreaksbr }}</div>
+                                {% endif %}
+                                <div class="btn-row">
+                                    <a class="btn btn-primary btn-sm" href="{% url 'projects:group_detail' assignment.submission.group.pk %}">进入项目组详情并评审</a>
+                                </div>
+                            </div>
+                        </div>
+                    {% empty %}
+                        <div class="empty">暂无待评审的项目书。</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <div class="panel reveal">
+            <div class="panel-head">
+                <h2>已完成</h2>
+                <span class="count">{{ completed|length }} done</span>
+            </div>
+            <div class="panel-body tight">
+                <table>
+                    <thead>
+                        <tr><th>项目组</th><th class="num">轮次</th><th>结论</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for assignment in completed %}
+                            <tr>
+                                <td>
+                                    <div class="t">{{ assignment.submission.group.name }}</div>
+                                    <div class="muted">{{ assignment.completed_at|date:"Y-m-d H:i" }}</div>
+                                </td>
+                                <td class="num">R{{ assignment.submission.round }}</td>
+                                <td>
+                                    {% if assignment.decision == "approve" %}
+                                        <span class="chip chip-ok">{{ assignment.get_decision_display }}</span>
+                                    {% else %}
+                                        <span class="chip chip-warn">{{ assignment.get_decision_display }}</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr><td colspan="3"><div class="empty">暂无已完成的评审。</div></td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}

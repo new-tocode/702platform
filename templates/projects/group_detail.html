@@ -1,101 +1,215 @@
 {% extends "base.html" %}
+{% load files %}
 
-{% block title %}{{ group.name }} - 竞赛社团平台{% endblock %}
+{% block title %}{{ group.name }} - 竞赛社团管理平台{% endblock %}
 
 {% block content %}
-<div class="card">
-    <p><a href="{% url 'projects:group_list' %}">返回项目组列表</a></p>
-    <h1>{{ group.name }}</h1>
-    <p>联系人：{{ group.leader.profile.full_name|default:group.leader.username }}</p>
-    {% if group.description %}<div>{{ group.description|linebreaks }}</div>{% endif %}
-    {% if can_manage %}
-        <p><a href="{% url 'projects:group_manage' group.pk %}">管理项目组</a></p>
-    {% endif %}
-
-    <h2>成员</h2>
-    <ul>
-        {% for member in group.members.all %}
-            <li>
-                {{ member.profile.full_name|default:member.username }}
-                {% if member.pk == group.leader_id %}（联系人）{% endif %}
-            </li>
-        {% empty %}
-            <li class="muted">暂无成员</li>
-        {% endfor %}
-    </ul>
-
-    <h2>项目书</h2>
-    {% if group.proposal %}
-        <p><a href="{% url 'projects:group_proposal_download' group.pk %}">下载当前项目书</a></p>
-    {% else %}
-        <p class="muted">尚未上传项目书。</p>
-    {% endif %}
-
-    <h2>评审状态</h2>
-    {% if latest_submission %}
-        <p>
-            第 {{ latest_submission.round }} 轮：
-            <strong>{{ latest_submission.get_status_display }}</strong>
-            {% if latest_submission.status == "approved" %}
-                · 方案已通过，可按此推进项目。
-            {% elif latest_submission.status == "needs_revision" %}
-                · 请根据评审意见修改项目书后重新提交。
+<div class="wrap">
+    <div class="pagehead">
+        <div class="path">
+            <a href="{% url 'projects:group_list' %}">/member/projects</a>
+            <span>/</span>
+            <span>#{{ group.pk }}</span>
+        </div>
+        <div class="head-row">
+            <div>
+                <h1>{{ group.name }}</h1>
+                <div class="sub">
+                    项目组联系人 {{ group.leader.profile.full_name|default:group.leader.username }} ·
+                    成员 {{ group.members.all|length }} 人
+                </div>
+            </div>
+            {% if can_manage %}
+                <div class="head-actions">
+                    <a class="btn btn-primary" href="{% url 'projects:group_manage' group.pk %}">管理项目组</a>
+                </div>
             {% endif %}
-        </p>
-    {% else %}
-        <p class="muted">尚未提交评审。</p>
-    {% endif %}
-</div>
-
-{% if my_assignment %}
-    <div class="card">
-        <h2>我的评审</h2>
-        <p>请先下载本轮项目书，阅读后填写评审意见与决定。</p>
-        <p><a href="{% url 'projects:group_proposal_download' group.pk %}">下载项目书</a></p>
-        <form method="post" action="{% url 'reviews:complete' my_assignment.pk %}">
-            {% csrf_token %}
-            {{ review_form.non_field_errors }}
-            <label>{{ review_form.decision.label_tag }}</label>
-            {{ review_form.decision }}
-            {{ review_form.decision.errors }}
-            <label for="{{ review_form.comment.id_for_label }}">{{ review_form.comment.label }}</label>
-            {{ review_form.comment }}
-            {{ review_form.comment.errors }}
-            <button type="submit">完成评审</button>
-        </form>
+        </div>
     </div>
-{% endif %}
 
-<div class="card">
-    <h2>评审记录</h2>
-    {% for submission in submissions %}
-        <article class="card">
-            <p>
-                <strong>第 {{ submission.round }} 轮</strong>
-                · {{ submission.get_status_display }}
-                · 提交于 {{ submission.submitted_at|date:"Y-m-d H:i" }}
-            </p>
-            {% if submission.message %}<div>{{ submission.message|linebreaks }}</div>{% endif %}
-            <p>
-                提交人：{{ submission.submitted_by.profile.full_name|default:submission.submitted_by.username }}
-            </p>
-            <ul>
-                {% for assignment in submission.assignments.all %}
-                    <li>
-                        评审人 {{ forloop.counter }} —
-                        {% if assignment.is_completed %}
-                            结论：<strong>{{ assignment.get_decision_display }}</strong>；意见：{{ assignment.comment|default:"—" }}
-                        {% else %}
-                            <span class="muted">待评审</span>
-                        {% endif %}
-                    </li>
-                {% empty %}
-                    <li class="muted">暂无评审任务。</li>
-                {% endfor %}
-            </ul>
-        </article>
-    {% empty %}
-        <p class="muted">暂无评审记录。</p>
-    {% endfor %}
+    <div class="spec reveal">
+        <div>
+            <div class="k">项目组联系人</div>
+            <div class="v mono">{{ group.leader.profile.full_name|default:group.leader.username }}</div>
+        </div>
+        <div>
+            <div class="k">成员</div>
+            <div class="v">{{ group.members.all|length }}<small>人</small></div>
+        </div>
+        <div>
+            <div class="k">最近送审</div>
+            <div class="v mono">{% if latest_submission %}R{{ latest_submission.round }}{% else %}—{% endif %}</div>
+        </div>
+        <div>
+            <div class="k">方案结论</div>
+            <div class="v mono {% if latest_submission.status == 'approved' %}ok{% elif latest_submission.status == 'needs_revision' %}warn{% endif %}">
+                {% if latest_submission %}{{ latest_submission.get_status_display }}{% else %}未提交{% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="split">
+        <div class="stack reveal">
+            <div class="panel">
+                <div class="panel-head">
+                    <h2>成员</h2>
+                    <span class="count">{{ group.members.all|length }} members</span>
+                </div>
+                <div class="panel-body tight">
+                    <table>
+                        <thead>
+                            <tr><th>姓名</th><th>角色</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for member in group.members.all %}
+                                <tr>
+                                    <td>{{ member.profile.full_name|default:member.username }}</td>
+                                    <td>
+                                        {% if member.pk == group.leader_id %}
+                                            <span class="chip chip-on">项目组联系人</span>
+                                        {% else %}
+                                            <span class="chip chip-off">成员</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% empty %}
+                                <tr><td colspan="2"><div class="empty">暂无成员。</div></td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {% if group.description %}
+                <div class="panel">
+                    <div class="panel-head"><h2>项目组介绍</h2></div>
+                    <div class="panel-body">
+                        <div class="prose">{{ group.description|linebreaks }}</div>
+                    </div>
+                </div>
+            {% endif %}
+
+            <div class="panel">
+                <div class="panel-head">
+                    <h2>评审记录</h2>
+                    <span class="count">{{ submissions|length }} rounds</span>
+                </div>
+                <div class="panel-body tight">
+                    <div class="queue">
+                        {% for submission in submissions %}
+                            <div class="qitem">
+                                <span class="idx">R{{ submission.round }}</span>
+                                <div class="grow">
+                                    <div>
+                                        <span class="who">{{ submission.get_status_display }}</span>
+                                        <span class="when">{{ submission.submitted_at|date:"Y-m-d H:i" }}</span>
+                                    </div>
+                                    {% if submission.message %}<div class="msg">{{ submission.message|linebreaksbr }}</div>{% endif %}
+                                    <div class="qmeta">
+                                        提交人 {{ submission.submitted_by.profile.full_name|default:submission.submitted_by.username }}
+                                    </div>
+                                    <dl class="dl review-lines">
+                                        {% for assignment in submission.assignments.all %}
+                                            <div>
+                                                <dt>评审人 {{ forloop.counter }}</dt>
+                                                <dd>
+                                                    {% if assignment.is_completed %}
+                                                        {{ assignment.get_decision_display }} · {{ assignment.comment|default:"—" }}
+                                                    {% else %}
+                                                        <span class="muted">待评审</span>
+                                                    {% endif %}
+                                                </dd>
+                                            </div>
+                                        {% empty %}
+                                            <div><dt>评审任务</dt><dd class="muted">暂无</dd></div>
+                                        {% endfor %}
+                                    </dl>
+                                </div>
+                            </div>
+                        {% empty %}
+                            <div class="empty">暂无评审记录。</div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="stack reveal">
+            <div class="panel">
+                <div class="panel-head"><h2>项目书</h2></div>
+                <div class="panel-body">
+                    {% if group.proposal %}
+                        <div class="doc-file">
+                            <span class="doc-ext">{{ group.proposal.name|file_ext }}</span>
+                            <div>
+                                <div class="doc-name">{{ group.proposal.name|basename }}</div>
+                                <div class="doc-spec">点击下载查看全文</div>
+                            </div>
+                        </div>
+                        <div class="btn-row">
+                            <a class="btn btn-sm" href="{% url 'projects:group_proposal_download' group.pk %}">下载项目书</a>
+                        </div>
+                    {% else %}
+                        <p class="muted">尚未上传项目书。</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-head"><h2>方案状态</h2></div>
+                <div class="panel-body">
+                    {% if latest_submission %}
+                        <dl class="dl">
+                            <div><dt>轮次</dt><dd class="mono">R{{ latest_submission.round }}</dd></div>
+                            <div><dt>结论</dt><dd>{{ latest_submission.get_status_display }}</dd></div>
+                        </dl>
+                        <p class="help">
+                            {% if latest_submission.status == "approved" %}
+                                方案已通过，可按此推进项目。
+                            {% elif latest_submission.status == "needs_revision" %}
+                                请根据评审意见修改项目书后重新提交。
+                            {% else %}
+                                等待评审人提交意见；两人都通过后方案即为通过。
+                            {% endif %}
+                        </p>
+                    {% else %}
+                        <p class="muted">尚未提交评审。</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if my_assignment %}
+                <div class="panel">
+                    <div class="panel-head">
+                        <h2>我的评审</h2>
+                        <span class="chip chip-warn">待处理</span>
+                    </div>
+                    <div class="panel-body">
+                        <p class="muted">请先下载本轮项目书，阅读后填写评审意见与决定。</p>
+                        <div class="btn-row">
+                            <a class="btn btn-sm" href="{% url 'projects:group_proposal_download' group.pk %}">下载项目书</a>
+                        </div>
+                        <form method="post" action="{% url 'reviews:complete' my_assignment.pk %}">
+                            {% csrf_token %}
+                            {{ review_form.non_field_errors }}
+                            <div class="field">
+                                <span class="field-label">{{ review_form.decision.label }}</span>
+                                <div class="radiogroup">{{ review_form.decision }}</div>
+                                {{ review_form.decision.errors }}
+                            </div>
+                            <div class="field">
+                                <label for="{{ review_form.comment.id_for_label }}">{{ review_form.comment.label }}</label>
+                                {{ review_form.comment }}
+                                {{ review_form.comment.errors }}
+                            </div>
+                            <div class="form-actions">
+                                <button class="btn btn-primary" type="submit">完成评审</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
 </div>
 {% endblock %}

@@ -135,7 +135,16 @@ class PublicContentAcceptanceTests(TestCase):
         self.assertContains(response, self.image.file.url)
         self.assertContains(response, "成员照片")
 
-    def test_unpublished_about_page_is_not_public(self):
+    def test_missing_about_page_shows_empty_state_instead_of_404(self):
+        """/about/ 是顶栏固定入口，内容尚未录入时不应报 404。"""
+
+        response = self.client.get(reverse("content:about"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "社团简介")
+        self.assertContains(response, "尚未发布")
+
+    def test_unpublished_about_page_shows_empty_state_without_leaking_draft(self):
         ContentPage.objects.create(
             slug="about",
             title="未发布简介",
@@ -145,7 +154,11 @@ class PublicContentAcceptanceTests(TestCase):
 
         response = self.client.get(reverse("content:about"))
 
-        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "尚未发布")
+        # 草稿的标题与正文都不能泄漏到响应里。
+        self.assertNotContains(response, "未发布简介")
+        self.assertNotContains(response, "不应公开。")
 
     def test_markdown_is_rendered_and_unsafe_html_is_removed(self):
         ContentPage.objects.create(

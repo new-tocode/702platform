@@ -1,40 +1,65 @@
 {% extends "base.html" %}
 
-{% block title %}借用记录 - 竞赛社团平台{% endblock %}
+{% block title %}借用记录 - 竞赛社团管理平台{% endblock %}
 
 {% block content %}
-<div class="card">
-    <h1>{% if user.is_staff %}全部借用记录{% else %}我的借用记录{% endif %}</h1>
+<div class="wrap">
+    <div class="pagehead">
+        <div class="path">
+            <a href="{% url 'accounts:member_home' %}">/member</a>
+            <span>/</span>
+            <span>borrows</span>
+        </div>
+        <div class="head-row">
+            <div>
+                <h1>{% if user.is_staff %}全部借用记录{% else %}我的借用记录{% endif %}</h1>
+                <div class="sub">
+                    {% if user.is_staff %}管理员可代成员登记归还。{% else %}只显示你自己的借用记录；归还后库存回补。{% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
     {% if borrows %}
-        <div style="overflow-x:auto;">
+        <div class="table-wrap reveal">
             <table>
                 <thead>
                     <tr>
                         <th>设备</th>
                         {% if user.is_staff %}<th>借用人</th>{% endif %}
-                        <th>借用日期</th>
-                        <th>计划归还</th>
+                        <th class="num">借用日期</th>
+                        <th class="num">计划归还</th>
                         <th>状态</th>
-                        <th>实际归还</th>
-                        <th>操作</th>
+                        <th class="num">实际归还</th>
+                        <th class="right">操作</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for borrow in borrows %}
                         <tr>
-                            <td>{{ borrow.equipment.name }}</td>
-                            {% if user.is_staff %}<td>{{ borrow.borrower.profile.full_name|default:borrow.borrower.username }}</td>{% endif %}
-                            <td>{{ borrow.borrow_date|date:"Y-m-d" }}</td>
-                            <td>{{ borrow.planned_return_date|date:"Y-m-d" }}</td>
-                            <td>{{ borrow.get_status_display }}</td>
-                            <td>{{ borrow.actual_return_date|date:"Y-m-d"|default:"—" }}</td>
+                            <td><span class="t">{{ borrow.equipment.name }}</span></td>
+                            {% if user.is_staff %}
+                                <td>{{ borrow.borrower.profile.full_name|default:borrow.borrower.username }}</td>
+                            {% endif %}
+                            <td class="num">{{ borrow.borrow_date|date:"Y-m-d" }}</td>
+                            <td class="num">{{ borrow.planned_return_date|date:"Y-m-d" }}</td>
                             <td>
+                                {% if borrow.status == "borrowed" %}
+                                    <span class="chip chip-warn">{{ borrow.get_status_display }}</span>
+                                {% else %}
+                                    <span class="chip chip-ok">{{ borrow.get_status_display }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="num">{{ borrow.actual_return_date|date:"Y-m-d"|default:"—" }}</td>
+                            <td class="right">
                                 {% if borrow.status == "borrowed" and user.is_staff or borrow.status == "borrowed" and borrow.borrower_id == user.pk %}
                                     <form method="post" action="{% url 'equipment_borrows:return' borrow.pk %}">
                                         {% csrf_token %}
-                                        <button type="submit">登记归还</button>
+                                        <button class="btn btn-primary btn-sm" type="submit">登记归还</button>
                                     </form>
-                                {% else %}—{% endif %}
+                                {% else %}
+                                    <span class="muted">—</span>
+                                {% endif %}
                             </td>
                         </tr>
                     {% endfor %}
@@ -42,7 +67,7 @@
             </table>
         </div>
     {% else %}
-        <p class="muted">暂无借用记录。</p>
+        <div class="empty">暂无借用记录。</div>
     {% endif %}
 </div>
 {% endblock %}

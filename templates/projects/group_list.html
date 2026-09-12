@@ -1,43 +1,68 @@
 {% extends "base.html" %}
 
-{% block title %}项目组 - 竞赛社团平台{% endblock %}
+{% block title %}项目组 - 竞赛社团管理平台{% endblock %}
 
 {% block content %}
-<div class="card">
-    <h1>项目组</h1>
+<div class="wrap">
+    <div class="pagehead">
+        <div class="path">
+            <a href="{% url 'accounts:member_home' %}">/member</a>
+            <span>/</span>
+            <span>projects</span>
+        </div>
+        <div class="head-row">
+            <div>
+                <h1>项目组</h1>
+                <div class="sub">共 {{ group_rows|length }} 个项目组。组员只看得到自己的项目组，项目组联系人可管理自己的项目组。</div>
+            </div>
+        </div>
+    </div>
+
     {% for row in group_rows %}
-        <article class="card">
-            <h2>
-                {{ row.group.name }}
-                {% if row.status_label %}<span class="muted">[{{ row.status_label }}]</span>{% endif %}
-            </h2>
-            <p>联系人：{{ row.group.leader.profile.full_name|default:row.group.leader.username }}</p>
-            {% if row.group.description %}<div>{{ row.group.description|linebreaks }}</div>{% endif %}
-            <p>成员（{{ row.group.member_count }}）：</p>
-            <ul>
-                {% for member in row.group.members.all %}
-                    <li>{{ member.profile.full_name|default:member.username }}</li>
-                {% empty %}
-                    <li class="muted">暂无成员</li>
-                {% endfor %}
-            </ul>
-            <p>
-                {% if row.can_view %}
-                    <a href="{% url 'projects:group_detail' row.group.pk %}">查看详情</a>
+        <div class="panel reveal">
+            <div class="panel-head">
+                <h2>{{ row.group.name }}</h2>
+                {% if row.status %}
+                    <span class="chip {% if row.status == 'approved' %}chip-ok{% elif row.status == 'needs_revision' %}chip-warn{% else %}chip-on{% endif %}">{{ row.status_label }}</span>
                 {% endif %}
-                {% if row.can_manage %}
-                    · <a href="{% url 'projects:group_manage' row.group.pk %}">管理项目组</a>
-                {% elif row.is_member %}
-                    · <span class="muted">已加入</span>
-                {% elif row.has_pending %}
-                    · <span class="muted">申请审核中</span>
-                {% else %}
-                    · <a href="{% url 'projects:group_apply' row.group.pk %}">申请加入</a>
+            </div>
+            <div class="panel-body">
+                <dl class="dl">
+                    <div><dt>项目组联系人</dt><dd>{{ row.group.leader.profile.full_name|default:row.group.leader.username }}</dd></div>
+                    <div><dt>成员</dt><dd>{{ row.group.member_count }} 人</dd></div>
+                </dl>
+
+                {% if row.group.description %}
+                    <div class="prose group-desc">{{ row.group.description|linebreaks }}</div>
                 {% endif %}
-            </p>
-        </article>
+
+                <h3 class="minor-head">成员名单</h3>
+                <p class="member-line">
+                    {% for member in row.group.members.all %}
+                        <span class="member">{{ member.profile.full_name|default:member.username }}</span>
+                    {% empty %}
+                        <span class="muted">暂无成员</span>
+                    {% endfor %}
+                </p>
+
+                <div class="btn-row">
+                    {% if row.can_view %}
+                        <a class="btn btn-sm" href="{% url 'projects:group_detail' row.group.pk %}">查看详情</a>
+                    {% endif %}
+                    {% if row.can_manage %}
+                        <a class="btn btn-primary btn-sm" href="{% url 'projects:group_manage' row.group.pk %}">管理项目组</a>
+                    {% elif row.is_member %}
+                        <span class="chip chip-off">已加入</span>
+                    {% elif row.has_pending %}
+                        <span class="chip chip-warn">申请审核中</span>
+                    {% else %}
+                        <a class="btn btn-primary btn-sm" href="{% url 'projects:group_apply' row.group.pk %}">申请加入</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
     {% empty %}
-        <p class="muted">暂时没有项目组。</p>
+        <div class="empty">暂时没有项目组。</div>
     {% endfor %}
 </div>
 {% endblock %}

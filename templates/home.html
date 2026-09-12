@@ -1,30 +1,91 @@
 {% extends "base.html" %}
 
-{% block title %}首页 - 竞赛社团平台{% endblock %}
+{% block title %}首页 - 竞赛社团管理平台{% endblock %}
 
 {% block content %}
-<div class="card">
-    <h1>竞赛社团管理平台</h1>
-    <p>公开门户和成员管理功能正在分阶段建设。</p>
-    <h2>最新公开通知</h2>
-    {% if latest_public_notices %}
-        <ul>
-            {% for notice in latest_public_notices %}
-                <li>
-                    {% if notice.is_pinned %}<strong>[置顶]</strong> {% endif %}
-                    <a href="{% url 'notices:public_detail' notice.pk %}">{{ notice.title }}</a>
-                    <span class="muted">{{ notice.published_at|date:"Y-m-d H:i" }}</span>
-                </li>
-            {% endfor %}
-        </ul>
-        <p><a href="{% url 'notices:public_list' %}">查看全部公开通知</a></p>
-    {% else %}
-        <p class="muted">暂时没有公开通知。</p>
-    {% endif %}
-    {% if not user.is_authenticated %}
-        <p><a href="{% url 'accounts:login' %}">成员登录</a>：账号由管理员统一发放，不开放公开注册。</p>
-    {% else %}
-        <p><a href="{% url 'accounts:member_home' %}">进入成员中心</a>。</p>
-    {% endif %}
+<div class="wrap">
+    <div class="pagehead">
+        <div class="path"><span>/</span><span>公开门户</span></div>
+        <div class="head-row">
+            <div>
+                <h1>竞赛社团管理平台</h1>
+                <div class="sub">项目组立项与送审、竞赛报名、设备借用与通知发布，都在这里完成。</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="spec reveal">
+        <div>
+            <div class="k">在册成员</div>
+            <div class="v">{{ member_count }}<small>人</small></div>
+        </div>
+        <div>
+            <div class="k">项目组</div>
+            <div class="v">{{ group_count }}<small>个</small></div>
+        </div>
+        <div>
+            <div class="k">开放报名竞赛</div>
+            <div class="v">{{ open_competition_count }}<small>项</small></div>
+        </div>
+        <div>
+            <div class="k">在借设备</div>
+            <div class="v">{{ borrowed_count }}<small>台</small></div>
+        </div>
+    </div>
+
+    <div class="split">
+        <div class="table-wrap reveal">
+            <table>
+                <thead>
+                    <tr>
+                        <th class="num">日期</th>
+                        <th>公开通知</th>
+                        <th class="num right">范围</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for notice in latest_public_notices %}
+                        <tr>
+                            <td class="num">{{ notice.published_at|date:"Y-m-d" }}</td>
+                            <td>
+                                <a class="t" href="{% url 'notices:public_detail' notice.pk %}">{% if notice.is_pinned %}<span class="chip chip-pin">置顶</span> {% endif %}{{ notice.title }}</a>
+                            </td>
+                            <td class="num right">public</td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="3"><div class="empty">暂时没有公开通知。</div></td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="stack reveal">
+            <div class="panel">
+                <div class="panel-head"><h2>了解社团</h2></div>
+                <div class="panel-body">
+                    <dl class="dl">
+                        <div><dt><a href="{% url 'content:about' %}">社团简介</a></dt><dd class="mono">{% url 'content:about' %}</dd></div>
+                        <div><dt><a href="{% url 'content:awards' %}">历年获奖</a></dt><dd class="mono">{% url 'content:awards' %}</dd></div>
+                        <div><dt><a href="{% url 'content:showcase' %}">成员风采</a></dt><dd class="mono">{% url 'content:showcase' %}</dd></div>
+                        <div><dt><a href="{% url 'notices:public_list' %}">公开通知</a></dt><dd class="mono">{% url 'notices:public_list' %}</dd></div>
+                    </dl>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-head"><h2>成员入口</h2></div>
+                <div class="panel-body">
+                    <p class="muted">账号由管理员统一发放，不开放公开注册；首次登录需先修改初始密码。</p>
+                    {% if user.is_authenticated %}
+                        <a class="btn btn-primary btn-block" href="{% url 'accounts:member_home' %}">进入成员中心</a>
+                    {% else %}
+                        <a class="btn btn-primary btn-block" href="{% url 'accounts:login' %}">成员登录</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}

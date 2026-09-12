@@ -1,42 +1,82 @@
 {% extends "base.html" %}
 
-{% block title %}{{ competition.title }}{% if is_edit %}修改报名{% else %}报名{% endif %} - 竞赛社团平台{% endblock %}
+{% block title %}{{ competition.title }}{% if is_edit %}修改报名{% else %}报名{% endif %} - 竞赛社团管理平台{% endblock %}
 
 {% block content %}
-<div class="card">
-    <p><a href="{% url 'competitions:list' %}">返回竞赛列表</a></p>
-    <h1>{{ competition.title }}</h1>
-    <p class="muted">
-        报名截止：{{ competition.deadline|date:"Y-m-d H:i" }}
-        {% if competition.team_size %} · 人数要求：{{ competition.team_size }}{% endif %}
-    </p>
-    <div>{{ competition.description|linebreaks }}</div>
+<div class="wrap">
+    <div class="pagehead">
+        <div class="path">
+            <a href="{% url 'competitions:list' %}">/member/competitions</a>
+            <span>/</span>
+            <span>{% if is_edit %}edit{% else %}register{% endif %}</span>
+        </div>
+        <div class="head-row">
+            <div>
+                <h1>{{ competition.title }}</h1>
+                <div class="sub">
+                    报名截止 {{ competition.deadline|date:"Y-m-d H:i" }}
+                    {% if competition.team_size %} · 人数要求 {{ competition.team_size }}{% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
 
-    <h2>{% if is_edit %}修改报名{% else %}登记报名{% endif %}</h2>
-    <form method="post">
-        {% csrf_token %}
-        {{ form.non_field_errors }}
+    <div class="split">
+        <div class="frame reveal">
+            {% if competition.description %}
+                <div class="prose">{{ competition.description|linebreaks }}</div>
+            {% endif %}
 
-        <label for="{{ form.group.id_for_label }}">{{ form.group.label }}</label>
-        {{ form.group }}
-        {{ form.group.errors }}
+            <h2 class="form-heading">{% if is_edit %}修改报名{% else %}登记报名{% endif %}</h2>
+            <form method="post">
+                {% csrf_token %}
+                {{ form.non_field_errors }}
 
-        <label for="{{ form.members.id_for_label }}">{{ form.members.label }}</label>
-        {{ form.members }}
-        <p class="muted">{{ form.members.help_text }}</p>
-        {{ form.members.errors }}
+                <div class="field">
+                    <label for="{{ form.group.id_for_label }}">{{ form.group.label }}</label>
+                    {{ form.group }}
+                    {{ form.group.errors }}
+                </div>
 
-        <label for="{{ form.team_leader.id_for_label }}">{{ form.team_leader.label }}</label>
-        {{ form.team_leader }}
-        <p class="muted">{{ form.team_leader.help_text }}</p>
-        {{ form.team_leader.errors }}
+                <div class="field">
+                    <label for="{{ form.members.id_for_label }}">{{ form.members.label }}</label>
+                    {{ form.members }}
+                    {% if form.members.help_text %}<p class="help">{{ form.members.help_text }}</p>{% endif %}
+                    {{ form.members.errors }}
+                </div>
 
-        <label for="{{ form.remark.id_for_label }}">{{ form.remark.label }}</label>
-        {{ form.remark }}
-        {{ form.remark.errors }}
+                <div class="field">
+                    <label for="{{ form.team_leader.id_for_label }}">{{ form.team_leader.label }}</label>
+                    {{ form.team_leader }}
+                    {% if form.team_leader.help_text %}<p class="help">{{ form.team_leader.help_text }}</p>{% endif %}
+                    {{ form.team_leader.errors }}
+                </div>
 
-        <button type="submit">{% if is_edit %}保存修改{% else %}提交报名登记{% endif %}</button>
-    </form>
+                <div class="field">
+                    <label for="{{ form.remark.id_for_label }}">{{ form.remark.label }}</label>
+                    {{ form.remark }}
+                    {{ form.remark.errors }}
+                </div>
+
+                <div class="form-actions">
+                    <button class="btn btn-primary" type="submit">{% if is_edit %}保存修改{% else %}提交报名登记{% endif %}</button>
+                    <a class="btn" href="{% url 'competitions:list' %}">返回竞赛列表</a>
+                </div>
+            </form>
+        </div>
+
+        <div class="panel reveal">
+            <div class="panel-head"><h2>填报说明</h2></div>
+            <div class="panel-body">
+                <dl class="dl">
+                    <div><dt>可选参赛成员</dt><dd>所选项目组的成员</dd></div>
+                    <div><dt>竞赛组长</dt><dd>须在参赛成员内</dd></div>
+                    <div><dt>报名范围</dt><dd>仅限自己的项目组</dd></div>
+                </dl>
+                <p class="help">切换项目组后，参赛成员与竞赛组长候选会自动过滤为该组成员。</p>
+            </div>
+        </div>
+    </div>
 </div>
 
 {{ member_group_map|json_script:"member-group-map" }}

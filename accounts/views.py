@@ -14,6 +14,7 @@ from django.views.decorators.http import require_http_methods
 from django.views.generic.edit import FormView
 
 from core.audit import record_audit
+from core.stats import platform_overview
 
 from .forms import (
     FirstPasswordChangeForm,
@@ -21,6 +22,7 @@ from .forms import (
     ProfileForm,
 )
 from .models import Profile
+from .roles import describe_member
 
 
 logger = logging.getLogger(__name__)
@@ -136,7 +138,7 @@ def home(request):
     return render(
         request,
         "home.html",
-        {"latest_public_notices": latest_public_notices},
+        {"latest_public_notices": latest_public_notices, **platform_overview()},
     )
 
 
@@ -148,7 +150,11 @@ def member_home(request):
         request.user.pk,
         extra={"request_id": getattr(request, "request_id", "-")},
     )
-    return render(request, "accounts/member_home.html")
+    return render(
+        request,
+        "accounts/member_home.html",
+        {"member_role": describe_member(request.user)},
+    )
 
 
 @login_required
