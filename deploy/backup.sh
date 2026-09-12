@@ -29,18 +29,11 @@ mkdir -p backups
 STAMP="$(date +%F-%H%M)"
 RETAIN="${DJANGO_BACKUP_RETAIN:-14}"
 
-case "${DJANGO_DB_ENGINE:-django.db.backends.postgresql}" in
-  *postgres*)
-    PGPASSWORD="$DJANGO_DB_PASSWORD" pg_dump \
-        --username "$DJANGO_DB_USER" \
-        --host "${DJANGO_DB_HOST:-127.0.0.1}" \
-        --port "${DJANGO_DB_PORT:-5432}" \
-        "$DJANGO_DB_NAME" | gzip > "backups/db-$STAMP.sql.gz"
-    ;;
-  *)
-    echo "跳过数据库备份（非 PostgreSQL 引擎）" >&2
-    ;;
-esac
+PGPASSWORD="$DJANGO_DB_PASSWORD" pg_dump \
+    --username "$DJANGO_DB_USER" \
+    --host "${DJANGO_DB_HOST:-127.0.0.1}" \
+    --port "${DJANGO_DB_PORT:-5432}" \
+    "$DJANGO_DB_NAME" | gzip > "backups/db-$STAMP.sql.gz"
 
 tar -czf "backups/media-$STAMP.tar.gz" mediafiles/
 

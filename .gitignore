@@ -8,9 +8,9 @@ __pycache__/
 .env
 
 # Django runtime
-*.sqlite3
 staticfiles/
 mediafiles/uploads/
+mediafiles/project_proposals/
 logs/*.log
 
 # Editors

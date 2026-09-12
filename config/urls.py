@@ -12,6 +12,10 @@ urlpatterns = [
     path("", include(("content.urls", "content"), namespace="content")),
     path("member/projects/", include(("projects.urls", "projects"), namespace="projects")),
     path(
+        "member/reviews/",
+        include(("reviews.urls", "reviews"), namespace="reviews"),
+    ),
+    path(
         "member/competitions/",
         include(("competitions.urls", "competitions"), namespace="competitions"),
     ),

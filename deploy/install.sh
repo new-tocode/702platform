@@ -55,7 +55,7 @@ source "$ENV_FILE"
 set +a
 
 # 校验必须在 env.sh 中显式存在的关键项
-for var in DJANGO_SECRET_KEY DJANGO_ALLOWED_HOSTS DJANGO_DB_ENGINE DJANGO_DB_NAME \
+for var in DJANGO_SECRET_KEY DJANGO_ALLOWED_HOSTS DJANGO_DB_NAME \
            DJANGO_DB_USER DJANGO_DB_PASSWORD DJANGO_SUPERUSER_USERNAME \
            DJANGO_SUPERUSER_EMAIL DJANGO_SUPERUSER_PASSWORD \
            DEPLOY_DOMAIN DEPLOY_PUBLIC_IP DEPLOY_SYSTEM_USER DJANGO_BACKUP_SCHEDULE; do
@@ -140,82 +140,71 @@ if [[ "${#MISSING[@]}" -gt 0 ]]; then
 fi
 ok "依赖环境检查通过"
 
-# ---------- 4. 数据库就绪（默认 PostgreSQL） ----------
-case "$DJANGO_DB_ENGINE" in
-  *postgres*)
-    # 探测 PostgreSQL 的 systemd 服务单元名（随发行版与 PG 版本而变，故不硬编码）:
-    #   Debian/Ubuntu → postgresql.service（官方包提供的 meta 单元）
-    #   RHEL/PGDG     → postgresql-<主版本>.service（如 postgresql-16.service）
-    PG_SERVICE="$(systemctl list-unit-files --type=service --no-pager 2>/dev/null \
-        | awk '/^postgresql\.service[[:space:]]/ {deb=$1} /^postgresql-[0-9]+\.service[[:space:]]/ {if (!ver) ver=$1} END {print (deb ? deb : ver)}')"
-    if [[ -z "$PG_SERVICE" ]]; then
-        PG_SERVICE="postgresql.service"
-        warn "未探测到 PostgreSQL 服务单元，回退为 $PG_SERVICE（可用 systemctl list-unit-files | grep postgres 核对）"
-    fi
-    info "PostgreSQL 服务单元: $PG_SERVICE"
+# ---------- 4. 数据库就绪（PostgreSQL） ----------
+# 探测 PostgreSQL 的 systemd 服务单元名（随发行版与 PG 版本而变，故不硬编码）:
+#   Debian/Ubuntu → postgresql.service（官方包提供的 meta 单元）
+#   RHEL/PGDG     → postgresql-<主版本>.service（如 postgresql-16.service）
+PG_SERVICE="$(systemctl list-unit-files --type=service --no-pager 2>/dev/null \
+    | awk '/^postgresql\.service[[:space:]]/ {deb=$1} /^postgresql-[0-9]+\.service[[:space:]]/ {if (!ver) ver=$1} END {print (deb ? deb : ver)}')"
+if [[ -z "$PG_SERVICE" ]]; then
+    PG_SERVICE="postgresql.service"
+    warn "未探测到 PostgreSQL 服务单元，回退为 $PG_SERVICE（可用 systemctl list-unit-files | grep postgres 核对）"
+fi
+info "PostgreSQL 服务单元: $PG_SERVICE"
 
-    info "确保 PostgreSQL 服务运行中"
-    if ! systemctl is-active "$PG_SERVICE" >/dev/null 2>&1; then
-        systemctl start "$PG_SERVICE" 2>/dev/null || true
-    fi
+info "确保 PostgreSQL 服务运行中"
+if ! systemctl is-active "$PG_SERVICE" >/dev/null 2>&1; then
+    systemctl start "$PG_SERVICE" 2>/dev/null || true
+fi
 
-    # Django 5.2 要求 PostgreSQL >= 14
-    info "检查 PostgreSQL 版本（Django 5.2 要求 >= 14）"
-    PG_VER_NUM="$(sudo -u postgres psql -tAc 'SHOW server_version_num' 2>/dev/null | tr -d '[:space:]' || true)"
-    if [[ -z "$PG_VER_NUM" ]]; then
-        warn "无法读取 PostgreSQL 版本号，跳过版本检查（请确认 server 版本 >= 14）"
+# Django 5.2 要求 PostgreSQL >= 14
+info "检查 PostgreSQL 版本（Django 5.2 要求 >= 14）"
+PG_VER_NUM="$(sudo -u postgres psql -tAc 'SHOW server_version_num' 2>/dev/null | tr -d '[:space:]' || true)"
+if [[ -z "$PG_VER_NUM" ]]; then
+    warn "无法读取 PostgreSQL 版本号，跳过版本检查（请确认 server 版本 >= 14）"
+else
+    PG_MAJOR=$((PG_VER_NUM / 10000))
+    if (( PG_MAJOR < 14 )); then
+        fail "PostgreSQL 版本过低（主版本 $PG_MAJOR，Django 5.2 要求 >= 14），请先升级 PostgreSQL 再运行本脚本"
+        fail "升级参考: 添加 PGDG 官方源（https://www.postgresql.org/download/linux/）后安装 PostgreSQL 16"
+        exit 1
+    elif (( PG_MAJOR < 16 )); then
+        warn "PostgreSQL $PG_MAJOR 可满足 Django 5.2（>= 14），但建议升级到 16 以获得更佳支持与性能"
     else
-        PG_MAJOR=$((PG_VER_NUM / 10000))
-        if (( PG_MAJOR < 14 )); then
-            fail "PostgreSQL 版本过低（主版本 $PG_MAJOR，Django 5.2 要求 >= 14），请先升级 PostgreSQL 再运行本脚本"
-            fail "升级参考: 添加 PGDG 官方源（https://www.postgresql.org/download/linux/）后安装 PostgreSQL 16"
-            exit 1
-        elif (( PG_MAJOR < 16 )); then
-            warn "PostgreSQL $PG_MAJOR 可满足 Django 5.2（>= 14），但建议升级到 16 以获得更佳支持与性能"
-        else
-            ok "PostgreSQL $PG_MAJOR 满足要求（>= 14）"
-        fi
+        ok "PostgreSQL $PG_MAJOR 满足要求（>= 14）"
     fi
+fi
 
-    # 会话认证统一 scram-sha-256：密码以 scram 存储，pg_hba 对本地 TCP 也要求 scram
-    info "确保数据库角色 $DJANGO_DB_USER 存在（密码 scram-sha-256 存储）"
-    if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='$DJANGO_DB_USER'" | grep -q 1; then
-        # CREATEDB: 允许 Django 测试(`manage.py test`)创建临时测试库
-        sudo -u postgres psql -c "SET password_encryption = 'scram-sha-256'; CREATE ROLE \"$DJANGO_DB_USER\" LOGIN CREATEDB PASSWORD '$DJANGO_DB_PASSWORD'"
-        ok "已创建数据库角色 $DJANGO_DB_USER"
-    else
-        # 已存在则按当前 env 密码重设，确保以 scram 加密存储
-        sudo -u postgres psql -c "SET password_encryption = 'scram-sha-256'; ALTER ROLE \"$DJANGO_DB_USER\" PASSWORD '$DJANGO_DB_PASSWORD'"
-        info "数据库角色 $DJANGO_DB_USER 已存在，密码已按 scram-sha-256 刷新"
-    fi
+# 会话认证统一 scram-sha-256：密码以 scram 存储，pg_hba 对本地 TCP 也要求 scram
+info "确保数据库角色 $DJANGO_DB_USER 存在（密码 scram-sha-256 存储）"
+if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='$DJANGO_DB_USER'" | grep -q 1; then
+    # CREATEDB: 允许 Django 测试(`manage.py test`)创建临时测试库
+    sudo -u postgres psql -c "SET password_encryption = 'scram-sha-256'; CREATE ROLE \"$DJANGO_DB_USER\" LOGIN CREATEDB PASSWORD '$DJANGO_DB_PASSWORD'"
+    ok "已创建数据库角色 $DJANGO_DB_USER"
+else
+    # 已存在则按当前 env 密码重设，确保以 scram 加密存储
+    sudo -u postgres psql -c "SET password_encryption = 'scram-sha-256'; ALTER ROLE \"$DJANGO_DB_USER\" PASSWORD '$DJANGO_DB_PASSWORD'"
+    info "数据库角色 $DJANGO_DB_USER 已存在，密码已按 scram-sha-256 刷新"
+fi
 
-    # pg_hba.conf：本地 TCP(127.0.0.1 / ::1) 认证方法统一改为 scram-sha-256 并重载
-    HBA_FILE="$(sudo -u postgres psql -tAc 'SHOW hba_file' 2>/dev/null | tr -d '[:space:]' || true)"
-    if [[ -n "$HBA_FILE" && -f "$HBA_FILE" ]]; then
-        sudo sed -E -i 's|^[[:space:]]*(host[[:space:]]+all[[:space:]]+all[[:space:]]+127\.0\.0\.1/32[[:space:]]+)[a-zA-Z0-9_-]+$|\1scram-sha-256|' "$HBA_FILE"
-        sudo sed -E -i 's|^[[:space:]]*(host[[:space:]]+all[[:space:]]+all[[:space:]]+::1/128[[:space:]]+)[a-zA-Z0-9_-]+$|\1scram-sha-256|' "$HBA_FILE"
-        sudo -u postgres psql -c 'SELECT pg_reload_conf()' >/dev/null 2>&1 || true
-        ok "pg_hba.conf 已启用 scram-sha-256 认证"
-    else
-        warn "无法定位 pg_hba.conf，请手工确认 127.0.0.1/::1 使用 scram-sha-256 认证"
-    fi
+# pg_hba.conf：本地 TCP(127.0.0.1 / ::1) 认证方法统一改为 scram-sha-256 并重载
+HBA_FILE="$(sudo -u postgres psql -tAc 'SHOW hba_file' 2>/dev/null | tr -d '[:space:]' || true)"
+if [[ -n "$HBA_FILE" && -f "$HBA_FILE" ]]; then
+    sudo sed -E -i 's|^[[:space:]]*(host[[:space:]]+all[[:space:]]+all[[:space:]]+127\.0\.0\.1/32[[:space:]]+)[a-zA-Z0-9_-]+$|\1scram-sha-256|' "$HBA_FILE"
+    sudo sed -E -i 's|^[[:space:]]*(host[[:space:]]+all[[:space:]]+all[[:space:]]+::1/128[[:space:]]+)[a-zA-Z0-9_-]+$|\1scram-sha-256|' "$HBA_FILE"
+    sudo -u postgres psql -c 'SELECT pg_reload_conf()' >/dev/null 2>&1 || true
+    ok "pg_hba.conf 已启用 scram-sha-256 认证"
+else
+    warn "无法定位 pg_hba.conf，请手工确认 127.0.0.1/::1 使用 scram-sha-256 认证"
+fi
 
-    info "确保数据库 $DJANGO_DB_NAME 存在"
-    if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='$DJANGO_DB_NAME'" | grep -q 1; then
-        sudo -u postgres createdb -O "$DJANGO_DB_USER" "$DJANGO_DB_NAME"
-        ok "已创建数据库 $DJANGO_DB_NAME"
-    else
-        info "数据库 $DJANGO_DB_NAME 已存在，跳过"
-    fi
-    ;;
-  *sqlite*)
-    warn "使用 SQLite（仅建议轻量测试），跳过数据库账号创建"
-    ;;
-  *)
-    fail "不支持的 DJANGO_DB_ENGINE: $DJANGO_DB_ENGINE"
-    exit 1
-    ;;
-esac
+info "确保数据库 $DJANGO_DB_NAME 存在"
+if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='$DJANGO_DB_NAME'" | grep -q 1; then
+    sudo -u postgres createdb -O "$DJANGO_DB_USER" "$DJANGO_DB_NAME"
+    ok "已创建数据库 $DJANGO_DB_NAME"
+else
+    info "数据库 $DJANGO_DB_NAME 已存在，跳过"
+fi
 
 run_as_app() {
     sudo -u "$DEPLOY_SYSTEM_USER" env "PATH=$APP_DIR/.venv/bin:$PATH" \
@@ -363,5 +352,5 @@ ${GRN}============================================${RST}
   日志     : journalctl -u club702 -f
 
   后续发布新版本: git checkout <新tag> 后执行 ./deploy/deploy.sh <新tag>
-  说明        : 本脚本只负责首次部署；依赖环境的落地请参考 docs/deploy-production.md
+  说明        : 本脚本只负责首次部署；依赖环境的落地请参考 docs/deploy.md
 EOF

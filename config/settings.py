@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     "content.apps.ContentConfig",
     "projects.apps.ProjectsConfig",
     "competitions.apps.CompetitionsConfig",
+    "reviews.apps.ReviewsConfig",
     "equipment.apps.EquipmentConfig",
     "core.apps.CoreConfig",
 ]
@@ -85,25 +86,14 @@ WSGI_APPLICATION = "config.wsgi.application"
 
 DATABASES = {
     "default": {
-        "ENGINE": os.environ.get(
-            "DJANGO_DB_ENGINE",
-            "django.db.backends.sqlite3",
-        ),
-        "NAME": os.environ.get("DJANGO_DB_NAME", str(BASE_DIR / "db.sqlite3")),
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": os.environ.get("DJANGO_DB_NAME", "club702_dev"),
+        "USER": os.environ.get("DJANGO_DB_USER", ""),
+        "PASSWORD": os.environ.get("DJANGO_DB_PASSWORD", ""),
+        "HOST": os.environ.get("DJANGO_DB_HOST", "127.0.0.1"),
+        "PORT": os.environ.get("DJANGO_DB_PORT", "5432"),
     }
 }
-
-# PostgreSQL connection options only apply when a PostgreSQL engine is
-# selected; the SQLite default stays zero-configuration.
-if "postgres" in DATABASES["default"]["ENGINE"]:
-    DATABASES["default"].update(
-        {
-            "USER": os.environ.get("DJANGO_DB_USER", ""),
-            "PASSWORD": os.environ.get("DJANGO_DB_PASSWORD", ""),
-            "HOST": os.environ.get("DJANGO_DB_HOST", "127.0.0.1"),
-            "PORT": os.environ.get("DJANGO_DB_PORT", "5432"),
-        }
-    )
 
 
 AUTH_USER_MODEL = "accounts.User"
