@@ -27,6 +27,26 @@ def page_detail(request, slug):
     return render(request, "content/page_detail.html", {"page": page})
 
 
+def page_index(request):
+    """List the published standalone pages, minus the /about/ shortcut.
+
+    「社团简介」已有固定入口和独立地址，这里只列附加页面：同一条内容在清单里
+    出现两次、还分别指向 /about/ 与 /pages/about/ 两个地址，只会让人困惑。
+    """
+    pages = (
+        ContentPage.objects.filter(is_published=True)
+        .exclude(slug="about")
+        .order_by("slug")
+    )
+    logger.info(
+        "content.page_index.view count=%s user=%s",
+        len(pages),
+        request.user.get_username() if request.user.is_authenticated else "anonymous",
+        extra={"request_id": getattr(request, "request_id", "-")},
+    )
+    return render(request, "content/page_index.html", {"pages": pages})
+
+
 def about(request):
     """Keep /about/ as the friendly shortcut for the about ContentPage.
 

@@ -424,6 +424,7 @@ core / registry.py
 |---|---|
 | `/` | 首页：社团概览数字 + 最新公开公告 + 公开内容入口 |
 | `/about/` | 社团简介快捷地址（读取 ContentPage slug=about；未发布时显示空状态，不返回 404） |
+| `/pages/` | 更多页面：已发布的通用 ContentPage 清单（不含 slug=about，首页「了解社团」入口） |
 | `/pages/<slug>/` | 通用公开内容页（仅已发布的 ContentPage 可访问，未发布 404） |
 | `/awards/` | 历年获奖列表 |
 | `/showcase/` | 成员风采 |
