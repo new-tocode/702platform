@@ -12,12 +12,30 @@ from django.urls import reverse
 from core.registry import get_entries_for_user
 from projects.models import ProjectGroup
 
-from .models import ProjectSubmission, ReviewAssignment
-from .services import ReviewError, complete_review, submit_for_review
+from .forms import ReviewForm
+from .models import (
+    REVIEW_TYPE_CHOICES,
+    REVIEW_TYPE_COMPETITION_PROJECT,
+    REVIEW_TYPE_INNOVATION_MIDTERM,
+    REVIEW_TYPE_INNOVATION_START,
+    REVIEWER_QUOTA,
+    ArchivedProposal,
+    ProjectSubmission,
+    ReviewAssignment,
+)
+from .services import (
+    ReviewError,
+    _settle_submission,
+    complete_review,
+    submit_for_review,
+)
 
 
 User = get_user_model()
 MEDIA_ROOT = tempfile.mkdtemp()
+
+#: A round type needing two reviewers, so the historic two-reviewer assertions hold.
+TWO_REVIEWER_TYPE = REVIEW_TYPE_INNOVATION_MIDTERM
 
 
 def _pdf(name="proposal.pdf"):
@@ -68,15 +86,33 @@ class ProjectReviewFlowTests(TestCase):
         user.save(update_fields=["is_reviewer", "must_change_password"])
         return user
 
-    def _submit(self):
+    def _submit(self, review_type=TWO_REVIEWER_TYPE, message="申请开题。"):
         return submit_for_review(
             group=self.group,
             submitter=self.contact,
-            message="申请开题。",
+            review_type=review_type,
+            message=message,
         )
 
     def _assignment(self, submission, reviewer):
         return submission.assignments.get(reviewer=reviewer)
+
+    def _approve_both(self, submission, **files):
+        """Complete both assignments as approve; ``files`` maps reviewer to a file."""
+        complete_review(
+            assignment=self._assignment(submission, self.reviewer_one),
+            reviewer=self.reviewer_one,
+            decision=ReviewAssignment.APPROVE,
+            comment="方案可行。",
+            annotated_file=files.get("reviewer_one"),
+        )
+        complete_review(
+            assignment=self._assignment(submission, self.reviewer_two),
+            reviewer=self.reviewer_two,
+            decision=ReviewAssignment.APPROVE,
+            comment="同意开题。",
+            annotated_file=files.get("reviewer_two"),
+        )
 
     # --- registration of the reviewer operation entry -----------------------
 
@@ -100,18 +136,46 @@ class ProjectReviewFlowTests(TestCase):
             {self.reviewer_one.pk, self.reviewer_two.pk},
         )
 
+    def test_review_type_determines_reviewer_quota(self):
+        self._make_reviewer("reviewer-three")
+
+        for review_type, expected in REVIEWER_QUOTA.items():
+            with self.subTest(review_type=review_type):
+                submission = self._submit(review_type=review_type)
+
+                self.assertEqual(submission.required_reviewers, expected)
+                self.assertEqual(submission.assignments.count(), expected)
+
+    def test_legacy_submission_without_type_defaults_to_two(self):
+        """Rounds created before submission types existed keep the old rule."""
+        legacy = ProjectSubmission.objects.create(
+            group=self.group,
+            round=9,
+            review_type="",
+            submitted_by=self.contact,
+        )
+
+        self.assertEqual(legacy.required_reviewers, 2)
+
+    def test_submission_requires_a_valid_review_type(self):
+        for review_type in ("", "not-a-type"):
+            with self.subTest(review_type=review_type):
+                with self.assertRaises(ReviewError):
+                    self._submit(review_type=review_type)
+
     def test_submission_requires_a_proposal(self):
         self.group.proposal.delete(save=True)
 
         with self.assertRaises(ReviewError):
             self._submit()
 
-    def test_submission_blocked_when_fewer_than_two_reviewers(self):
-        self.reviewer_two.is_reviewer = False
-        self.reviewer_two.save(update_fields=["is_reviewer"])
+    def test_submission_blocked_when_candidates_below_quota(self):
+        # Only two qualified reviewers exist, but a competition round needs three.
+        with self.assertRaises(ReviewError) as caught:
+            self._submit(review_type=REVIEW_TYPE_COMPETITION_PROJECT)
 
-        with self.assertRaises(ReviewError):
-            self._submit()
+        self.assertIn("3 人", str(caught.exception))
+        self.assertFalse(ProjectSubmission.objects.exists())
 
     # --- verdict aggregation -------------------------------------------------
 
@@ -136,6 +200,22 @@ class ProjectReviewFlowTests(TestCase):
         submission.refresh_from_db()
         self.assertEqual(submission.status, ProjectSubmission.APPROVED)
 
+    def test_single_reviewer_type_is_decided_by_one_verdict(self):
+        submission = self._submit(review_type=REVIEW_TYPE_INNOVATION_START)
+
+        self.assertEqual(submission.assignments.count(), 1)
+        # Which of the two qualified reviewers is drawn is random.
+        assignment = submission.assignments.get()
+        complete_review(
+            assignment=assignment,
+            reviewer=assignment.reviewer,
+            decision=ReviewAssignment.APPROVE,
+            comment="同意立项。",
+        )
+
+        submission.refresh_from_db()
+        self.assertEqual(submission.status, ProjectSubmission.APPROVED)
+
     def test_one_revision_request_marks_needs_revision(self):
         submission = self._submit()
 
@@ -153,6 +233,24 @@ class ProjectReviewFlowTests(TestCase):
         )
         submission.refresh_from_db()
         self.assertEqual(submission.status, ProjectSubmission.NEEDS_REVISION)
+
+    def test_settlement_reaches_a_verdict_from_any_caller(self):
+        """Aggregation must not depend on which reviewer happens to finish last.
+
+        The verdict is settled by whichever call finds no pending assignment, so
+        settlement is reachable from any caller once the round is fully reviewed.
+        """
+        submission = self._submit()
+        submission.assignments.update(
+            status=ReviewAssignment.COMPLETED,
+            decision=ReviewAssignment.APPROVE,
+        )
+        submission.refresh_from_db()
+
+        _settle_submission(submission)
+
+        submission.refresh_from_db()
+        self.assertEqual(submission.status, ProjectSubmission.APPROVED)
 
     def test_resubmission_creates_next_round(self):
         first = self._submit()
@@ -185,6 +283,100 @@ class ProjectReviewFlowTests(TestCase):
                 decision=ReviewAssignment.APPROVE,
                 comment="越权。",
             )
+
+    # --- annotated proposals and archiving -----------------------------------
+
+    def test_annotated_file_is_optional(self):
+        submission = self._submit()
+
+        self._approve_both(submission)
+
+        submission.refresh_from_db()
+        self.assertEqual(submission.status, ProjectSubmission.APPROVED)
+        self.assertFalse(self._assignment(submission, self.reviewer_one).annotated_file)
+
+    def test_approved_submission_archives_annotated_proposals(self):
+        submission = self._submit()
+
+        self._approve_both(
+            submission,
+            reviewer_one=_pdf("annotated-one.pdf"),
+            reviewer_two=_pdf("annotated-two.pdf"),
+        )
+
+        archived = ArchivedProposal.objects.filter(submission=submission)
+        self.assertEqual(archived.count(), 2)
+        self.assertEqual(
+            set(archived.values_list("source_assignment_id", flat=True)),
+            set(submission.assignments.values_list("pk", flat=True)),
+        )
+        for record in archived:
+            self.assertEqual(record.group_id, self.group.pk)
+            self.assertTrue(record.file.name)
+
+    def test_archive_filename_does_not_leak_the_reviewer(self):
+        submission = self._submit()
+
+        self._approve_both(submission, reviewer_one=_pdf("reviewer-one-批注.pdf"))
+
+        record = ArchivedProposal.objects.get(submission=submission)
+        self.assertTrue(record.file.name.endswith(".pdf"))
+        self.assertNotIn("reviewer-one", record.file.name)
+        self.assertNotIn("批注", record.file.name)
+
+    def test_only_uploaders_produce_archive_entries(self):
+        submission = self._submit()
+
+        self._approve_both(submission, reviewer_one=_pdf("annotated.pdf"))
+
+        record = ArchivedProposal.objects.get(submission=submission)
+        self.assertEqual(
+            record.source_assignment,
+            self._assignment(submission, self.reviewer_one),
+        )
+
+    def test_archive_is_idempotent(self):
+        submission = self._submit()
+        self._approve_both(submission, reviewer_one=_pdf("annotated.pdf"))
+
+        submission.refresh_from_db()
+        _settle_submission(submission)
+
+        self.assertEqual(ArchivedProposal.objects.filter(submission=submission).count(), 1)
+
+    def test_needs_revision_does_not_archive(self):
+        submission = self._submit()
+
+        complete_review(
+            assignment=self._assignment(submission, self.reviewer_one),
+            reviewer=self.reviewer_one,
+            decision=ReviewAssignment.APPROVE,
+            comment="可以。",
+            annotated_file=_pdf("annotated.pdf"),
+        )
+        complete_review(
+            assignment=self._assignment(submission, self.reviewer_two),
+            reviewer=self.reviewer_two,
+            decision=ReviewAssignment.REVISE,
+            comment="请补充预算。",
+        )
+
+        submission.refresh_from_db()
+        self.assertEqual(submission.status, ProjectSubmission.NEEDS_REVISION)
+        self.assertFalse(ArchivedProposal.objects.filter(submission=submission).exists())
+        # The annotated copy is still reachable on the assignment itself.
+        self.assertTrue(
+            self._assignment(submission, self.reviewer_one).annotated_file
+        )
+
+    def test_annotated_file_validator_rejects_unsupported_extension(self):
+        form = ReviewForm(
+            data={"decision": ReviewAssignment.APPROVE, "comment": "可以。"},
+            files={"annotated_file": SimpleUploadedFile("notes.txt", b"hello")},
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("annotated_file", form.errors)
 
     # --- queue and detail views ---------------------------------------------
 
@@ -254,15 +446,31 @@ class ProjectReviewFlowTests(TestCase):
         self.assertNotContains(response, "reviewer-one")
         self.assertNotContains(response, "reviewer-two")
 
+    def test_review_form_posts_multipart(self):
+        """A browser only sends the annotated file if the form is multipart.
+
+        The test client encodes files as multipart on its own, so without this
+        assertion a missing enctype would only ever break in a real browser.
+        """
+        self._submit()
+        self.client.force_login(self.reviewer_one)
+
+        response = self.client.get(
+            reverse("projects:group_detail", args=(self.group.pk,))
+        )
+
+        self.assertContains(response, 'enctype="multipart/form-data"')
+
     def test_contact_submits_and_reviewer_completes_via_views(self):
         self.client.force_login(self.contact)
         submit_response = self.client.post(
             reverse("projects:group_submit_review", args=(self.group.pk,)),
-            {"message": "申请参加竞赛。"},
+            {"review_type": TWO_REVIEWER_TYPE, "message": "申请参加竞赛。"},
         )
         self.assertEqual(submit_response.status_code, 302)
 
         submission = ProjectSubmission.objects.get(group=self.group)
+        self.assertEqual(submission.review_type, TWO_REVIEWER_TYPE)
         assignment = self._assignment(submission, self.reviewer_one)
         self.client.force_login(self.reviewer_one)
         complete_response = self.client.post(
@@ -275,6 +483,82 @@ class ProjectReviewFlowTests(TestCase):
         self.assertEqual(assignment.status, ReviewAssignment.COMPLETED)
         self.assertEqual(assignment.decision, ReviewAssignment.APPROVE)
 
+    def test_submit_view_requires_a_review_type(self):
+        self.client.force_login(self.contact)
+
+        response = self.client.post(
+            reverse("projects:group_submit_review", args=(self.group.pk,)),
+            {"message": "忘了选类型。"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(ProjectSubmission.objects.exists())
+
+    def test_reviewer_uploads_annotated_file_via_view(self):
+        submission = self._submit()
+        assignment = self._assignment(submission, self.reviewer_one)
+        self.client.force_login(self.reviewer_one)
+
+        response = self.client.post(
+            reverse("reviews:complete", args=(assignment.pk,)),
+            {
+                "decision": ReviewAssignment.APPROVE,
+                "comment": "已在稿件上批注。",
+                "annotated_file": _pdf("annotated.pdf"),
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        assignment.refresh_from_db()
+        self.assertTrue(assignment.annotated_file)
+        self.assertTrue(assignment.annotated_file.name.endswith(".pdf"))
+
+    def test_annotated_download_honours_group_visibility(self):
+        submission = self._submit()
+        assignment = self._assignment(submission, self.reviewer_one)
+        complete_review(
+            assignment=assignment,
+            reviewer=self.reviewer_one,
+            decision=ReviewAssignment.APPROVE,
+            comment="已批注。",
+            annotated_file=_pdf("annotated.pdf"),
+        )
+        url = reverse("reviews:annotated", args=(assignment.pk,))
+
+        for user in (self.member, self.admin, self.reviewer_one):
+            with self.subTest(user=user.get_username()):
+                self.client.force_login(user)
+                self.assertEqual(self.client.get(url).status_code, 200)
+
+        self.client.force_login(self.outsider)
+        self.assertEqual(self.client.get(url).status_code, 403)
+
+    def test_archived_proposal_download_honours_group_visibility(self):
+        submission = self._submit()
+        self._approve_both(submission, reviewer_one=_pdf("annotated.pdf"))
+        record = ArchivedProposal.objects.get(submission=submission)
+        url = reverse("reviews:archive_download", args=(record.pk,))
+
+        for user in (self.member, self.admin):
+            with self.subTest(user=user.get_username()):
+                self.client.force_login(user)
+                self.assertEqual(self.client.get(url).status_code, 200)
+
+        self.client.force_login(self.outsider)
+        self.assertEqual(self.client.get(url).status_code, 403)
+
+    def test_group_detail_lists_archived_proposals(self):
+        submission = self._submit()
+        self._approve_both(submission, reviewer_one=_pdf("annotated.pdf"))
+        self.client.force_login(self.member)
+
+        response = self.client.get(
+            reverse("projects:group_detail", args=(self.group.pk,))
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.context["archived_proposals"]), 1)
+
     def test_proposal_upload_rejects_unsupported_extension(self):
         self.client.force_login(self.contact)
 
@@ -286,3 +570,24 @@ class ProjectReviewFlowTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.group.refresh_from_db()
         self.assertNotEqual(self.group.proposal.name, "plan.txt")
+
+
+class ReviewTypeQuotaTests(TestCase):
+    """The type → reviewer-count table is the single source of truth."""
+
+    def test_quota_table_matches_the_agreed_rule(self):
+        expected = {
+            "competition_project": 3,
+            "competition_provincial": 3,
+            "competition_national": 3,
+            "innovation_start": 1,
+            "innovation_midterm": 2,
+            "innovation_final": 2,
+        }
+
+        self.assertEqual(REVIEWER_QUOTA, expected)
+
+    def test_every_choice_has_a_quota(self):
+        for value, _label in REVIEW_TYPE_CHOICES:
+            with self.subTest(review_type=value):
+                self.assertIn(value, REVIEWER_QUOTA)

@@ -37,6 +37,10 @@
             <div class="v">{{ group.members.all|length }}<small>人</small></div>
         </div>
         <div>
+            <div class="k">评审类型</div>
+            <div class="v text">{% if latest_submission %}{{ latest_submission.get_review_type_display|default:"—" }}{% else %}—{% endif %}</div>
+        </div>
+        <div>
             <div class="k">最近送审</div>
             <div class="v mono">{% if latest_submission %}R{{ latest_submission.round }}{% else %}—{% endif %}</div>
         </div>
@@ -106,6 +110,7 @@
                                     </div>
                                     {% if submission.message %}<div class="msg">{{ submission.message|linebreaksbr }}</div>{% endif %}
                                     <div class="qmeta">
+                                        {% if submission.get_review_type_display %}{{ submission.get_review_type_display }} · {% endif %}需 {{ submission.required_reviewers }} 名评审人 · 已审结 {{ submission.completed_count }} ·
                                         提交人 {{ submission.submitted_by.profile.full_name|default:submission.submitted_by.username }}
                                     </div>
                                     <dl class="dl review-lines">
@@ -115,6 +120,11 @@
                                                 <dd>
                                                     {% if assignment.is_completed %}
                                                         {{ assignment.get_decision_display }} · {{ assignment.comment|default:"—" }}
+                                                        {% if assignment.annotated_file %}
+                                                            <div class="btn-row">
+                                                                <a class="btn btn-sm" href="{% url 'reviews:annotated' assignment.pk %}">下载批注版</a>
+                                                            </div>
+                                                        {% endif %}
                                                     {% else %}
                                                         <span class="muted">待评审</span>
                                                     {% endif %}
@@ -156,11 +166,40 @@
             </div>
 
             <div class="panel">
+                <div class="panel-head">
+                    <h2>批注版项目书</h2>
+                    <span class="count">{{ archived_proposals|length }} archived</span>
+                </div>
+                <div class="panel-body tight">
+                    <div class="queue">
+                        {% for archived in archived_proposals %}
+                            <div class="qitem">
+                                <span class="idx">R{{ archived.submission.round }}</span>
+                                <div class="grow">
+                                    <div>
+                                        <span class="who">批注版项目书</span>
+                                        <span class="when">{{ archived.archived_at|date:"Y-m-d H:i" }}</span>
+                                    </div>
+                                    <div class="btn-row">
+                                        <a class="btn btn-sm" href="{% url 'reviews:archive_download' archived.pk %}">下载</a>
+                                    </div>
+                                </div>
+                            </div>
+                        {% empty %}
+                            <div class="empty">评审通过后，评审人上传的批注版项目书会归档到这里。</div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
                 <div class="panel-head"><h2>方案状态</h2></div>
                 <div class="panel-body">
                     {% if latest_submission %}
                         <dl class="dl">
                             <div><dt>轮次</dt><dd class="mono">R{{ latest_submission.round }}</dd></div>
+                            <div><dt>评审类型</dt><dd>{{ latest_submission.get_review_type_display|default:"—" }}</dd></div>
+                            <div><dt>评审进度</dt><dd class="mono">{{ latest_submission.completed_count }} / {{ latest_submission.required_reviewers }}</dd></div>
                             <div><dt>结论</dt><dd>{{ latest_submission.get_status_display }}</dd></div>
                         </dl>
                         <p class="help">
@@ -169,7 +208,7 @@
                             {% elif latest_submission.status == "needs_revision" %}
                                 请根据评审意见修改项目书后重新提交。
                             {% else %}
-                                等待评审人提交意见；两人都通过后方案即为通过。
+                                等待评审人提交意见；{{ latest_submission.required_reviewers }} 名评审人全部通过后方案即为通过。
                             {% endif %}
                         </p>
                     {% else %}
@@ -185,11 +224,11 @@
                         <span class="chip chip-warn">待处理</span>
                     </div>
                     <div class="panel-body">
-                        <p class="muted">请先下载本轮项目书，阅读后填写评审意见与决定。</p>
+                        <p class="muted">请先下载本轮项目书，阅读后填写评审意见与决定；如已在项目书上批注，可一并上传批注版。</p>
                         <div class="btn-row">
                             <a class="btn btn-sm" href="{% url 'projects:group_proposal_download' group.pk %}">下载项目书</a>
                         </div>
-                        <form method="post" action="{% url 'reviews:complete' my_assignment.pk %}">
+                        <form method="post" action="{% url 'reviews:complete' my_assignment.pk %}" enctype="multipart/form-data">
                             {% csrf_token %}
                             {{ review_form.non_field_errors }}
                             <div class="field">
@@ -201,6 +240,12 @@
                                 <label for="{{ review_form.comment.id_for_label }}">{{ review_form.comment.label }}</label>
                                 {{ review_form.comment }}
                                 {{ review_form.comment.errors }}
+                            </div>
+                            <div class="field">
+                                <label for="{{ review_form.annotated_file.id_for_label }}">{{ review_form.annotated_file.label }}</label>
+                                {{ review_form.annotated_file }}
+                                {% if review_form.annotated_file.help_text %}<p class="help">{{ review_form.annotated_file.help_text }}</p>{% endif %}
+                                {{ review_form.annotated_file.errors }}
                             </div>
                             <div class="form-actions">
                                 <button class="btn btn-primary" type="submit">完成评审</button>

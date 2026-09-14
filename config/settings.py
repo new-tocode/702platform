@@ -236,6 +236,11 @@ LOGGING = {
             "level": "DEBUG",
             "propagate": False,
         },
+        "reviews": {
+            "handlers": ["console", "file"],
+            "level": "DEBUG",
+            "propagate": False,
+        },
         "equipment": {
             "handlers": ["console", "file"],
             "level": "DEBUG",
