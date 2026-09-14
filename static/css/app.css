@@ -169,18 +169,22 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 22px 0; }
 .spec .v.dim { color: var(--ink-3); }
 
 /* --- 图纸角标：只画对角两处，作为分区标记 --- */
-.frame, .panel, .spec { position: relative; }
-.frame::before, .panel::before, .spec::before,
-.frame::after, .panel::after, .spec::after {
+.frame, .panel, .spec, .reel { position: relative; }
+.frame::before, .panel::before, .spec::before, .reel::before,
+.frame::after, .panel::after, .spec::after, .reel::after {
   content: ""; position: absolute; width: 10px; height: 10px;
   border: 1.5px solid var(--blue); pointer-events: none;
 }
-.frame::before, .panel::before, .spec::before {
+.frame::before, .panel::before, .spec::before, .reel::before {
   top: -1px; left: -1px; border-right: 0; border-bottom: 0;
 }
-.frame::after, .panel::after, .spec::after {
+.frame::after, .panel::after, .spec::after, .reel::after {
   bottom: -1px; right: -1px; border-left: 0; border-top: 0;
 }
+
+/* 面板内嵌的规格条：容器已有边框，去掉自身边框与角标 */
+.spec.plain { border: 0; margin-bottom: 0; }
+.spec.plain::before, .spec.plain::after { display: none; }
 
 .frame { background: var(--surface); border: 1px solid var(--line); padding: 22px; }
 .frame + .frame { margin-top: 20px; }
@@ -365,6 +369,71 @@ input[type="file"] { font: inherit; font-size: 13px; color: var(--ink-2); }
   border-top: 1px solid var(--line);
 }
 
+/* --- 首页影像切换区：同一块空间内切换，绘图仪落笔式揭幕 --- */
+.reel {
+  --reel-dur: 0.3s;   /* 揭幕时长：要更快/更慢只改这一个值 */
+  margin-bottom: 24px;
+  background: var(--surface); border: 1px solid var(--line);
+}
+/* 单选框只作为状态机：视觉隐藏但保留键盘可达，方向键即可切换图片 */
+.reel-radio {
+  position: absolute; width: 1px; height: 1px;
+  opacity: 0; pointer-events: none;
+}
+.reel-frame { display: none; margin: 0; }
+.reel-radio:checked + .reel-frame { display: block; }
+.reel-radio:focus-visible + .reel-frame { outline: 2px solid var(--blue); outline-offset: -3px; }
+
+/* 画面区：contain 保证整图完整不裁切，留白即「图版」底色 */
+.reel-plane { position: relative; overflow: hidden; background: var(--surface-2); }
+.reel-plane img {
+  display: block; width: 100%; height: clamp(220px, 40vw, 460px);
+  object-fit: contain;
+}
+.reel-hit { display: block; cursor: pointer; }
+
+/* 揭幕：画面自左向右绘制展开，一条蓝线同步扫过（绘图仪落笔）。
+   裁剪加在 img 上而不是 .reel-plane，否则扫描线会被自己的裁剪切掉。
+   未揭开的一侧盖一层蓝图色遮罩，白底图上也能看清推进的边界。 */
+.reel-radio:checked + .reel-frame .reel-plane img {
+  animation: reel-plot var(--reel-dur) cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+.reel-radio:checked + .reel-frame .reel-plane::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: var(--blue-tint); opacity: 0.92;
+  animation: reel-cover var(--reel-dur) cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+.reel-radio:checked + .reel-frame .reel-plane::after {
+  content: ""; position: absolute; top: 0; bottom: 0; width: 2px; pointer-events: none;
+  background: var(--blue);
+  box-shadow: 0 0 10px rgba(18, 80, 143, 0.45);
+  animation: reel-draw var(--reel-dur) cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+@keyframes reel-plot { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0); } }
+@keyframes reel-cover { from { clip-path: inset(0 0 0 0); } to { clip-path: inset(0 0 0 100%); } }
+@keyframes reel-draw { from { left: 0; opacity: 1; } to { left: 100%; opacity: 0; } }
+
+/* 切换控件：蓝图式细边方块 */
+.reel-step {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  width: 34px; height: 34px; display: grid; place-items: center;
+  background: rgba(255, 255, 255, 0.9); border: 1px solid var(--line-2);
+  color: var(--blue); font-family: var(--mono); font-size: 18px; line-height: 1;
+  cursor: pointer; user-select: none;
+  transition: background 0.15s, border-color 0.15s;
+}
+.reel-step:hover { background: #fff; border-color: var(--blue); }
+.reel-step.prev { left: 14px; }
+.reel-step.next { right: 14px; }
+
+.reel-cap {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  padding: 10px 16px; border-top: 1px solid var(--line);
+  background: var(--surface-2); font-size: 12px; color: var(--ink-2);
+}
+.reel-cap .cap { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reel-cap .idx { flex: none; font-family: var(--mono); font-size: 11px; color: var(--ink-3); }
+
 /* --- 条目（成员中心入口、列表卡） --- */
 .entries { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(272px, 1fr)); }
 .entry {
@@ -483,6 +552,8 @@ td .empty, .panel-body.tight .empty {
 .reveal:nth-child(3) { animation-delay: 0.12s; }
 
 @media (prefers-reduced-motion: reduce) {
+  /* 项目约定：放宽「减少动效」——短促且有信息量的动效（如轮播揭幕）照常保留，
+     只关掉纯装饰的页面入场编排。 */
   .reveal { animation: none; }
   * { transition-duration: 0.01ms !important; }
 }
@@ -503,4 +574,5 @@ td .empty, .panel-body.tight .empty {
   .brand-code { display: none; }
   .head-row { align-items: flex-start; }
   .spec { grid-template-columns: 1fr 1fr; }
+  .reel-step { width: 30px; height: 30px; }
 }

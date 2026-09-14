@@ -1,6 +1,7 @@
 """Public-facing club introduction, awards and member showcase models."""
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 
 from media.models import MediaFile
@@ -79,3 +80,37 @@ class Showcase(models.Model):
 
     def __str__(self):
         return f"{self.member.profile.full_name or self.member.username} 的成员风采"
+
+
+class HomeSlide(models.Model):
+    """首页影像滚动区的一张图，由管理员在后台挑选与排序。
+
+    图片来自共享媒体库；这里只挑已有的 MediaFile，不复制文件。限定为图片类型，
+    视频在横向滚动条里既不好看也不好操作。
+    """
+
+    image = models.ForeignKey(
+        MediaFile,
+        on_delete=models.PROTECT,
+        limit_choices_to={"kind": MediaFile.IMAGE},
+        related_name="home_slides",
+        verbose_name="图片",
+    )
+    title = models.CharField("说明文字", max_length=120, blank=True)
+    sort_order = models.IntegerField("排序", default=0)
+    is_active = models.BooleanField("启用", default=True)
+    created_at = models.DateTimeField("创建时间", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "首页轮播"
+        verbose_name_plural = "首页轮播"
+        ordering = ("sort_order", "pk")
+        indexes = [models.Index(fields=("is_active", "sort_order"))]
+
+    def __str__(self):
+        return self.title or self.image.caption or f"轮播图 #{self.pk}"
+
+    def clean(self):
+        super().clean()
+        if self.image_id and self.image.kind != MediaFile.IMAGE:
+            raise ValidationError({"image": "首页轮播只支持图片，不支持视频。"})
