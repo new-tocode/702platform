@@ -151,6 +151,9 @@ def group_detail(request, pk):
             "latest_submission": latest,
             "my_assignment": my_assignment,
             "review_form": ReviewForm(),
+            "archived_proposals": group.archived_proposals.select_related(
+                "submission"
+            ),
             "can_manage": can_manage_group(request.user, group),
         },
     )
@@ -182,16 +185,25 @@ def group_proposal_update(request, pk):
 @login_required
 @require_POST
 def group_submit_review(request, pk):
+    from reviews.forms import SubmissionForm
     from reviews.services import ReviewError, submit_for_review
 
     group = get_object_or_404(ProjectGroup, pk=pk)
     _require_group_manager(request, group)
 
+    form = SubmissionForm(request.POST)
+    if not form.is_valid():
+        for field_errors in form.errors.values():
+            for error in field_errors:
+                messages.error(request, error)
+        return redirect("projects:group_detail", pk=group.pk)
+
     try:
         submission = submit_for_review(
             group=group,
             submitter=request.user,
-            message=request.POST.get("message", ""),
+            review_type=form.cleaned_data["review_type"],
+            message=form.cleaned_data["message"],
             request=request,
         )
     except ReviewError as exc:
@@ -199,7 +211,9 @@ def group_submit_review(request, pk):
     else:
         messages.success(
             request,
-            f"已提交第 {submission.round} 轮评审，等待评审人返回意见。",
+            f"已提交第 {submission.round} 轮评审"
+            f"（{submission.get_review_type_display()}，需 {submission.required_reviewers} 名评审人），"
+            "等待评审人返回意见。",
         )
     return redirect("projects:group_detail", pk=group.pk)
 
@@ -255,6 +269,8 @@ def group_apply(request, pk):
 
 @login_required
 def group_manage(request, pk):
+    from reviews.forms import SubmissionForm
+
     group = get_object_or_404(
         ProjectGroup.objects.select_related("leader__profile"),
         pk=pk,
@@ -308,6 +324,7 @@ def group_manage(request, pk):
             "description_form": description_form,
             "transfer_form": transfer_form,
             "proposal_form": GroupProposalForm(instance=group),
+            "submit_form": SubmissionForm(),
             "latest_submission": latest_submission,
         },
     )

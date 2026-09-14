@@ -7,12 +7,77 @@ is approved only when every assignment is complete and every verdict approves.
 The proposal itself is **not** copied here: reviewers download the project
 group's current proposal (``ProjectGroup.proposal``) from the group detail page,
 so there is a single stored file per group.
+
+How many reviewers a round needs depends on the type the submitter picks
+(``REVIEWER_QUOTA``): competition rounds need three, an innovation project needs
+one at kick-off and two at mid-term/final. A reviewer may attach an annotated
+copy of the proposal along with the verdict; once the round is approved those
+annotated copies are archived as :class:`ArchivedProposal` records.
+
+The ``review_type`` labels are **platform-local tags** and deliberately have no
+foreign key to ``competitions.Competition``.
 """
+
+import uuid
 
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 from projects.models import ProjectGroup
+from projects.validators import validate_proposal_file
+
+
+REVIEW_TYPE_COMPETITION_PROJECT = "competition_project"
+REVIEW_TYPE_COMPETITION_PROVINCIAL = "competition_provincial"
+REVIEW_TYPE_COMPETITION_NATIONAL = "competition_national"
+REVIEW_TYPE_INNOVATION_START = "innovation_start"
+REVIEW_TYPE_INNOVATION_MIDTERM = "innovation_midterm"
+REVIEW_TYPE_INNOVATION_FINAL = "innovation_final"
+
+REVIEW_TYPE_CHOICES = (
+    (REVIEW_TYPE_COMPETITION_PROJECT, "竞赛立项"),
+    (REVIEW_TYPE_COMPETITION_PROVINCIAL, "竞赛省赛"),
+    (REVIEW_TYPE_COMPETITION_NATIONAL, "竞赛国赛"),
+    (REVIEW_TYPE_INNOVATION_START, "大创立项"),
+    (REVIEW_TYPE_INNOVATION_MIDTERM, "大创中期"),
+    (REVIEW_TYPE_INNOVATION_FINAL, "大创结题"),
+)
+
+#: Reviewers required per submission type; the single place that decides it.
+REVIEWER_QUOTA = {
+    REVIEW_TYPE_COMPETITION_PROJECT: 3,
+    REVIEW_TYPE_COMPETITION_PROVINCIAL: 3,
+    REVIEW_TYPE_COMPETITION_NATIONAL: 3,
+    REVIEW_TYPE_INNOVATION_START: 1,
+    REVIEW_TYPE_INNOVATION_MIDTERM: 2,
+    REVIEW_TYPE_INNOVATION_FINAL: 2,
+}
+
+#: Rounds created before submission types existed keep the original two-reviewer rule.
+DEFAULT_REVIEWERS = 2
+
+
+def _neutral_name(filename):
+    """Return a uuid-based storage name that carries no user information."""
+    extension = filename.rsplit(".", 1)[-1].lower() if "." in filename else "bin"
+    return f"{uuid.uuid4().hex}.{extension}"
+
+
+def upload_annotated_proposal(instance, filename):
+    """Store a reviewer's annotated copy under a name that hides the reviewer.
+
+    Reviewer attachments must never carry the reviewer's name into storage: the
+    anonymous-by-default contract would leak through a filename such as
+    ``zhangsan-批注.docx``. The download views hand out a neutral
+    ``Content-Disposition`` on top of this.
+    """
+    return f"review_annotations/{timezone.now():%Y/%m}/{_neutral_name(filename)}"
+
+
+def upload_archived_proposal(instance, filename):
+    """Store an archived annotated copy under the same neutral naming."""
+    return f"review_archives/{timezone.now():%Y/%m}/{_neutral_name(filename)}"
 
 
 class ProjectSubmission(models.Model):
@@ -32,6 +97,14 @@ class ProjectSubmission(models.Model):
         verbose_name="项目组",
     )
     round = models.PositiveIntegerField("评审轮次", default=1)
+    review_type = models.CharField(
+        "评审类型",
+        max_length=32,
+        choices=REVIEW_TYPE_CHOICES,
+        blank=True,
+        default="",
+        help_text="决定本轮需要几名评审人；升级前创建的送审留空，沿用两人制。",
+    )
     message = models.TextField("提交说明", blank=True)
     status = models.CharField(
         "状态",
@@ -69,6 +142,15 @@ class ProjectSubmission(models.Model):
     @property
     def is_approved(self):
         return self.status == self.APPROVED
+
+    @property
+    def required_reviewers(self):
+        """How many reviewers this round needs; rounds without a type keep the old rule."""
+        return REVIEWER_QUOTA.get(self.review_type, DEFAULT_REVIEWERS)
+
+    @property
+    def completed_count(self):
+        return self.assignments.filter(status=ReviewAssignment.COMPLETED).count()
 
     @property
     def pending_count(self):
@@ -115,6 +197,13 @@ class ReviewAssignment(models.Model):
         blank=True,
     )
     comment = models.TextField("评审意见", blank=True)
+    annotated_file = models.FileField(
+        "批注版项目书",
+        upload_to=upload_annotated_proposal,
+        blank=True,
+        validators=[validate_proposal_file],
+        help_text="选填；支持 doc、docx、pdf。请勿在文件属性中保留可识别个人身份的信息。",
+    )
     assigned_at = models.DateTimeField("分配时间", auto_now_add=True)
     completed_at = models.DateTimeField("完成时间", null=True, blank=True)
 
@@ -138,3 +227,56 @@ class ReviewAssignment(models.Model):
     @property
     def is_completed(self):
         return self.status == self.COMPLETED
+
+
+class ArchivedProposal(models.Model):
+    """An approved round's annotated proposal, kept as the group's record.
+
+    One row per reviewer who actually attached an annotated copy — reviewers who
+    answered with text only produce no row, and the original proposal is never
+    duplicated here. Rows are written once when a round turns ``approved`` and
+    are immutable afterwards.
+    """
+
+    group = models.ForeignKey(
+        ProjectGroup,
+        on_delete=models.PROTECT,
+        related_name="archived_proposals",
+        verbose_name="项目组",
+    )
+    submission = models.ForeignKey(
+        ProjectSubmission,
+        on_delete=models.PROTECT,
+        related_name="archived_proposals",
+        verbose_name="送审",
+    )
+    source_assignment = models.ForeignKey(
+        ReviewAssignment,
+        on_delete=models.PROTECT,
+        related_name="archived_proposals",
+        verbose_name="来源评审任务",
+    )
+    file = models.FileField(
+        "批注版项目书",
+        upload_to=upload_archived_proposal,
+    )
+    archived_at = models.DateTimeField("归档时间", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "批注版项目书归档"
+        verbose_name_plural = "批注版项目书归档"
+        ordering = ("-archived_at", "-id")
+        constraints = [
+            # Archiving runs inside the verdict aggregation, which may be
+            # retried; one archive per source assignment keeps it idempotent.
+            models.UniqueConstraint(
+                fields=("source_assignment",),
+                name="unique_archived_proposal_assignment",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=("group", "-archived_at")),
+        ]
+
+    def __str__(self):
+        return f"{self.group} 第 {self.submission.round} 轮的批注版项目书"

@@ -48,6 +48,9 @@
                                 {% if assignment.submission.message %}
                                     <div class="msg">{{ assignment.submission.message|linebreaksbr }}</div>
                                 {% endif %}
+                                <div class="qmeta">
+                                    {% if assignment.submission.get_review_type_display %}{{ assignment.submission.get_review_type_display }} · {% endif %}需 {{ assignment.submission.required_reviewers }} 名评审人
+                                </div>
                                 <div class="btn-row">
                                     <a class="btn btn-primary btn-sm" href="{% url 'projects:group_detail' assignment.submission.group.pk %}">进入项目组详情并评审</a>
                                 </div>
@@ -75,7 +78,9 @@
                             <tr>
                                 <td>
                                     <div class="t">{{ assignment.submission.group.name }}</div>
-                                    <div class="muted">{{ assignment.completed_at|date:"Y-m-d H:i" }}</div>
+                                    <div class="muted">
+                                        {% if assignment.submission.get_review_type_display %}{{ assignment.submission.get_review_type_display }} · {% endif %}{{ assignment.completed_at|date:"Y-m-d H:i" }}
+                                    </div>
                                 </td>
                                 <td class="num">R{{ assignment.submission.round }}</td>
                                 <td>

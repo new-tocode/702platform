@@ -51,8 +51,8 @@
 │   ├── forms.py / views.py / urls.py / admin.py
 │   └── tests.py
 ├── reviews/                          # 项目书同行评审
-│   ├── models.py                     # ProjectSubmission、ReviewAssignment
-│   ├── services.py                   # 送审、随机分配评审人、结论汇总
+│   ├── models.py                     # ProjectSubmission、ReviewAssignment、ArchivedProposal
+│   ├── services.py                   # 送审与送审类型、随机分配评审人、结论汇总与批注版归档
 │   ├── forms.py / views.py / urls.py / admin.py
 │   └── tests.py
 ├── equipment/                        # 设备台账与借用
@@ -148,7 +148,7 @@ source env.local.sh          # 必须：不加载会因缺少库名/账号/密�
 | `LOGIN_URL` / `LOGIN_REDIRECT_URL` / `LOGOUT_REDIRECT_URL` | `accounts:login` / `accounts:member_home` / `accounts:home` | 登录跳转 |
 | `AUTH_PASSWORD_VALIDATORS` | 相似度/最小长度/常见密码/纯数字 | 密码强度 |
 
-**媒体上传限制**：图片 `jpg/jpeg/png/webp/gif` ≤10MB（Pillow 解码校验）；视频 `mp4`（查 `ftyp`）/`webm`（查 EBML 头）≤500MB。项目书 `doc/docx/pdf` ≤20MB（扩展名 + 文件头签名）。扩展名、大小、MIME、签名任一不符即拒绝。
+**媒体上传限制**：图片 `jpg/jpeg/png/webp/gif` ≤10MB（Pillow 解码校验）；视频 `mp4`（查 `ftyp`）/`webm`（查 EBML 头）≤500MB。项目书与评审人的批注版项目书 `doc/docx/pdf` ≤20MB（扩展名 + 文件头签名，复用同一校验器）。扩展名、大小、MIME、签名任一不符即拒绝。
 
 ## 4. 常用命令
 
@@ -189,7 +189,7 @@ source env.local.sh
 | `projects` | 联系人由 `leader` 计算；无组员看全部可申请、组员只看自己的组、联系人看全部并管理自己的组；申请→审核入组；拒绝后可重申；移除成员；联系人转让后原联系人保留为成员；改组介绍；非联系人管理页 403 |
 | `competitions` | 竞赛列表所有登录成员可见；仅项目组联系人报名（限自己的组）；参赛成员与竞赛组长须属该组且组长在参赛成员内；重复报名/截止校验；报名修改与放弃；跨组越权拒绝 |
 | `equipment` | 借用限项目组成员（入口隐藏 + 视图 403）；库存事务 + 行锁不超借；仅见本人记录；归还回补、重复归还不重复回补；管理员代还；被移出组后仍可归还 |
-| `reviews` | `is_reviewer` 驱动「评审」入口；送审随机分配两名评审人并排除提交人/本组成员；不足两人拒绝；两人均通过→方案通过，任一需修改→可修改后重提；评审人身份匿名 |
+| `reviews` | `is_reviewer` 驱动「评审」入口；送审类型决定评审人数（竞赛类 3 / 大创中期·结题 2 / 大创立项 1）并排除提交人/本组成员；可用人数不足即拒绝；全部评审人均通过→方案通过，任一需修改→可修改后重提；批注版项目书选填，通过后按上传者归档（未上传不产生记录、重复汇总不重复归档）；批注与归档文件仅 staff/组内/被分配评审人可下载且文件名不含评审人身份；评审人身份匿名 |
 | `core` | 操作入口注册表按登录/改密/权限/自定义条件过滤；审计只读；Admin 标题定制 |
 
 评估某项改动是否合格：先补齐迁移并让 `check`、`makemigrations --check`、`test` 全过；测试通过后再提交。

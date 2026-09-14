@@ -1,8 +1,8 @@
-"""Read-only admin oversight for project submissions and review assignments."""
+"""Read-only admin oversight for project submissions, review tasks and archives."""
 
 from django.contrib import admin
 
-from .models import ProjectSubmission, ReviewAssignment
+from .models import ArchivedProposal, ProjectSubmission, ReviewAssignment
 
 
 @admin.register(ProjectSubmission)
@@ -10,17 +10,19 @@ class ProjectSubmissionAdmin(admin.ModelAdmin):
     list_display = (
         "group",
         "round",
+        "review_type",
         "status",
         "submitted_by",
         "submitted_at",
         "decided_at",
     )
-    list_filter = ("status", "submitted_at")
+    list_filter = ("status", "review_type", "submitted_at")
     search_fields = ("group__name", "submitted_by__username")
     list_select_related = ("group", "submitted_by")
     readonly_fields = (
         "group",
         "round",
+        "review_type",
         "message",
         "status",
         "submitted_by",
@@ -43,6 +45,7 @@ class ReviewAssignmentAdmin(admin.ModelAdmin):
         "reviewer",
         "status",
         "decision",
+        "annotated_file",
         "assigned_at",
         "completed_at",
     )
@@ -59,9 +62,37 @@ class ReviewAssignmentAdmin(admin.ModelAdmin):
         "status",
         "decision",
         "comment",
+        "annotated_file",
         "assigned_at",
         "completed_at",
     )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(ArchivedProposal)
+class ArchivedProposalAdmin(admin.ModelAdmin):
+    list_display = (
+        "group",
+        "submission",
+        "file",
+        "archived_at",
+    )
+    list_filter = ("archived_at",)
+    search_fields = ("group__name",)
+    list_select_related = ("group", "submission")
+    readonly_fields = (
+        "group",
+        "submission",
+        "source_assignment",
+        "file",
+        "archived_at",
+    )
+    date_hierarchy = "archived_at"
 
     def has_add_permission(self, request):
         return False
