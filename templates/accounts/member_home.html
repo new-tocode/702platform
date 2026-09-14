@@ -9,7 +9,7 @@
         <div class="head-row">
             <div>
                 <h1>成员中心</h1>
-                <div class="sub">你好，{{ user.profile.full_name|default:user.username }}。可用入口按当前账号权限显示。</div>
+                <div class="sub">你好，{{ user.profile.full_name|default:user.username }}。</div>
             </div>
         </div>
     </div>
@@ -24,14 +24,39 @@
             <div class="v mono">{{ user.username }}</div>
         </div>
         <div>
-            <div class="k">可用入口</div>
-            <div class="v">{{ operation_entries|length }}<small>个</small></div>
-        </div>
-        <div>
             <div class="k">评审资格</div>
             <div class="v mono">{% if user.is_reviewer %}有{% else %}无{% endif %}</div>
         </div>
     </div>
+
+    {% if overview %}
+        <div class="panel reveal">
+            <div class="panel-head">
+                <h2>社团概览</h2>
+                <span class="count">仅管理员与联系人可见</span>
+            </div>
+            <div class="panel-body tight">
+                <div class="spec plain">
+                    <div>
+                        <div class="k">在册成员</div>
+                        <div class="v">{{ overview.member_count }}<small>人</small></div>
+                    </div>
+                    <div>
+                        <div class="k">项目组</div>
+                        <div class="v">{{ overview.group_count }}<small>个</small></div>
+                    </div>
+                    <div>
+                        <div class="k">开放报名竞赛</div>
+                        <div class="v">{{ overview.open_competition_count }}<small>项</small></div>
+                    </div>
+                    <div>
+                        <div class="k">在借设备</div>
+                        <div class="v">{{ overview.borrowed_count }}<small>台</small></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
 
     <div class="panel reveal">
         <div class="panel-head">

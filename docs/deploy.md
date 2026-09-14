@@ -184,6 +184,7 @@ tar -xzf backups/media-XXXX.tar.gz -C /opt/702platform
 |---|---|
 | `DisallowedHost` | 把访问 IP/域名补进 `DJANGO_ALLOWED_HOSTS` 后重启（不带端口） |
 | `DEBUG=0` 时页面无样式 | 忘记 `collectstatic`，或 Nginx 未映射 `/static/` |
+| `DEBUG=0` 报 `Missing staticfiles manifest entry` | 生产启用了静态指纹，`collectstatic` 是硬要求；补跑 `collectstatic` 后重启 |
 | `DEBUG=0` 时 `/media/` 404 | Nginx 未映射 `/media/` |
 | 上传视频 413 | Nginx `client_max_body_size` 太小（模板已设 520m） |
 | `no such table` | 未 `migrate`，或数据库连接参数（`DJANGO_DB_NAME`/账号）有误 |

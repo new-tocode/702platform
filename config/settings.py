@@ -130,6 +130,20 @@ STATICFILES_DIRS = [BASE_DIR / "static"]
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "mediafiles"
 
+# 静态资源指纹：生产环境 collectstatic 后，{% static %} 解析为 app.<hash>.css，
+# 与 Nginx 的 expires 7d 配合，部署即让浏览器里的旧样式失效。开发环境不加指纹，
+# 否则每次改 CSS 都得重新 collectstatic；本地看到旧样式时硬刷新即可。
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {
+        "BACKEND": (
+            "django.contrib.staticfiles.storage.StaticFilesStorage"
+            if DEBUG
+            else "django.contrib.staticfiles.storage.ManifestStaticFilesStorage"
+        )
+    },
+}
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Explicit production-safe cookie defaults. HTTPS deployments can enable the

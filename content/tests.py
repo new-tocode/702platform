@@ -6,6 +6,7 @@ import shutil
 import tempfile
 
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -13,7 +14,7 @@ from PIL import Image
 
 from media.models import MediaFile
 
-from .models import Award, ContentPage, Showcase
+from .models import Award, ContentPage, HomeSlide, Showcase
 
 
 User = get_user_model()
@@ -163,6 +164,63 @@ class PublicContentAcceptanceTests(TestCase):
 
         self.assertContains(response, "更多页面")
         self.assertContains(response, reverse("content:page_index"))
+
+    def test_home_shows_active_home_slides_in_order(self):
+        second = HomeSlide.objects.create(
+            image=self.image, title="第二张", sort_order=2, is_active=True
+        )
+        first = HomeSlide.objects.create(
+            image=self.image, title="第一张", sort_order=1, is_active=True
+        )
+        HomeSlide.objects.create(
+            image=self.image, title="已停用图", sort_order=0, is_active=False
+        )
+
+        response = self.client.get(reverse("accounts:home"))
+        body = response.content.decode()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.image.file.url)
+        self.assertContains(response, first.title)
+        self.assertContains(response, second.title)
+        self.assertNotContains(response, "已停用图")
+        self.assertLess(body.index(first.title), body.index(second.title))
+
+    def test_home_reel_renders_one_frame_per_active_slide(self):
+        HomeSlide.objects.create(
+            image=self.image, title="甲图", sort_order=1, is_active=True
+        )
+        HomeSlide.objects.create(
+            image=self.image, title="乙图", sort_order=2, is_active=True
+        )
+        HomeSlide.objects.create(
+            image=self.image, title="丙图", sort_order=3, is_active=False
+        )
+
+        body = self.client.get(reverse("accounts:home")).content.decode()
+
+        # 同一块空间内每张图各一帧，默认选中第一帧，未启用的不渲染。
+        self.assertEqual(body.count('class="reel-radio"'), 2)
+        self.assertEqual(body.count("checked"), 1)
+        self.assertEqual(body.count('class="reel-plane"'), 2)
+
+    def test_home_has_no_reel_without_slides(self):
+        response = self.client.get(reverse("accounts:home"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "reel-plane")
+
+    def test_home_slide_rejects_video_media(self):
+        video = MediaFile.objects.create(
+            file=video_upload(),
+            kind=MediaFile.VIDEO,
+            caption="轮播视频",
+            uploader=self.admin,
+        )
+        slide = HomeSlide(image=video, title="视频幻灯片")
+
+        with self.assertRaises(ValidationError):
+            slide.full_clean()
 
     def test_top_nav_marks_more_pages_section(self):
         ContentPage.objects.create(

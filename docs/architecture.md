@@ -172,7 +172,17 @@ Showcase（成员风采）
   - sort_order     排序
   - is_active      是否启用
   - photo          FK(MediaFile)  展示照片/视频
+
+HomeSlide（首页轮播）
+  - image          FK(MediaFile, 限图片)  滚动区用图，取自共享媒体库
+  - title          说明文字（可空，回退到图片 caption）
+  - sort_order     排序
+  - is_active      是否启用
+  - created_at
 ```
+
+> 平台概览数字（在册成员／项目组／开放竞赛／在借设备）由 `core/stats.py` 提供，
+> 只对管理员与项目组联系人呈现，展示在成员中心；公开首页不再展示这些内部规模数据。
 
 ### 6.4 projects
 
@@ -422,7 +432,7 @@ core / registry.py
 
 | 路径 | 页面 |
 |---|---|
-| `/` | 首页：社团概览数字 + 最新公开公告 + 公开内容入口 |
+| `/` | 首页：社团影像切换区（HomeSlide，同屏单帧切换）+ 最新公开公告 + 公开内容入口 |
 | `/about/` | 社团简介快捷地址（读取 ContentPage slug=about；未发布时显示空状态，不返回 404） |
 | `/pages/` | 更多页面：已发布的通用 ContentPage 清单（不含 slug=about，首页「了解社团」入口） |
 | `/pages/<slug>/` | 通用公开内容页（仅已发布的 ContentPage 可访问，未发布 404） |
@@ -436,7 +446,7 @@ core / registry.py
 
 | 路径 | 页面 | 权限 |
 |---|---|---|
-| `/member/` | 成员首页：内部通知 + 操作面板（注册表渲染） | 登录 |
+| `/member/` | 成员首页：身份／评审资格 + 社团概览（仅管理员与联系人可见）+ 操作面板（注册表渲染） | 登录 |
 | `/member/notices/` | 内部通知 + 仅联系人可见通知列表/详情 | 登录（按受众过滤） |
 | `/member/profile/` | 查看/修改个人信息 | 本人 |
 | `/member/password/` | 修改密码 | 本人 |

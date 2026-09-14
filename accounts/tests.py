@@ -267,6 +267,39 @@ class MemberRoleDisplayAcceptanceTests(TestCase):
 
         self.assert_role_cell(response, "管理员")
 
+    def test_platform_overview_is_visible_to_admin_and_contact_only(self):
+        for user, sees_overview in (
+            (self.staff, True),
+            (self.contact, True),
+            (self.member, False),
+        ):
+            with self.subTest(username=user.username):
+                self.client.force_login(user)
+
+                response = self.client.get(reverse("accounts:member_home"))
+
+                if sees_overview:
+                    self.assertContains(response, "社团概览")
+                    self.assertContains(response, "在册成员")
+                else:
+                    self.assertNotContains(response, "社团概览")
+                    self.assertNotContains(response, "在册成员")
+
+    def test_public_home_no_longer_exposes_platform_overview(self):
+        response = self.client.get(reverse("accounts:home"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "在册成员")
+        self.assertNotContains(response, "在借设备")
+
+    def test_member_home_drops_permission_hint_and_entry_counter_box(self):
+        self.client.force_login(self.member)
+
+        response = self.client.get(reverse("accounts:member_home"))
+
+        self.assertNotContains(response, "可用入口按当前账号权限显示")
+        self.assertNotContains(response, '<div class="k">可用入口</div>')
+
 
 class AdminProvisioningAcceptanceTests(TestCase):
     def setUp(self):

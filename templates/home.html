@@ -14,24 +14,26 @@
         </div>
     </div>
 
-    <div class="spec reveal">
-        <div>
-            <div class="k">在册成员</div>
-            <div class="v">{{ member_count }}<small>人</small></div>
+    {% if home_slides %}
+        <div class="reel reveal" role="region" aria-label="社团影像">
+            {% for slide in home_slides %}
+                <input type="radio" name="home-reel" id="home-reel-{{ forloop.counter }}" class="reel-radio"{% if forloop.first %} checked{% endif %}>
+                <figure class="reel-frame">
+                    <div class="reel-plane">
+                        <label class="reel-hit" for="home-reel-{% if forloop.last %}1{% else %}{{ forloop.counter|add:'1' }}{% endif %}" aria-label="下一张">
+                            <img src="{{ slide.image.file.url }}" alt="{{ slide.title|default:slide.image.caption }}"{% if forloop.first %} fetchpriority="high"{% else %} loading="lazy"{% endif %}>
+                        </label>
+                        <label class="reel-step prev" for="home-reel-{% if forloop.first %}{{ home_slides|length }}{% else %}{{ forloop.counter|add:'-1' }}{% endif %}" aria-label="上一张" title="上一张">‹</label>
+                        <label class="reel-step next" for="home-reel-{% if forloop.last %}1{% else %}{{ forloop.counter|add:'1' }}{% endif %}" aria-label="下一张" title="下一张">›</label>
+                    </div>
+                    <figcaption class="reel-cap">
+                        <span class="cap">{{ slide.title|default:slide.image.caption }}</span>
+                        <span class="idx">{{ forloop.counter|stringformat:"02d" }} / {{ home_slides|length|stringformat:"02d" }}</span>
+                    </figcaption>
+                </figure>
+            {% endfor %}
         </div>
-        <div>
-            <div class="k">项目组</div>
-            <div class="v">{{ group_count }}<small>个</small></div>
-        </div>
-        <div>
-            <div class="k">开放报名竞赛</div>
-            <div class="v">{{ open_competition_count }}<small>项</small></div>
-        </div>
-        <div>
-            <div class="k">在借设备</div>
-            <div class="v">{{ borrowed_count }}<small>台</small></div>
-        </div>
-    </div>
+    {% endif %}
 
     <div class="split">
         <div class="table-wrap reveal">

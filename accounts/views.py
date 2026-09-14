@@ -14,7 +14,7 @@ from django.views.decorators.http import require_http_methods
 from django.views.generic.edit import FormView
 
 from core.audit import record_audit
-from core.stats import platform_overview
+from core.stats import can_view_platform_overview, platform_overview
 
 from .forms import (
     FirstPasswordChangeForm,
@@ -123,22 +123,32 @@ class PasswordChangeView(FormView):
 
 @require_http_methods(["GET", "HEAD"])
 def home(request):
+    from content.models import HomeSlide
     from notices.models import Notice
 
     latest_public_notices = (
         Notice.objects.filter(scope=Notice.PUBLIC)
         .select_related("published_by")[:5]
     )
+    home_slides = (
+        HomeSlide.objects.filter(is_active=True)
+        .select_related("image")
+        .order_by("sort_order", "pk")
+    )
     logger.debug(
-        "public.home.view user=%s latest_public_notice_count=%s",
+        "public.home.view user=%s latest_public_notice_count=%s slide_count=%s",
         request.user.get_username() if request.user.is_authenticated else "anonymous",
         len(latest_public_notices),
+        len(home_slides),
         extra={"request_id": getattr(request, "request_id", "-")},
     )
     return render(
         request,
         "home.html",
-        {"latest_public_notices": latest_public_notices, **platform_overview()},
+        {
+            "latest_public_notices": latest_public_notices,
+            "home_slides": home_slides,
+        },
     )
 
 
@@ -150,11 +160,11 @@ def member_home(request):
         request.user.pk,
         extra={"request_id": getattr(request, "request_id", "-")},
     )
-    return render(
-        request,
-        "accounts/member_home.html",
-        {"member_role": describe_member(request.user)},
-    )
+    context = {"member_role": describe_member(request.user)}
+    # 平台概览数字只对管理员与项目组联系人呈现，普通成员与访客都不显示。
+    if can_view_platform_overview(request.user):
+        context["overview"] = platform_overview()
+    return render(request, "accounts/member_home.html", context)
 
 
 @login_required
