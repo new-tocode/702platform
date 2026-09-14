@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}更多页面 - 竞赛社团管理平台{% endblock %}
+
+{% block content %}
+<div class="wrap">
+    <div class="pagehead">
+        <div class="path">
+            <a href="{% url 'accounts:home' %}">/</a>
+            <span>/</span>
+            <span>更多页面</span>
+        </div>
+        <div class="head-row">
+            <div>
+                <h1>更多页面</h1>
+                {% if pages %}<div class="sub">共 {{ pages|length }} 个页面</div>{% endif %}
+            </div>
+        </div>
+    </div>
+
+    {% if pages %}
+        <div class="panel reveal">
+            <div class="panel-body">
+                <dl class="dl">
+                    {% for page in pages %}
+                        <div>
+                            <dt><a href="{% url 'content:page_detail' page.slug %}">{{ page.title }}</a></dt>
+                            <dd class="mono">{% url 'content:page_detail' page.slug %}</dd>
+                        </div>
+                    {% endfor %}
+                </dl>
+            </div>
+        </div>
+    {% else %}
+        <div class="empty">暂时没有更多公开页面。</div>
+    {% endif %}
+</div>
+{% endblock %}

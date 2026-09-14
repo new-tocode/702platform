@@ -22,6 +22,7 @@
                 <a href="{% url 'content:about' %}"{% if nav_section == "about" %} aria-current="page"{% endif %}>社团简介</a>
                 <a href="{% url 'content:awards' %}"{% if nav_section == "awards" %} aria-current="page"{% endif %}>历年获奖</a>
                 <a href="{% url 'content:showcase' %}"{% if nav_section == "showcase" %} aria-current="page"{% endif %}>成员风采</a>
+                <a href="{% url 'content:page_index' %}"{% if nav_section == "pages" %} aria-current="page"{% endif %}>更多页面</a>
                 <a href="{% url 'notices:public_list' %}"{% if nav_section == "notices" %} aria-current="page"{% endif %}>公开通知</a>
             </nav>
             <div class="topbar-end">

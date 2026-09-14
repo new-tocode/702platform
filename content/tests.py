@@ -118,6 +118,73 @@ class PublicContentAcceptanceTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
 
+    def test_page_index_lists_published_pages_except_about(self):
+        about = ContentPage.objects.create(
+            slug="about",
+            title="关于我们",
+            content="简介正文。",
+            is_published=True,
+        )
+        rules = ContentPage.objects.create(
+            slug="rules",
+            title="社团规章",
+            content="规章正文。",
+            is_published=True,
+        )
+        draft = ContentPage.objects.create(
+            slug="draft",
+            title="未发布页面",
+            content="草稿正文。",
+            is_published=False,
+        )
+
+        response = self.client.get(reverse("content:page_index"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, rules.title)
+        self.assertContains(
+            response, reverse("content:page_detail", args=(rules.slug,))
+        )
+        # 社团简介已有 /about/ 固定入口，不在清单里重复出现。
+        self.assertNotContains(response, about.title)
+        self.assertNotContains(
+            response, reverse("content:page_detail", args=("about",))
+        )
+        self.assertNotContains(response, draft.title)
+
+    def test_page_index_shows_empty_state_without_extra_pages(self):
+        response = self.client.get(reverse("content:page_index"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "暂时没有更多公开页面")
+
+    def test_home_links_to_page_index(self):
+        response = self.client.get(reverse("accounts:home"))
+
+        self.assertContains(response, "更多页面")
+        self.assertContains(response, reverse("content:page_index"))
+
+    def test_top_nav_marks_more_pages_section(self):
+        ContentPage.objects.create(
+            slug="rules",
+            title="社团规章",
+            content="规章正文。",
+            is_published=True,
+        )
+        more_pages_link = '<a href="/pages/" aria-current="page">更多页面</a>'
+
+        index_response = self.client.get(reverse("content:page_index"))
+        detail_response = self.client.get(
+            reverse("content:page_detail", args=("rules",))
+        )
+
+        self.assertContains(index_response, more_pages_link, html=True)
+        self.assertContains(detail_response, more_pages_link, html=True)
+        # 附加页面不再借用「社团简介」的栏目高亮。
+        self.assertNotContains(
+            detail_response, '<a href="/about/" aria-current="page"'
+        )
+
     def test_published_about_page_is_public_and_renders_media(self):
         page = ContentPage.objects.create(
             slug="about",

@@ -5,7 +5,8 @@ from .registry import get_entries_for_user
 NAV_BY_VIEW = {
     "accounts:home": "home",
     "content:about": "about",
-    "content:page_detail": "about",
+    "content:page_index": "pages",
+    "content:page_detail": "pages",
     "content:awards": "awards",
     "content:showcase": "showcase",
     "notices:public_list": "notices",
