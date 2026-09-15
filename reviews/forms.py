@@ -1,10 +1,15 @@
 """Forms for submitting a project proposal for review and for reviewing it."""
 
 from django import forms
+from django.contrib.auth import get_user_model
 
 from projects.validators import validate_proposal_file
 
 from .models import REVIEW_TYPE_CHOICES, ReviewAssignment, ReviewerLeave
+from .services import eligible_reviewers
+
+
+User = get_user_model()
 
 
 #: ``<input type="datetime-local">`` only accepts the literal "T" form. The
@@ -90,3 +95,40 @@ class ReviewerLeaveForm(forms.ModelForm):
         if starts_at and ends_at and ends_at <= starts_at:
             self.add_error("ends_at", "请假结束时间必须晚于开始时间。")
         return cleaned
+
+
+class AdminReassignReviewerForm(forms.ModelForm):
+    """Administrator-side swap of one pending review task to another reviewer.
+
+    Only ``reviewer`` is exposed; the other fields stay read-only on the change
+    page. This form deliberately has no say in *whether* a swap is legal and its
+    ``save()`` is never used — the write goes through ``reassign_reviewer`` (see
+    ``ReviewAssignmentAdmin.save_model``), which owns the status rules and the
+    audit trail. The candidate list comes from the same ``eligible_reviewers``
+    that draws reviewers at submission time, so the two cannot drift apart.
+    """
+
+    class Meta:
+        model = ReviewAssignment
+        fields = ("reviewer",)
+        labels = {"reviewer": "评审人"}
+        help_texts = {
+            "reviewer": (
+                "只列出有评审资格、非本项目组成员、未请假、且本轮尚未分配的人。"
+            ),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        assignment = self.instance
+        submission = assignment.submission
+        candidates = eligible_reviewers(
+            group=submission.group,
+            submitter=submission.submitted_by,
+            exclude_assigned_on=submission,
+        )
+        # Keep the current reviewer among the choices, otherwise the select
+        # renders empty and the administrator cannot see who holds it now.
+        self.fields["reviewer"].queryset = candidates | User.objects.filter(
+            pk=assignment.reviewer_id
+        )

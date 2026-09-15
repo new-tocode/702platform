@@ -1,21 +1,29 @@
 """Admin oversight for project submissions, review tasks, archives and leaves.
 
 The review records themselves are read-only: they are the durable trace of what
-happened. ``ReviewerLeave`` is the exception — it is an operational setting, and
-the two time fields are editable straight from the changelist because shifting a
-reviewer's recovery time earlier or later is the whole administrative action.
+happened. Two models are exceptions, both because they are settings rather than
+records —
+
+* ``ReviewerLeave``: the two time fields are editable straight from the
+  changelist, because shifting a reviewer's recovery time earlier or later is
+  the whole administrative action.
+* ``ReviewAssignment``: the reviewer may be swapped while the task is still
+  pending on an undecided round, and only then. The write goes through
+  ``reassign_reviewer`` so the eligibility rules and the audit trail hold.
 """
 
-from django.contrib import admin
+from django.contrib import admin, messages
 
 from core.audit import record_audit
 
+from .forms import AdminReassignReviewerForm
 from .models import (
     ArchivedProposal,
     ProjectSubmission,
     ReviewAssignment,
     ReviewerLeave,
 )
+from .services import ReviewError, reassign_reviewer
 
 
 @admin.register(ProjectSubmission)
@@ -53,6 +61,16 @@ class ProjectSubmissionAdmin(admin.ModelAdmin):
 
 @admin.register(ReviewAssignment)
 class ReviewAssignmentAdmin(admin.ModelAdmin):
+    """Read-only, except for handing a still-pending task to another reviewer.
+
+    A verdict is a record of who decided what: once it exists, the reviewer of
+    that row is never editable, in line with the other review models. While a
+    task is still pending on an undecided round, though, the reviewer can be
+    swapped — this is the only way to recover a round whose reviewer has gone
+    quiet, or turns out to have a conflict of interest, and would otherwise sit
+    at 评审中 forever.
+    """
+
     list_display = (
         "submission",
         "reviewer",
@@ -83,8 +101,62 @@ class ReviewAssignmentAdmin(admin.ModelAdmin):
     def has_add_permission(self, request):
         return False
 
-    def has_change_permission(self, request, obj=None):
+    def has_delete_permission(self, request, obj=None):
+        # Deleting a task would silently change how many reviewers the round
+        # needs; the roster stays whole and swaps go through the change page.
         return False
+
+    @staticmethod
+    def _reassignment_allowed(obj):
+        """A swap is sound only while this task and its round are both still open."""
+        return bool(
+            obj is not None
+            and obj.pk is not None
+            and obj.status == ReviewAssignment.PENDING
+            and obj.submission.status == ProjectSubmission.PENDING
+        )
+
+    def has_change_permission(self, request, obj=None):
+        # When this is False Django serves the page read-only, which is exactly
+        # what every record other than a swappable one should be.
+        return self._reassignment_allowed(obj)
+
+    def get_readonly_fields(self, request, obj=None):
+        if self._reassignment_allowed(obj):
+            return tuple(f for f in self.readonly_fields if f != "reviewer")
+        return self.readonly_fields
+
+    def get_form(self, request, obj=None, change=False, **kwargs):
+        if self._reassignment_allowed(obj):
+            kwargs["form"] = AdminReassignReviewerForm
+        return super().get_form(request, obj, change=change, **kwargs)
+
+    def save_model(self, request, obj, form, change):
+        """Route the swap through the service instead of saving the row.
+
+        The default implementation calls obj.save(), which would write the new
+        reviewer with no eligibility check and no audit entry. Note that Django
+        has already applied the submitted reviewer to ``obj`` in memory;
+        ``reassign_reviewer`` re-reads the row itself, so it still sees the
+        reviewer being replaced.
+        """
+        new_reviewer = form.cleaned_data.get("reviewer")
+        if new_reviewer is None:
+            # Django already refuses the POST for a task that may not be swapped
+            # (has_change_permission is False there), so this is belt-and-braces
+            # against another entry point reaching save_model with a plain form.
+            return
+        try:
+            reassign_reviewer(
+                assignment=obj,
+                new_reviewer=new_reviewer,
+                actor=request.user,
+                request=request,
+            )
+        except ReviewError as exc:
+            self.message_user(request, str(exc), messages.ERROR)
+        else:
+            self.message_user(request, "已更换评审人。", messages.SUCCESS)
 
 
 @admin.register(ArchivedProposal)

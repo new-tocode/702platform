@@ -182,26 +182,39 @@
             </div>
 
             <div class="panel">
-                <div class="panel-head"><h2>提交审核</h2></div>
+                <div class="panel-head">
+                    <h2>提交审核</h2>
+                    {% if latest_submission.status == 'pending' %}
+                        <span class="chip chip-warn">本轮未结束</span>
+                    {% endif %}
+                </div>
                 <div class="panel-body">
-                    <form method="post" action="{% url 'projects:group_submit_review' group.pk %}">
-                        {% csrf_token %}
-                        <div class="field">
-                            <label for="{{ submit_form.review_type.id_for_label }}">{{ submit_form.review_type.label }}</label>
-                            {{ submit_form.review_type }}
-                            {% if submit_form.review_type.help_text %}<p class="help">{{ submit_form.review_type.help_text }}</p>{% endif %}
-                            {{ submit_form.review_type.errors }}
-                        </div>
-                        <div class="field">
-                            <label for="{{ submit_form.message.id_for_label }}">{{ submit_form.message.label }}</label>
-                            {{ submit_form.message }}
-                            <p class="help">按所选类型随机分配评审人；全部评审人通过后，本项目组方案即通过。评审人身份对项目组匿名，评审人可另附批注版项目书。</p>
-                            {{ submit_form.message.errors }}
-                        </div>
-                        <div class="form-actions">
-                            <button class="btn btn-primary btn-block" type="submit">提交审核</button>
-                        </div>
-                    </form>
+                    {% if latest_submission.status == 'pending' %}
+                        <p class="help">
+                            第 {{ latest_submission.round }} 轮评审尚未结束
+                            （已审结 {{ latest_submission.completed_count }} / {{ latest_submission.required_reviewers }}），
+                            需等本轮出结论后才能提交下一轮。同一条送审不会被重复提交。
+                        </p>
+                    {% else %}
+                        <form method="post" action="{% url 'projects:group_submit_review' group.pk %}">
+                            {% csrf_token %}
+                            <div class="field">
+                                <label for="{{ submit_form.review_type.id_for_label }}">{{ submit_form.review_type.label }}</label>
+                                {{ submit_form.review_type }}
+                                {% if submit_form.review_type.help_text %}<p class="help">{{ submit_form.review_type.help_text }}</p>{% endif %}
+                                {{ submit_form.review_type.errors }}
+                            </div>
+                            <div class="field">
+                                <label for="{{ submit_form.message.id_for_label }}">{{ submit_form.message.label }}</label>
+                                {{ submit_form.message }}
+                                <p class="help">按所选类型随机分配评审人；全部评审人通过后，本项目组方案即通过。评审人身份对项目组匿名，评审人可另附批注版项目书。</p>
+                                {{ submit_form.message.errors }}
+                            </div>
+                            <div class="form-actions">
+                                <button class="btn btn-primary btn-block" type="submit">提交审核</button>
+                            </div>
+                        </form>
+                    {% endif %}
                 </div>
             </div>
 

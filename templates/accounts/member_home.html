@@ -32,6 +32,63 @@
         </div>
     </div>
 
+    {% if pending_review_count %}
+        <div class="todo reveal">
+            <a href="{% url 'reviews:queue' %}">
+                <span class="n">{{ pending_review_count }}</span>
+                <span class="t">份项目书待你评审 · 点击前往处理</span>
+            </a>
+        </div>
+    {% endif %}
+
+    {% if overview %}
+        <div class="panel reveal">
+            <div class="panel-head">
+                <h2>社团概览</h2>
+                <span class="count">仅管理员与联系人可见</span>
+            </div>
+            <div class="panel-body tight">
+                <div class="spec plain">
+                    <div>
+                        <div class="k">在册成员</div>
+                        <div class="v">{{ overview.member_count }}<small>人</small></div>
+                    </div>
+                    <div>
+                        <div class="k">项目组</div>
+                        <div class="v">{{ overview.group_count }}<small>个</small></div>
+                    </div>
+                    <div>
+                        <div class="k">开放报名竞赛</div>
+                        <div class="v">{{ overview.open_competition_count }}<small>项</small></div>
+                    </div>
+                    <div>
+                        <div class="k">在借设备</div>
+                        <div class="v">{{ overview.borrowed_count }}<small>台</small></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+
+    <div class="panel reveal">
+        <div class="panel-head">
+            <h2>可用入口</h2>
+            <span class="count">{{ operation_entries|length }} entries</span>
+        </div>
+        <div class="panel-body">
+            <div class="entries">
+                {% for entry in operation_entries %}
+                    <a class="entry" href="{{ entry.url }}">
+                        <span class="label">{{ entry.label }}</span>
+                        <span class="desc">{{ entry.description }}</span>
+                    </a>
+                {% empty %}
+                    <div class="empty">当前没有可用的业务入口。</div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
     {% if user.is_reviewer %}
         <div class="panel reveal">
             <div class="panel-head">
@@ -86,53 +143,5 @@
             </div>
         </div>
     {% endif %}
-
-    {% if overview %}
-        <div class="panel reveal">
-            <div class="panel-head">
-                <h2>社团概览</h2>
-                <span class="count">仅管理员与联系人可见</span>
-            </div>
-            <div class="panel-body tight">
-                <div class="spec plain">
-                    <div>
-                        <div class="k">在册成员</div>
-                        <div class="v">{{ overview.member_count }}<small>人</small></div>
-                    </div>
-                    <div>
-                        <div class="k">项目组</div>
-                        <div class="v">{{ overview.group_count }}<small>个</small></div>
-                    </div>
-                    <div>
-                        <div class="k">开放报名竞赛</div>
-                        <div class="v">{{ overview.open_competition_count }}<small>项</small></div>
-                    </div>
-                    <div>
-                        <div class="k">在借设备</div>
-                        <div class="v">{{ overview.borrowed_count }}<small>台</small></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    {% endif %}
-
-    <div class="panel reveal">
-        <div class="panel-head">
-            <h2>可用入口</h2>
-            <span class="count">{{ operation_entries|length }} entries</span>
-        </div>
-        <div class="panel-body">
-            <div class="entries">
-                {% for entry in operation_entries %}
-                    <a class="entry" href="{{ entry.url }}">
-                        <span class="label">{{ entry.label }}</span>
-                        <span class="desc">{{ entry.description }}</span>
-                    </a>
-                {% empty %}
-                    <div class="empty">当前没有可用的业务入口。</div>
-                {% endfor %}
-            </div>
-        </div>
-    </div>
 </div>
 {% endblock %}
