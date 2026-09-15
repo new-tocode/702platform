@@ -32,6 +32,8 @@ from .services import (
     _settle_submission,
     clear_reviewer_leave,
     complete_review,
+    count_pending_reviews,
+    reassign_reviewer,
     set_reviewer_leave,
     submit_for_review,
 )
@@ -40,6 +42,7 @@ from .services import (
 User = get_user_model()
 MEDIA_ROOT = tempfile.mkdtemp()
 LEAVE_MEDIA_ROOT = tempfile.mkdtemp()
+REMINDER_MEDIA_ROOT = tempfile.mkdtemp()
 
 #: A round type needing two reviewers, so the historic two-reviewer assertions hold.
 TWO_REVIEWER_TYPE = REVIEW_TYPE_INNOVATION_MIDTERM
@@ -121,6 +124,16 @@ class ProjectReviewFlowTests(TestCase):
             annotated_file=files.get("reviewer_two"),
         )
 
+    def _approve_round(self, submission):
+        """Settle a round by approving every task, so the next round may open."""
+        for assignment in submission.assignments.all():
+            complete_review(
+                assignment=assignment,
+                reviewer=assignment.reviewer,
+                decision=ReviewAssignment.APPROVE,
+                comment="同意。",
+            )
+
     # --- registration of the reviewer operation entry -----------------------
 
     def test_review_entry_visible_only_to_reviewers(self):
@@ -152,6 +165,26 @@ class ProjectReviewFlowTests(TestCase):
 
                 self.assertEqual(submission.required_reviewers, expected)
                 self.assertEqual(submission.assignments.count(), expected)
+                # 收尾，否则下一轮会被「本轮未结束」挡住。
+                self._approve_round(submission)
+
+    def test_a_new_round_is_blocked_while_the_previous_one_is_open(self):
+        first = self._submit()
+
+        with self.assertRaises(ReviewError) as caught:
+            self._submit()
+
+        self.assertIn(f"第 {first.round} 轮", str(caught.exception))
+        self.assertEqual(ProjectSubmission.objects.filter(group=self.group).count(), 1)
+
+    def test_a_new_round_opens_once_the_previous_one_has_a_verdict(self):
+        first = self._submit()
+        self._approve_round(first)
+
+        second = self._submit()
+
+        self.assertEqual(second.round, first.round + 1)
+        self.assertEqual(second.status, ProjectSubmission.PENDING)
 
     def test_legacy_submission_without_type_defaults_to_two(self):
         """Rounds created before submission types existed keep the old rule."""
@@ -500,6 +533,47 @@ class ProjectReviewFlowTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertFalse(ProjectSubmission.objects.exists())
+
+    def test_submit_view_refuses_while_a_round_is_still_open(self):
+        first = self._submit()
+        self.client.force_login(self.contact)
+
+        response = self.client.post(
+            reverse("projects:group_submit_review", args=(self.group.pk,)),
+            {"review_type": TWO_REVIEWER_TYPE, "message": "再来一轮。"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(ProjectSubmission.objects.filter(group=self.group).count(), 1)
+        self.assertEqual(
+            ProjectSubmission.objects.get(group=self.group).round, first.round
+        )
+
+    def test_group_manage_hides_the_submit_form_while_a_round_is_open(self):
+        self._submit()
+        self.client.force_login(self.contact)
+
+        response = self.client.get(
+            reverse("projects:group_manage", args=(self.group.pk,))
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "本轮未结束")
+        self.assertNotContains(
+            response, reverse("projects:group_submit_review", args=(self.group.pk,))
+        )
+
+    def test_group_manage_offers_the_submit_form_when_nothing_is_open(self):
+        self.client.force_login(self.contact)
+
+        response = self.client.get(
+            reverse("projects:group_manage", args=(self.group.pk,))
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response, reverse("projects:group_submit_review", args=(self.group.pk,))
+        )
 
     def test_reviewer_uploads_annotated_file_via_view(self):
         submission = self._submit()
@@ -881,6 +955,17 @@ class ReviewerLeaveTests(TestCase):
         self.assertContains(response, "请假中")
         self.assertContains(response, timezone.localtime(leave.ends_at).strftime("%m-%d %H:%M"))
 
+    def test_leave_panel_sits_below_the_operation_entries(self):
+        self.client.force_login(self.reviewer)
+
+        response = self.client.get(reverse("accounts:member_home"))
+        html = response.content.decode()
+
+        self.assertLess(html.index("可用入口"), html.index("评审请假"))
+        # Django 模板不校验 HTML 嵌套：区块顺序对了但标签没配平，页面照样渲染 200，
+        # 所以这里顺带盯住 div 配平。
+        self.assertEqual(html.count("<div"), html.count("</div>"))
+
     # --- administrator side --------------------------------------------------
 
     def test_admin_lists_every_leave_with_editable_times(self):
@@ -925,3 +1010,431 @@ class ReviewerLeaveTests(TestCase):
         self.assertTrue(
             AuditLog.objects.filter(action="reviews.leave.admin_save").exists()
         )
+
+
+@override_settings(MEDIA_ROOT=REMINDER_MEDIA_ROOT)
+class ReviewReminderTests(TestCase):
+    """Unfinished reviews are surfaced twice: right after login, and on the member centre."""
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(REMINDER_MEDIA_ROOT, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
+        self.contact = User.objects.create_user(
+            username="remind-contact",
+            password="Contact-Password-123!",
+        )
+        self.contact.must_change_password = False
+        self.contact.save(update_fields=["must_change_password"])
+        self.reviewer = User.objects.create_user(
+            username="remind-reviewer",
+            password="Password-123!",
+        )
+        self.reviewer.is_reviewer = True
+        self.reviewer.must_change_password = False
+        self.reviewer.save(update_fields=["is_reviewer", "must_change_password"])
+        self.member = User.objects.create_user(
+            username="remind-member",
+            password="Password-123!",
+        )
+        self.member.must_change_password = False
+        self.member.save(update_fields=["must_change_password"])
+
+        self.group = ProjectGroup.objects.create(name="提醒项目组", leader=self.contact)
+        self.group.proposal.save(
+            "proposal.pdf", ContentFile(b"%PDF-1.4 proposal"), save=True
+        )
+
+    def _submit_round(self):
+        """Open a round that leaves the reviewer holding one pending task."""
+        return submit_for_review(
+            group=self.group,
+            submitter=self.contact,
+            review_type=REVIEW_TYPE_INNOVATION_START,
+        )
+
+    def _login(self, username):
+        return self.client.post(
+            reverse("accounts:login"),
+            {"username": username, "password": "Password-123!"},
+            follow=True,
+        )
+
+    # --- the count -----------------------------------------------------------
+
+    def test_count_only_covers_pending_tasks(self):
+        submission = self._submit_round()
+        self.assertEqual(count_pending_reviews(self.reviewer), 1)
+
+        complete_review(
+            assignment=submission.assignments.get(),
+            reviewer=self.reviewer,
+            decision=ReviewAssignment.APPROVE,
+            comment="同意。",
+        )
+
+        self.assertEqual(count_pending_reviews(self.reviewer), 0)
+
+    def test_count_accumulates_across_groups(self):
+        """同一名评审人可能同时持有来自不同项目组的待评审任务。"""
+        other_group = ProjectGroup.objects.create(
+            name="提醒项目组二", leader=self.contact
+        )
+        other_group.proposal.save(
+            "proposal.pdf", ContentFile(b"%PDF-1.4 proposal"), save=True
+        )
+
+        self._submit_round()
+        submit_for_review(
+            group=other_group,
+            submitter=self.contact,
+            review_type=REVIEW_TYPE_INNOVATION_START,
+        )
+
+        self.assertEqual(count_pending_reviews(self.reviewer), 2)
+
+    # --- the login nudge -----------------------------------------------------
+
+    def test_login_reminds_a_reviewer_holding_pending_tasks(self):
+        self._submit_round()
+
+        response = self._login(self.reviewer.username)
+
+        self.assertContains(response, "1 份项目书待评审")
+
+    def test_login_stays_quiet_without_pending_tasks(self):
+        response = self._login(self.reviewer.username)
+
+        self.assertNotContains(response, "份项目书待评审")
+
+    def test_login_stays_quiet_after_the_qualification_is_revoked(self):
+        """Reminding someone who can no longer open the queue would mislead them."""
+        self._submit_round()
+        self.reviewer.is_reviewer = False
+        self.reviewer.save(update_fields=["is_reviewer"])
+
+        response = self._login(self.reviewer.username)
+
+        self.assertNotContains(response, "份项目书待评审")
+
+    def test_login_stays_quiet_for_a_plain_member(self):
+        self._submit_round()
+
+        response = self._login(self.member.username)
+
+        self.assertNotContains(response, "份项目书待评审")
+
+    # --- the member-centre todo card -----------------------------------------
+
+    def test_member_home_shows_a_todo_card_with_the_count(self):
+        self._submit_round()
+        self.client.force_login(self.reviewer)
+
+        response = self.client.get(reverse("accounts:member_home"))
+
+        self.assertEqual(response.context["pending_review_count"], 1)
+        self.assertContains(response, "份项目书待你评审")
+        self.assertContains(response, '<span class="n">1</span>')
+
+    def test_member_home_shows_no_todo_card_when_nothing_is_pending(self):
+        self.client.force_login(self.reviewer)
+
+        response = self.client.get(reverse("accounts:member_home"))
+
+        self.assertEqual(response.context["pending_review_count"], 0)
+        self.assertNotContains(response, "份项目书待你评审")
+
+    def test_member_home_shows_no_todo_card_for_non_reviewers(self):
+        self.client.force_login(self.member)
+
+        response = self.client.get(reverse("accounts:member_home"))
+
+        self.assertNotIn("pending_review_count", response.context)
+        self.assertNotContains(response, "份项目书待你评审")
+
+
+class ReviewAssignmentReassignmentTests(TestCase):
+    """An administrator can hand a still-pending task to a different reviewer.
+
+    This is the only recovery path for a round whose reviewer went quiet or
+    turned out to have a conflict of interest — without it such a round sits at
+    评审中 forever. Verdicts are never rewritten, so the permission is limited to
+    tasks that are pending on a round that has not been decided.
+    """
+
+    def setUp(self):
+        self.admin = User.objects.create_superuser(
+            username="swap-admin",
+            password="Admin-Password-123!",
+        )
+        self.contact = User.objects.create_user(
+            username="swap-contact",
+            password="Contact-Password-123!",
+        )
+        self.contact.must_change_password = False
+        self.contact.save(update_fields=["must_change_password"])
+        self.member = User.objects.create_user(
+            username="swap-member",
+            password="Member-Password-123!",
+        )
+        self.member.must_change_password = False
+        self.member.save(update_fields=["must_change_password"])
+        self.outsider = User.objects.create_user(
+            username="swap-outsider",
+            password="Outsider-Password-123!",
+        )
+        self.outsider.must_change_password = False
+        self.outsider.save(update_fields=["must_change_password"])
+        self.reviewers = [
+            self._make_reviewer(name)
+            for name in ("swap-reviewer-one", "swap-reviewer-two", "swap-reviewer-three")
+        ]
+
+        self.group = ProjectGroup.objects.create(name="换人项目组", leader=self.contact)
+        self.group.members.add(self.member)
+        # 本类只关心「有一份项目书」这个事实，不读文件内容，所以不落盘。
+        self.group.proposal.name = "project_proposals/existing.pdf"
+        self.group.save(update_fields=["proposal"])
+
+    def _make_reviewer(self, username):
+        user = User.objects.create_user(
+            username=username, password="Reviewer-Password-123!"
+        )
+        user.is_reviewer = True
+        user.must_change_password = False
+        user.save(update_fields=["is_reviewer", "must_change_password"])
+        return user
+
+    def _submit(self):
+        """Two-reviewer round, leaving one of the three reviewers spare."""
+        return submit_for_review(
+            group=self.group,
+            submitter=self.contact,
+            review_type=REVIEW_TYPE_INNOVATION_MIDTERM,
+        )
+
+    def _spare_reviewer(self, submission):
+        assigned = set(submission.assignments.values_list("reviewer_id", flat=True))
+        return next(user for user in self.reviewers if user.pk not in assigned)
+
+    def _change_url(self, assignment):
+        return reverse(
+            "admin:reviews_reviewassignment_change", args=(assignment.pk,)
+        )
+
+    # --- the service ---------------------------------------------------------
+
+    def test_swapping_moves_the_task_to_the_new_reviewer(self):
+        submission = self._submit()
+        assignment = submission.assignments.first()
+        spare = self._spare_reviewer(submission)
+
+        reassign_reviewer(assignment=assignment, new_reviewer=spare, actor=self.admin)
+
+        assignment.refresh_from_db()
+        self.assertEqual(assignment.reviewer, spare)
+        # 换人不改变任务数与状态，因此无需重新判结论。
+        self.assertEqual(assignment.status, ReviewAssignment.PENDING)
+        self.assertEqual(submission.assignments.count(), 2)
+        submission.refresh_from_db()
+        self.assertEqual(submission.status, ProjectSubmission.PENDING)
+        audit = AuditLog.objects.get(action="reviews.assignment.reassign")
+        self.assertEqual(audit.detail["to_reviewer_id"], spare.pk)
+
+    def test_a_completed_task_cannot_be_swapped(self):
+        submission = self._submit()
+        assignment = submission.assignments.first()
+        complete_review(
+            assignment=assignment,
+            reviewer=assignment.reviewer,
+            decision=ReviewAssignment.APPROVE,
+            comment="同意。",
+        )
+        assignment.refresh_from_db()
+        spare = self._spare_reviewer(submission)
+
+        with self.assertRaises(ReviewError):
+            reassign_reviewer(assignment=assignment, new_reviewer=spare, actor=self.admin)
+
+        assignment.refresh_from_db()
+        self.assertNotEqual(assignment.reviewer, spare)
+        # 已经落下的结论、意见不能被换人改写。
+        self.assertEqual(assignment.comment, "同意。")
+
+    def test_a_round_that_already_has_a_verdict_cannot_be_swapped(self):
+        """Guards an abnormal state:正常流程下判结论的前提就是没有待评审任务。"""
+        submission = self._submit()
+        assignment = submission.assignments.first()
+        spare = self._spare_reviewer(submission)
+        ProjectSubmission.objects.filter(pk=submission.pk).update(
+            status=ProjectSubmission.APPROVED
+        )
+
+        with self.assertRaises(ReviewError):
+            reassign_reviewer(assignment=assignment, new_reviewer=spare, actor=self.admin)
+
+    def test_the_current_reviewer_is_not_a_change(self):
+        submission = self._submit()
+        assignment = submission.assignments.first()
+
+        with self.assertRaises(ReviewError):
+            reassign_reviewer(
+                assignment=assignment,
+                new_reviewer=assignment.reviewer,
+                actor=self.admin,
+            )
+
+    def test_the_submitter_cannot_be_swapped_in(self):
+        submission = self._submit()
+        assignment = submission.assignments.first()
+
+        with self.assertRaises(ReviewError):
+            reassign_reviewer(
+                assignment=assignment, new_reviewer=self.contact, actor=self.admin
+            )
+
+    def test_a_group_member_cannot_be_swapped_in(self):
+        submission = self._submit()
+        assignment = submission.assignments.first()
+        self.member.is_reviewer = True
+        self.member.save(update_fields=["is_reviewer"])
+
+        with self.assertRaises(ReviewError):
+            reassign_reviewer(
+                assignment=assignment, new_reviewer=self.member, actor=self.admin
+            )
+
+    def test_someone_already_on_the_round_cannot_be_swapped_in(self):
+        submission = self._submit()
+        assignment = submission.assignments.first()
+        other = submission.assignments.exclude(pk=assignment.pk).get().reviewer
+
+        with self.assertRaises(ReviewError):
+            reassign_reviewer(
+                assignment=assignment, new_reviewer=other, actor=self.admin
+            )
+
+    def test_a_non_reviewer_cannot_be_swapped_in(self):
+        submission = self._submit()
+        assignment = submission.assignments.first()
+
+        with self.assertRaises(ReviewError):
+            reassign_reviewer(
+                assignment=assignment, new_reviewer=self.outsider, actor=self.admin
+            )
+
+    def test_an_inactive_reviewer_cannot_be_swapped_in(self):
+        submission = self._submit()
+        assignment = submission.assignments.first()
+        spare = self._spare_reviewer(submission)
+        spare.is_active = False
+        spare.save(update_fields=["is_active"])
+
+        with self.assertRaises(ReviewError):
+            reassign_reviewer(assignment=assignment, new_reviewer=spare, actor=self.admin)
+
+    def test_a_reviewer_on_leave_cannot_be_swapped_in(self):
+        submission = self._submit()
+        assignment = submission.assignments.first()
+        spare = self._spare_reviewer(submission)
+        now = timezone.now()
+        ReviewerLeave.objects.create(
+            reviewer=spare,
+            starts_at=now - timedelta(days=1),
+            ends_at=now + timedelta(days=7),
+        )
+
+        with self.assertRaises(ReviewError):
+            reassign_reviewer(assignment=assignment, new_reviewer=spare, actor=self.admin)
+
+    # --- the admin change page ----------------------------------------------
+
+    def test_admin_offers_the_reviewer_dropdown_for_a_pending_task(self):
+        submission = self._submit()
+        assignment = submission.assignments.first()
+        spare = self._spare_reviewer(submission)
+        self.client.force_login(self.admin)
+
+        response = self.client.get(self._change_url(assignment))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'name="reviewer"')
+        candidates = set(
+            response.context["adminform"]
+            .form.fields["reviewer"]
+            .queryset.values_list("pk", flat=True)
+        )
+        # 当前评审人留着（否则下拉看不出现在是谁），空余的那位可选；
+        # 提交人、组员、本轮另一条任务的评审人都不在候选里。
+        self.assertEqual(candidates, {assignment.reviewer_id, spare.pk})
+
+    def test_admin_change_page_is_read_only_for_a_completed_task(self):
+        submission = self._submit()
+        assignment = submission.assignments.first()
+        complete_review(
+            assignment=assignment,
+            reviewer=assignment.reviewer,
+            decision=ReviewAssignment.APPROVE,
+            comment="同意。",
+        )
+        self.client.force_login(self.admin)
+
+        response = self.client.get(self._change_url(assignment))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'name="reviewer"')
+
+    def test_admin_swaps_the_reviewer(self):
+        submission = self._submit()
+        assignment = submission.assignments.first()
+        spare = self._spare_reviewer(submission)
+        self.client.force_login(self.admin)
+
+        response = self.client.post(
+            self._change_url(assignment),
+            {"reviewer": spare.pk, "_save": "保存"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        assignment.refresh_from_db()
+        self.assertEqual(assignment.reviewer, spare)
+        self.assertTrue(
+            AuditLog.objects.filter(action="reviews.assignment.reassign").exists()
+        )
+
+    def test_admin_cannot_post_a_swap_for_a_completed_task(self):
+        submission = self._submit()
+        assignment = submission.assignments.first()
+        complete_review(
+            assignment=assignment,
+            reviewer=assignment.reviewer,
+            decision=ReviewAssignment.APPROVE,
+            comment="同意。",
+        )
+        assignment.refresh_from_db()
+        original_reviewer_id = assignment.reviewer_id
+        spare = self._spare_reviewer(submission)
+        self.client.force_login(self.admin)
+
+        response = self.client.post(
+            self._change_url(assignment),
+            {"reviewer": spare.pk, "_save": "保存"},
+        )
+
+        self.assertEqual(response.status_code, 403)
+        assignment.refresh_from_db()
+        self.assertEqual(assignment.reviewer_id, original_reviewer_id)
+
+    def test_admin_cannot_delete_a_task(self):
+        submission = self._submit()
+        assignment = submission.assignments.first()
+        self.client.force_login(self.admin)
+
+        response = self.client.get(
+            reverse("admin:reviews_reviewassignment_delete", args=(assignment.pk,))
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(ReviewAssignment.objects.filter(pk=assignment.pk).exists())

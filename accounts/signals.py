@@ -2,6 +2,7 @@
 
 import logging
 
+from django.contrib import messages
 from django.contrib.auth.signals import user_logged_in, user_login_failed
 from django.db.models.signals import post_save
 from django.dispatch import receiver
@@ -39,6 +40,41 @@ def log_user_login(sender, request, user, **kwargs):
         user.pk,
         user.must_change_password,
         getattr(request, "path", "-"),
+        extra={"request_id": getattr(request, "request_id", "-")},
+    )
+
+
+@receiver(user_logged_in)
+def remind_reviewer_of_pending_reviews(sender, request, user, **kwargs):
+    """Nudge a reviewer about unfinished reviews as soon as they log in.
+
+    The reminder is a flash message rather than a redirect: logging in should
+    not silently change the page the user asked for, and the same count is shown
+    persistently on the member centre.
+    """
+    if request is None:
+        return
+    # Local imports keep accounts free of load-time dependencies on other apps.
+    from projects.permissions import is_project_reviewer
+    from reviews.services import count_pending_reviews
+
+    if not is_project_reviewer(user):
+        return
+    pending = count_pending_reviews(user)
+    if not pending:
+        return
+    # fail_silently: a login must never break because the reminder could not be
+    # queued — e.g. a programmatic login outside the middleware chain, where the
+    # request carries no message storage.
+    messages.warning(
+        request,
+        f"你有 {pending} 份项目书待评审，请前往「评审」处理。",
+        fail_silently=True,
+    )
+    logger.info(
+        "reviews.reminder.login user=%s pending=%s",
+        user.get_username(),
+        pending,
         extra={"request_id": getattr(request, "request_id", "-")},
     )
 

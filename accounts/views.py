@@ -165,11 +165,12 @@ def member_home(request):
     # 平台概览数字只对管理员与项目组联系人呈现，普通成员与访客都不显示。
     if can_view_platform_overview(request.user):
         context["overview"] = platform_overview()
-    # 评审请假面板只对有评审资格的账号呈现；其他人不必触碰 reviews。
+    # 评审相关块（待办提醒、请假面板）只对有评审资格的账号呈现；其他人不必触碰 reviews。
     if request.user.is_reviewer:
         from reviews.forms import ReviewerLeaveForm
-        from reviews.services import open_leave_for
+        from reviews.services import count_pending_reviews, open_leave_for
 
+        context["pending_review_count"] = count_pending_reviews(request.user)
         leave = open_leave_for(request.user)
         initial = (
             {

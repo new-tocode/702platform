@@ -14,6 +14,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from core.audit import record_audit
+from projects.models import ProjectGroup
 
 from .models import (
     REVIEWER_QUOTA,
@@ -32,23 +33,40 @@ class ReviewError(Exception):
     """A submission or review action violates a business rule."""
 
 
-def _pick_reviewers(*, group, submitter, count):
-    """Randomly pick reviewers, skipping the submitter, the group, and anyone on leave.
+def eligible_reviewers(*, group, submitter, exclude_assigned_on=None):
+    """Users who may take a review task for this group's proposal right now.
 
-    Leave is checked here, at draw time, rather than by flipping
-    ``is_reviewer``: the qualification never changes, so nothing has to be
-    restored when a leave window ends.
+    The single definition of "who may review": the draw at submission time and
+    an administrator's manual reassignment both come through here, so the
+    exclusions (submitter, the group's members, anyone on leave) cannot drift
+    apart between the two paths.
     """
     excluded = set(group.members.values_list("pk", flat=True))
     excluded.add(submitter.pk)
+    if exclude_assigned_on is not None:
+        excluded |= set(
+            exclude_assigned_on.assignments.values_list("reviewer_id", flat=True)
+        )
     on_leave = set(ReviewerLeave.objects.active().values_list("reviewer_id", flat=True))
-    candidates = list(
+    return (
         User.objects.filter(is_reviewer=True, is_active=True)
         .exclude(pk__in=excluded)
         .exclude(pk__in=on_leave)
     )
+
+
+def _pick_reviewers(*, group, submitter, count):
+    """Randomly draw reviewers for a brand-new round.
+
+    Leave is honoured here, at draw time, rather than by flipping
+    ``is_reviewer``: the qualification never changes, so nothing has to be
+    restored when a leave window ends.
+    """
+    candidates = list(eligible_reviewers(group=group, submitter=submitter))
     if len(candidates) < count:
-        leave_note = f"（另有 {len(on_leave)} 人请假）" if on_leave else ""
+        # Only reached on the failure path, so the extra count is cheap here.
+        on_leave = ReviewerLeave.objects.active().count()
+        leave_note = f"（另有 {on_leave} 人请假）" if on_leave else ""
         raise ReviewError(
             f"当前可用的评审人不足 {count} 人{leave_note}，无法提交审核。"
         )
@@ -62,9 +80,24 @@ def submit_for_review(*, group, submitter, review_type, message="", request=None
     if not group.proposal:
         raise ReviewError("请先上传项目书，再提交审核。")
     required = REVIEWER_QUOTA[review_type]
-    reviewers = _pick_reviewers(group=group, submitter=submitter, count=required)
 
     with transaction.atomic():
+        # Lock the group: without it, two submissions for the same group could
+        # both pass the open-round check below and both compute the same next
+        # round number, colliding on the (group, round) constraint.
+        ProjectGroup.objects.select_for_update().get(pk=group.pk)
+        open_round = (
+            group.submissions.filter(status=ProjectSubmission.PENDING)
+            .order_by("round")
+            .first()
+        )
+        if open_round is not None:
+            raise ReviewError(
+                f"第 {open_round.round} 轮评审尚未结束，"
+                "请等本轮出结论后再提交下一轮。"
+            )
+
+        reviewers = _pick_reviewers(group=group, submitter=submitter, count=required)
         last = group.submissions.order_by("-round").first()
         round_number = (last.round + 1) if last else 1
         submission = ProjectSubmission.objects.create(
@@ -232,6 +265,91 @@ def complete_review(
         extra={"request_id": getattr(request, "request_id", "-")},
     )
     return locked
+
+
+def reassign_reviewer(*, assignment, new_reviewer, actor, request=None):
+    """Hand one pending review task to a different reviewer.
+
+    Only a task that is still ``pending`` on a round that has not reached a
+    verdict may be reassigned. Once a verdict exists the task is a record of who
+    decided what: swapping the reviewer would re-attribute that decision (and
+    its comment and annotated file) to somebody who never made it. Because the
+    task stays pending, the round keeps the same number of open tasks, so
+    nothing has to be re-aggregated and no archive is touched.
+
+    The replaced reviewer's row is mutated rather than deleted, so the roster
+    always shows exactly one task per (round, reviewer). Who held it before is
+    kept in the audit log.
+    """
+    with transaction.atomic():
+        # Same lock order as complete_review (submission → assignment): a
+        # reviewer finishing concurrently would settle the round, after which
+        # reassigning it would no longer be sound.
+        submission = ProjectSubmission.objects.select_for_update().get(
+            pk=assignment.submission_id
+        )
+        locked = (
+            ReviewAssignment.objects.select_for_update()
+            .select_related("submission__group", "submission__submitted_by")
+            .get(pk=assignment.pk)
+        )
+        if locked.status != ReviewAssignment.PENDING:
+            raise ReviewError("只有待评审的任务可以更换评审人。")
+        if submission.status != ProjectSubmission.PENDING:
+            raise ReviewError("该轮送审已给出结论，不能再更换评审人。")
+        if locked.reviewer_id == new_reviewer.pk:
+            raise ReviewError("评审人没有变化。")
+        # The admin form limits the choices already; these checks are what make
+        # the rule hold for any other caller too.
+        if new_reviewer.pk == submission.submitted_by_id:
+            raise ReviewError("提交人不能评审自己的项目书。")
+        if submission.group.members.filter(pk=new_reviewer.pk).exists():
+            raise ReviewError("该项目组成员不能评审本组的项目书。")
+        if submission.assignments.filter(reviewer=new_reviewer).exists():
+            raise ReviewError("该评审人已在本轮评审任务中。")
+        if not eligible_reviewers(
+            group=submission.group, submitter=submission.submitted_by
+        ).filter(pk=new_reviewer.pk).exists():
+            raise ReviewError("该账号当前不具备评审资格（可能已停用或正在请假）。")
+
+        previous_reviewer_id = locked.reviewer_id
+        locked.reviewer = new_reviewer
+        locked.save(update_fields=["reviewer"])
+
+    record_audit(
+        action="reviews.assignment.reassign",
+        user=actor,
+        target=locked,
+        detail={
+            "submission_id": locked.submission_id,
+            "from_reviewer_id": previous_reviewer_id,
+            "to_reviewer_id": new_reviewer.pk,
+        },
+        request=request,
+    )
+    logger.info(
+        "reviews.assignment.reassign assignment_id=%s submission_id=%s from_reviewer_id=%s to_reviewer_id=%s actor=%s",
+        locked.pk,
+        locked.submission_id,
+        previous_reviewer_id,
+        new_reviewer.pk,
+        actor.get_username(),
+        extra={"request_id": getattr(request, "request_id", "-")},
+    )
+    return locked
+
+
+def count_pending_reviews(reviewer):
+    """How many review tasks await this reviewer.
+
+    Drives the platform's reminders (the post-login nudge and the member-centre
+    todo card). Leave is deliberately not applied: taking leave does not excuse
+    the reviews a reviewer already holds.
+    """
+    return ReviewAssignment.objects.filter(
+        reviewer=reviewer,
+        status=ReviewAssignment.PENDING,
+    ).count()
 
 
 def open_leave_for(reviewer, at=None):

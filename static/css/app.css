@@ -449,7 +449,7 @@ input[type="file"] { font: inherit; font-size: 13px; color: var(--ink-2); }
 .entry .desc { font-size: 12px; color: var(--ink-3); line-height: 1.65; }
 
 /* --- 待办 --- */
-.todo { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.todo { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); margin-bottom: 20px; }
 .todo a {
   display: flex; align-items: center; gap: 14px;
   background: var(--surface); border: 1px solid var(--line);
