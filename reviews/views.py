@@ -10,14 +10,15 @@ from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
-from projects.permissions import can_view_group, is_project_reviewer
+from projects.permissions import can_view_group, is_project_reviewer, is_super_reviewer
 
 from .forms import ReviewForm, ReviewerLeaveForm
-from .models import ArchivedProposal, ReviewAssignment
+from .models import ArchivedProposal, ProjectSubmission, ReviewAssignment
 from .services import (
     ReviewError,
     clear_reviewer_leave,
     complete_review,
+    override_review,
     set_reviewer_leave,
 )
 
@@ -29,6 +30,17 @@ def _require_reviewer(request):
     if not is_project_reviewer(request.user):
         logger.warning(
             "reviews.permission.denied username=%s path=%s",
+            request.user.get_username(),
+            request.path,
+            extra={"request_id": getattr(request, "request_id", "-")},
+        )
+        raise PermissionDenied
+
+
+def _require_super_reviewer(request):
+    if not is_super_reviewer(request.user):
+        logger.warning(
+            "reviews.permission.denied username=%s path=%s reason=not_super_reviewer",
             request.user.get_username(),
             request.path,
             extra={"request_id": getattr(request, "request_id", "-")},
@@ -67,18 +79,61 @@ def review_queue(request):
     completed = [
         item for item in assignments if item.status == ReviewAssignment.COMPLETED
     ]
+    released = [item for item in assignments if item.status == ReviewAssignment.RELEASED]
+    context = {"pending": pending, "completed": completed, "released": released}
+    if is_super_reviewer(request.user):
+        # The super reviewer's reach: every round still in progress, whether or
+        # not they hold a task on it.
+        context["open_rounds"] = (
+            ProjectSubmission.objects.filter(status=ProjectSubmission.PENDING)
+            .select_related("group", "submitted_by")
+            .order_by("submitted_at", "id")
+        )
     logger.info(
-        "reviews.queue.view pending=%s completed=%s reviewer=%s",
+        "reviews.queue.view pending=%s completed=%s released=%s super=%s reviewer=%s",
         len(pending),
         len(completed),
+        len(released),
+        is_super_reviewer(request.user),
         request.user.get_username(),
         extra={"request_id": getattr(request, "request_id", "-")},
     )
-    return render(
-        request,
-        "reviews/queue.html",
-        {"pending": pending, "completed": completed},
+    return render(request, "reviews/queue.html", context)
+
+
+@login_required
+@require_POST
+def override_submission(request, pk):
+    """Let a super reviewer settle an in-progress round with a single vote."""
+    _require_super_reviewer(request)
+    submission = get_object_or_404(
+        ProjectSubmission.objects.select_related("group"),
+        pk=pk,
     )
+    form = ReviewForm(request.POST, request.FILES, prefix="override")
+    if form.is_valid():
+        try:
+            decided = override_review(
+                submission=submission,
+                super_reviewer=request.user,
+                decision=form.cleaned_data["decision"],
+                comment=form.cleaned_data["comment"],
+                annotated_file=form.cleaned_data.get("annotated_file"),
+                request=request,
+            )
+        except ReviewError as exc:
+            messages.error(request, str(exc))
+        else:
+            messages.success(
+                request,
+                f"超级评审已敲定第 {decided.round} 轮：{decided.get_status_display()}，"
+                "等待中的评审人已释放。",
+            )
+    else:
+        for field_errors in form.errors.values():
+            for error in field_errors:
+                messages.error(request, error)
+    return redirect("projects:group_detail", pk=submission.group_id)
 
 
 @login_required

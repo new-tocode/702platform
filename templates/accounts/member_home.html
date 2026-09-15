@@ -29,6 +29,9 @@
             {% if reviewer_leave.is_active %}
                 <div class="help">请假中，{{ reviewer_leave.ends_at|date:"m-d H:i" }} 恢复</div>
             {% endif %}
+            {% if user.is_super_reviewer %}
+                <div class="help">超级评审</div>
+            {% endif %}
         </div>
     </div>
 

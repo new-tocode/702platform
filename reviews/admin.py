@@ -58,6 +58,58 @@ class ProjectSubmissionAdmin(admin.ModelAdmin):
     def has_change_permission(self, request, obj=None):
         return False
 
+    def get_deleted_objects(self, objs, request):
+        """Let a round be deleted together with its review tasks.
+
+        ``ReviewAssignmentAdmin`` refuses to delete a single task on purpose —
+        that would silently change how many reviewers the round needs. Django's
+        cascade check, however, asks that same admin about the tasks a round
+        deletion would carry away, which used to make the round undeletable. The
+        waiver is deliberate: the unit of deletion is the whole round, and the
+        per-task guard keeps its own lock.
+        """
+        to_delete, model_count, perms_needed, protected = super().get_deleted_objects(
+            objs, request
+        )
+        # perms_needed holds verbose names; 评审任务 is the only one waived here.
+        perms_needed.discard(ReviewAssignment._meta.verbose_name)
+        return to_delete, model_count, perms_needed, protected
+
+    @staticmethod
+    def _deletion_detail(submission):
+        """What to keep in the audit log, gathered before the row disappears."""
+        return {
+            "submission_id": submission.pk,
+            "group_id": submission.group_id,
+            "round": submission.round,
+            "review_type": submission.review_type,
+            "status": submission.status,
+            "assignments": submission.assignments.count(),
+        }
+
+    def delete_model(self, request, obj):
+        detail = self._deletion_detail(obj)
+        super().delete_model(request, obj)
+        # target=None: the object is gone, so every identifier lives in detail.
+        record_audit(
+            action="reviews.submission.delete",
+            user=request.user,
+            target=None,
+            detail=detail,
+            request=request,
+        )
+
+    def delete_queryset(self, request, queryset):
+        details = [self._deletion_detail(obj) for obj in queryset]
+        super().delete_queryset(request, queryset)
+        record_audit(
+            action="reviews.submission.delete",
+            user=request.user,
+            target=None,
+            detail={"submissions": details},
+            request=request,
+        )
+
 
 @admin.register(ReviewAssignment)
 class ReviewAssignmentAdmin(admin.ModelAdmin):

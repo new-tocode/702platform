@@ -14,6 +14,7 @@ from django.utils import timezone
 from core.models import AuditLog
 from core.registry import get_entries_for_user
 from projects.models import ProjectGroup
+from projects.permissions import can_view_group
 
 from .forms import ReviewForm, ReviewerLeaveForm
 from .models import (
@@ -30,9 +31,11 @@ from .models import (
 from .services import (
     ReviewError,
     _settle_submission,
+    can_override_review,
     clear_reviewer_leave,
     complete_review,
     count_pending_reviews,
+    override_review,
     reassign_reviewer,
     set_reviewer_leave,
     submit_for_review,
@@ -43,6 +46,7 @@ User = get_user_model()
 MEDIA_ROOT = tempfile.mkdtemp()
 LEAVE_MEDIA_ROOT = tempfile.mkdtemp()
 REMINDER_MEDIA_ROOT = tempfile.mkdtemp()
+SUPER_MEDIA_ROOT = tempfile.mkdtemp()
 
 #: A round type needing two reviewers, so the historic two-reviewer assertions hold.
 TWO_REVIEWER_TYPE = REVIEW_TYPE_INNOVATION_MIDTERM
@@ -1432,6 +1436,461 @@ class ReviewAssignmentReassignmentTests(TestCase):
         assignment = submission.assignments.first()
         self.client.force_login(self.admin)
 
+        response = self.client.get(
+            reverse("admin:reviews_reviewassignment_delete", args=(assignment.pk,))
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(ReviewAssignment.objects.filter(pk=assignment.pk).exists())
+
+
+@override_settings(MEDIA_ROOT=SUPER_MEDIA_ROOT)
+class SuperReviewerOverrideTests(TestCase):
+    """A super reviewer settles an in-progress round with one vote.
+
+    The point of the role is to be able to decide a round that is stuck or
+    contested, so the verdict must not be re-derived from the ordinary
+    reviewers' votes — an earlier 需修改 must not overrule it.
+    """
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(SUPER_MEDIA_ROOT, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
+        self.contact = User.objects.create_user(
+            username="super-contact", password="Contact-Password-123!"
+        )
+        self.contact.must_change_password = False
+        self.contact.save(update_fields=["must_change_password"])
+        self.member = User.objects.create_user(
+            username="super-member", password="Member-Password-123!"
+        )
+        self.member.must_change_password = False
+        self.member.save(update_fields=["must_change_password"])
+        self.reviewer_one = self._make_user("super-reviewer-one", is_reviewer=True)
+        self.reviewer_two = self._make_user("super-reviewer-two", is_reviewer=True)
+        # Only the override qualification — never drawn as an ordinary reviewer.
+        self.super_reviewer = self._make_user("super-boss", is_super_reviewer=True)
+        self.outsider = self._make_user("super-outsider")
+
+        self.group = ProjectGroup.objects.create(name="超级评审项目组", leader=self.contact)
+        self.group.members.add(self.member)
+        self.group.proposal.save(
+            "proposal.pdf", ContentFile(b"%PDF-1.4 proposal"), save=True
+        )
+
+    def _make_user(self, username, is_reviewer=False, is_super_reviewer=False):
+        user = User.objects.create_user(username=username, password="Password-123!")
+        user.is_reviewer = is_reviewer
+        user.is_super_reviewer = is_super_reviewer
+        user.must_change_password = False
+        user.save(update_fields=["is_reviewer", "is_super_reviewer", "must_change_password"])
+        return user
+
+    def _submit(self):
+        return submit_for_review(
+            group=self.group,
+            submitter=self.contact,
+            review_type=REVIEW_TYPE_INNOVATION_MIDTERM,
+        )
+
+    def _override(self, submission, decision=ReviewAssignment.APPROVE, **kwargs):
+        kwargs.setdefault("comment", "超级评审意见。")
+        return override_review(
+            submission=submission,
+            super_reviewer=kwargs.pop("super_reviewer", self.super_reviewer),
+            decision=decision,
+            **kwargs,
+        )
+
+    # --- the vote settles the round -----------------------------------------
+
+    def test_override_approves_the_round_and_releases_the_waiting_reviewers(self):
+        submission = self._submit()
+
+        self._override(submission)
+
+        submission.refresh_from_db()
+        self.assertEqual(submission.status, ProjectSubmission.APPROVED)
+        self.assertIsNotNone(submission.decided_at)
+        self.assertEqual(
+            set(submission.assignments.values_list("status", flat=True)),
+            {ReviewAssignment.RELEASED, ReviewAssignment.COMPLETED},
+        )
+        override_row = submission.assignments.get(is_override=True)
+        self.assertEqual(override_row.reviewer, self.super_reviewer)
+        self.assertEqual(override_row.decision, ReviewAssignment.APPROVE)
+        self.assertEqual(override_row.status, ReviewAssignment.COMPLETED)
+        audit = AuditLog.objects.get(action="reviews.submission.override")
+        self.assertEqual(audit.detail["released"], 2)
+
+    def test_override_rejects_the_round(self):
+        submission = self._submit()
+
+        self._override(submission, decision=ReviewAssignment.REVISE)
+
+        submission.refresh_from_db()
+        self.assertEqual(submission.status, ProjectSubmission.NEEDS_REVISION)
+        self.assertEqual(
+            submission.assignments.filter(status=ReviewAssignment.RELEASED).count(), 2
+        )
+        self.assertFalse(ArchivedProposal.objects.filter(submission=submission).exists())
+
+    def test_override_beats_an_earlier_revision_request(self):
+        """The super vote must not be re-derived from the ordinary reviewers' votes."""
+        submission = self._submit()
+        first = submission.assignments.filter(reviewer=self.reviewer_one).get()
+        complete_review(
+            assignment=first,
+            reviewer=self.reviewer_one,
+            decision=ReviewAssignment.REVISE,
+            comment="请补充预算。",
+        )
+
+        self._override(submission)
+
+        submission.refresh_from_db()
+        self.assertEqual(submission.status, ProjectSubmission.APPROVED)
+
+    def test_override_archives_every_annotated_copy(self):
+        submission = self._submit()
+        complete_review(
+            assignment=submission.assignments.filter(reviewer=self.reviewer_one).get(),
+            reviewer=self.reviewer_one,
+            decision=ReviewAssignment.APPROVE,
+            comment="同意。",
+            annotated_file=_pdf("reviewer-one.pdf"),
+        )
+
+        self._override(submission, annotated_file=_pdf("super.pdf"))
+
+        archived = ArchivedProposal.objects.filter(submission=submission)
+        self.assertEqual(archived.count(), 2)
+        # 归档的正是「已完成且通过」的那两条；被释放的那条没有批注文件，不产生归档。
+        self.assertEqual(
+            set(archived.values_list("source_assignment_id", flat=True)),
+            set(
+                submission.assignments.filter(
+                    status=ReviewAssignment.COMPLETED,
+                    decision=ReviewAssignment.APPROVE,
+                ).values_list("pk", flat=True)
+            ),
+        )
+
+    # --- the released reviewer cannot come back ------------------------------
+
+    def test_a_released_task_can_no_longer_be_submitted(self):
+        submission = self._submit()
+        released = submission.assignments.filter(reviewer=self.reviewer_two).get()
+
+        self._override(submission)
+
+        with self.assertRaises(ReviewError):
+            complete_review(
+                assignment=released,
+                reviewer=self.reviewer_two,
+                decision=ReviewAssignment.APPROVE,
+                comment="我还是评一下。",
+            )
+        released.refresh_from_db()
+        self.assertEqual(released.status, ReviewAssignment.RELEASED)
+
+    def test_released_tasks_drop_out_of_the_reminder_count(self):
+        submission = self._submit()
+        self.assertEqual(count_pending_reviews(self.reviewer_one), 1)
+
+        self._override(submission)
+
+        self.assertEqual(count_pending_reviews(self.reviewer_one), 0)
+
+    # --- who may not override ------------------------------------------------
+
+    def test_a_super_reviewer_holding_a_task_on_the_round_cannot_override_it(self):
+        submission = self._submit()
+        ReviewAssignment.objects.create(
+            submission=submission, reviewer=self.super_reviewer
+        )
+
+        self.assertFalse(
+            can_override_review(submission=submission, user=self.super_reviewer)
+        )
+        with self.assertRaises(ReviewError):
+            self._override(submission)
+
+    def test_a_plain_reviewer_cannot_override(self):
+        submission = self._submit()
+
+        self.assertFalse(
+            can_override_review(submission=submission, user=self.reviewer_one)
+        )
+        with self.assertRaises(ReviewError):
+            self._override(submission, super_reviewer=self.reviewer_one)
+
+    def test_the_submitter_cannot_override(self):
+        submission = self._submit()
+        self.contact.is_super_reviewer = True
+        self.contact.save(update_fields=["is_super_reviewer"])
+
+        with self.assertRaises(ReviewError):
+            self._override(submission, super_reviewer=self.contact)
+
+    def test_a_group_member_cannot_override(self):
+        submission = self._submit()
+        self.member.is_super_reviewer = True
+        self.member.save(update_fields=["is_super_reviewer"])
+
+        with self.assertRaises(ReviewError):
+            self._override(submission, super_reviewer=self.member)
+
+    def test_a_settled_round_cannot_be_overridden(self):
+        submission = self._submit()
+        for assignment in submission.assignments.all():
+            complete_review(
+                assignment=assignment,
+                reviewer=assignment.reviewer,
+                decision=ReviewAssignment.APPROVE,
+                comment="同意。",
+            )
+
+        with self.assertRaises(ReviewError):
+            self._override(submission, decision=ReviewAssignment.REVISE)
+
+    # --- reach: queue and group visibility -----------------------------------
+
+    def test_the_review_entry_is_visible_to_super_reviewers(self):
+        keys = {entry.key for entry in get_entries_for_user(self.super_reviewer)}
+
+        self.assertIn("reviews.queue", keys)
+
+    def test_super_reviewer_sees_a_group_only_while_it_has_an_open_round(self):
+        self.assertFalse(can_view_group(self.super_reviewer, self.group))
+        submission = self._submit()
+        self.assertTrue(can_view_group(self.super_reviewer, self.group))
+
+        for assignment in submission.assignments.all():
+            complete_review(
+                assignment=assignment,
+                reviewer=assignment.reviewer,
+                decision=ReviewAssignment.APPROVE,
+                comment="同意。",
+            )
+
+        self.assertFalse(can_view_group(self.super_reviewer, self.group))
+
+    def test_queue_lists_every_open_round_for_a_super_reviewer(self):
+        other = ProjectGroup.objects.create(name="另一个组", leader=self.contact)
+        other.proposal.save("proposal.pdf", ContentFile(b"%PDF-1.4 p"), save=True)
+        self._submit()
+        submit_for_review(
+            group=other,
+            submitter=self.contact,
+            review_type=REVIEW_TYPE_INNOVATION_START,
+        )
+        self.client.force_login(self.super_reviewer)
+
+        response = self.client.get(reverse("reviews:queue"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "全部进行中")
+        self.assertContains(response, "超级评审项目组")
+        self.assertContains(response, "另一个组")
+        self.assertEqual(len(response.context["open_rounds"]), 2)
+
+    def test_queue_has_no_open_rounds_section_for_a_plain_reviewer(self):
+        self._submit()
+        self.client.force_login(self.reviewer_one)
+
+        response = self.client.get(reverse("reviews:queue"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("open_rounds", response.context)
+        self.assertNotContains(response, "全部进行中")
+
+    # --- the views -----------------------------------------------------------
+
+    def test_super_reviewer_overrides_via_view(self):
+        submission = self._submit()
+        self.client.force_login(self.super_reviewer)
+
+        response = self.client.post(
+            reverse("reviews:override", args=(submission.pk,)),
+            {"override-decision": ReviewAssignment.APPROVE, "override-comment": "同意。"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        submission.refresh_from_db()
+        self.assertEqual(submission.status, ProjectSubmission.APPROVED)
+
+    def test_override_view_requires_a_comment(self):
+        submission = self._submit()
+        self.client.force_login(self.super_reviewer)
+
+        response = self.client.post(
+            reverse("reviews:override", args=(submission.pk,)),
+            {"override-decision": ReviewAssignment.APPROVE, "override-comment": ""},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        submission.refresh_from_db()
+        self.assertEqual(submission.status, ProjectSubmission.PENDING)
+
+    def test_override_view_rejects_plain_reviewers_and_get(self):
+        submission = self._submit()
+        url = reverse("reviews:override", args=(submission.pk,))
+        self.client.force_login(self.reviewer_one)
+        self.assertEqual(
+            self.client.post(url, {"override-decision": "approve", "override-comment": "x"}).status_code,
+            403,
+        )
+
+        self.client.force_login(self.super_reviewer)
+        self.assertEqual(self.client.get(url).status_code, 405)
+
+    def test_group_detail_offers_the_override_form_only_to_super_reviewers(self):
+        submission = self._submit()
+        url = reverse("projects:group_detail", args=(self.group.pk,))
+
+        self.client.force_login(self.reviewer_one)
+        plain = self.client.get(url)
+        self.assertNotContains(plain, "一票决定")
+        self.assertFalse(plain.context["can_override"])
+
+        self.client.force_login(self.super_reviewer)
+        boss = self.client.get(url)
+        self.assertContains(boss, "一票决定")
+        self.assertTrue(boss.context["can_override"])
+        self.assertEqual(
+            boss.context["latest_submission"].pk, submission.pk
+        )
+
+    def test_group_detail_shows_a_released_task_as_released(self):
+        submission = self._submit()
+        self._override(submission)
+        self.client.force_login(self.member)
+
+        response = self.client.get(reverse("projects:group_detail", args=(self.group.pk,)))
+
+        self.assertContains(response, "已释放")
+        self.assertContains(response, "超级评审")
+        # 超级评审同样匿名：页面上不出现其账号。
+        self.assertNotContains(response, self.super_reviewer.username)
+
+    # --- markup stays well formed -------------------------------------------
+
+    def test_queue_markup_stays_balanced(self):
+        """Django 模板不校验 HTML 嵌套：区块对了但标签没配平照样渲染 200。"""
+        submission = self._submit()
+        self.client.force_login(self.super_reviewer)
+
+        with_open_rounds = self.client.get(reverse("reviews:queue"))
+        self._override(submission)
+        with_released = self.client.get(reverse("reviews:queue"))
+
+        for response in (with_open_rounds, with_released):
+            html = response.content.decode()
+            self.assertEqual(html.count("<div"), html.count("</div>"))
+
+    def test_group_detail_markup_stays_balanced(self):
+        self._submit()
+        self.client.force_login(self.super_reviewer)
+
+        response = self.client.get(
+            reverse("projects:group_detail", args=(self.group.pk,))
+        )
+
+        html = response.content.decode()
+        self.assertEqual(html.count("<div"), html.count("</div>"))
+
+
+class AdminRoundDeletionTests(TestCase):
+    """A round is deleted as a whole, together with its review tasks.
+
+    ``ReviewAssignmentAdmin`` still refuses to delete a single task — that would
+    silently change how many reviewers the round needs. But that guard also used
+    to make the round undeletable, because Django asks the task's admin about the
+    tasks a round deletion would carry away. The two rules must coexist: whole
+    rounds go, individual tasks stay.
+    """
+
+    def setUp(self):
+        self.admin = User.objects.create_superuser(
+            username="del-admin", password="Admin-Password-123!"
+        )
+        self.contact = User.objects.create_user(
+            username="del-contact", password="Contact-Password-123!"
+        )
+        self.contact.must_change_password = False
+        self.contact.save(update_fields=["must_change_password"])
+        self.reviewers = [
+            self._make_reviewer(name) for name in ("del-reviewer-one", "del-reviewer-two")
+        ]
+
+        self.group = ProjectGroup.objects.create(name="删除项目组", leader=self.contact)
+        # 只需要「有项目书」这一事实，不读文件内容，所以不落盘。
+        self.group.proposal.name = "project_proposals/existing.pdf"
+        self.group.save(update_fields=["proposal"])
+
+    def _make_reviewer(self, username):
+        user = User.objects.create_user(
+            username=username, password="Reviewer-Password-123!"
+        )
+        user.is_reviewer = True
+        user.must_change_password = False
+        user.save(update_fields=["is_reviewer", "must_change_password"])
+        return user
+
+    def _submit(self):
+        return submit_for_review(
+            group=self.group,
+            submitter=self.contact,
+            review_type=REVIEW_TYPE_INNOVATION_MIDTERM,
+        )
+
+    def _delete_url(self, submission):
+        return reverse(
+            "admin:reviews_projectsubmission_delete", args=(submission.pk,)
+        )
+
+    def test_admin_deletes_a_round_together_with_its_tasks(self):
+        submission = self._submit()
+        submission_pk = submission.pk
+        assignment_pks = list(submission.assignments.values_list("pk", flat=True))
+        self.client.force_login(self.admin)
+
+        response = self.client.post(self._delete_url(submission), {"post": "yes"})
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(ProjectSubmission.objects.filter(pk=submission_pk).exists())
+        self.assertFalse(ReviewAssignment.objects.filter(pk__in=assignment_pks).exists())
+        audit = AuditLog.objects.get(action="reviews.submission.delete")
+        self.assertEqual(audit.detail["submission_id"], submission_pk)
+        self.assertEqual(audit.detail["assignments"], 2)
+
+    def test_admin_deletion_is_refused_once_the_round_is_archived(self):
+        submission = self._submit()
+        ArchivedProposal.objects.create(
+            group=self.group,
+            submission=submission,
+            source_assignment=submission.assignments.first(),
+            file="review_archives/kept.pdf",
+        )
+        submission_pk = submission.pk
+        self.client.force_login(self.admin)
+
+        response = self.client.post(self._delete_url(submission), {"post": "yes"})
+
+        # PROTECT 拦住级联：确认页被重新渲染，对象仍在。
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(ProjectSubmission.objects.filter(pk=submission_pk).exists())
+
+    def test_the_single_task_guard_stays_closed(self):
+        """删整轮放开的同时，单独删一条任务仍然被拒。"""
+        submission = self._submit()
+        assignment = submission.assignments.first()
+
+        self.client.force_login(self.admin)
         response = self.client.get(
             reverse("admin:reviews_reviewassignment_delete", args=(assignment.pk,))
         )

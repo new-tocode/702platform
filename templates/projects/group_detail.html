@@ -116,7 +116,11 @@
                                     <dl class="dl review-lines">
                                         {% for assignment in submission.assignments.all %}
                                             <div>
-                                                <dt>评审人 {{ forloop.counter }}</dt>
+                                                {% if assignment.is_override %}
+                                                    <dt>超级评审</dt>
+                                                {% else %}
+                                                    <dt>评审人 {{ forloop.counter }}</dt>
+                                                {% endif %}
                                                 <dd>
                                                     {% if assignment.is_completed %}
                                                         {{ assignment.get_decision_display }} · {{ assignment.comment|default:"—" }}
@@ -125,6 +129,9 @@
                                                                 <a class="btn btn-sm" href="{% url 'reviews:annotated' assignment.pk %}">下载批注版</a>
                                                             </div>
                                                         {% endif %}
+                                                    {% elif assignment.status == 'released' %}
+                                                        <span class="chip chip-off">已释放</span>
+                                                        <span class="muted">本轮已由超级评审敲定，该评审任务随之结束</span>
                                                     {% else %}
                                                         <span class="muted">待评审</span>
                                                     {% endif %}
@@ -216,6 +223,48 @@
                     {% endif %}
                 </div>
             </div>
+
+            {% if can_override %}
+                <div class="panel">
+                    <div class="panel-head">
+                        <h2>超级评审</h2>
+                        <span class="chip chip-warn">一票决定</span>
+                    </div>
+                    <div class="panel-body">
+                        <p class="help">
+                            你的决定会立即敲定第 {{ latest_submission.round }} 轮，正在等待的
+                            {{ latest_submission.pending_count }} 名评审人会随即被释放。
+                            请先下载项目书阅读，需要时附上批注版。
+                        </p>
+                        <div class="btn-row">
+                            <a class="btn btn-sm" href="{% url 'projects:group_proposal_download' group.pk %}">下载项目书</a>
+                        </div>
+                        <form method="post" action="{% url 'reviews:override' latest_submission.pk %}" enctype="multipart/form-data">
+                            {% csrf_token %}
+                            {{ override_form.non_field_errors }}
+                            <div class="field">
+                                <span class="field-label">{{ override_form.decision.label }}</span>
+                                <div class="radiogroup">{{ override_form.decision }}</div>
+                                {{ override_form.decision.errors }}
+                            </div>
+                            <div class="field">
+                                <label for="{{ override_form.comment.id_for_label }}">{{ override_form.comment.label }}</label>
+                                {{ override_form.comment }}
+                                {{ override_form.comment.errors }}
+                            </div>
+                            <div class="field">
+                                <label for="{{ override_form.annotated_file.id_for_label }}">{{ override_form.annotated_file.label }}</label>
+                                {{ override_form.annotated_file }}
+                                {% if override_form.annotated_file.help_text %}<p class="help">{{ override_form.annotated_file.help_text }}</p>{% endif %}
+                                {{ override_form.annotated_file.errors }}
+                            </div>
+                            <div class="form-actions">
+                                <button class="btn btn-primary" type="submit">提交超级评审</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            {% endif %}
 
             {% if my_assignment %}
                 <div class="panel">
