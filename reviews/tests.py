@@ -2,17 +2,20 @@
 
 import shutil
 import tempfile
+from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
+from core.models import AuditLog
 from core.registry import get_entries_for_user
 from projects.models import ProjectGroup
 
-from .forms import ReviewForm
+from .forms import ReviewForm, ReviewerLeaveForm
 from .models import (
     REVIEW_TYPE_CHOICES,
     REVIEW_TYPE_COMPETITION_PROJECT,
@@ -22,17 +25,21 @@ from .models import (
     ArchivedProposal,
     ProjectSubmission,
     ReviewAssignment,
+    ReviewerLeave,
 )
 from .services import (
     ReviewError,
     _settle_submission,
+    clear_reviewer_leave,
     complete_review,
+    set_reviewer_leave,
     submit_for_review,
 )
 
 
 User = get_user_model()
 MEDIA_ROOT = tempfile.mkdtemp()
+LEAVE_MEDIA_ROOT = tempfile.mkdtemp()
 
 #: A round type needing two reviewers, so the historic two-reviewer assertions hold.
 TWO_REVIEWER_TYPE = REVIEW_TYPE_INNOVATION_MIDTERM
@@ -591,3 +598,330 @@ class ReviewTypeQuotaTests(TestCase):
         for value, _label in REVIEW_TYPE_CHOICES:
             with self.subTest(review_type=value):
                 self.assertIn(value, REVIEWER_QUOTA)
+
+
+@override_settings(MEDIA_ROOT=LEAVE_MEDIA_ROOT)
+class ReviewerLeaveTests(TestCase):
+    """Review leave suspends new review requests for a window, then self-restores.
+
+    Eligibility is never stored as a flag — it is derived from the window — so
+    "恢复" needs no scheduled job. These tests pin that down.
+    """
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(LEAVE_MEDIA_ROOT, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
+        self.admin = User.objects.create_superuser(
+            username="leave-admin",
+            password="Admin-Password-123!",
+        )
+        self.contact = User.objects.create_user(
+            username="leave-contact",
+            password="Contact-Password-123!",
+        )
+        self.contact.must_change_password = False
+        self.contact.save(update_fields=["must_change_password"])
+        self.reviewer = self._make_reviewer("leave-reviewer")
+        self.member = User.objects.create_user(
+            username="leave-member",
+            password="Member-Password-123!",
+        )
+        self.member.must_change_password = False
+        self.member.save(update_fields=["must_change_password"])
+
+        self.group = ProjectGroup.objects.create(name="请假项目组", leader=self.contact)
+        self.group.proposal.save(
+            "proposal.pdf", ContentFile(b"%PDF-1.4 proposal"), save=True
+        )
+
+    def _make_reviewer(self, username):
+        user = User.objects.create_user(
+            username=username, password="Reviewer-Password-123!"
+        )
+        user.is_reviewer = True
+        user.must_change_password = False
+        user.save(update_fields=["is_reviewer", "must_change_password"])
+        return user
+
+    def _leave(self, *, reviewer=None, starts_in=-1, ends_in=7, reason=""):
+        """Create a leave window relative to now, in days."""
+        now = timezone.now()
+        return ReviewerLeave.objects.create(
+            reviewer=reviewer or self.reviewer,
+            starts_at=now + timedelta(days=starts_in),
+            ends_at=now + timedelta(days=ends_in),
+            reason=reason,
+        )
+
+    def _draw_one(self):
+        """Submit a single-reviewer round; returns the drawn reviewer."""
+        submission = submit_for_review(
+            group=self.group,
+            submitter=self.contact,
+            review_type=REVIEW_TYPE_INNOVATION_START,
+        )
+        return submission.assignments.get().reviewer
+
+    # --- the window itself ---------------------------------------------------
+
+    def test_state_tracks_the_window(self):
+        self.assertEqual(
+            self._leave(starts_in=1, ends_in=7).state, ReviewerLeave.LEAVE_UPCOMING
+        )
+        self.assertEqual(
+            self._leave(starts_in=-1, ends_in=1).state, ReviewerLeave.LEAVE_ACTIVE
+        )
+        self.assertEqual(
+            self._leave(starts_in=-7, ends_in=-1).state, ReviewerLeave.LEAVE_ENDED
+        )
+
+    def test_covers_only_its_own_window(self):
+        leave = self._leave(starts_in=-1, ends_in=2)
+
+        self.assertTrue(leave.covers(leave.starts_at))
+        self.assertTrue(leave.covers(leave.ends_at - timedelta(seconds=1)))
+        self.assertFalse(leave.covers(leave.starts_at - timedelta(seconds=1)))
+        # The end is exclusive: at ends_at the reviewer is back on duty.
+        self.assertFalse(leave.covers(leave.ends_at))
+
+    # --- effect on reviewer draws -------------------------------------------
+
+    def test_reviewer_on_leave_is_not_drawn(self):
+        other = self._make_reviewer("leave-reviewer-two")
+        self._leave(starts_in=-1, ends_in=7)
+
+        self.assertEqual(self._draw_one(), other)
+
+    def test_expired_leave_restores_eligibility(self):
+        """No job runs at ends_at — the reviewer is simply eligible again."""
+        other = self._make_reviewer("leave-reviewer-two")
+        self._leave(starts_in=-7, ends_in=-1)
+        self._leave(reviewer=other, starts_in=-1, ends_in=7)
+
+        self.assertEqual(self._draw_one(), self.reviewer)
+
+    def test_leave_that_has_not_started_does_not_exclude_yet(self):
+        other = self._make_reviewer("leave-reviewer-two")
+        self._leave(starts_in=1, ends_in=7)
+        self._leave(reviewer=other, starts_in=-1, ends_in=7)
+
+        self.assertEqual(self._draw_one(), self.reviewer)
+
+    def test_shortage_message_mentions_how_many_are_on_leave(self):
+        self._leave(starts_in=-1, ends_in=7)
+
+        with self.assertRaises(ReviewError) as caught:
+            submit_for_review(
+                group=self.group,
+                submitter=self.contact,
+                review_type=REVIEW_TYPE_INNOVATION_MIDTERM,
+            )
+
+        self.assertIn("另有 1 人请假", str(caught.exception))
+
+    def test_clearing_leave_restores_immediately(self):
+        other = self._make_reviewer("leave-reviewer-two")
+        self._leave(starts_in=-1, ends_in=7)
+        self._leave(reviewer=other, starts_in=-1, ends_in=7)
+        with self.assertRaises(ReviewError):
+            submit_for_review(
+                group=self.group,
+                submitter=self.contact,
+                review_type=REVIEW_TYPE_INNOVATION_START,
+            )
+
+        clear_reviewer_leave(reviewer=self.reviewer, actor=self.reviewer)
+
+        self.assertEqual(self._draw_one(), self.reviewer)
+
+    # --- registering and clearing -------------------------------------------
+
+    def test_registering_twice_edits_the_same_window(self):
+        now = timezone.now()
+        set_reviewer_leave(
+            reviewer=self.reviewer,
+            starts_at=now,
+            ends_at=now + timedelta(days=3),
+            actor=self.reviewer,
+        )
+        leave = set_reviewer_leave(
+            reviewer=self.reviewer,
+            starts_at=now,
+            ends_at=now + timedelta(days=10),
+            actor=self.reviewer,
+        )
+
+        self.assertEqual(ReviewerLeave.objects.filter(reviewer=self.reviewer).count(), 1)
+        self.assertEqual(leave.ends_at, now + timedelta(days=10))
+
+    def test_leave_must_end_in_the_future(self):
+        now = timezone.now()
+
+        with self.assertRaises(ReviewError):
+            set_reviewer_leave(
+                reviewer=self.reviewer,
+                starts_at=now - timedelta(days=2),
+                ends_at=now - timedelta(days=1),
+                actor=self.reviewer,
+            )
+
+    def test_leave_must_end_after_it_starts(self):
+        now = timezone.now()
+
+        with self.assertRaises(ReviewError):
+            set_reviewer_leave(
+                reviewer=self.reviewer,
+                starts_at=now + timedelta(days=5),
+                ends_at=now + timedelta(days=1),
+                actor=self.reviewer,
+            )
+
+    def test_leave_requires_reviewer_qualification(self):
+        now = timezone.now()
+
+        with self.assertRaises(ReviewError):
+            set_reviewer_leave(
+                reviewer=self.member,
+                starts_at=now,
+                ends_at=now + timedelta(days=1),
+                actor=self.member,
+            )
+
+    def test_clearing_without_an_open_leave_is_an_error(self):
+        with self.assertRaises(ReviewError):
+            clear_reviewer_leave(reviewer=self.reviewer, actor=self.reviewer)
+
+    # --- the member-centre form and views -----------------------------------
+
+    def test_leave_form_parses_datetime_local_values(self):
+        starts = timezone.localtime(timezone.now() + timedelta(days=1))
+        ends = starts + timedelta(days=3)
+        form = ReviewerLeaveForm(
+            data={
+                "starts_at": starts.strftime("%Y-%m-%dT%H:%M"),
+                "ends_at": ends.strftime("%Y-%m-%dT%H:%M"),
+                "reason": "考试周",
+            }
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertTrue(timezone.is_aware(form.cleaned_data["starts_at"]))
+
+    def test_leave_form_rejects_an_end_before_the_start(self):
+        starts = timezone.localtime(timezone.now() + timedelta(days=5))
+        form = ReviewerLeaveForm(
+            data={
+                "starts_at": starts.strftime("%Y-%m-%dT%H:%M"),
+                "ends_at": (starts - timedelta(days=2)).strftime("%Y-%m-%dT%H:%M"),
+                "reason": "",
+            }
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("ends_at", form.errors)
+
+    def test_leave_views_require_reviewer_qualification(self):
+        self.client.force_login(self.member)
+
+        self.assertEqual(
+            self.client.post(reverse("reviews:set_leave"), {}).status_code, 403
+        )
+        self.assertEqual(
+            self.client.post(reverse("reviews:cancel_leave")).status_code, 403
+        )
+
+    def test_leave_views_reject_get(self):
+        self.client.force_login(self.reviewer)
+
+        self.assertEqual(self.client.get(reverse("reviews:set_leave")).status_code, 405)
+        self.assertEqual(self.client.get(reverse("reviews:cancel_leave")).status_code, 405)
+
+    def test_reviewer_registers_and_cancels_leave_via_view(self):
+        starts = timezone.localtime(timezone.now())
+        ends = starts + timedelta(days=4)
+        self.client.force_login(self.reviewer)
+
+        response = self.client.post(
+            reverse("reviews:set_leave"),
+            {
+                "starts_at": starts.strftime("%Y-%m-%dT%H:%M"),
+                "ends_at": ends.strftime("%Y-%m-%dT%H:%M"),
+                "reason": "考试周",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        leave = ReviewerLeave.objects.get(reviewer=self.reviewer)
+        self.assertEqual(leave.reason, "考试周")
+        self.assertEqual(leave.created_by, self.reviewer)
+        home = self.client.get(reverse("accounts:member_home"))
+        self.assertContains(home, "请假中")
+
+        cancel = self.client.post(reverse("reviews:cancel_leave"))
+
+        self.assertEqual(cancel.status_code, 302)
+        self.assertFalse(ReviewerLeave.objects.filter(reviewer=self.reviewer).exists())
+
+    def test_member_home_hides_the_leave_panel_from_non_reviewers(self):
+        self.client.force_login(self.member)
+
+        response = self.client.get(reverse("accounts:member_home"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "评审请假")
+
+    def test_member_home_shows_when_recovery_happens(self):
+        leave = self._leave(starts_in=-1, ends_in=2)
+        self.client.force_login(self.reviewer)
+
+        response = self.client.get(reverse("accounts:member_home"))
+
+        self.assertContains(response, "请假中")
+        self.assertContains(response, timezone.localtime(leave.ends_at).strftime("%m-%d %H:%M"))
+
+    # --- administrator side --------------------------------------------------
+
+    def test_admin_lists_every_leave_with_editable_times(self):
+        self._leave(starts_in=-1, ends_in=2, reason="考试周")
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse("admin:reviews_reviewerleave_changelist"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "leave-reviewer")
+        self.assertContains(response, "考试周")
+        self.assertContains(response, "请假中")
+        # list_editable renders the two timestamps as inputs on the changelist.
+        self.assertContains(response, "form-0-starts_at_0")
+        self.assertContains(response, "form-0-ends_at_1")
+
+    def test_admin_can_move_the_recovery_time(self):
+        leave = self._leave(starts_in=-1, ends_in=2)
+        new_end = timezone.localtime(leave.ends_at + timedelta(days=3))
+        start = timezone.localtime(leave.starts_at)
+        self.client.force_login(self.admin)
+
+        response = self.client.post(
+            reverse("admin:reviews_reviewerleave_changelist"),
+            {
+                "form-TOTAL_FORMS": "1",
+                "form-INITIAL_FORMS": "1",
+                "form-MIN_NUM_FORMS": "0",
+                "form-MAX_NUM_FORMS": "1000",
+                "form-0-id": str(leave.pk),
+                "form-0-starts_at_0": start.strftime("%Y-%m-%d"),
+                "form-0-starts_at_1": start.strftime("%H:%M:%S"),
+                "form-0-ends_at_0": new_end.strftime("%Y-%m-%d"),
+                "form-0-ends_at_1": new_end.strftime("%H:%M:%S"),
+                "_save": "保存",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        leave.refresh_from_db()
+        self.assertEqual(leave.ends_at, new_end.replace(microsecond=0))
+        self.assertTrue(
+            AuditLog.objects.filter(action="reviews.leave.admin_save").exists()
+        )

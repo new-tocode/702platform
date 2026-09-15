@@ -20,6 +20,7 @@ from .models import (
     ArchivedProposal,
     ProjectSubmission,
     ReviewAssignment,
+    ReviewerLeave,
 )
 
 
@@ -32,14 +33,25 @@ class ReviewError(Exception):
 
 
 def _pick_reviewers(*, group, submitter, count):
-    """Randomly pick reviewers, excluding the submitter and the group's members."""
+    """Randomly pick reviewers, skipping the submitter, the group, and anyone on leave.
+
+    Leave is checked here, at draw time, rather than by flipping
+    ``is_reviewer``: the qualification never changes, so nothing has to be
+    restored when a leave window ends.
+    """
     excluded = set(group.members.values_list("pk", flat=True))
     excluded.add(submitter.pk)
+    on_leave = set(ReviewerLeave.objects.active().values_list("reviewer_id", flat=True))
     candidates = list(
-        User.objects.filter(is_reviewer=True, is_active=True).exclude(pk__in=excluded)
+        User.objects.filter(is_reviewer=True, is_active=True)
+        .exclude(pk__in=excluded)
+        .exclude(pk__in=on_leave)
     )
     if len(candidates) < count:
-        raise ReviewError(f"当前可用的评审人不足 {count} 人，无法提交审核。")
+        leave_note = f"（另有 {len(on_leave)} 人请假）" if on_leave else ""
+        raise ReviewError(
+            f"当前可用的评审人不足 {count} 人{leave_note}，无法提交审核。"
+        )
     return random.sample(candidates, count)
 
 
@@ -220,3 +232,100 @@ def complete_review(
         extra={"request_id": getattr(request, "request_id", "-")},
     )
     return locked
+
+
+def open_leave_for(reviewer, at=None):
+    """The reviewer's not-yet-ended leave, if they have one."""
+    return (
+        ReviewerLeave.objects.filter(reviewer=reviewer)
+        .open(at)
+        .order_by("-starts_at", "-id")
+        .first()
+    )
+
+
+def set_reviewer_leave(*, reviewer, starts_at, ends_at, reason="", actor, request=None):
+    """Register or adjust the reviewer's open leave window.
+
+    A reviewer holds at most one open window, so registering again edits that
+    one instead of stacking a second. This is also how a reviewer or an
+    administrator moves the recovery time earlier or later.
+    """
+    if not reviewer.is_reviewer:
+        raise ReviewError("该账号没有评审资格，无需请假。")
+    if ends_at <= starts_at:
+        raise ReviewError("请假结束时间必须晚于开始时间。")
+    if ends_at <= timezone.now():
+        raise ReviewError("请假结束时间必须晚于当前时间。")
+
+    with transaction.atomic():
+        leave = (
+            ReviewerLeave.objects.select_for_update()
+            .filter(reviewer=reviewer)
+            .open()
+            .order_by("-starts_at", "-id")
+            .first()
+        )
+        created = leave is None
+        if created:
+            leave = ReviewerLeave(reviewer=reviewer)
+        leave.starts_at = starts_at
+        leave.ends_at = ends_at
+        leave.reason = reason
+        leave.created_by = actor
+        leave.save()
+
+    record_audit(
+        action="reviews.leave.set",
+        user=actor,
+        target=leave,
+        detail={
+            "reviewer_id": reviewer.pk,
+            "created": created,
+            "ends_at": ends_at.isoformat(),
+        },
+        request=request,
+    )
+    logger.info(
+        "reviews.leave.set reviewer_id=%s leave_id=%s created=%s ends_at=%s actor=%s",
+        reviewer.pk,
+        leave.pk,
+        created,
+        ends_at.isoformat(),
+        actor.get_username(),
+        extra={"request_id": getattr(request, "request_id", "-")},
+    )
+    return leave
+
+
+def clear_reviewer_leave(*, reviewer, actor, request=None):
+    """Drop the reviewer's open leave window, restoring them immediately.
+
+    Nothing restores eligibility because nothing ever removed it — deleting the
+    window is the whole operation. The removal is kept in the audit log.
+    """
+    with transaction.atomic():
+        open_leaves = ReviewerLeave.objects.select_for_update().filter(
+            reviewer=reviewer
+        ).open()
+        removed = open_leaves.count()
+        if removed:
+            open_leaves.delete()
+
+    if not removed:
+        raise ReviewError("当前没有可取消的请假。")
+
+    record_audit(
+        action="reviews.leave.clear",
+        user=actor,
+        target=reviewer,
+        detail={"reviewer_id": reviewer.pk, "removed": removed},
+        request=request,
+    )
+    logger.info(
+        "reviews.leave.clear reviewer_id=%s removed=%s actor=%s",
+        reviewer.pk,
+        removed,
+        actor.get_username(),
+        extra={"request_id": getattr(request, "request_id", "-")},
+    )

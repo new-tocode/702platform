@@ -9,6 +9,7 @@ from django.contrib.auth.views import LoginView as DjangoLoginView, LogoutView
 from django.db import transaction
 from django.shortcuts import redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_http_methods
 from django.views.generic.edit import FormView
@@ -164,6 +165,23 @@ def member_home(request):
     # 平台概览数字只对管理员与项目组联系人呈现，普通成员与访客都不显示。
     if can_view_platform_overview(request.user):
         context["overview"] = platform_overview()
+    # 评审请假面板只对有评审资格的账号呈现；其他人不必触碰 reviews。
+    if request.user.is_reviewer:
+        from reviews.forms import ReviewerLeaveForm
+        from reviews.services import open_leave_for
+
+        leave = open_leave_for(request.user)
+        initial = (
+            {
+                "starts_at": leave.starts_at,
+                "ends_at": leave.ends_at,
+                "reason": leave.reason,
+            }
+            if leave
+            else {"starts_at": timezone.localtime(timezone.now())}
+        )
+        context["reviewer_leave"] = leave
+        context["leave_form"] = ReviewerLeaveForm(initial=initial)
     return render(request, "accounts/member_home.html", context)
 
 

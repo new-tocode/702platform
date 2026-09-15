@@ -11,6 +11,8 @@ __pycache__/
 staticfiles/
 mediafiles/uploads/
 mediafiles/project_proposals/
+mediafiles/review_annotations/
+mediafiles/review_archives/
 logs/*.log
 
 # Editors

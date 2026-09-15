@@ -26,8 +26,66 @@
         <div>
             <div class="k">评审资格</div>
             <div class="v mono">{% if user.is_reviewer %}有{% else %}无{% endif %}</div>
+            {% if reviewer_leave.is_active %}
+                <div class="help">请假中，{{ reviewer_leave.ends_at|date:"m-d H:i" }} 恢复</div>
+            {% endif %}
         </div>
     </div>
+
+    {% if user.is_reviewer %}
+        <div class="panel reveal">
+            <div class="panel-head">
+                <h2>评审请假</h2>
+                {% if reviewer_leave.is_active %}
+                    <span class="chip chip-warn">请假中</span>
+                {% elif reviewer_leave %}
+                    <span class="chip chip-off">已安排</span>
+                {% endif %}
+            </div>
+            <div class="panel-body">
+                <div class="col-narrow">
+                    {% if reviewer_leave %}
+                        <p class="help">
+                            当前请假：{{ reviewer_leave.starts_at|date:"Y-m-d H:i" }} 至 {{ reviewer_leave.ends_at|date:"Y-m-d H:i" }}{% if reviewer_leave.reason %} · {{ reviewer_leave.reason }}{% endif %}。
+                            修改下面任一时间即可调整恢复评审的时间。
+                        </p>
+                    {% else %}
+                        <p class="help">请假期间不会被分配新的评审请求，到点自动恢复；已经分配给你的评审任务不受影响。</p>
+                    {% endif %}
+                    <form method="post" action="{% url 'reviews:set_leave' %}">
+                        {% csrf_token %}
+                        <div class="field">
+                            <label for="{{ leave_form.starts_at.id_for_label }}">{{ leave_form.starts_at.label }}</label>
+                            {{ leave_form.starts_at }}
+                            {{ leave_form.starts_at.errors }}
+                        </div>
+                        <div class="field">
+                            <label for="{{ leave_form.ends_at.id_for_label }}">{{ leave_form.ends_at.label }}</label>
+                            {{ leave_form.ends_at }}
+                            {% if leave_form.ends_at.help_text %}<p class="help">{{ leave_form.ends_at.help_text }}</p>{% endif %}
+                            {{ leave_form.ends_at.errors }}
+                        </div>
+                        <div class="field">
+                            <label for="{{ leave_form.reason.id_for_label }}">{{ leave_form.reason.label }}</label>
+                            {{ leave_form.reason }}
+                            {{ leave_form.reason.errors }}
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn btn-primary" type="submit">保存请假</button>
+                        </div>
+                    </form>
+                    {% if reviewer_leave %}
+                        <form method="post" action="{% url 'reviews:cancel_leave' %}">
+                            {% csrf_token %}
+                            <div class="btn-row">
+                                <button class="btn btn-danger btn-sm" type="submit">取消请假</button>
+                            </div>
+                        </form>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    {% endif %}
 
     {% if overview %}
         <div class="panel reveal">
