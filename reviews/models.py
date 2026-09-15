@@ -280,3 +280,103 @@ class ArchivedProposal(models.Model):
 
     def __str__(self):
         return f"{self.group} 第 {self.submission.round} 轮的批注版项目书"
+
+
+class ReviewerLeaveQuerySet(models.QuerySet):
+    def active(self, at=None):
+        """Leaves whose window covers ``at`` (defaults to now)."""
+        moment = at or timezone.now()
+        return self.filter(starts_at__lte=moment, ends_at__gt=moment)
+
+    def open(self, at=None):
+        """Leaves that have not ended yet — the ones a reviewer may still edit."""
+        moment = at or timezone.now()
+        return self.filter(ends_at__gt=moment)
+
+
+class ReviewerLeave(models.Model):
+    """A window during which a reviewer takes no new review requests.
+
+    Leave never touches ``User.is_reviewer``: the qualification stays and the
+    reviewer is merely skipped when a round draws its reviewers. Because the
+    window is stored as two timestamps, eligibility returns on its own once
+    ``ends_at`` passes — there is no scheduled job to run and nothing to undo.
+
+    A reviewer has at most one open window at a time; re-registering edits that
+    window rather than stacking a second one. Overlap cannot be expressed as a
+    database constraint because PostgreSQL index predicates must be immutable
+    and ``now()`` is not, so the rule lives in ``reviews.services``.
+    """
+
+    LEAVE_UPCOMING = "upcoming"
+    LEAVE_ACTIVE = "active"
+    LEAVE_ENDED = "ended"
+    STATE_LABELS = {
+        LEAVE_UPCOMING: "未开始",
+        LEAVE_ACTIVE: "请假中",
+        LEAVE_ENDED: "已结束",
+    }
+
+    reviewer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="reviewer_leaves",
+        verbose_name="评审人",
+    )
+    starts_at = models.DateTimeField("请假开始")
+    ends_at = models.DateTimeField("请假结束")
+    reason = models.TextField("事由", blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="created_reviewer_leaves",
+        verbose_name="登记人",
+        help_text="首次登记该请假的账号：本人自助登记时为自己，管理员代登记时为该管理员。",
+    )
+    created_at = models.DateTimeField("创建时间", auto_now_add=True)
+    updated_at = models.DateTimeField("更新时间", auto_now=True)
+
+    objects = ReviewerLeaveQuerySet.as_manager()
+
+    class Meta:
+        verbose_name = "评审人请假"
+        verbose_name_plural = "评审人请假"
+        ordering = ("-starts_at", "-id")
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(ends_at__gt=models.F("starts_at")),
+                name="reviewer_leave_ends_after_starts",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=("reviewer", "starts_at", "ends_at")),
+            models.Index(fields=("starts_at", "ends_at")),
+        ]
+
+    def __str__(self):
+        return f"{self.reviewer} 请假 {self.starts_at:%Y-%m-%d %H:%M} 至 {self.ends_at:%Y-%m-%d %H:%M}"
+
+    def covers(self, moment=None):
+        """Whether this window covers ``moment`` (defaults to now)."""
+        moment = moment or timezone.now()
+        return self.starts_at <= moment < self.ends_at
+
+    @property
+    def state(self):
+        """Which of the three states this window is in right now."""
+        now = timezone.now()
+        if self.starts_at > now:
+            return self.LEAVE_UPCOMING
+        if self.ends_at > now:
+            return self.LEAVE_ACTIVE
+        return self.LEAVE_ENDED
+
+    @property
+    def is_active(self):
+        return self.state == self.LEAVE_ACTIVE
+
+    @property
+    def state_label(self):
+        return self.STATE_LABELS[self.state]
