@@ -15,6 +15,7 @@ from django.utils import timezone
 
 from core.audit import record_audit
 from projects.models import ProjectGroup
+from projects.permissions import is_super_reviewer
 
 from .models import (
     REVIEWER_QUOTA,
@@ -228,8 +229,12 @@ def complete_review(
             .select_related("submission")
             .get(pk=assignment.pk)
         )
-        if locked.status == ReviewAssignment.COMPLETED:
-            raise ReviewError("你已经完成过该评审。")
+        # Any non-pending state is final: COMPLETED means this reviewer has
+        # already voted, RELEASED means a super reviewer settled the round
+        # first. Without this guard a released task could be revived into the
+        # record after the round was decided.
+        if locked.status != ReviewAssignment.PENDING:
+            raise ReviewError("该评审任务已经处理过了，无法再次提交。")
 
         locked.status = ReviewAssignment.COMPLETED
         locked.decision = decision
@@ -262,6 +267,103 @@ def complete_review(
         decision,
         annotated_file is not None,
         reviewer.get_username(),
+        extra={"request_id": getattr(request, "request_id", "-")},
+    )
+    return locked
+
+
+def can_override_review(*, submission, user):
+    """Whether this user may decide this round outright with a single vote.
+
+    One definition, used both to decide whether the UI offers the override and
+    as the service's own guard. The conflict-of-interest rules match an ordinary
+    reviewer's, and a super reviewer who already holds a task on this round must
+    use that task instead — otherwise the same round would be counted twice.
+    """
+    if not is_super_reviewer(user):
+        return False
+    if submission is None or submission.status != ProjectSubmission.PENDING:
+        return False
+    if user.pk == submission.submitted_by_id:
+        return False
+    if submission.group.members.filter(pk=user.pk).exists():
+        return False
+    return not submission.assignments.filter(reviewer=user).exists()
+
+
+def override_review(
+    *,
+    submission,
+    super_reviewer,
+    decision,
+    comment,
+    annotated_file=None,
+    request=None,
+):
+    """Settle a round outright with a super reviewer's single vote.
+
+    This deliberately does **not** go through :func:`_settle_submission`. That
+    aggregation answers "did every reviewer approve?", so an earlier 需修改 from
+    an ordinary reviewer would overrule the super reviewer — which is precisely
+    the decision this path exists to make. The verdict is written directly and
+    the reviewers still waiting are released.
+    """
+    if decision not in dict(ReviewAssignment.DECISION_CHOICES):
+        raise ReviewError("请选择评审决定。")
+
+    with transaction.atomic():
+        locked = ProjectSubmission.objects.select_for_update().get(pk=submission.pk)
+        if not can_override_review(submission=locked, user=super_reviewer):
+            raise ReviewError(
+                "无法对本轮行使超级评审权：本轮可能已出结论、你已被分配为本轮评审人"
+                "（请直接提交那条评审任务），或你与本项目组存在关联。"
+            )
+
+        now = timezone.now()
+        ReviewAssignment.objects.create(
+            submission=locked,
+            reviewer=super_reviewer,
+            status=ReviewAssignment.COMPLETED,
+            decision=decision,
+            comment=comment,
+            annotated_file=annotated_file or "",
+            completed_at=now,
+            is_override=True,
+        )
+        # Whoever was still being waited on is let go: the round no longer needs
+        # them. Completed rows stay as they are — their verdict is history.
+        released = locked.assignments.filter(status=ReviewAssignment.PENDING).update(
+            status=ReviewAssignment.RELEASED
+        )
+
+        locked.status = (
+            ProjectSubmission.APPROVED
+            if decision == ReviewAssignment.APPROVE
+            else ProjectSubmission.NEEDS_REVISION
+        )
+        locked.decided_at = now
+        locked.save(update_fields=["status", "decided_at"])
+
+        if locked.status == ProjectSubmission.APPROVED:
+            _archive_annotated_proposals(locked)
+
+    record_audit(
+        action="reviews.submission.override",
+        user=super_reviewer,
+        target=locked,
+        detail={
+            "submission_id": locked.pk,
+            "decision": decision,
+            "released": released,
+        },
+        request=request,
+    )
+    logger.info(
+        "reviews.submission.override submission_id=%s decision=%s released=%s actor=%s",
+        locked.pk,
+        decision,
+        released,
+        super_reviewer.get_username(),
         extra={"request_id": getattr(request, "request_id", "-")},
     )
     return locked

@@ -41,9 +41,26 @@ def can_manage_group(user, group):
     )
 
 
+def is_super_reviewer(user):
+    """Whether the user holds the one-vote override qualification."""
+    return bool(
+        user and user.is_authenticated and getattr(user, "is_super_reviewer", False)
+    )
+
+
 def is_project_reviewer(user):
-    """Whether the user holds the reviewer qualification."""
-    return bool(user and user.is_authenticated and getattr(user, "is_reviewer", False))
+    """Whether the user may work in the review app.
+
+    True for both the ordinary qualification and the super-reviewer one: a super
+    reviewer's whole job lives in the review queue even when they personally
+    hold no review tasks.
+    """
+    if not (user and user.is_authenticated):
+        return False
+    return bool(
+        getattr(user, "is_reviewer", False)
+        or getattr(user, "is_super_reviewer", False)
+    )
 
 
 def can_view_group(user, group):
@@ -53,7 +70,12 @@ def can_view_group(user, group):
     if user.is_staff or group.members.filter(pk=user.pk).exists():
         return True
     # Local import keeps the projects app free of a hard dependency on reviews.
-    from reviews.models import ReviewAssignment
+    from reviews.models import ProjectSubmission, ReviewAssignment
+
+    if is_super_reviewer(user):
+        # A super reviewer's reach is the in-progress reviews — they need the
+        # proposal to decide one — not every group on the platform.
+        return group.submissions.filter(status=ProjectSubmission.PENDING).exists()
 
     return ReviewAssignment.objects.filter(
         reviewer=user,

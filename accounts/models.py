@@ -30,6 +30,15 @@ class User(AbstractUser):
         default=False,
         help_text="启用后可进入“评审”应用，审阅分配到自己的项目书并给出评审意见。",
     )
+    is_super_reviewer = models.BooleanField(
+        "超级评审资格",
+        default=False,
+        help_text=(
+            "启用后可在“评审”中看到全部进行中的评审，并对其直接通过或打回："
+            "该票单独决定本轮结论，原本等待中的评审人随即被释放。"
+            "与“评审资格”相互独立——只有同时具备评审资格，才会被随机抽为普通评审人。"
+        ),
+    )
 
     objects = UserManager()
 

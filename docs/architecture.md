@@ -108,7 +108,10 @@
 User（继承 AbstractUser，项目自定义，经 AUTH_USER_MODEL 生效）
   - 复用默认字段：username / password / is_staff / is_active / groups / date_joined
   - must_change_password   bool  首次登录强制改密标记（默认 True）
-  - 角色通过 Group 表达，不新增 role 字段
+  - is_reviewer           bool  评审资格（默认 False）
+  - is_super_reviewer     bool  超级评审资格（默认 False）
+  - 权限口径以用户上的布尔标志表达（is_staff／is_reviewer／is_super_reviewer），不新增 role 字段；
+    Django auth.Group 只用于内部通知的投递范围
 
 Profile（User 一对一扩展）
   - user          OneToOne(User)
@@ -289,10 +292,11 @@ ProjectSubmission（每轮送审）
 ReviewAssignment（评审任务）
   - submission     FK(ProjectSubmission)
   - reviewer       FK(User，须有 is_reviewer 资格)
-  - status         pending（待评审）| completed（已完成）
+  - status         pending（待评审）| completed（已完成）| released（已释放）
   - decision       approve（通过）| revise（需修改）
   - comment        评审意见
   - annotated_file 批注版项目书（选填，doc/docx/pdf）
+  - is_override    该行来自超级评审的一票决定
   - assigned_at / completed_at
   - 唯一约束：(submission, reviewer)
 
@@ -348,8 +352,19 @@ ReviewerLeave（评审人请假）
 - **只在「任务待评审 且 该轮尚未判结论」时开放**（`ReviewAssignmentAdmin.has_change_permission` 逐对象判定），其余记录与另外两个 reviews admin 一样全字段只读。理由：结论一旦落下，这条任务就是「谁判了什么」的记录，换人等于把结论、意见与批注文件记到别人名下。
 - 由于任务仍是 `pending`、该轮的待评审任务数不变，**换人不需要重新判结论，也完全不触碰归档**。被替换者那一行是**原地改派**而不是删除（保持「每（轮次，评审人）恰好一条任务」），换人前的持有人记在审计日志里。
 - 候选名单来自与送审抽人**同一个** `eligible_reviewers()`（排除提交人、本组成员、请假中、非 `is_reviewer` 或已停用），并额外排除本轮已有的评审人；服务层对这些规则再校验一遍，所以绕过表单的调用方也拦得住。
-- `ReviewAssignment` 在 Admin 中禁止新增与删除：删除一条任务会**悄悄改变该轮所需的评审人数**。
+- `ReviewAssignment` 在 Admin 中禁止新增与删除：删除一条任务会**悄悄改变该轮所需的评审人数**。但**整轮可以删**——`ProjectSubmissionAdmin.get_deleted_objects` 专门豁免了这一项权限，删除的单位因此是「整轮」（Django 的级联检查会拿被级联的评审任务去问评审任务自己的 admin，不豁免就会连整轮也删不掉）。已通过并归档的轮次由 `ArchivedProposal` 的 PROTECT 挡住，删不掉；删除写审计日志。
 - 写入必须经 `reassign_reviewer()`（`save_model` 不使用 `form.save()`），校验、加锁（沿用 submission → assignment 的锁序）与审计都在服务层。
+
+**超级评审（一票敲定）**
+
+- 具备 `User.is_super_reviewer` 的账号在「评审」里除自己的任务外，还能看到**全部进行中的评审**，并对其直接**通过或打回**。用途是把卡住或存在争议的轮次直接了结。
+- **这一票单独敲定本轮，不走 `_settle_submission`**。那条汇总回答的是「是否每个评审人都通过了」，因此如果某个普通评审人先判了「需修改」，再走汇总就会把超级评审的决定顶回去——而那正是这条路径要做的决定。所以结论直接写入，同时统计照常不受影响。
+- 打回映射为 `needs_revision`（需修改）：项目组可修改后重新送审，与三态流程、单轮次约束完全一致。
+- 敲定时，本轮仍**等待中**的评审任务变为 `released`（已释放）：不再计入待办与提醒、不能再提交，但行保留，名单上仍看得出曾请过谁。**已完成**的任务原样保留——它们的结论是历史。
+- 超级评审那一票自身记成一条 `is_override=True` 的评审任务，因此批注文件、意见文字、通过时的归档全部复用现成机制（`_archive_annotated_proposals` 会一并收走此前普通评审人已上传的批注版）。页面只显示「超级评审」，不显示账号，匿名口径不变。
+- 可否行使该权由 `can_override_review()` 一处判定，**页面显隐与服务层守卫共用**：仅限 `pending` 轮次；提交人、项目组成员不得行使（利益冲突）；**已在本轮持有普通评审任务的超级评审人不得行使**（请直接提交那条任务，否则同一轮会被记两票）。
+- 因为「已释放」不等于「待评审」，请假、待办提醒、管理员改派、单轮次约束这些机制天然把它排除在外。
+- 相配套的守卫：`complete_review()` 由「拒绝 `completed`」改为「**非 `pending` 一律拒绝**」。否则被释放的评审人仍能提交，把任务从「已释放」翻成「已完成」——在该轮已经出结论之后改写记录。
 
 ### 6.8 core
 
@@ -398,6 +413,7 @@ MediaFile（统一媒体库，供各内容模型通过 M2M/FK 引用）
 | 项目组成员 | 已加入至少一个项目组 | `ProjectGroup.members` 归属 |
 | 项目组联系人 | 某个项目组的 leader | **对象级、计算得出**：`ProjectGroup.leader == user` |
 | 评审人 | 具备评审资格、可审阅项目书 | **用户属性**：`User.is_reviewer`（管理员在后台发放） |
+| 超级评审 | 可看到全部进行中的评审，并对其直接通过或打回：该票单独敲定本轮，等待中的评审人随即被释放 | **用户属性**：`User.is_super_reviewer`（与评审资格相互独立；只有同时具备评审资格才会被随机抽为普通评审人） |
 | 管理员 | 系统管理 | `is_staff`（Django Admin）+ 自定义 `Permission` |
 
 - 「项目组联系人」**不新建用户组存储**：身份由 `ProjectGroup.leader` 计算，判定收敛在 `projects/permissions.py`（`is_project_contact` / `is_project_member` / `can_manage_group` / `can_use_equipment` / `groups_visible_to`），其他模块复用这些函数，避免出现会漂移的副本。
@@ -509,10 +525,11 @@ core / registry.py
 | `/member/projects/<id>/manage/submit/` | 提交项目书审核（选送审类型 + 可选提交说明） | 该组联系人/管理员 |
 | `/member/projects/<id>/` | 项目组详情：成员、项目书、批注版项目书归档、评审状态与历史 | staff / 该组成员 / 被分配评审人 |
 | `/member/projects/<id>/proposal/` | 下载当前项目书 | 同上 |
-| `/member/reviews/` | 我的评审队列（待评审 / 已完成） | 评审人 |
+| `/member/reviews/` | 我的评审队列（待评审 / 已完成 / 已释放；超级评审另有「全部进行中」） | 评审人 / 超级评审 |
 | `/member/reviews/leave/` | 登记/修改本人评审请假窗口（POST） | 评审人 |
 | `/member/reviews/leave/cancel/` | 取消本人评审请假（POST） | 评审人 |
 | `/member/reviews/<id>/complete/` | 提交评审意见与决定，可选附批注版项目书（POST） | 该任务的评审人 |
+| `/member/reviews/override/<id>/` | 超级评审对进行中的轮次直接通过或打回（POST） | 超级评审 |
 | `/member/reviews/<id>/annotated/` | 下载某条评审任务的批注版项目书 | 同上（staff / 该组成员 / 被分配评审人） |
 | `/member/reviews/archive/<id>/download/` | 下载已归档的批注版项目书 | 同上 |
 | `/member/competitions/` | 竞赛列表（所有登录成员可见；联系人可见报名操作） | 登录 |
@@ -527,7 +544,7 @@ core / registry.py
 ### 10.3 管理后台
 
 - 起步直接复用 Django Admin：`/admin/` 管理账号、通知、竞赛、设备、项目组、展示内容。
-- 评审相关记录以**只读留痕**为主，两处例外：评审人请假的两个时间可在列表上直接改（`list_editable`）；待评审且该轮未判结论的评审任务可在详情页改派评审人。两者的写操作都经服务层并写审计日志。
+- 评审相关记录以**只读留痕**为主，三处例外：评审人请假的两个时间可在列表上直接改（`list_editable`）；待评审且该轮未判结论的评审任务可在详情页改派评审人；**整轮送审可删除**（连同它的评审任务，已归档的轮次除外）。写操作都经服务层或审计日志留痕。
 - 按需定制更友好的发布表单（本期以 Admin 为主）。
 
 ---
@@ -537,7 +554,7 @@ core / registry.py
 1. **登录**：管理员创建账号（初始密码，建议设为学号/工号）→ 成员首次登录 → **强制修改密码**（`must_change_password` 置 False）→ 之后可修改资料。有未完成评审任务的评审人登录后会立刻收到一条待评审提醒。
 2. **公告分发**：管理员发布 `scope` 明确的公告 → `public` 进首页/公开列表；`internal` 按 `visible_groups` 投递；`contacts` 由 `is_project_contact` 实时投递给全部项目组联系人。
 3. **入组申请**：无组员在项目组页看到全部组 → 申请加入 → 该项目组联系人在管理页通过/拒绝 → 通过即写入 `members`（被拒可重新申请）。
-4. **项目书评审**：联系人上传项目书 → 提交审核、选择送审类型（决定 1~3 名评审人）并可选填说明 → 按类型随机分配评审人（跳过正在请假的评审人）→ 评审人下载项目书、填写意见与决定，可选附批注版项目书 → 全部评审人均通过则方案通过并归档批注版，否则需修改后可再次提交（新一轮）。
+4. **项目书评审**：联系人上传项目书 → 提交审核、选择送审类型（决定 1~3 名评审人）并可选填说明 → 按类型随机分配评审人（跳过正在请假的评审人）→ 评审人下载项目书、填写意见与决定，可选附批注版项目书 → 全部评审人均通过则方案通过并归档批注版，否则需修改后可再次提交（新一轮）。轮次若卡住或存在争议，**超级评审可一票敲定**，等待中的评审人随即被释放。
 5. **评审请假**：评审人在成员中心登记请假窗口（两个时间点 + 可选事由）→ 窗口内不被抽中新的评审任务，已有任务不受影响 → `ends_at` 一到自动恢复，**无需人工操作或定时任务**；管理员在 Admin 查看全部请假并可直接改时间以提前/延后恢复。
 6. **竞赛报名**：管理员发布竞赛（`is_open=True`）→ 项目组联系人进入竞赛页 → 只能选择自己的项目组 → 选择组内成员并指定竞赛组长（可从参赛成员中选，含本人）→ 校验截止时间、成员/组长归属和重复报名 → 提交登记 → 截止前可修改或放弃；管理员可为任意项目组登记。
 7. **设备借用**：**项目组成员**查看启用设备 → 填写计划归还日期登记借用 → 事务锁定设备并扣减可借数量 → 成员或管理员登记归还 → 状态更新为 `returned` 并在同一事务回补数量；无审批流。

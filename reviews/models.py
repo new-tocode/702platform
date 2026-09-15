@@ -158,11 +158,21 @@ class ProjectSubmission(models.Model):
 
 
 class ReviewAssignment(models.Model):
+    """One reviewer's task on one round.
+
+    ``RELEASED`` is the end state of a task whose round was decided by a super
+    reviewer before this reviewer got to it: the task is no longer in 待评审, so
+    it stops counting towards reminders and can no longer be submitted — but the
+    row stays, so the roster still shows who had been asked.
+    """
+
     PENDING = "pending"
     COMPLETED = "completed"
+    RELEASED = "released"
     STATUS_CHOICES = (
         (PENDING, "待评审"),
         (COMPLETED, "已完成"),
+        (RELEASED, "已释放"),
     )
 
     APPROVE = "approve"
@@ -197,6 +207,11 @@ class ReviewAssignment(models.Model):
         blank=True,
     )
     comment = models.TextField("评审意见", blank=True)
+    is_override = models.BooleanField(
+        "超级评审决定",
+        default=False,
+        help_text="该行来自超级评审的一票决定：本轮结论由它单独敲定，等待中的评审人随即被释放。",
+    )
     annotated_file = models.FileField(
         "批注版项目书",
         upload_to=upload_annotated_proposal,

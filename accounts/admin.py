@@ -46,6 +46,7 @@ class UserAdmin(DjangoUserAdmin):
                     "is_staff",
                     "is_superuser",
                     "is_reviewer",
+                    "is_super_reviewer",
                     "groups",
                     "user_permissions",
                 ),
@@ -82,6 +83,7 @@ class UserAdmin(DjangoUserAdmin):
         "must_change_password",
         "is_staff",
         "is_reviewer",
+        "is_super_reviewer",
         "is_active",
     )
     list_filter = (
@@ -89,6 +91,7 @@ class UserAdmin(DjangoUserAdmin):
         "is_staff",
         "is_superuser",
         "is_reviewer",
+        "is_super_reviewer",
         "is_active",
         "groups",
     )

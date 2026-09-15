@@ -25,6 +25,7 @@ from .permissions import (
     can_manage_group,
     can_view_group,
     groups_visible_to,
+    is_super_reviewer,
     manageable_group_ids,
     member_group_ids,
 )
@@ -109,6 +110,7 @@ def group_list(request):
 def group_detail(request, pk):
     from reviews.forms import ReviewForm
     from reviews.models import ReviewAssignment
+    from reviews.services import can_override_review
 
     group = get_object_or_404(
         ProjectGroup.objects.select_related("leader__profile").prefetch_related(
@@ -142,21 +144,24 @@ def group_detail(request, pk):
             ),
             None,
         )
-    return render(
-        request,
-        "projects/group_detail.html",
-        {
-            "group": group,
-            "submissions": submissions,
-            "latest_submission": latest,
-            "my_assignment": my_assignment,
-            "review_form": ReviewForm(),
-            "archived_proposals": group.archived_proposals.select_related(
-                "submission"
-            ),
-            "can_manage": can_manage_group(request.user, group),
-        },
+    can_override = latest is not None and can_override_review(
+        submission=latest,
+        user=request.user,
     )
+    context = {
+        "group": group,
+        "submissions": submissions,
+        "latest_submission": latest,
+        "my_assignment": my_assignment,
+        "review_form": ReviewForm(),
+        "archived_proposals": group.archived_proposals.select_related("submission"),
+        "can_override": can_override,
+        "can_manage": can_manage_group(request.user, group),
+    }
+    if can_override:
+        # Prefixed so its field ids cannot clash with the reviewer form above.
+        context["override_form"] = ReviewForm(prefix="override")
+    return render(request, "projects/group_detail.html", context)
 
 
 @login_required

@@ -13,7 +13,10 @@
         <div class="head-row">
             <div>
                 <h1>我的评审</h1>
-                <div class="sub">审阅分配给你的项目书并给出评审意见；评审人身份对项目组匿名。</div>
+                <div class="sub">
+                    审阅分配给你的项目书并给出评审意见；评审人身份对项目组匿名。
+                    {% if open_rounds %}作为超级评审，你还可以看到全部进行中的评审，并对其直接通过或打回。{% endif %}
+                </div>
             </div>
         </div>
     </div>
@@ -27,7 +30,48 @@
             <div class="k">已完成</div>
             <div class="v">{{ completed|length }}<small>份</small></div>
         </div>
+        {% if released %}
+            <div>
+                <div class="k">已释放</div>
+                <div class="v dim">{{ released|length }}<small>份</small></div>
+            </div>
+        {% endif %}
     </div>
+
+    {% if open_rounds %}
+        <div class="panel reveal">
+            <div class="panel-head">
+                <h2>全部进行中</h2>
+                <span class="count">{{ open_rounds|length }} in progress</span>
+            </div>
+            <div class="panel-body tight">
+                <div class="queue">
+                    {% for submission in open_rounds %}
+                        <div class="qitem">
+                            <span class="idx">R{{ submission.round }}</span>
+                            <div class="grow">
+                                <div>
+                                    <span class="who">{{ submission.group.name }}</span>
+                                    <span class="when">{{ submission.submitted_at|date:"Y-m-d H:i" }}</span>
+                                </div>
+                                {% if submission.message %}
+                                    <div class="msg">{{ submission.message|linebreaksbr }}</div>
+                                {% endif %}
+                                <div class="qmeta">
+                                    {% if submission.get_review_type_display %}{{ submission.get_review_type_display }} · {% endif %}需 {{ submission.required_reviewers }} 名评审人 · 已审结 {{ submission.completed_count }}
+                                </div>
+                                <div class="btn-row">
+                                    <a class="btn btn-sm" href="{% url 'projects:group_detail' submission.group.pk %}">查看项目书并决定</a>
+                                </div>
+                            </div>
+                        </div>
+                    {% empty %}
+                        <div class="empty">当前没有进行中的评审。</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    {% endif %}
 
     <div class="split">
         <div class="panel reveal">
@@ -63,40 +107,69 @@
             </div>
         </div>
 
-        <div class="panel reveal">
-            <div class="panel-head">
-                <h2>已完成</h2>
-                <span class="count">{{ completed|length }} done</span>
+        <div class="stack reveal">
+            <div class="panel">
+                <div class="panel-head">
+                    <h2>已完成</h2>
+                    <span class="count">{{ completed|length }} done</span>
+                </div>
+                <div class="panel-body tight">
+                    <table>
+                        <thead>
+                            <tr><th>项目组</th><th class="num">轮次</th><th>结论</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for assignment in completed %}
+                                <tr>
+                                    <td>
+                                        <div class="t">{{ assignment.submission.group.name }}</div>
+                                        <div class="muted">
+                                            {% if assignment.submission.get_review_type_display %}{{ assignment.submission.get_review_type_display }} · {% endif %}{{ assignment.completed_at|date:"Y-m-d H:i" }}
+                                        </div>
+                                    </td>
+                                    <td class="num">R{{ assignment.submission.round }}</td>
+                                    <td>
+                                        {% if assignment.decision == "approve" %}
+                                            <span class="chip chip-ok">{{ assignment.get_decision_display }}</span>
+                                        {% else %}
+                                            <span class="chip chip-warn">{{ assignment.get_decision_display }}</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% empty %}
+                                <tr><td colspan="3"><div class="empty">暂无已完成的评审。</div></td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
-            <div class="panel-body tight">
-                <table>
-                    <thead>
-                        <tr><th>项目组</th><th class="num">轮次</th><th>结论</th></tr>
-                    </thead>
-                    <tbody>
-                        {% for assignment in completed %}
-                            <tr>
-                                <td>
-                                    <div class="t">{{ assignment.submission.group.name }}</div>
-                                    <div class="muted">
-                                        {% if assignment.submission.get_review_type_display %}{{ assignment.submission.get_review_type_display }} · {% endif %}{{ assignment.completed_at|date:"Y-m-d H:i" }}
-                                    </div>
-                                </td>
-                                <td class="num">R{{ assignment.submission.round }}</td>
-                                <td>
-                                    {% if assignment.decision == "approve" %}
-                                        <span class="chip chip-ok">{{ assignment.get_decision_display }}</span>
-                                    {% else %}
-                                        <span class="chip chip-warn">{{ assignment.get_decision_display }}</span>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                        {% empty %}
-                            <tr><td colspan="3"><div class="empty">暂无已完成的评审。</div></td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+
+            {% if released %}
+                <div class="panel">
+                    <div class="panel-head">
+                        <h2>已释放</h2>
+                        <span class="count">{{ released|length }} released</span>
+                    </div>
+                    <div class="panel-body tight">
+                        <table>
+                            <thead>
+                                <tr><th>项目组</th><th class="num">轮次</th></tr>
+                            </thead>
+                            <tbody>
+                                {% for assignment in released %}
+                                    <tr>
+                                        <td>
+                                            <div class="t">{{ assignment.submission.group.name }}</div>
+                                            <div class="muted">本轮已由超级评审敲定，无需再审</div>
+                                        </td>
+                                        <td class="num">R{{ assignment.submission.round }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            {% endif %}
         </div>
     </div>
 </div>
