@@ -18,6 +18,7 @@ from .services import (
     ReviewError,
     clear_reviewer_leave,
     complete_review,
+    override_blocker,
     override_review,
     set_reviewer_leave,
 )
@@ -83,12 +84,19 @@ def review_queue(request):
     context = {"pending": pending, "completed": completed, "released": released}
     if is_super_reviewer(request.user):
         # The super reviewer's reach: every round still in progress, whether or
-        # not they hold a task on it.
-        context["open_rounds"] = (
-            ProjectSubmission.objects.filter(status=ProjectSubmission.PENDING)
+        # not they hold a task on it. Rounds they cannot act on stay listed —
+        # seeing the whole picture is the point — but each says why.
+        context["open_rounds"] = [
+            {
+                "submission": submission,
+                "blocker": override_blocker(submission=submission, user=request.user),
+            }
+            for submission in ProjectSubmission.objects.filter(
+                status=ProjectSubmission.PENDING
+            )
             .select_related("group", "submitted_by")
             .order_by("submitted_at", "id")
-        )
+        ]
     logger.info(
         "reviews.queue.view pending=%s completed=%s released=%s super=%s reviewer=%s",
         len(pending),

@@ -272,23 +272,31 @@ def complete_review(
     return locked
 
 
-def can_override_review(*, submission, user):
-    """Whether this user may decide this round outright with a single vote.
+def override_blocker(*, submission, user):
+    """Why this user may not decide this round outright; None when they may.
 
-    One definition, used both to decide whether the UI offers the override and
-    as the service's own guard. The conflict-of-interest rules match an ordinary
-    reviewer's, and a super reviewer who already holds a task on this round must
-    use that task instead — otherwise the same round would be counted twice.
+    The single definition of the rule, so the queue can explain itself, the
+    change page can decide whether to offer the form, and the service can refuse
+    with the same reason — none of them re-implement it. The conflict-of-interest
+    rules match an ordinary reviewer's, and a super reviewer who already holds a
+    task on this round must use that task instead.
     """
     if not is_super_reviewer(user):
-        return False
+        return "没有超级评审资格"
     if submission is None or submission.status != ProjectSubmission.PENDING:
-        return False
+        return "本轮已经出过结论"
     if user.pk == submission.submitted_by_id:
-        return False
+        return "你是本轮的提交人"
     if submission.group.members.filter(pk=user.pk).exists():
-        return False
-    return not submission.assignments.filter(reviewer=user).exists()
+        return "你是本项目组成员"
+    if submission.assignments.filter(reviewer=user).exists():
+        return "你在本轮已有评审任务，请直接提交那一条"
+    return None
+
+
+def can_override_review(*, submission, user):
+    """Whether this user may decide this round outright with a single vote."""
+    return override_blocker(submission=submission, user=user) is None
 
 
 def override_review(
@@ -313,11 +321,9 @@ def override_review(
 
     with transaction.atomic():
         locked = ProjectSubmission.objects.select_for_update().get(pk=submission.pk)
-        if not can_override_review(submission=locked, user=super_reviewer):
-            raise ReviewError(
-                "无法对本轮行使超级评审权：本轮可能已出结论、你已被分配为本轮评审人"
-                "（请直接提交那条评审任务），或你与本项目组存在关联。"
-            )
+        blocker = override_blocker(submission=locked, user=super_reviewer)
+        if blocker:
+            raise ReviewError(f"无法行使超级评审权：{blocker}。")
 
         now = timezone.now()
         ReviewAssignment.objects.create(

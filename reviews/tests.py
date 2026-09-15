@@ -35,6 +35,7 @@ from .services import (
     clear_reviewer_leave,
     complete_review,
     count_pending_reviews,
+    override_blocker,
     override_review,
     reassign_reviewer,
     set_reviewer_leave,
@@ -1697,6 +1698,57 @@ class SuperReviewerOverrideTests(TestCase):
         self.assertContains(response, "超级评审项目组")
         self.assertContains(response, "另一个组")
         self.assertEqual(len(response.context["open_rounds"]), 2)
+        # 这条账号两条都能行使，所以给的是可操作按钮、没有「不可行使」标注。
+        self.assertContains(response, "查看项目书并决定")
+        self.assertNotContains(response, "不可行使")
+
+    def test_queue_explains_why_a_round_cannot_be_overridden(self):
+        """无权行使时不要把按钮写成「并决定」——那是在承诺做不到的事。"""
+        submission = self._submit()
+        self.contact.is_super_reviewer = True
+        self.contact.save(update_fields=["is_super_reviewer"])
+        self.client.force_login(self.contact)
+
+        response = self.client.get(reverse("reviews:queue"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "不可行使")
+        self.assertContains(response, "你是本轮的提交人")
+        self.assertNotContains(response, "查看项目书并决定")
+        rows = response.context["open_rounds"]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["submission"].pk, submission.pk)
+        self.assertEqual(rows[0]["blocker"], "你是本轮的提交人")
+
+    def test_override_blocker_names_each_reason(self):
+        submission = self._submit()
+
+        self.assertIsNone(
+            override_blocker(submission=submission, user=self.super_reviewer)
+        )
+        self.assertEqual(
+            override_blocker(submission=submission, user=self.reviewer_one),
+            "没有超级评审资格",
+        )
+        self.contact.is_super_reviewer = True
+        self.contact.save(update_fields=["is_super_reviewer"])
+        self.assertEqual(
+            override_blocker(submission=submission, user=self.contact),
+            "你是本轮的提交人",
+        )
+        self.member.is_super_reviewer = True
+        self.member.save(update_fields=["is_super_reviewer"])
+        self.assertEqual(
+            override_blocker(submission=submission, user=self.member),
+            "你是本项目组成员",
+        )
+        ReviewAssignment.objects.create(
+            submission=submission, reviewer=self.super_reviewer
+        )
+        self.assertEqual(
+            override_blocker(submission=submission, user=self.super_reviewer),
+            "你在本轮已有评审任务，请直接提交那一条",
+        )
 
     def test_queue_has_no_open_rounds_section_for_a_plain_reviewer(self):
         self._submit()

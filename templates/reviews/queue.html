@@ -46,22 +46,30 @@
             </div>
             <div class="panel-body tight">
                 <div class="queue">
-                    {% for submission in open_rounds %}
+                    {% for row in open_rounds %}
                         <div class="qitem">
-                            <span class="idx">R{{ submission.round }}</span>
+                            <span class="idx">R{{ row.submission.round }}</span>
                             <div class="grow">
                                 <div>
-                                    <span class="who">{{ submission.group.name }}</span>
-                                    <span class="when">{{ submission.submitted_at|date:"Y-m-d H:i" }}</span>
+                                    <span class="who">{{ row.submission.group.name }}</span>
+                                    <span class="when">{{ row.submission.submitted_at|date:"Y-m-d H:i" }}</span>
                                 </div>
-                                {% if submission.message %}
-                                    <div class="msg">{{ submission.message|linebreaksbr }}</div>
+                                {% if row.submission.message %}
+                                    <div class="msg">{{ row.submission.message|linebreaksbr }}</div>
                                 {% endif %}
                                 <div class="qmeta">
-                                    {% if submission.get_review_type_display %}{{ submission.get_review_type_display }} · {% endif %}需 {{ submission.required_reviewers }} 名评审人 · 已审结 {{ submission.completed_count }}
+                                    {% if row.submission.get_review_type_display %}{{ row.submission.get_review_type_display }} · {% endif %}需 {{ row.submission.required_reviewers }} 名评审人 · 已审结 {{ row.submission.completed_count }}
                                 </div>
+                                {% if row.blocker %}
+                                    <div class="qmeta">
+                                        <span class="chip chip-off">不可行使</span>
+                                        超级评审不可行使：{{ row.blocker }}。
+                                    </div>
+                                {% endif %}
                                 <div class="btn-row">
-                                    <a class="btn btn-sm" href="{% url 'projects:group_detail' submission.group.pk %}">查看项目书并决定</a>
+                                    <a class="btn {% if not row.blocker %}btn-primary {% endif %}btn-sm" href="{% url 'projects:group_detail' row.submission.group.pk %}">
+                                        {% if row.blocker %}查看项目书{% else %}查看项目书并决定{% endif %}
+                                    </a>
                                 </div>
                             </div>
                         </div>
