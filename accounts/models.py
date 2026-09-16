@@ -75,6 +75,12 @@ class Profile(models.Model):
     )
     college = models.CharField("学院", max_length=128, blank=True)
     major = models.CharField("专业", max_length=128, blank=True)
+    specialty = models.CharField(
+        "特长",
+        max_length=255,
+        blank=True,
+        help_text="可填写多项，用顿号或逗号分隔。",
+    )
     phone = models.CharField("手机号", max_length=32, blank=True)
     contact = models.CharField("其他联系方式", max_length=255, blank=True)
     created_at = models.DateTimeField("创建时间", auto_now_add=True)

@@ -17,6 +17,7 @@ from core.audit import record_audit
 from .forms import (
     ContactTransferForm,
     GroupDescriptionForm,
+    GroupInfoForm,
     GroupJoinRequestForm,
     GroupProposalForm,
 )
@@ -37,6 +38,7 @@ from .services import (
     remove_group_member,
     transfer_contact,
     update_group_description,
+    update_group_info,
 )
 
 
@@ -64,6 +66,7 @@ def group_list(request):
         groups_visible_to(request.user)
         .select_related("leader__profile")
         .prefetch_related("members__profile")
+        .prefetch_related("advisors")
         .prefetch_related(
             Prefetch(
                 "submissions",
@@ -113,7 +116,7 @@ def group_detail(request, pk):
 
     group = get_object_or_404(
         ProjectGroup.objects.select_related("leader__profile").prefetch_related(
-            "members__profile"
+            "members__profile", "advisors"
         ),
         pk=pk,
     )
@@ -266,10 +269,23 @@ def group_manage(request, pk):
 
     description_form = GroupDescriptionForm(instance=group)
     transfer_form = ContactTransferForm(group)
+    info_form = GroupInfoForm(instance=group)
 
     if request.method == "POST":
         action = request.POST.get("action")
-        if action == "description":
+        if action == "info":
+            info_form = GroupInfoForm(request.POST, instance=group)
+            if info_form.is_valid():
+                update_group_info(
+                    group=group,
+                    college=info_form.cleaned_data["college"],
+                    advisor_names=info_form.advisor_names(),
+                    actor=request.user,
+                    request=request,
+                )
+                messages.success(request, "学院与指导老师已更新。")
+                return redirect("projects:group_manage", pk=group.pk)
+        elif action == "description":
             description_form = GroupDescriptionForm(request.POST, instance=group)
             if description_form.is_valid():
                 update_group_description(
@@ -310,6 +326,7 @@ def group_manage(request, pk):
             "join_requests": join_requests,
             "description_form": description_form,
             "transfer_form": transfer_form,
+            "info_form": info_form,
             "proposal_form": GroupProposalForm(instance=group),
             "submit_form": SubmissionForm(),
             "latest_submission": latest_submission,

@@ -23,8 +23,23 @@ logger = logging.getLogger(__name__)
 
 @admin.register(Profile)
 class ProfileAdmin(admin.ModelAdmin):
-    list_display = ("user", "full_name", "student_id", "college", "major", "phone")
-    search_fields = ("user__username", "full_name", "student_id", "college", "major")
+    list_display = (
+        "user",
+        "full_name",
+        "student_id",
+        "college",
+        "major",
+        "specialty",
+        "phone",
+    )
+    search_fields = (
+        "user__username",
+        "full_name",
+        "student_id",
+        "college",
+        "major",
+        "specialty",
+    )
     list_select_related = ("user",)
 
 

@@ -120,6 +120,7 @@ Profile（User 一对一扩展）
   - student_id    学号（唯一）
   - college       学院
   - major         专业
+  - specialty     特长（自由文本，可写多项）
   - phone         手机号
   - contact       其他联系方式（可选）
   - created_at
@@ -196,8 +197,17 @@ ProjectGroup
   - leader         FK(User)  项目组联系人（一个，唯一真相源）
   - members        M2M(User) 组员（保存时自动确保项目组联系人也在成员列表中）
   - description    简介
+  - college        学院
   - created_at
   - updated_at
+
+ProjectAdvisor（指导老师）
+  - group          FK(ProjectGroup)
+  - name           指导老师姓名（纯文本——平台没有教师账号可关联）
+  - sort_order     槽位 0 / 1 / 2
+  - created_at / updated_at
+  - 槽位唯一约束 (group, sort_order) 加 CHECK(sort_order < 3)，两条合起来即「每组至多 3 位」；
+    上限只有一处写法：projects.models.MAX_ADVISORS_PER_GROUP
 
 GroupJoinRequest（入组申请）
   - group          FK(ProjectGroup)
@@ -211,7 +221,8 @@ GroupJoinRequest（入组申请）
 ```
 
 - 联系人身份**由 `ProjectGroup.leader` 计算**，不新建任何用户组存储；判定统一收敛在 `projects/permissions.py`。
-- 联系人可审核入组申请、移除非联系人成员、修改项目组介绍、把联系人转让给组内成员（原联系人保留为普通成员）。
+- 联系人可审核入组申请、移除非联系人成员、修改项目组介绍、维护学院与指导老师、把联系人转让给组内成员（原联系人保留为普通成员）。
+- 学院与指导老师在同一张表单上维护：指导老师固定三行输入框，空槽位表示没有这一位，保存时按槽位顺序补齐（`projects.services.update_group_info`），因此不会撞上槽位唯一约束。学院与指导老师在项目组详情页与项目组列表页都对外展示。
 
 ### 6.5 competitions
 
@@ -541,12 +552,12 @@ core / registry.py
 | `/member/password/` | 修改密码 | 本人 |
 | `/member/projects/` | 项目组列表：无组员看全部可申请，组员看自己的组，联系人看全部 | 登录 |
 | `/member/projects/<id>/apply/` | 申请加入项目组 | 登录且非该组成员 |
-| `/member/projects/<id>/manage/` | 管理组：审核申请、移除成员、转让联系人、改组介绍 | 该组联系人/管理员 |
+| `/member/projects/<id>/manage/` | 管理组：审核申请、移除成员、转让联系人、改组介绍与学院/指导老师 | 该组联系人/管理员 |
 | `/member/projects/<id>/manage/requests/<req>/<action>/` | 通过/拒绝入组申请 | 该组联系人/管理员 |
 | `/member/projects/<id>/manage/members/<user>/remove/` | 移除组员 | 该组联系人/管理员 |
 | `/member/projects/<id>/manage/proposal/` | 上传 / 更新项目书（doc/docx/pdf） | 该组联系人/管理员 |
 | `/member/projects/<id>/manage/submit/` | 提交项目书审核（选送审类型 + 可选提交说明） | 该组联系人/管理员 |
-| `/member/projects/<id>/` | 项目组详情：成员、项目书、批注版项目书归档、初审与评审状态及历史 | staff / 该组成员 / 本轮初审人 / 被分配评审人 |
+| `/member/projects/<id>/` | 项目组详情：学院与指导老师、成员、项目书、批注版项目书归档、初审与评审状态及历史 | staff / 该组成员 / 本轮初审人 / 被分配评审人 |
 | `/member/projects/<id>/proposal/` | 下载当前项目书 | 同上 |
 | `/member/reviews/` | 我的评审队列（初审与评审各三档：待办 / 已完成 / 已释放；超级评审另有「全部进行中」） | 初审人 / 评审人 / 超级评审 |
 | `/member/reviews/leave/` | 登记/修改本人「初审／评审请假」窗口（POST） | 初审人 / 评审人 |

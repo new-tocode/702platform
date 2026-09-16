@@ -55,6 +55,16 @@
     <div class="split">
         <div class="stack reveal">
             <div class="panel">
+                <div class="panel-head"><h2>项目组信息</h2></div>
+                <div class="panel-body">
+                    <dl class="dl">
+                        <div><dt>学院</dt><dd>{{ group.college|default:"—" }}</dd></div>
+                        <div><dt>指导老师</dt><dd>{{ group.advisor_names|default:"—" }}</dd></div>
+                    </dl>
+                </div>
+            </div>
+
+            <div class="panel">
                 <div class="panel-head">
                     <h2>成员</h2>
                     <span class="count">{{ group.members.all|length }} members</span>

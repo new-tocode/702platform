@@ -143,6 +143,32 @@
                     </form>
                 </div>
             </div>
+
+            <div class="panel">
+                <div class="panel-head">
+                    <h2>学院与指导老师</h2>
+                    <span class="count">指导老师最多 3 位</span>
+                </div>
+                <div class="panel-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="action" value="info">
+                        {{ info_form.non_field_errors }}
+                        {% for field in info_form %}
+                            <div class="field">
+                                <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                                {{ field }}
+                                {% if field.help_text %}<p class="help">{{ field.help_text }}</p>{% endif %}
+                                {{ field.errors }}
+                            </div>
+                        {% endfor %}
+                        <p class="help">指导老师最多 3 位，留空表示没有这一位；保存后按填写顺序依次排列。</p>
+                        <div class="form-actions">
+                            <button class="btn btn-primary" type="submit">保存学院与指导老师</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
         </div>
 
         <div class="stack reveal">
