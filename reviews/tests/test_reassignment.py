@@ -12,6 +12,7 @@ from django.utils import timezone
 
 from core.models import AuditLog
 
+from .. import lifecycle
 from ..models import (
     ProjectSubmission,
     ReviewAssignment,
@@ -159,10 +160,16 @@ class ReviewAssignmentReassignmentTests(ReviewTestCase):
         assignment = submission.assignments.first()
         other = submission.assignments.exclude(pk=assignment.pk).get().reviewer
 
-        with self.assertRaises(ReviewError):
+        with self.assertRaises(ReviewError) as caught:
             reassign_reviewer(
                 assignment=assignment, new_reviewer=other, actor=self.admin
             )
+
+        # 拒绝文案与初审侧同源（StageRules），不再各写一句。
+        self.assertEqual(
+            str(caught.exception),
+            lifecycle.STAGES[lifecycle.STAGE_REVIEW].swap_holds,
+        )
 
     def test_a_non_reviewer_cannot_be_swapped_in(self):
         submission = self._submit()

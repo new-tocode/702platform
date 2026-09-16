@@ -303,8 +303,10 @@ def complete_preliminary_review(*, preliminary, reviewer, decision, comment, req
         # first, and reviving it would rewrite a decided round.
         if locked.status != PreliminaryReview.PENDING:
             raise ReviewError("该初审任务已经处理过了，无法再次提交。")
-        if submission.status != ProjectSubmission.PRELIMINARY_PENDING:
-            raise ReviewError("该轮送审已不在初审环节。")
+        # 轮次必须还停在初审阶段——与评审侧同一条守卫，文案同样取自 StageRules。
+        reason = lifecycle.open_stage_refusal(submission, lifecycle.STAGE_PRELIMINARY)
+        if reason:
+            raise ReviewError(reason)
 
         now = timezone.now()
         locked.status = PreliminaryReview.COMPLETED
@@ -402,7 +404,9 @@ def _settle_submission(submission):
     :func:`complete_review`): this reads the round's *other* assignments, so the
     parent row — not the reviewer's own assignment — is what serialises
     concurrent verdicts. A round that already reached a verdict is left alone,
-    which also makes the archiving below idempotent.
+    which also makes the archiving below idempotent — the guard that keeps a vote
+    from being recorded on a decided round lives in :func:`complete_review`, so
+    reaching here with anything but 评审中 means "nothing left to aggregate".
     """
     if submission.status != ProjectSubmission.PENDING:
         return submission
@@ -457,6 +461,12 @@ def complete_review(
         # record after the round was decided.
         if locked.status != ReviewAssignment.PENDING:
             raise ReviewError("该评审任务已经处理过了，无法再次提交。")
+        # 轮次必须还停在评审阶段。少了这一道，一条本该在「初审中」或已出结论的
+        # 轮次上的任务会被写成 COMPLETED，而汇总函数按设计静默早退——记录里于是
+        # 留下一票既没参与汇总、也没人解释的结论。
+        reason = lifecycle.open_stage_refusal(submission, lifecycle.STAGE_REVIEW)
+        if reason:
+            raise ReviewError(reason)
 
         locked.status = ReviewAssignment.COMPLETED
         locked.decision = decision
@@ -518,7 +528,8 @@ def override_blocker(*, submission, user):
     preliminary = preliminary_review_of(submission)
     if preliminary is not None and preliminary.reviewer_id == user.pk:
         if preliminary.status == PreliminaryReview.PENDING:
-            return "你在本轮有初审任务，请直接提交那一条"
+            label = lifecycle.STAGES[lifecycle.STAGE_PRELIMINARY].label
+            return f"你在本轮已有{label}任务，请直接提交那一条"
         return "你是本轮的初审人，已经就该轮给出初审意见"
     if submission.assignments.filter(reviewer=user).exists():
         return "你在本轮已有评审任务，请直接提交那一条"
@@ -641,10 +652,11 @@ def reassign_reviewer(*, assignment, new_reviewer, actor, request=None):
             .select_related("submission__group", "submission__submitted_by")
             .get(pk=assignment.pk)
         )
+        rules = lifecycle.STAGES[lifecycle.STAGE_REVIEW]
         if locked.status != ReviewAssignment.PENDING:
-            raise ReviewError("只有待评审的任务可以更换评审人。")
-        if submission.status != ProjectSubmission.PENDING:
-            raise ReviewError("该轮送审已给出结论，不能再更换评审人。")
+            raise ReviewError(rules.swap_not_pending)
+        if not lifecycle.stage_is_open(submission, lifecycle.STAGE_REVIEW):
+            raise ReviewError(rules.swap_phase)
         if locked.reviewer_id == new_reviewer.pk:
             raise ReviewError("评审人没有变化。")
         # The admin form limits the choices already; these checks are what make
@@ -653,8 +665,10 @@ def reassign_reviewer(*, assignment, new_reviewer, actor, request=None):
             raise ReviewError("提交人不能评审自己的项目书。")
         if submission.group.members.filter(pk=new_reviewer.pk).exists():
             raise ReviewError("该项目组成员不能评审本组的项目书。")
+        # 一个人在一轮里只有一席：他要是已经持有本轮的（任何一条）任务，换过去
+        # 就破了这条不变式。初审侧同样检查，两侧的文案都取自 StageRules。
         if submission.assignments.filter(reviewer=new_reviewer).exists():
-            raise ReviewError("该评审人已在本轮评审任务中。")
+            raise ReviewError(rules.swap_holds)
         if not eligible_reviewers(
             group=submission.group,
             submitter=submission.submitted_by,
@@ -712,10 +726,11 @@ def reassign_preliminary_reviewer(*, preliminary, new_reviewer, actor, request=N
             .select_related("submission__group", "submission__submitted_by")
             .get(pk=preliminary.pk)
         )
+        rules = lifecycle.STAGES[lifecycle.STAGE_PRELIMINARY]
         if locked.status != PreliminaryReview.PENDING:
-            raise ReviewError("只有待初审的任务可以更换初审人。")
-        if submission.status != ProjectSubmission.PRELIMINARY_PENDING:
-            raise ReviewError("该轮送审已不在初审环节，不能再更换初审人。")
+            raise ReviewError(rules.swap_not_pending)
+        if not lifecycle.stage_is_open(submission, lifecycle.STAGE_PRELIMINARY):
+            raise ReviewError(rules.swap_phase)
         if locked.reviewer_id == new_reviewer.pk:
             raise ReviewError("初审人没有变化。")
         # The admin form limits the choices already; these checks are what make
@@ -724,6 +739,10 @@ def reassign_preliminary_reviewer(*, preliminary, new_reviewer, actor, request=N
             raise ReviewError("提交人不能初审自己的项目书。")
         if submission.group.members.filter(pk=new_reviewer.pk).exists():
             raise ReviewError("该项目组成员不能初审本组的项目书。")
+        # 与评审改派对同一条不变式：一人一轮一席。初审中还没有评审任务，所以今天
+        # 这句不会触发——留着是为了两道关的规则真正对称，而不是靠「恰好没数据」。
+        if submission.assignments.filter(reviewer=new_reviewer).exists():
+            raise ReviewError(rules.swap_holds)
         if not eligible_preliminary_reviewers(
             group=submission.group,
             submitter=submission.submitted_by,
