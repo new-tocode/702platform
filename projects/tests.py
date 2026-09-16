@@ -4,7 +4,8 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
-from .models import GroupJoinRequest, ProjectGroup
+from .models import GroupJoinRequest, ProjectAdvisor, ProjectGroup
+from .services import GroupManagementError, update_group_info
 
 
 User = get_user_model()
@@ -112,6 +113,14 @@ class ProjectGroupAcceptanceTests(TestCase):
                 "leader": self.leader.pk,
                 "members": [self.member.pk],
                 "description": "算法竞赛项目组。",
+                "college": "计算机学院",
+                # 指导老师内联的表单集管理表单；缺了它整张表单会被判为无效。
+                "advisors-TOTAL_FORMS": "1",
+                "advisors-INITIAL_FORMS": "0",
+                "advisors-MIN_NUM_FORMS": "0",
+                "advisors-MAX_NUM_FORMS": "3",
+                "advisors-0-sort_order": "0",
+                "advisors-0-name": "张三",
                 "_save": "保存",
             },
         )
@@ -120,6 +129,8 @@ class ProjectGroupAcceptanceTests(TestCase):
         group = ProjectGroup.objects.get(name="新算法组")
         self.assertIn(self.leader, group.members.all())
         self.assertIn(self.member, group.members.all())
+        self.assertEqual(group.college, "计算机学院")
+        self.assertEqual(group.advisor_names, "张三")
 
     def test_member_applies_and_contact_approves(self):
         self.client.force_login(self.no_group_user)
@@ -270,7 +281,15 @@ class ProjectGroupAcceptanceTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "管理「机器人组」")
-        for section in ("入组申请", "成员", "项目组介绍", "项目书", "提交审核", "转让联系人"):
+        for section in (
+            "入组申请",
+            "成员",
+            "项目组介绍",
+            "学院与指导老师",
+            "项目书",
+            "提交审核",
+            "转让联系人",
+        ):
             self.assertContains(response, section)
 
     def test_manage_page_lists_pending_request_and_real_proposal_file(self):
@@ -307,4 +326,93 @@ class ProjectGroupAcceptanceTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "开题报告.pdf")
         self.assertContains(response, "PDF")
+
+    def test_contact_can_update_college_and_advisors(self):
+        self.client.force_login(self.leader)
+
+        response = self.client.post(
+            reverse("projects:group_manage", args=(self.group.pk,)),
+            {
+                "action": "info",
+                "college": "计算机学院",
+                "advisor_1": "张三",
+                "advisor_2": "李四",
+                "advisor_3": "王五",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.group.refresh_from_db()
+        self.assertEqual(self.group.college, "计算机学院")
+        self.assertEqual(
+            list(self.group.advisors.values_list("sort_order", "name")),
+            [(0, "张三"), (1, "李四"), (2, "王五")],
+        )
+
+    def test_cleared_advisor_slot_closes_the_gap(self):
+        """空槽位不占位：后面的老师补上来，且不会撞上槽位唯一约束。"""
+        for slot, name in enumerate(("张三", "李四", "王五")):
+            ProjectAdvisor.objects.create(group=self.group, name=name, sort_order=slot)
+        self.client.force_login(self.leader)
+
+        self.client.post(
+            reverse("projects:group_manage", args=(self.group.pk,)),
+            {
+                "action": "info",
+                "college": "",
+                "advisor_1": "张三",
+                "advisor_2": "",
+                "advisor_3": "王五",
+            },
+        )
+
+        self.assertEqual(
+            list(self.group.advisors.values_list("sort_order", "name")),
+            [(0, "张三"), (1, "王五")],
+        )
+
+    def test_advisor_cap_cannot_be_exceeded_through_the_service(self):
+        """表单只给三个槽位；服务层这道关挡住绕过表单的调用。"""
+        with self.assertRaises(GroupManagementError):
+            update_group_info(
+                group=self.group,
+                college="计算机学院",
+                advisor_names=["甲", "乙", "丙", "丁"],
+                actor=self.leader,
+            )
+
+        self.group.refresh_from_db()
+        self.assertEqual(self.group.advisors.count(), 0)
+        self.assertEqual(self.group.college, "")
+
+    def test_group_detail_and_list_show_college_and_advisors(self):
+        self.group.college = "计算机学院"
+        self.group.save(update_fields=["college"])
+        ProjectAdvisor.objects.create(group=self.group, name="张三", sort_order=0)
+        ProjectAdvisor.objects.create(group=self.group, name="李四", sort_order=1)
+        self.client.force_login(self.leader)
+
+        detail = self.client.get(
+            reverse("projects:group_detail", args=(self.group.pk,))
+        )
+        self.assertEqual(detail.status_code, 200)
+        self.assertContains(detail, "计算机学院")
+        self.assertContains(detail, "张三、李四")
+
+        listing = self.client.get(reverse("projects:group_list"))
+        self.assertEqual(listing.status_code, 200)
+        self.assertContains(listing, "计算机学院")
+        self.assertContains(listing, "张三、李四")
+
+    def test_group_without_advisors_renders_placeholder_in_detail(self):
+        """没填时详情页仍要渲染得出来，用 — 占位而不是留空。"""
+        self.client.force_login(self.leader)
+
+        response = self.client.get(
+            reverse("projects:group_detail", args=(self.group.pk,))
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "项目组信息")
+        self.assertContains(response, "指导老师")
         self.assertNotContains(response, ">DOC</span>")

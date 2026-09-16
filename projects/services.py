@@ -12,7 +12,7 @@ from django.utils import timezone
 
 from core.audit import record_audit
 
-from .models import GroupJoinRequest
+from .models import MAX_ADVISORS_PER_GROUP, GroupJoinRequest, ProjectAdvisor
 
 
 logger = logging.getLogger(__name__)
@@ -143,6 +143,42 @@ def transfer_contact(*, group, new_contact, actor, request=None):
             "previous_contact_id": previous_contact_id,
             "new_contact_id": new_contact.pk,
         },
+        request=request,
+    )
+    return group
+
+
+def update_group_info(*, group, college, advisor_names, actor, request=None):
+    """Update a group's college and its advisors (at most ``MAX_ADVISORS_PER_GROUP``).
+
+    Advisors map onto fixed slots, so editing a name keeps that row's identity
+    instead of replacing every row on each save. A blank slot deletes the row
+    it held, and the remaining names close up to slots 0..n-1 — which is what
+    keeps the ``(group, sort_order)`` uniqueness constraint satisfiable.
+    """
+    names = [name.strip() for name in advisor_names if name.strip()]
+    if len(names) > MAX_ADVISORS_PER_GROUP:
+        raise GroupManagementError(f"指导老师最多 {MAX_ADVISORS_PER_GROUP} 位。")
+    with transaction.atomic():
+        group.college = college
+        group.save(update_fields=["college", "updated_at"])
+        existing = {advisor.sort_order: advisor for advisor in group.advisors.all()}
+        for slot in range(MAX_ADVISORS_PER_GROUP):
+            name = names[slot] if slot < len(names) else ""
+            advisor = existing.get(slot)
+            if not name:
+                if advisor:
+                    advisor.delete()
+            elif not advisor:
+                ProjectAdvisor.objects.create(group=group, name=name, sort_order=slot)
+            elif advisor.name != name:
+                advisor.name = name
+                advisor.save(update_fields=["name", "updated_at"])
+    record_audit(
+        action="projects.group.info.update",
+        user=actor,
+        target=group,
+        detail={"college": college, "advisors": names},
         request=request,
     )
     return group

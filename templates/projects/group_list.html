@@ -30,6 +30,12 @@
                 <dl class="dl">
                     <div><dt>项目组联系人</dt><dd>{{ row.group.leader.profile.full_name|default:row.group.leader.username }}</dd></div>
                     <div><dt>成员</dt><dd>{{ row.group.member_count }} 人</dd></div>
+                    {% if row.group.college %}
+                        <div><dt>学院</dt><dd>{{ row.group.college }}</dd></div>
+                    {% endif %}
+                    {% if row.group.advisor_names %}
+                        <div><dt>指导老师</dt><dd>{{ row.group.advisor_names }}</dd></div>
+                    {% endif %}
                 </dl>
 
                 {% if row.group.description %}
