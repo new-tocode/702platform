@@ -118,12 +118,14 @@ class ReviewReminderTests(ReviewTestCase):
 
     def test_login_names_both_kinds_of_pending_task(self):
         """同一个人两种任务都有时，提醒要把两个数字分开说。"""
-        both = make_user("remind-both", is_reviewer=True, is_preliminary_reviewer=True)
         other_group = make_group("提醒项目组二", leader=self.contact)
+        # 两轮都先开好，再建这个两种资格都具备的账号：否则他会被抽成某轮的初审人，
+        # 而下面又要把他挪进同一轮的评审席——一人一轮一席，正好撞上唯一约束。
         review_round = self._submit()
         preliminary_round = self._open_round(group=other_group)
+        both = make_user("remind-both", is_reviewer=True, is_preliminary_reviewer=True)
         # 把两条任务都记到这个账号名下：两种资格都具备的人，手上有两种任务。
-        # 评审任务只挪一条——一人一轮一席，多挪一条就会撞唯一约束。
+        # 评审任务只挪一条——同一轮里多挪一条同样会撞唯一约束。
         review_task = ReviewTask.objects.filter(
             submission=review_round, stage=ReviewTask.REVIEW
         ).first()
