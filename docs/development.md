@@ -54,7 +54,10 @@
 │   ├── models.py                     # ProjectSubmission、PreliminaryReview、ReviewAssignment、ArchivedProposal、ReviewerLeave
 │   ├── services.py                   # 送审与送审类型、抽初审人、初审通过后随机分配评审人（跳过请假中、排除本轮初审人）、结论汇总与批注版归档、请假登记、管理员改派（评审/初审）、超级评审敲定
 │   ├── forms.py / views.py / urls.py / admin.py
-│   └── tests.py
+│   └── tests/                        # 测试按功能分模块（用例多，见 §5）
+│       ├── factories.py              # 造对象：用户/角色、项目组、上传文件
+│       ├── base.py                   # ReviewTestCase：临时 MEDIA_ROOT + 推进轮次的动作
+│       └── test_*.py                 # 送审 / 结论与归档 / 页面 / 初审 / 请假 / 提醒 / 改派 / 超级评审 / 后台删整轮
 ├── equipment/                        # 设备台账与借用
 │   ├── models.py                     # Equipment、EquipmentBorrow
 │   ├── services.py                   # 事务化借用/归还与库存更新
@@ -180,6 +183,8 @@ source env.local.sh
 ```
 
 测试按模块分布在各 app 的 `tests.py`，覆盖的验收要点：
+
+**`reviews` 例外**：它的用例最多（169 条），因此按功能拆成 `reviews/tests/` 包，一个模块一个主题——送审规则、结论与归档、评审页面、初审关卡、请假、待办提醒、改派、超级评审、后台删整轮。共用件只有两处：`factories.py`（造对象）与 `base.py`（`ReviewTestCase`：临时 MEDIA_ROOT + `_open_round`/`_pass_preliminary`/`_submit` 三个推进轮次的动作）。夹具（谁是评审人、各有几名）**刻意留在各个类自己的 `setUp`**：送审类型决定名额，而名额是「恰好抽到谁」这类断言的前提，由基类统一发放夹具会让这些断言随候选人数变化而时灵时不灵。跑单个模块用 `manage.py test reviews.tests.test_preliminary`。
 
 | 模块 | 验收要点 |
 |---|---|
