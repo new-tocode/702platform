@@ -72,7 +72,7 @@ class ReviewerLeaveTests(ReviewTestCase):
         """Submit a single-reviewer round; returns the drawn reviewer."""
         submission = self._open_round()
         self._pass_preliminary(submission)
-        return submission.assignments.get().reviewer
+        return self.review_tasks(submission).get().reviewer
 
     # --- the window itself ---------------------------------------------------
 
@@ -124,7 +124,7 @@ class ReviewerLeaveTests(ReviewTestCase):
         other = make_preliminary_reviewer("leave-preliminary-two")
         self._leave(reviewer=self.preliminary, starts_in=-1, ends_in=7)
 
-        drawn = self._open_round().preliminary_review.reviewer
+        drawn = self._open_round().preliminary_task.reviewer
 
         self.assertEqual(drawn, other)
 

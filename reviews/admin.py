@@ -7,7 +7,7 @@ records —
 * ``ReviewerLeave``: the two time fields are editable straight from the
   changelist, because shifting a reviewer's recovery time earlier or later is
   the whole administrative action.
-* ``ReviewAssignment`` and ``PreliminaryReview``: the holder may be swapped
+* ``ReviewTask`` and ``ReviewTask``: the holder may be swapped
   while the task is still pending on a round that has not moved past it, and
   only then. The write goes through the matching service so the eligibility
   rules and the audit trail hold.
@@ -18,20 +18,15 @@ from django.contrib import admin, messages
 from core.audit import record_audit
 
 from . import lifecycle
-from .forms import AdminReassignPreliminaryReviewerForm, AdminReassignReviewerForm
+from .forms import AdminReassignTaskForm
 from .models import (
     ArchivedProposal,
-    PreliminaryReview,
+    ReviewTask,
     ProjectSubmission,
-    ReviewAssignment,
     ReviewerLeave,
-    preliminary_review_of,
+    preliminary_task_of,
 )
-from .services import (
-    ReviewError,
-    reassign_preliminary_reviewer,
-    reassign_reviewer,
-)
+from .services import ReviewError, reassign_task
 
 
 @admin.register(ProjectSubmission)
@@ -69,7 +64,7 @@ class ProjectSubmissionAdmin(admin.ModelAdmin):
     def get_deleted_objects(self, objs, request):
         """Let a round be deleted together with its review tasks.
 
-        ``ReviewAssignmentAdmin`` and ``PreliminaryReviewAdmin`` both refuse to
+        ``ReviewTaskAdmin`` and ``ReviewTaskAdmin`` both refuse to
         delete a single task on purpose — that would silently change what the
         round needs. Django's cascade check, however, asks those same admins
         about the tasks a round deletion would carry away, which used to make the
@@ -79,10 +74,8 @@ class ProjectSubmissionAdmin(admin.ModelAdmin):
         to_delete, model_count, perms_needed, protected = super().get_deleted_objects(
             objs, request
         )
-        # perms_needed holds verbose names; the two task models are the only
-        # ones waived here.
-        perms_needed.discard(ReviewAssignment._meta.verbose_name)
-        perms_needed.discard(PreliminaryReview._meta.verbose_name)
+        # perms_needed holds verbose names; 评审任务 is the only one waived here.
+        perms_needed.discard(ReviewTask._meta.verbose_name)
         return to_delete, model_count, perms_needed, protected
 
     @staticmethod
@@ -94,8 +87,8 @@ class ProjectSubmissionAdmin(admin.ModelAdmin):
             "round": submission.round,
             "review_type": submission.review_type,
             "status": submission.status,
-            "assignments": submission.assignments.count(),
-            "preliminary": 1 if preliminary_review_of(submission) else 0,
+            "tasks": submission.tasks.count(),
+            "preliminary": 1 if preliminary_task_of(submission) else 0,
         }
 
     def delete_model(self, request, obj):
@@ -122,28 +115,31 @@ class ProjectSubmissionAdmin(admin.ModelAdmin):
         )
 
 
-@admin.register(ReviewAssignment)
-class ReviewAssignmentAdmin(admin.ModelAdmin):
-    """Read-only, except for handing a still-pending task to another reviewer.
+@admin.register(ReviewTask)
+class ReviewTaskAdmin(admin.ModelAdmin):
+    """只读，唯一的例外是把一张还没交的任务卡换个人。
 
-    A verdict is a record of who decided what: once it exists, the reviewer of
-    that row is never editable, in line with the other review models. While a
-    task is still pending on an undecided round, though, the reviewer can be
-    swapped — this is the only way to recover a round whose reviewer has gone
-    quiet, or turns out to have a conflict of interest, and would otherwise sit
-    at 评审中 forever.
+    A verdict is a record of who decided what: once it exists, the holder of that
+    row is never editable. While a task is still pending on a round that has not
+    moved past its stage, though, the holder may be swapped — the only way to
+    recover a round whose 初审人／评审人 has gone quiet, or turns out to have a
+    conflict of interest, and would otherwise sit at 初审中／评审中 forever.
+
+    两道关共用这一屏（合并任务表之前是两个几乎逐字相同的类）：差别只有措辞与
+    候选资格，都按 ``lifecycle.STAGES`` 生成。
     """
 
     list_display = (
         "submission",
+        "stage",
         "reviewer",
-        "status",
+        "status_label",
         "decision",
         "annotated_file",
         "assigned_at",
         "completed_at",
     )
-    list_filter = ("status", "decision", "assigned_at")
+    list_filter = ("stage", "status", "decision", "assigned_at")
     search_fields = (
         "submission__group__name",
         "reviewer__username",
@@ -152,38 +148,45 @@ class ReviewAssignmentAdmin(admin.ModelAdmin):
     list_select_related = ("submission__group", "reviewer")
     readonly_fields = (
         "submission",
+        "stage",
         "reviewer",
         "status",
         "decision",
         "comment",
         "annotated_file",
+        "is_override",
         "assigned_at",
         "completed_at",
     )
+
+    @admin.display(description="状态")
+    def status_label(self, obj):
+        """状态按阶段叫（待初审／待评审……）：字段只存中性的取值。"""
+        return obj.status_label
 
     def has_add_permission(self, request):
         return False
 
     def has_delete_permission(self, request, obj=None):
-        # Deleting a task would silently change how many reviewers the round
-        # needs; the roster stays whole and swaps go through the change page.
+        # 删一条任务会悄悄改变这一轮需要几人／有没有初审：名单保持完整，换人走
+        # 详情页。（整轮可以删——见 ProjectSubmissionAdmin.get_deleted_objects。）
         return False
 
     def _reassignment_allowed(self, request, obj=None):
         """Whether this task may be swapped to another holder, by this user, now.
 
         Two conditions, both required: the row is still swappable (pending, and
-        its round has not moved past it) *and* the administrator holds the
+        its round has not moved past its stage) *and* the administrator holds the
         model's change permission. The state check must not replace the ordinary
-        permission check — `view_reviewassignment` alone must not buy a write —
-        and it is also what decides whether the change page renders an editable
-        reviewer select at all.
+        permission check — ``view_reviewtask`` alone must not buy a write — and
+        it is also what decides whether the change page renders an editable
+        holder select at all.
         """
         return bool(
             obj is not None
             and obj.pk is not None
-            and obj.status == ReviewAssignment.PENDING
-            and lifecycle.stage_is_open(obj.submission, lifecycle.STAGE_REVIEW)
+            and obj.status == ReviewTask.PENDING
+            and lifecycle.stage_is_open(obj.submission, obj.stage)
         ) and super().has_change_permission(request, obj)
 
     def has_change_permission(self, request, obj=None):
@@ -198,17 +201,17 @@ class ReviewAssignmentAdmin(admin.ModelAdmin):
 
     def get_form(self, request, obj=None, change=False, **kwargs):
         if self._reassignment_allowed(request, obj):
-            kwargs["form"] = AdminReassignReviewerForm
+            kwargs["form"] = AdminReassignTaskForm
         return super().get_form(request, obj, change=change, **kwargs)
 
     def save_model(self, request, obj, form, change):
         """Route the swap through the service instead of saving the row.
 
         The default implementation calls obj.save(), which would write the new
-        reviewer with no eligibility check and no audit entry. Note that Django
-        has already applied the submitted reviewer to ``obj`` in memory;
-        ``reassign_reviewer`` re-reads the row itself, so it still sees the
-        reviewer being replaced.
+        holder with no eligibility check and no audit entry. Note that Django has
+        already applied the submitted holder to ``obj`` in memory;
+        ``reassign_task`` re-reads the row itself, so it still sees the holder
+        being replaced.
         """
         new_reviewer = form.cleaned_data.get("reviewer")
         if new_reviewer is None:
@@ -217,8 +220,8 @@ class ReviewAssignmentAdmin(admin.ModelAdmin):
             # against another entry point reaching save_model with a plain form.
             return
         try:
-            reassign_reviewer(
-                assignment=obj,
+            reassign_task(
+                task=obj,
                 new_reviewer=new_reviewer,
                 actor=request.user,
                 request=request,
@@ -226,96 +229,8 @@ class ReviewAssignmentAdmin(admin.ModelAdmin):
         except ReviewError as exc:
             self.message_user(request, str(exc), messages.ERROR)
         else:
-            self.message_user(request, "已更换评审人。", messages.SUCCESS)
-
-
-@admin.register(PreliminaryReview)
-class PreliminaryReviewAdmin(admin.ModelAdmin):
-    """Read-only, except for handing a still-pending 初审 to another 初审人.
-
-    Deliberately the same shape as ``ReviewAssignmentAdmin``: a former 初审 is a
-    record of who admitted the round, so it is never editable once it has a
-    verdict, and while it is still pending its holder may be swapped — the only
-    way to recover a round whose 初审人 cannot be reached.
-    """
-
-    list_display = (
-        "submission",
-        "reviewer",
-        "status",
-        "decision",
-        "assigned_at",
-        "completed_at",
-    )
-    list_filter = ("status", "decision", "assigned_at")
-    search_fields = (
-        "submission__group__name",
-        "reviewer__username",
-        "reviewer__profile__full_name",
-    )
-    list_select_related = ("submission__group", "reviewer")
-    readonly_fields = (
-        "submission",
-        "reviewer",
-        "status",
-        "decision",
-        "comment",
-        "assigned_at",
-        "completed_at",
-    )
-
-    def has_add_permission(self, request):
-        return False
-
-    def has_delete_permission(self, request, obj=None):
-        # A round has exactly one 初审 and it is the only way in; deleting it
-        # would strand the round at 初审中. Swaps go through the change page.
-        return False
-
-    def _reassignment_allowed(self, request, obj=None):
-        """Whether this 初审 may be swapped, by this user, now.
-
-        Same two conditions as ``ReviewAssignmentAdmin``: still swappable, and
-        the administrator actually holds the change permission.
-        """
-        return bool(
-            obj is not None
-            and obj.pk is not None
-            and obj.status == PreliminaryReview.PENDING
-            and lifecycle.stage_is_open(obj.submission, lifecycle.STAGE_PRELIMINARY)
-        ) and super().has_change_permission(request, obj)
-
-    def has_change_permission(self, request, obj=None):
-        return self._reassignment_allowed(request, obj)
-
-    def get_readonly_fields(self, request, obj=None):
-        if self._reassignment_allowed(request, obj):
-            return tuple(f for f in self.readonly_fields if f != "reviewer")
-        return self.readonly_fields
-
-    def get_form(self, request, obj=None, change=False, **kwargs):
-        if self._reassignment_allowed(request, obj):
-            kwargs["form"] = AdminReassignPreliminaryReviewerForm
-        return super().get_form(request, obj, change=change, **kwargs)
-
-    def save_model(self, request, obj, form, change):
-        """Route the swap through the service instead of saving the row."""
-        new_reviewer = form.cleaned_data.get("reviewer")
-        if new_reviewer is None:
-            # See ReviewAssignmentAdmin.save_model: Django has already refused
-            # the POST for a task that may not be swapped.
-            return
-        try:
-            reassign_preliminary_reviewer(
-                preliminary=obj,
-                new_reviewer=new_reviewer,
-                actor=request.user,
-                request=request,
-            )
-        except ReviewError as exc:
-            self.message_user(request, str(exc), messages.ERROR)
-        else:
-            self.message_user(request, "已更换初审人。", messages.SUCCESS)
+            label = lifecycle.STAGES[obj.stage].holder_label
+            self.message_user(request, f"已更换{label}。", messages.SUCCESS)
 
 
 @admin.register(ArchivedProposal)
@@ -332,7 +247,7 @@ class ArchivedProposalAdmin(admin.ModelAdmin):
     readonly_fields = (
         "group",
         "submission",
-        "source_assignment",
+        "source_task",
         "file",
         "archived_at",
     )

@@ -5,13 +5,9 @@ from django.contrib.auth import get_user_model
 
 from projects.validators import validate_proposal_file
 
-from .models import (
-    REVIEW_TYPE_CHOICES,
-    PreliminaryReview,
-    ReviewAssignment,
-    ReviewerLeave,
-)
-from .services import eligible_preliminary_reviewers, eligible_reviewers
+from . import lifecycle
+from .models import REVIEW_TYPE_CHOICES, ReviewTask, ReviewerLeave
+from .services import eligible_holders
 
 
 User = get_user_model()
@@ -44,17 +40,57 @@ class SubmissionForm(forms.Form):
     )
 
 
-class ReviewForm(forms.Form):
+class DecisionForm(forms.Form):
+    """一次判定的形状：一个结论 + 一段意见——两道关共用的部分。
+
+    初审直接用这个基类（它给的是理由，不是稿子），评审在它之上多一个批注版字段。
+    标签按阶段生成（「初审决定」「评审决定」），所以两个页面上的措辞与合并前逐字
+    相同。
+    """
+
+    #: 子类覆盖：出现在「××决定」「××意见」里的那两个字。
+    stage_label = "评审"
+    comment_help = "请说明通过或需要修改的理由。"
+
     decision = forms.ChoiceField(
-        label="评审决定",
-        choices=ReviewAssignment.DECISION_CHOICES,
+        choices=ReviewTask.DECISION_CHOICES,
         widget=forms.RadioSelect,
     )
     comment = forms.CharField(
-        label="评审意见",
         widget=forms.Textarea(attrs={"rows": 6}),
-        help_text="请说明通过或需要修改的理由。",
     )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["decision"].label = f"{self.stage_label}决定"
+        self.fields["comment"].label = f"{self.stage_label}意见"
+        self.fields["comment"].help_text = self.comment_help
+
+
+class PreliminaryReviewForm(DecisionForm):
+    """初审的判定：放行，还是打回。
+
+    没有批注版字段——初审是关卡，产出的是理由；要附批注版的是评审人那一侧。
+    """
+
+    stage_label = "初审"
+    decision_help = (
+        "通过后按送审类型随机分配评审人，进入正式评审；"
+        "需修改则本轮直接打回项目组，不分配评审人。"
+    )
+    comment_help = "请说明通过或需要修改的理由；打回时项目组会据此修改项目书。"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["decision"].help_text = self.decision_help
+
+
+class ReviewForm(DecisionForm):
+    """评审的判定：通过还是需修改，可另附一份批注版项目书。"""
+
+    stage_label = "评审"
+    comment_help = "请说明通过或需要修改的理由。"
+
     annotated_file = forms.FileField(
         label="批注版项目书",
         required=False,
@@ -63,30 +99,6 @@ class ReviewForm(forms.Form):
             "选填；支持 doc、docx、pdf。可在项目书上直接批注后上传，"
             "也可只填文字意见。请勿在文件属性中保留可识别个人身份的信息。"
         ),
-    )
-
-
-class PreliminaryReviewForm(forms.Form):
-    """The 初审 verdict: pass the proposal on, or send it back to the group.
-
-    Same two verdicts as a review, but no annotated copy: the 初审 is a gate —
-    what it produces is the reason it passed or bounced, and the group reads it
-    off the group detail page.
-    """
-
-    decision = forms.ChoiceField(
-        label="初审决定",
-        choices=PreliminaryReview.DECISION_CHOICES,
-        widget=forms.RadioSelect,
-        help_text=(
-            "通过后按送审类型随机分配评审人，进入正式评审；"
-            "需修改则本轮直接打回项目组，不分配评审人。"
-        ),
-    )
-    comment = forms.CharField(
-        label="初审意见",
-        widget=forms.Textarea(attrs={"rows": 6}),
-        help_text="请说明通过或需要修改的理由；打回时项目组会据此修改项目书。",
     )
 
 
@@ -137,78 +149,36 @@ class ReviewerLeaveForm(forms.ModelForm):
         return cleaned
 
 
-class AdminReassignReviewerForm(forms.ModelForm):
-    """Administrator-side swap of one pending review task to another reviewer.
+class AdminReassignTaskForm(forms.ModelForm):
+    """管理员把一张还没交的任务卡换个人——两道关共用这一个表单。
 
-    Only ``reviewer`` is exposed; the other fields stay read-only on the change
-    page. This form deliberately has no say in *whether* a swap is legal and its
-    ``save()`` is never used — the write goes through ``reassign_reviewer`` (see
-    ``ReviewAssignmentAdmin.save_model``), which owns the status rules and the
-    audit trail. The candidate list comes from the same ``eligible_reviewers``
-    that draws reviewers when a round is let through, so the two cannot drift
-    apart.
+    与 ``ReviewTaskAdmin.save_model`` 的契约：表单只负责给候选人，**没有**发言权
+    决定能不能换（校验与审计都在 ``reassign_task``），``save()`` 也从不被使用。
+    候选名单来自与抽人同一个 ``eligible_holders(stage=…)``，两者因此不可能漂移。
     """
 
     class Meta:
-        model = ReviewAssignment
+        model = ReviewTask
         fields = ("reviewer",)
-        labels = {"reviewer": "评审人"}
-        help_texts = {
-            "reviewer": (
-                "只列出有评审资格、非本项目组成员、未请假、且本轮尚未分配的人"
-                "（本轮的初审人也不在其中）。"
-            ),
-        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        assignment = self.instance
-        submission = assignment.submission
-        candidates = eligible_reviewers(
+        task = self.instance
+        rules = lifecycle.STAGES[task.stage]
+        submission = task.submission
+        self.fields["reviewer"].label = rules.holder_label
+        self.fields["reviewer"].help_text = (
+            f"只列出有{rules.label}资格、启用中、非本项目组成员、未请假、"
+            "且本轮尚未持有任务的人。"
+        )
+        candidates = eligible_holders(
+            stage=task.stage,
             group=submission.group,
             submitter=submission.submitted_by,
             submission=submission,
         )
-        # Keep the current reviewer among the choices, otherwise the select
-        # renders empty and the administrator cannot see who holds it now.
+        # Keep the current holder among the choices, otherwise the select renders
+        # empty and the administrator cannot see who holds it now.
         self.fields["reviewer"].queryset = candidates | User.objects.filter(
-            pk=assignment.reviewer_id
-        )
-
-
-class AdminReassignPreliminaryReviewerForm(forms.ModelForm):
-    """Administrator-side swap of one pending 初审 task to another 初审人.
-
-    The 初审 counterpart of :class:`AdminReassignReviewerForm`, and it exists for
-    the same reason: without it, a 初审人 who cannot be reached leaves the round
-    stuck at 初审中 with no way in. Only the reviewer may be edited, and the write
-    goes through ``reassign_preliminary_reviewer``.
-    """
-
-    class Meta:
-        model = PreliminaryReview
-        fields = ("reviewer",)
-        labels = {"reviewer": "初审人"}
-        help_texts = {
-            # 与候选 queryset 逐项对齐：这里少写一项，管理员就会以为某个不在
-            # 列表里的人该出现。评审侧的同一句话在 AdminReassignReviewerForm。
-            "reviewer": (
-                "只列出有初审资格、启用中、非本项目组成员、未请假、"
-                "且本轮尚未持有任务的人。"
-            ),
-        }
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        preliminary = self.instance
-        submission = preliminary.submission
-        candidates = eligible_preliminary_reviewers(
-            group=submission.group,
-            submitter=submission.submitted_by,
-            submission=submission,
-        )
-        # Keep the current 初审人 among the choices so the select shows who holds
-        # the task now; the service still refuses a swap that changes nothing.
-        self.fields["reviewer"].queryset = candidates | User.objects.filter(
-            pk=preliminary.reviewer_id
+            pk=task.reviewer_id
         )

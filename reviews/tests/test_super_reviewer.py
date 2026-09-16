@@ -13,18 +13,15 @@ from projects.permissions import can_view_group
 from ..models import (
     REVIEW_TYPE_INNOVATION_START,
     ArchivedProposal,
-    PreliminaryReview,
+    ReviewTask,
     ProjectSubmission,
-    ReviewAssignment,
-    preliminary_review_of,
+    preliminary_task_of,
 )
 from ..services import (
+    pending_task_summary,
     ReviewError,
     can_override_review,
-    complete_preliminary_review,
-    complete_review,
-    count_pending_preliminary_reviews,
-    count_pending_reviews,
+    submit_verdict,
     override_blocker,
     override_review,
     submit_for_review,
@@ -65,7 +62,7 @@ class SuperReviewerOverrideTests(ReviewTestCase):
     reviewers' votes — an earlier 需修改 must not overrule it.
     """
 
-    def _override(self, submission, decision=ReviewAssignment.APPROVE, **kwargs):
+    def _override(self, submission, decision=ReviewTask.APPROVE, **kwargs):
         kwargs.setdefault("comment", "超级评审意见。")
         return override_review(
             submission=submission,
@@ -85,36 +82,36 @@ class SuperReviewerOverrideTests(ReviewTestCase):
         self.assertEqual(submission.status, ProjectSubmission.APPROVED)
         self.assertIsNotNone(submission.decided_at)
         self.assertEqual(
-            set(submission.assignments.values_list("status", flat=True)),
-            {ReviewAssignment.RELEASED, ReviewAssignment.COMPLETED},
+            set(self.review_tasks(submission).values_list("status", flat=True)),
+            {ReviewTask.RELEASED, ReviewTask.COMPLETED},
         )
-        override_row = submission.assignments.get(is_override=True)
+        override_row = self.review_tasks(submission).get(is_override=True)
         self.assertEqual(override_row.reviewer, self.super_reviewer)
-        self.assertEqual(override_row.decision, ReviewAssignment.APPROVE)
-        self.assertEqual(override_row.status, ReviewAssignment.COMPLETED)
+        self.assertEqual(override_row.decision, ReviewTask.APPROVE)
+        self.assertEqual(override_row.status, ReviewTask.COMPLETED)
         audit = AuditLog.objects.get(action="reviews.submission.override")
         self.assertEqual(audit.detail["released"], 2)
 
     def test_override_rejects_the_round(self):
         submission = self._submit()
 
-        self._override(submission, decision=ReviewAssignment.REVISE)
+        self._override(submission, decision=ReviewTask.REVISE)
 
         submission.refresh_from_db()
         self.assertEqual(submission.status, ProjectSubmission.NEEDS_REVISION)
         self.assertEqual(
-            submission.assignments.filter(status=ReviewAssignment.RELEASED).count(), 2
+            self.review_tasks(submission).filter(status=ReviewTask.RELEASED).count(), 2
         )
         self.assertFalse(ArchivedProposal.objects.filter(submission=submission).exists())
 
     def test_override_beats_an_earlier_revision_request(self):
         """The super vote must not be re-derived from the ordinary reviewers' votes."""
         submission = self._submit()
-        first = submission.assignments.filter(reviewer=self.reviewer_one).get()
-        complete_review(
-            assignment=first,
+        first = self.review_tasks(submission).filter(reviewer=self.reviewer_one).get()
+        submit_verdict(
+            task=first,
             reviewer=self.reviewer_one,
-            decision=ReviewAssignment.REVISE,
+            decision=ReviewTask.REVISE,
             comment="请补充预算。",
         )
 
@@ -125,10 +122,10 @@ class SuperReviewerOverrideTests(ReviewTestCase):
 
     def test_override_archives_every_annotated_copy(self):
         submission = self._submit()
-        complete_review(
-            assignment=submission.assignments.filter(reviewer=self.reviewer_one).get(),
+        submit_verdict(
+            task=self.review_tasks(submission).filter(reviewer=self.reviewer_one).get(),
             reviewer=self.reviewer_one,
-            decision=ReviewAssignment.APPROVE,
+            decision=ReviewTask.APPROVE,
             comment="同意。",
             annotated_file=pdf("reviewer-one.pdf"),
         )
@@ -139,11 +136,11 @@ class SuperReviewerOverrideTests(ReviewTestCase):
         self.assertEqual(archived.count(), 2)
         # 归档的正是「已完成且通过」的那两条；被释放的那条没有批注文件，不产生归档。
         self.assertEqual(
-            set(archived.values_list("source_assignment_id", flat=True)),
+            set(archived.values_list("source_task_id", flat=True)),
             set(
-                submission.assignments.filter(
-                    status=ReviewAssignment.COMPLETED,
-                    decision=ReviewAssignment.APPROVE,
+                self.review_tasks(submission).filter(
+                    status=ReviewTask.COMPLETED,
+                    decision=ReviewTask.APPROVE,
                 ).values_list("pk", flat=True)
             ),
         )
@@ -152,27 +149,27 @@ class SuperReviewerOverrideTests(ReviewTestCase):
 
     def test_a_released_task_can_no_longer_be_submitted(self):
         submission = self._submit()
-        released = submission.assignments.filter(reviewer=self.reviewer_two).get()
+        released = self.review_tasks(submission).filter(reviewer=self.reviewer_two).get()
 
         self._override(submission)
 
         with self.assertRaises(ReviewError):
-            complete_review(
-                assignment=released,
+            submit_verdict(
+                task=released,
                 reviewer=self.reviewer_two,
-                decision=ReviewAssignment.APPROVE,
+                decision=ReviewTask.APPROVE,
                 comment="我还是评一下。",
             )
         released.refresh_from_db()
-        self.assertEqual(released.status, ReviewAssignment.RELEASED)
+        self.assertEqual(released.status, ReviewTask.RELEASED)
 
     def test_released_tasks_drop_out_of_the_reminder_count(self):
         submission = self._submit()
-        self.assertEqual(count_pending_reviews(self.reviewer_one), 1)
+        self.assertEqual(pending_task_summary(self.reviewer_one).review, 1)
 
         self._override(submission)
 
-        self.assertEqual(count_pending_reviews(self.reviewer_one), 0)
+        self.assertEqual(pending_task_summary(self.reviewer_one).review, 0)
 
     # --- the override reaches a round waiting on its 初审 ----------------------
 
@@ -184,30 +181,30 @@ class SuperReviewerOverrideTests(ReviewTestCase):
 
         submission.refresh_from_db()
         self.assertEqual(submission.status, ProjectSubmission.APPROVED)
-        preliminary = preliminary_review_of(submission)
-        self.assertEqual(preliminary.status, PreliminaryReview.RELEASED)
-        self.assertEqual(count_pending_preliminary_reviews(self.preliminary), 0)
+        preliminary = preliminary_task_of(submission)
+        self.assertEqual(preliminary.status, ReviewTask.RELEASED)
+        self.assertEqual(pending_task_summary(self.preliminary).preliminary, 0)
         # 这一轮还没分配过评审人，所以被释放的只有那条初审任务。
-        self.assertFalse(submission.assignments.filter(is_override=False).exists())
+        self.assertFalse(self.review_tasks(submission).filter(is_override=False).exists())
         audit = AuditLog.objects.get(action="reviews.submission.override")
-        self.assertEqual(audit.detail["released"], 0)
-        self.assertEqual(audit.detail["released_preliminary"], 1)
+        # 两道关的等待任务一起放掉：这里就是那一张初审卡。
+        self.assertEqual(audit.detail["released"], 1)
 
     def test_a_released_preliminary_can_no_longer_be_submitted(self):
         submission = self._open_round()
-        preliminary = submission.preliminary_review
+        preliminary = submission.preliminary_task
 
         self._override(submission)
 
         with self.assertRaises(ReviewError):
-            complete_preliminary_review(
-                preliminary=preliminary,
+            submit_verdict(
+                task=preliminary,
                 reviewer=self.preliminary,
-                decision=PreliminaryReview.APPROVE,
+                decision=ReviewTask.APPROVE,
                 comment="我还是审一下。",
             )
         preliminary.refresh_from_db()
-        self.assertEqual(preliminary.status, PreliminaryReview.RELEASED)
+        self.assertEqual(preliminary.status, ReviewTask.RELEASED)
 
     def test_a_super_reviewer_who_is_also_the_rounds_preliminary_cannot_override_it(self):
         """同一个人不能既放行又敲定同一轮：两票都是他一个人的意见。"""
@@ -253,8 +250,8 @@ class SuperReviewerOverrideTests(ReviewTestCase):
 
     def test_a_super_reviewer_holding_a_task_on_the_round_cannot_override_it(self):
         submission = self._submit()
-        ReviewAssignment.objects.create(
-            submission=submission, reviewer=self.super_reviewer
+        ReviewTask.objects.create(
+            submission=submission, stage=ReviewTask.REVIEW, reviewer=self.super_reviewer
         )
 
         self.assertFalse(
@@ -290,16 +287,16 @@ class SuperReviewerOverrideTests(ReviewTestCase):
 
     def test_a_settled_round_cannot_be_overridden(self):
         submission = self._submit()
-        for assignment in submission.assignments.all():
-            complete_review(
-                assignment=assignment,
+        for assignment in self.review_tasks(submission).all():
+            submit_verdict(
+                task=assignment,
                 reviewer=assignment.reviewer,
-                decision=ReviewAssignment.APPROVE,
+                decision=ReviewTask.APPROVE,
                 comment="同意。",
             )
 
         with self.assertRaises(ReviewError):
-            self._override(submission, decision=ReviewAssignment.REVISE)
+            self._override(submission, decision=ReviewTask.REVISE)
 
     # --- reach: queue and group visibility -----------------------------------
 
@@ -313,20 +310,20 @@ class SuperReviewerOverrideTests(ReviewTestCase):
         submission = self._open_round()
         # 初审中也算进行中：要看项目书才谈得上敲定。
         self.assertTrue(can_view_group(self.super_reviewer, self.group))
-        preliminary = submission.preliminary_review
-        complete_preliminary_review(
-            preliminary=preliminary,
+        preliminary = submission.preliminary_task
+        submit_verdict(
+            task=preliminary,
             reviewer=preliminary.reviewer,
-            decision=PreliminaryReview.APPROVE,
+            decision=ReviewTask.APPROVE,
             comment="同意送审。",
         )
         self.assertTrue(can_view_group(self.super_reviewer, self.group))
 
-        for assignment in submission.assignments.all():
-            complete_review(
-                assignment=assignment,
+        for assignment in self.review_tasks(submission).all():
+            submit_verdict(
+                task=assignment,
                 reviewer=assignment.reviewer,
-                decision=ReviewAssignment.APPROVE,
+                decision=ReviewTask.APPROVE,
                 comment="同意。",
             )
 
@@ -405,8 +402,8 @@ class SuperReviewerOverrideTests(ReviewTestCase):
             override_blocker(submission=submission, user=self.member),
             "你是本项目组成员",
         )
-        ReviewAssignment.objects.create(
-            submission=submission, reviewer=self.super_reviewer
+        ReviewTask.objects.create(
+            submission=submission, stage=ReviewTask.REVIEW, reviewer=self.super_reviewer
         )
         self.assertEqual(
             override_blocker(submission=submission, user=self.super_reviewer),
@@ -437,7 +434,7 @@ class SuperReviewerOverrideTests(ReviewTestCase):
 
         response = self.client.post(
             reverse("reviews:override", args=(submission.pk,)),
-            {"override-decision": ReviewAssignment.APPROVE, "override-comment": "同意。"},
+            {"override-decision": ReviewTask.APPROVE, "override-comment": "同意。"},
         )
 
         self.assertEqual(response.status_code, 302)
@@ -450,7 +447,7 @@ class SuperReviewerOverrideTests(ReviewTestCase):
 
         response = self.client.post(
             reverse("reviews:override", args=(submission.pk,)),
-            {"override-decision": ReviewAssignment.APPROVE, "override-comment": ""},
+            {"override-decision": ReviewTask.APPROVE, "override-comment": ""},
         )
 
         self.assertEqual(response.status_code, 302)
