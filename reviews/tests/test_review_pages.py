@@ -9,12 +9,11 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 
 from ..models import (
-    PreliminaryReview,
+    ReviewTask,
     ProjectSubmission,
-    ReviewAssignment,
-    preliminary_review_of,
+    preliminary_task_of,
 )
-from ..services import complete_review
+from ..services import submit_verdict
 from .base import (
     TWO_REVIEWER_TYPE,
     ReviewTestCase,
@@ -73,10 +72,10 @@ class ReviewPagesTests(ReviewTestCase):
 
     def test_group_member_can_view_review_history(self):
         submission = self._submit()
-        complete_review(
-            assignment=self._assignment(submission, self.reviewer_one),
+        submit_verdict(
+            task=self._assignment(submission, self.reviewer_one),
             reviewer=self.reviewer_one,
-            decision=ReviewAssignment.APPROVE,
+            decision=ReviewTask.APPROVE,
             comment="同意。",
         )
         self.client.force_login(self.member)
@@ -90,10 +89,10 @@ class ReviewPagesTests(ReviewTestCase):
 
     def test_reviewer_identity_is_hidden_on_group_detail(self):
         submission = self._submit()
-        complete_review(
-            assignment=self._assignment(submission, self.reviewer_one),
+        submit_verdict(
+            task=self._assignment(submission, self.reviewer_one),
             reviewer=self.reviewer_one,
-            decision=ReviewAssignment.APPROVE,
+            decision=ReviewTask.APPROVE,
             comment="同意。",
         )
         self.client.force_login(self.member)
@@ -137,15 +136,15 @@ class ReviewPagesTests(ReviewTestCase):
         self.assertEqual(submission.review_type, TWO_REVIEWER_TYPE)
         self.assertEqual(submission.status, ProjectSubmission.PRELIMINARY_PENDING)
 
-        preliminary = preliminary_review_of(submission)
+        preliminary = preliminary_task_of(submission)
         self.client.force_login(self.preliminary)
         preliminary_response = self.client.post(
             reverse("reviews:preliminary_complete", args=(preliminary.pk,)),
-            {"decision": PreliminaryReview.APPROVE, "comment": "同意送审。"},
+            {"decision": ReviewTask.APPROVE, "comment": "同意送审。"},
         )
         self.assertEqual(preliminary_response.status_code, 302)
         preliminary.refresh_from_db()
-        self.assertEqual(preliminary.status, PreliminaryReview.COMPLETED)
+        self.assertEqual(preliminary.status, ReviewTask.COMPLETED)
         submission.refresh_from_db()
         self.assertEqual(submission.status, ProjectSubmission.PENDING)
 
@@ -153,13 +152,13 @@ class ReviewPagesTests(ReviewTestCase):
         self.client.force_login(self.reviewer_one)
         complete_response = self.client.post(
             reverse("reviews:complete", args=(assignment.pk,)),
-            {"decision": ReviewAssignment.APPROVE, "comment": "通过。"},
+            {"decision": ReviewTask.APPROVE, "comment": "通过。"},
         )
 
         self.assertEqual(complete_response.status_code, 302)
         assignment.refresh_from_db()
-        self.assertEqual(assignment.status, ReviewAssignment.COMPLETED)
-        self.assertEqual(assignment.decision, ReviewAssignment.APPROVE)
+        self.assertEqual(assignment.status, ReviewTask.COMPLETED)
+        self.assertEqual(assignment.decision, ReviewTask.APPROVE)
 
     def test_group_manage_reports_the_preliminary_stage(self):
         """初审中同样是「本轮未结束」，措辞要说明在等谁。"""
@@ -211,7 +210,7 @@ class ReviewPagesTests(ReviewTestCase):
         response = self.client.post(
             reverse("reviews:complete", args=(assignment.pk,)),
             {
-                "decision": ReviewAssignment.APPROVE,
+                "decision": ReviewTask.APPROVE,
                 "comment": "已在稿件上批注。",
                 "annotated_file": pdf("annotated.pdf"),
             },

@@ -13,10 +13,9 @@ from django.utils import timezone
 from . import permissions
 from .forms import PreliminaryReviewForm, ReviewForm, ReviewerLeaveForm
 from .models import (
-    PreliminaryReview,
+    ReviewTask,
     ProjectSubmission,
-    ReviewAssignment,
-    preliminary_review_of,
+    preliminary_task_of,
 )
 from .services import (
     can_override_review,
@@ -27,9 +26,9 @@ from .services import (
 
 
 def queue_context(*, user):
-    """「我的评审」页：按资格决定显示哪几侧，并把任务分档。
+    """「我的评审」页：按资格决定显示哪几侧，并把任务按（阶段，状态）分档。
 
-    分档在 Python 里做而不是三次 DB 查询：一名评审人手上的任务是个位数量级，
+    分档在 Python 里做而不是六次 DB 查询：一名评审人手上的任务是个位数量级，
     一次取回再分，比按状态各查一次更省也更好读。
     """
     context = {
@@ -38,37 +37,30 @@ def queue_context(*, user):
         "show_review": permissions.is_reviewer(user)
         or permissions.is_super_reviewer(user),
     }
+    tasks = list(
+        ReviewTask.objects.filter(reviewer=user)
+        .select_related("submission__group", "submission__submitted_by")
+        .order_by("-assigned_at", "-id")
+    )
+
+    def bucket(stage, status):
+        return [task for task in tasks if task.stage == stage and task.status == status]
+
     if context["show_preliminary"]:
-        preliminary = (
-            PreliminaryReview.objects.filter(reviewer=user)
-            .select_related("submission__group", "submission__submitted_by")
-            .order_by("-assigned_at", "-id")
+        context["preliminary_pending"] = bucket(
+            ReviewTask.PRELIMINARY, ReviewTask.PENDING
         )
-        context["preliminary_pending"] = [
-            item for item in preliminary if item.status == PreliminaryReview.PENDING
-        ]
-        context["preliminary_completed"] = [
-            item for item in preliminary if item.status == PreliminaryReview.COMPLETED
-        ]
+        context["preliminary_completed"] = bucket(
+            ReviewTask.PRELIMINARY, ReviewTask.COMPLETED
+        )
         # 被超级评审释放的那一条也要列出来：否则初审人只会看到任务凭空消失。
-        context["preliminary_released"] = [
-            item for item in preliminary if item.status == PreliminaryReview.RELEASED
-        ]
-    if context["show_review"]:
-        assignments = (
-            ReviewAssignment.objects.filter(reviewer=user)
-            .select_related("submission__group", "submission__submitted_by")
-            .order_by("-assigned_at", "-id")
+        context["preliminary_released"] = bucket(
+            ReviewTask.PRELIMINARY, ReviewTask.RELEASED
         )
-        context["pending"] = [
-            item for item in assignments if item.status == ReviewAssignment.PENDING
-        ]
-        context["completed"] = [
-            item for item in assignments if item.status == ReviewAssignment.COMPLETED
-        ]
-        context["released"] = [
-            item for item in assignments if item.status == ReviewAssignment.RELEASED
-        ]
+    if context["show_review"]:
+        context["pending"] = bucket(ReviewTask.REVIEW, ReviewTask.PENDING)
+        context["completed"] = bucket(ReviewTask.REVIEW, ReviewTask.COMPLETED)
+        context["released"] = bucket(ReviewTask.REVIEW, ReviewTask.RELEASED)
     if permissions.is_super_reviewer(user):
         context["open_rounds"] = open_rounds_for(user)
     return context
@@ -97,36 +89,18 @@ def group_detail_context(*, submissions, user):
     """项目组详情页里评审那一半。
 
     ``submissions`` 是该组的轮次（新到旧）且已预取任务与提交人；本函数不补查询。
+    键名与合并前一致（``my_preliminary``／``my_assignment``／两个表单），所以模板与
+    既有断言都不用动——两条 URL 也仍然指向同一个视图。
     """
     latest = submissions[0] if submissions else None
-    my_assignment = None
-    my_preliminary = None
-    if latest is not None:
-        if permissions.is_reviewer(user):
-            my_assignment = next(
-                (
-                    assignment
-                    for assignment in latest.assignments.all()
-                    if assignment.reviewer_id == user.pk
-                    and assignment.status == ReviewAssignment.PENDING
-                ),
-                None,
-            )
-        if permissions.is_preliminary_reviewer(user):
-            preliminary = preliminary_review_of(latest)
-            if (
-                preliminary is not None
-                and preliminary.reviewer_id == user.pk
-                and preliminary.status == PreliminaryReview.PENDING
-            ):
-                my_preliminary = preliminary
+    my_task = _pending_task_of(latest, user)
     can_override = latest is not None and can_override_review(
         submission=latest,
         user=user,
     )
     context = {
-        "my_assignment": my_assignment,
-        "my_preliminary": my_preliminary,
+        "my_preliminary": my_task if my_task and my_task.is_preliminary else None,
+        "my_assignment": my_task if my_task and my_task.is_review else None,
         "review_form": ReviewForm(),
         "preliminary_form": PreliminaryReviewForm(),
         "can_override": can_override,
@@ -135,6 +109,26 @@ def group_detail_context(*, submissions, user):
         # Prefixed so its field ids cannot clash with the reviewer form above.
         context["override_form"] = ReviewForm(prefix="override")
     return context
+
+
+def _pending_task_of(submission, user):
+    """我和这一轮之间那条还没交的任务。
+
+    一个人在一轮里只有一席（``unique_submission_reviewer``），所以至多一条；资格
+    也一并检查——任务还挂着但资格已被撤销的人，不该看到一个自己也提交不了的表单。
+    """
+    if submission is None or not user.is_authenticated:
+        return None
+    return next(
+        (
+            task
+            for task in submission.tasks.all()
+            if task.reviewer_id == user.pk
+            and task.is_pending
+            and permissions.qualifies_for_stage(user, task.stage)
+        ),
+        None,
+    )
 
 
 def member_home_context(*, user):

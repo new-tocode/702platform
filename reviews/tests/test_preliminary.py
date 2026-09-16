@@ -7,6 +7,7 @@
 from datetime import timedelta
 
 from django.contrib.auth.models import Permission
+from django.db import IntegrityError
 from django.urls import reverse
 from django.utils import timezone
 
@@ -18,19 +19,17 @@ from .. import lifecycle
 from ..models import (
     REVIEW_TYPE_COMPETITION_PROJECT,
     ArchivedProposal,
-    PreliminaryReview,
+    ReviewTask,
     ProjectSubmission,
-    ReviewAssignment,
     ReviewerLeave,
-    preliminary_review_of,
+    preliminary_task_of,
 )
 from ..services import (
+    pending_task_summary,
     ReviewError,
-    complete_preliminary_review,
-    count_pending_preliminary_reviews,
-    eligible_preliminary_reviewers,
-    eligible_reviewers,
-    reassign_preliminary_reviewer,
+    submit_verdict,
+    eligible_holders,
+    reassign_task,
 )
 from .base import (
     TWO_REVIEWER_TYPE,
@@ -79,16 +78,16 @@ class PreliminaryReviewTests(ReviewTestCase):
         submission = self._open_round()
 
         self.assertEqual(
-            PreliminaryReview.objects.filter(submission=submission).count(), 1
+            ReviewTask.objects.filter(submission=submission).count(), 1
         )
-        preliminary = preliminary_review_of(submission)
+        preliminary = preliminary_task_of(submission)
         self.assertEqual(preliminary.reviewer, self.preliminary)
-        self.assertEqual(preliminary.status, PreliminaryReview.PENDING)
+        self.assertEqual(preliminary.status, ReviewTask.PENDING)
         self.assertEqual(submission.status, ProjectSubmission.PRELIMINARY_PENDING)
         self.assertTrue(submission.is_open)
         # 任务数算上初审：超级评审要释放的正是这些还没交的东西。
         self.assertEqual(submission.open_task_count, 1)
-        self.assertEqual(submission.assignments.count(), 0)
+        self.assertEqual(self.review_tasks(submission).count(), 0)
 
     def test_approval_draws_the_reviewers_its_type_calls_for(self):
         submission = self._open_round()
@@ -100,10 +99,10 @@ class PreliminaryReviewTests(ReviewTestCase):
         self.assertIsNone(submission.decided_at)
         self.assertEqual(submission.open_task_count, submission.required_reviewers)
         self.assertEqual(
-            set(submission.assignments.values_list("reviewer_id", flat=True)),
+            set(self.review_tasks(submission).values_list("reviewer_id", flat=True)),
             {self.reviewer_one.pk, self.reviewer_two.pk},
         )
-        self.assertEqual(count_pending_preliminary_reviews(self.preliminary), 0)
+        self.assertEqual(pending_task_summary(self.preliminary).preliminary, 0)
 
     def test_capacity_check_leaves_the_preliminary_reviewer_out(self):
         """初审人不能占评审名额：预检要比「名义上有几个评审人」少算他一个。"""
@@ -129,9 +128,9 @@ class PreliminaryReviewTests(ReviewTestCase):
         self.assertIn("评审人", str(caught.exception))
         submission.refresh_from_db()
         self.assertEqual(submission.status, ProjectSubmission.PRELIMINARY_PENDING)
-        self.assertEqual(submission.assignments.count(), 0)
-        preliminary = preliminary_review_of(submission)
-        self.assertEqual(preliminary.status, PreliminaryReview.PENDING)
+        self.assertEqual(self.review_tasks(submission).count(), 0)
+        preliminary = preliminary_task_of(submission)
+        self.assertEqual(preliminary.status, ReviewTask.PENDING)
         self.assertIsNone(preliminary.completed_at)
 
         # 有人可用之后原地重试即可，不必重新送审。
@@ -141,21 +140,21 @@ class PreliminaryReviewTests(ReviewTestCase):
 
         submission.refresh_from_db()
         self.assertEqual(submission.status, ProjectSubmission.PENDING)
-        self.assertEqual(submission.assignments.count(), 2)
+        self.assertEqual(self.review_tasks(submission).count(), 2)
 
     def test_a_revision_request_ends_the_round_without_reviewers(self):
         submission = self._open_round()
 
         self._pass_preliminary(
             submission,
-            decision=PreliminaryReview.REVISE,
+            decision=ReviewTask.REVISE,
             comment="请先补齐预算。",
         )
 
         submission.refresh_from_db()
         self.assertEqual(submission.status, ProjectSubmission.NEEDS_REVISION)
         self.assertIsNotNone(submission.decided_at)
-        self.assertEqual(submission.assignments.count(), 0)
+        self.assertEqual(self.review_tasks(submission).count(), 0)
         self.assertFalse(ArchivedProposal.objects.filter(submission=submission).exists())
         # 打回不花评审人的时间：这一轮从头到尾没分配过评审任务。
         audit = AuditLog.objects.get(action="reviews.preliminary.complete")
@@ -172,7 +171,7 @@ class PreliminaryReviewTests(ReviewTestCase):
         audit = AuditLog.objects.get(action="reviews.preliminary.complete")
         self.assertEqual(audit.user, self.preliminary)
         self.assertEqual(audit.detail["submission_id"], submission.pk)
-        self.assertEqual(audit.detail["decision"], PreliminaryReview.APPROVE)
+        self.assertEqual(audit.detail["decision"], ReviewTask.APPROVE)
         self.assertEqual(audit.detail["submission_status"], ProjectSubmission.PENDING)
         self.assertEqual(
             set(audit.detail["reviewer_ids"]),
@@ -184,36 +183,36 @@ class PreliminaryReviewTests(ReviewTestCase):
         self.preliminary.is_reviewer = True
         self.preliminary.save(update_fields=["is_reviewer"])
         submission = self._open_round()
-        self.assertEqual(preliminary_review_of(submission).reviewer, self.preliminary)
+        self.assertEqual(preliminary_task_of(submission).reviewer, self.preliminary)
 
         self._pass_preliminary(submission)
 
-        drawn = set(submission.assignments.values_list("reviewer_id", flat=True))
+        drawn = set(self.review_tasks(submission).values_list("reviewer_id", flat=True))
         self.assertEqual(drawn, {self.reviewer_one.pk, self.reviewer_two.pk})
         self.assertNotIn(self.preliminary.pk, drawn)
         # 候选池里也把他排除掉。
         self.assertNotIn(
             self.preliminary,
-            eligible_reviewers(
+            eligible_holders(stage=ReviewTask.REVIEW, 
                 group=self.group, submitter=self.contact, submission=submission
             ),
         )
         # 排除只跟着「这一轮」走：不带 submission 的候选池里他仍在（资格未被改动）。
         self.assertIn(
             self.preliminary,
-            eligible_reviewers(group=self.group, submitter=self.contact),
+            eligible_holders(stage=ReviewTask.REVIEW, group=self.group, submitter=self.contact),
         )
 
     def test_a_completed_preliminary_cannot_be_answered_twice(self):
         submission = self._open_round()
-        preliminary = preliminary_review_of(submission)
+        preliminary = preliminary_task_of(submission)
         self._pass_preliminary(submission)
 
         with self.assertRaises(ReviewError) as caught:
-            complete_preliminary_review(
-                preliminary=preliminary,
+            submit_verdict(
+                task=preliminary,
                 reviewer=self.preliminary,
-                decision=PreliminaryReview.APPROVE,
+                decision=ReviewTask.APPROVE,
                 comment="再判一次。",
             )
 
@@ -224,32 +223,59 @@ class PreliminaryReviewTests(ReviewTestCase):
         other = make_preliminary_reviewer("preliminary-other")
 
         with self.assertRaises(ReviewError):
-            complete_preliminary_review(
-                preliminary=preliminary_review_of(submission),
+            submit_verdict(
+                task=preliminary_task_of(submission),
                 reviewer=other,
-                decision=PreliminaryReview.APPROVE,
+                decision=ReviewTask.APPROVE,
                 comment="越权。",
             )
 
     def test_an_invalid_decision_is_refused(self):
         submission = self._open_round()
-        preliminary = preliminary_review_of(submission)
+        preliminary = preliminary_task_of(submission)
 
         with self.assertRaises(ReviewError):
-            complete_preliminary_review(
-                preliminary=preliminary,
+            submit_verdict(
+                task=preliminary,
                 reviewer=self.preliminary,
                 decision="not-a-decision",
                 comment="随便勾的。",
             )
 
         preliminary.refresh_from_db()
-        self.assertEqual(preliminary.status, PreliminaryReview.PENDING)
+        self.assertEqual(preliminary.status, ReviewTask.PENDING)
+
+    def test_one_person_holds_at_most_one_task_per_round(self):
+        """一人一轮一席——合并成一张表后由数据库约束背书。
+
+        正常流程撞不到它（初审人不会被抽为同一轮的评审人），但这条不变式正是
+        「一个人在一轮里只占一席」本身，值得单独锁住。
+        """
+        submission = self._open_round()
+        preliminary = preliminary_task_of(submission)
+
+        with self.assertRaises(IntegrityError):
+            ReviewTask.objects.create(
+                submission=submission,
+                stage=ReviewTask.REVIEW,
+                reviewer=preliminary.reviewer,
+            )
+
+    def test_a_round_has_at_most_one_preliminary_task(self):
+        """每轮恰好一条初审（升级前留下的老轮次没有，所以约束允许零条）。"""
+        submission = self._open_round()
+
+        with self.assertRaises(IntegrityError):
+            ReviewTask.objects.create(
+                submission=submission,
+                stage=ReviewTask.PRELIMINARY,
+                reviewer=make_user("preliminary-second"),
+            )
 
     def test_the_gate_uses_the_same_verdicts_as_a_review(self):
         """同一对结论、同一套取值；初审只是没有批注版——它给的是理由，不是稿子。"""
         self.assertEqual(
-            PreliminaryReview.DECISION_CHOICES, ReviewAssignment.DECISION_CHOICES
+            ReviewTask.DECISION_CHOICES, ReviewTask.DECISION_CHOICES
         )
         self.assertNotIn("annotated_file", PreliminaryReviewForm().fields)
 
@@ -257,7 +283,7 @@ class PreliminaryReviewTests(ReviewTestCase):
         """初审打回时没有评审意见可看，页面不能让人去找不存在的东西。"""
         submission = self._open_round()
         self._pass_preliminary(
-            submission, decision=PreliminaryReview.REVISE, comment="预算要重做。"
+            submission, decision=ReviewTask.REVISE, comment="预算要重做。"
         )
         self.client.force_login(self.member)
 
@@ -273,7 +299,7 @@ class PreliminaryReviewTests(ReviewTestCase):
 
     def test_queue_and_detail_serve_a_preliminary_only_account(self):
         submission = self._open_round()
-        preliminary = preliminary_review_of(submission)
+        preliminary = preliminary_task_of(submission)
         self.client.force_login(self.preliminary)
 
         queue = self.client.get(reverse("reviews:queue"))
@@ -345,7 +371,11 @@ class PreliminaryReviewTests(ReviewTestCase):
             status=ProjectSubmission.PENDING,
             submitted_by=self.contact,
         )
-        ReviewAssignment.objects.create(submission=legacy, reviewer=self.reviewer_one)
+        ReviewTask.objects.create(
+            submission=legacy,
+            stage=ReviewTask.REVIEW,
+            reviewer=self.reviewer_one,
+        )
         self.client.force_login(self.member)
 
         response = self.client.get(
@@ -362,9 +392,9 @@ class PreliminaryReviewTests(ReviewTestCase):
 
     def test_the_view_requires_the_post_verb_and_the_holder(self):
         submission = self._open_round()
-        url = self._preliminary_url(preliminary_review_of(submission))
+        url = self._preliminary_url(preliminary_task_of(submission))
         other = make_preliminary_reviewer("preliminary-other")
-        payload = {"decision": PreliminaryReview.APPROVE, "comment": "同意。"}
+        payload = {"decision": ReviewTask.APPROVE, "comment": "同意。"}
 
         self.client.force_login(self.member)
         self.assertEqual(self.client.post(url, payload).status_code, 403)
@@ -380,8 +410,8 @@ class PreliminaryReviewTests(ReviewTestCase):
         self.client.force_login(self.preliminary)
 
         response = self.client.post(
-            self._preliminary_url(preliminary_review_of(submission)),
-            {"decision": PreliminaryReview.APPROVE, "comment": "同意送审。"},
+            self._preliminary_url(preliminary_task_of(submission)),
+            {"decision": ReviewTask.APPROVE, "comment": "同意送审。"},
             follow=True,
         )
 
@@ -389,15 +419,15 @@ class PreliminaryReviewTests(ReviewTestCase):
         self.assertContains(response, "已随机分配 2 名评审人")
         submission.refresh_from_db()
         self.assertEqual(submission.status, ProjectSubmission.PENDING)
-        self.assertEqual(submission.assignments.count(), 2)
+        self.assertEqual(self.review_tasks(submission).count(), 2)
 
     def test_the_view_records_a_revision_request(self):
         submission = self._open_round()
         self.client.force_login(self.preliminary)
 
         response = self.client.post(
-            self._preliminary_url(preliminary_review_of(submission)),
-            {"decision": PreliminaryReview.REVISE, "comment": "预算要重做。"},
+            self._preliminary_url(preliminary_task_of(submission)),
+            {"decision": ReviewTask.REVISE, "comment": "预算要重做。"},
             follow=True,
         )
 
@@ -405,39 +435,39 @@ class PreliminaryReviewTests(ReviewTestCase):
         self.assertContains(response, "初审已打回")
         submission.refresh_from_db()
         self.assertEqual(submission.status, ProjectSubmission.NEEDS_REVISION)
-        self.assertEqual(submission.assignments.count(), 0)
+        self.assertEqual(self.review_tasks(submission).count(), 0)
 
     def test_the_view_refuses_an_empty_comment(self):
         submission = self._open_round()
         self.client.force_login(self.preliminary)
 
         response = self.client.post(
-            self._preliminary_url(preliminary_review_of(submission)),
-            {"decision": PreliminaryReview.APPROVE, "comment": ""},
+            self._preliminary_url(preliminary_task_of(submission)),
+            {"decision": ReviewTask.APPROVE, "comment": ""},
         )
 
         self.assertEqual(response.status_code, 302)
         submission.refresh_from_db()
         self.assertEqual(submission.status, ProjectSubmission.PRELIMINARY_PENDING)
-        self.assertEqual(submission.assignments.count(), 0)
+        self.assertEqual(self.review_tasks(submission).count(), 0)
 
     # --- administrator side ---------------------------------------------------
 
     def test_reassigning_hands_the_gate_to_another_preliminary_reviewer(self):
         submission = self._open_round()
-        preliminary = preliminary_review_of(submission)
+        preliminary = preliminary_task_of(submission)
         other = make_preliminary_reviewer("preliminary-spare")
 
-        reassign_preliminary_reviewer(
-            preliminary=preliminary, new_reviewer=other, actor=self.admin
+        reassign_task(
+            task=preliminary, new_reviewer=other, actor=self.admin
         )
 
         preliminary.refresh_from_db()
         self.assertEqual(preliminary.reviewer, other)
         # 换人不改任务状态，也不动这一轮的轮次与结论。
-        self.assertEqual(preliminary.status, PreliminaryReview.PENDING)
-        self.assertEqual(count_pending_preliminary_reviews(other), 1)
-        self.assertEqual(count_pending_preliminary_reviews(self.preliminary), 0)
+        self.assertEqual(preliminary.status, ReviewTask.PENDING)
+        self.assertEqual(pending_task_summary(other).preliminary, 1)
+        self.assertEqual(pending_task_summary(self.preliminary).preliminary, 0)
         audit = AuditLog.objects.get(action="reviews.preliminary.reassign")
         self.assertEqual(audit.detail["to_reviewer_id"], other.pk)
 
@@ -448,13 +478,15 @@ class PreliminaryReviewTests(ReviewTestCase):
         测的正是该检查要拦的那种形态。
         """
         submission = self._open_round()
-        preliminary = preliminary_review_of(submission)
+        preliminary = preliminary_task_of(submission)
         holder = make_user("preliminary-holder")
-        ReviewAssignment.objects.create(submission=submission, reviewer=holder)
+        ReviewTask.objects.create(
+            submission=submission, stage=ReviewTask.REVIEW, reviewer=holder
+        )
 
         with self.assertRaises(ReviewError) as caught:
-            reassign_preliminary_reviewer(
-                preliminary=preliminary, new_reviewer=holder, actor=self.admin
+            reassign_task(
+                task=preliminary, new_reviewer=holder, actor=self.admin
             )
 
         self.assertEqual(
@@ -464,13 +496,13 @@ class PreliminaryReviewTests(ReviewTestCase):
 
     def test_a_completed_preliminary_cannot_be_swapped(self):
         submission = self._open_round()
-        preliminary = preliminary_review_of(submission)
+        preliminary = preliminary_task_of(submission)
         self._pass_preliminary(submission)
         other = make_preliminary_reviewer("preliminary-spare")
 
         with self.assertRaises(ReviewError):
-            reassign_preliminary_reviewer(
-                preliminary=preliminary, new_reviewer=other, actor=self.admin
+            reassign_task(
+                task=preliminary, new_reviewer=other, actor=self.admin
             )
 
         preliminary.refresh_from_db()
@@ -480,33 +512,33 @@ class PreliminaryReviewTests(ReviewTestCase):
 
     def test_the_submitter_and_group_members_cannot_be_swapped_in(self):
         submission = self._open_round()
-        preliminary = preliminary_review_of(submission)
+        preliminary = preliminary_task_of(submission)
         qualify(self.contact, is_preliminary_reviewer=True)
         qualify(self.member, is_preliminary_reviewer=True)
 
         for candidate in (self.contact, self.member):
             with self.subTest(candidate=candidate.get_username()):
                 with self.assertRaises(ReviewError):
-                    reassign_preliminary_reviewer(
-                        preliminary=preliminary,
+                    reassign_task(
+                        task=preliminary,
                         new_reviewer=candidate,
                         actor=self.admin,
                     )
 
     def test_an_account_without_the_qualification_cannot_be_swapped_in(self):
         submission = self._open_round()
-        preliminary = preliminary_review_of(submission)
+        preliminary = preliminary_task_of(submission)
 
         with self.assertRaises(ReviewError):
-            reassign_preliminary_reviewer(
-                preliminary=preliminary,
+            reassign_task(
+                task=preliminary,
                 new_reviewer=self.outsider,
                 actor=self.admin,
             )
 
     def test_a_preliminary_reviewer_on_leave_cannot_be_swapped_in(self):
         submission = self._open_round()
-        preliminary = preliminary_review_of(submission)
+        preliminary = preliminary_task_of(submission)
         other = make_preliminary_reviewer("preliminary-spare")
         now = timezone.now()
         ReviewerLeave.objects.create(
@@ -516,15 +548,15 @@ class PreliminaryReviewTests(ReviewTestCase):
         )
 
         with self.assertRaises(ReviewError):
-            reassign_preliminary_reviewer(
-                preliminary=preliminary, new_reviewer=other, actor=self.admin
+            reassign_task(
+                task=preliminary, new_reviewer=other, actor=self.admin
             )
 
     def test_the_candidate_pool_is_the_preliminary_one(self):
         submission = self._open_round()
         spare = make_preliminary_reviewer("preliminary-spare")
 
-        candidates = eligible_preliminary_reviewers(
+        candidates = eligible_holders(stage=ReviewTask.PRELIMINARY, 
             group=self.group, submitter=self.contact, submission=submission
         )
 
@@ -534,12 +566,12 @@ class PreliminaryReviewTests(ReviewTestCase):
 
     def test_admin_offers_the_dropdown_for_a_pending_preliminary(self):
         submission = self._open_round()
-        preliminary = preliminary_review_of(submission)
+        preliminary = preliminary_task_of(submission)
         other = make_preliminary_reviewer("preliminary-spare")
         self.client.force_login(self.admin)
 
         response = self.client.get(
-            reverse("admin:reviews_preliminaryreview_change", args=(preliminary.pk,))
+            reverse("admin:reviews_reviewtask_change", args=(preliminary.pk,))
         )
 
         self.assertEqual(response.status_code, 200)
@@ -554,12 +586,12 @@ class PreliminaryReviewTests(ReviewTestCase):
 
     def test_admin_change_page_is_read_only_for_a_completed_preliminary(self):
         submission = self._open_round()
-        preliminary = preliminary_review_of(submission)
+        preliminary = preliminary_task_of(submission)
         self._pass_preliminary(submission)
         self.client.force_login(self.admin)
 
         response = self.client.get(
-            reverse("admin:reviews_preliminaryreview_change", args=(preliminary.pk,))
+            reverse("admin:reviews_reviewtask_change", args=(preliminary.pk,))
         )
 
         self.assertEqual(response.status_code, 200)
@@ -567,12 +599,12 @@ class PreliminaryReviewTests(ReviewTestCase):
 
     def test_admin_swaps_the_preliminary_reviewer(self):
         submission = self._open_round()
-        preliminary = preliminary_review_of(submission)
+        preliminary = preliminary_task_of(submission)
         other = make_preliminary_reviewer("preliminary-spare")
         self.client.force_login(self.admin)
 
         response = self.client.post(
-            reverse("admin:reviews_preliminaryreview_change", args=(preliminary.pk,)),
+            reverse("admin:reviews_reviewtask_change", args=(preliminary.pk,)),
             {"reviewer": other.pk, "_save": "保存"},
         )
 
@@ -586,13 +618,13 @@ class PreliminaryReviewTests(ReviewTestCase):
     def test_a_view_only_staff_account_cannot_swap_the_holder(self):
         """状态允许不等于有权改：只有查看权限的后台账号不能改派。"""
         submission = self._open_round()
-        preliminary = preliminary_review_of(submission)
+        preliminary = preliminary_task_of(submission)
         other = make_preliminary_reviewer("preliminary-spare")
         viewer = make_user("preliminary-viewer", is_staff=True)
         viewer.user_permissions.add(
-            Permission.objects.get(codename="view_preliminaryreview")
+            Permission.objects.get(codename="view_reviewtask")
         )
-        url = reverse("admin:reviews_preliminaryreview_change", args=(preliminary.pk,))
+        url = reverse("admin:reviews_reviewtask_change", args=(preliminary.pk,))
         self.client.force_login(viewer)
 
         # 看得到，但只能是只读的一页。

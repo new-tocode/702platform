@@ -5,14 +5,10 @@
 
 from django.urls import reverse
 
-from ..models import (
-    PreliminaryReview,
-    ReviewAssignment,
-)
+from ..models import ReviewTask
 from ..services import (
-    complete_review,
-    count_pending_preliminary_reviews,
-    count_pending_reviews,
+    pending_task_summary,
+    submit_verdict,
 )
 from .base import (
     ONE_REVIEWER_TYPE,
@@ -51,16 +47,16 @@ class ReviewReminderTests(ReviewTestCase):
 
     def test_count_only_covers_pending_tasks(self):
         submission = self._submit()
-        self.assertEqual(count_pending_reviews(self.reviewer), 1)
+        self.assertEqual(pending_task_summary(self.reviewer).review, 1)
 
-        complete_review(
-            assignment=submission.assignments.get(),
+        submit_verdict(
+            task=self.review_tasks(submission).get(),
             reviewer=self.reviewer,
-            decision=ReviewAssignment.APPROVE,
+            decision=ReviewTask.APPROVE,
             comment="同意。",
         )
 
-        self.assertEqual(count_pending_reviews(self.reviewer), 0)
+        self.assertEqual(pending_task_summary(self.reviewer).review, 0)
 
     def test_count_accumulates_across_groups(self):
         """同一名评审人可能同时持有来自不同项目组的待评审任务。"""
@@ -69,18 +65,18 @@ class ReviewReminderTests(ReviewTestCase):
         self._submit()
         self._submit(group=other_group)
 
-        self.assertEqual(count_pending_reviews(self.reviewer), 2)
+        self.assertEqual(pending_task_summary(self.reviewer).review, 2)
 
     def test_preliminary_count_only_covers_pending_preliminary_tasks(self):
         submission = self._open_round()
-        self.assertEqual(count_pending_preliminary_reviews(self.preliminary), 1)
+        self.assertEqual(pending_task_summary(self.preliminary).preliminary, 1)
 
-        self.assertIsNotNone(submission.preliminary_review)
-        PreliminaryReview.objects.filter(submission=submission).update(
-            status=PreliminaryReview.RELEASED
+        self.assertIsNotNone(submission.preliminary_task)
+        ReviewTask.objects.filter(submission=submission).update(
+            status=ReviewTask.RELEASED
         )
 
-        self.assertEqual(count_pending_preliminary_reviews(self.preliminary), 0)
+        self.assertEqual(pending_task_summary(self.preliminary).preliminary, 0)
 
     # --- the login nudge -----------------------------------------------------
 
@@ -127,10 +123,13 @@ class ReviewReminderTests(ReviewTestCase):
         review_round = self._submit()
         preliminary_round = self._open_round(group=other_group)
         # 把两条任务都记到这个账号名下：两种资格都具备的人，手上有两种任务。
-        ReviewAssignment.objects.filter(submission=review_round).update(reviewer=both)
-        PreliminaryReview.objects.filter(submission=preliminary_round).update(
-            reviewer=both
-        )
+        # 评审任务只挪一条——一人一轮一席，多挪一条就会撞唯一约束。
+        review_task = ReviewTask.objects.filter(
+            submission=review_round, stage=ReviewTask.REVIEW
+        ).first()
+        review_task.reviewer = both
+        review_task.save(update_fields=["reviewer"])
+        ReviewTask.objects.filter(submission=preliminary_round).update(reviewer=both)
 
         response = self._login("remind-both")
 

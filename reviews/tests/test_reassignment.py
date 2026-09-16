@@ -15,14 +15,14 @@ from core.models import AuditLog
 from .. import lifecycle
 from ..models import (
     ProjectSubmission,
-    ReviewAssignment,
+    ReviewTask,
     ReviewerLeave,
 )
 from ..services import (
     ReviewError,
-    complete_review,
-    eligible_reviewers,
-    reassign_reviewer,
+    submit_verdict,
+    eligible_holders,
+    reassign_task,
 )
 from .base import ReviewTestCase
 from .factories import (
@@ -34,7 +34,7 @@ from .factories import (
 )
 
 
-class ReviewAssignmentReassignmentTests(ReviewTestCase):
+class ReviewTaskReassignmentTests(ReviewTestCase):
     """An administrator can hand a still-pending task to a different reviewer.
 
     Either the reviewer went quiet or turns out to have a conflict of interest;
@@ -65,28 +65,28 @@ class ReviewAssignmentReassignmentTests(ReviewTestCase):
     """
 
     def _spare_reviewer(self, submission):
-        assigned = set(submission.assignments.values_list("reviewer_id", flat=True))
+        assigned = set(self.review_tasks(submission).values_list("reviewer_id", flat=True))
         return next(user for user in self.reviewers if user.pk not in assigned)
 
     def _change_url(self, assignment):
         return reverse(
-            "admin:reviews_reviewassignment_change", args=(assignment.pk,)
+            "admin:reviews_reviewtask_change", args=(assignment.pk,)
         )
 
     # --- the service ---------------------------------------------------------
 
     def test_swapping_moves_the_task_to_the_new_reviewer(self):
         submission = self._submit()
-        assignment = submission.assignments.first()
+        assignment = self.review_tasks(submission).first()
         spare = self._spare_reviewer(submission)
 
-        reassign_reviewer(assignment=assignment, new_reviewer=spare, actor=self.admin)
+        reassign_task(task=assignment, new_reviewer=spare, actor=self.admin)
 
         assignment.refresh_from_db()
         self.assertEqual(assignment.reviewer, spare)
         # 换人不改变任务数与状态，因此无需重新判结论。
-        self.assertEqual(assignment.status, ReviewAssignment.PENDING)
-        self.assertEqual(submission.assignments.count(), 2)
+        self.assertEqual(assignment.status, ReviewTask.PENDING)
+        self.assertEqual(self.review_tasks(submission).count(), 2)
         submission.refresh_from_db()
         self.assertEqual(submission.status, ProjectSubmission.PENDING)
         audit = AuditLog.objects.get(action="reviews.assignment.reassign")
@@ -94,18 +94,18 @@ class ReviewAssignmentReassignmentTests(ReviewTestCase):
 
     def test_a_completed_task_cannot_be_swapped(self):
         submission = self._submit()
-        assignment = submission.assignments.first()
-        complete_review(
-            assignment=assignment,
+        assignment = self.review_tasks(submission).first()
+        submit_verdict(
+            task=assignment,
             reviewer=assignment.reviewer,
-            decision=ReviewAssignment.APPROVE,
+            decision=ReviewTask.APPROVE,
             comment="同意。",
         )
         assignment.refresh_from_db()
         spare = self._spare_reviewer(submission)
 
         with self.assertRaises(ReviewError):
-            reassign_reviewer(assignment=assignment, new_reviewer=spare, actor=self.admin)
+            reassign_task(task=assignment, new_reviewer=spare, actor=self.admin)
 
         assignment.refresh_from_db()
         self.assertNotEqual(assignment.reviewer, spare)
@@ -115,54 +115,54 @@ class ReviewAssignmentReassignmentTests(ReviewTestCase):
     def test_a_round_that_already_has_a_verdict_cannot_be_swapped(self):
         """Guards an abnormal state:正常流程下判结论的前提就是没有待评审任务。"""
         submission = self._submit()
-        assignment = submission.assignments.first()
+        assignment = self.review_tasks(submission).first()
         spare = self._spare_reviewer(submission)
         ProjectSubmission.objects.filter(pk=submission.pk).update(
             status=ProjectSubmission.APPROVED
         )
 
         with self.assertRaises(ReviewError):
-            reassign_reviewer(assignment=assignment, new_reviewer=spare, actor=self.admin)
+            reassign_task(task=assignment, new_reviewer=spare, actor=self.admin)
 
     def test_the_current_reviewer_is_not_a_change(self):
         submission = self._submit()
-        assignment = submission.assignments.first()
+        assignment = self.review_tasks(submission).first()
 
         with self.assertRaises(ReviewError):
-            reassign_reviewer(
-                assignment=assignment,
+            reassign_task(
+                task=assignment,
                 new_reviewer=assignment.reviewer,
                 actor=self.admin,
             )
 
     def test_the_submitter_cannot_be_swapped_in(self):
         submission = self._submit()
-        assignment = submission.assignments.first()
+        assignment = self.review_tasks(submission).first()
 
         with self.assertRaises(ReviewError):
-            reassign_reviewer(
-                assignment=assignment, new_reviewer=self.contact, actor=self.admin
+            reassign_task(
+                task=assignment, new_reviewer=self.contact, actor=self.admin
             )
 
     def test_a_group_member_cannot_be_swapped_in(self):
         submission = self._submit()
-        assignment = submission.assignments.first()
+        assignment = self.review_tasks(submission).first()
         self.member.is_reviewer = True
         self.member.save(update_fields=["is_reviewer"])
 
         with self.assertRaises(ReviewError):
-            reassign_reviewer(
-                assignment=assignment, new_reviewer=self.member, actor=self.admin
+            reassign_task(
+                task=assignment, new_reviewer=self.member, actor=self.admin
             )
 
     def test_someone_already_on_the_round_cannot_be_swapped_in(self):
         submission = self._submit()
-        assignment = submission.assignments.first()
-        other = submission.assignments.exclude(pk=assignment.pk).get().reviewer
+        assignment = self.review_tasks(submission).first()
+        other = self.review_tasks(submission).exclude(pk=assignment.pk).get().reviewer
 
         with self.assertRaises(ReviewError) as caught:
-            reassign_reviewer(
-                assignment=assignment, new_reviewer=other, actor=self.admin
+            reassign_task(
+                task=assignment, new_reviewer=other, actor=self.admin
             )
 
         # 拒绝文案与初审侧同源（StageRules），不再各写一句。
@@ -173,26 +173,26 @@ class ReviewAssignmentReassignmentTests(ReviewTestCase):
 
     def test_a_non_reviewer_cannot_be_swapped_in(self):
         submission = self._submit()
-        assignment = submission.assignments.first()
+        assignment = self.review_tasks(submission).first()
 
         with self.assertRaises(ReviewError):
-            reassign_reviewer(
-                assignment=assignment, new_reviewer=self.outsider, actor=self.admin
+            reassign_task(
+                task=assignment, new_reviewer=self.outsider, actor=self.admin
             )
 
     def test_an_inactive_reviewer_cannot_be_swapped_in(self):
         submission = self._submit()
-        assignment = submission.assignments.first()
+        assignment = self.review_tasks(submission).first()
         spare = self._spare_reviewer(submission)
         spare.is_active = False
         spare.save(update_fields=["is_active"])
 
         with self.assertRaises(ReviewError):
-            reassign_reviewer(assignment=assignment, new_reviewer=spare, actor=self.admin)
+            reassign_task(task=assignment, new_reviewer=spare, actor=self.admin)
 
     def test_a_reviewer_on_leave_cannot_be_swapped_in(self):
         submission = self._submit()
-        assignment = submission.assignments.first()
+        assignment = self.review_tasks(submission).first()
         spare = self._spare_reviewer(submission)
         now = timezone.now()
         ReviewerLeave.objects.create(
@@ -202,24 +202,24 @@ class ReviewAssignmentReassignmentTests(ReviewTestCase):
         )
 
         with self.assertRaises(ReviewError):
-            reassign_reviewer(assignment=assignment, new_reviewer=spare, actor=self.admin)
+            reassign_task(task=assignment, new_reviewer=spare, actor=self.admin)
 
     def test_the_rounds_preliminary_reviewer_cannot_be_swapped_in(self):
         """一个人既初审又评审时，也不接自己初审通过的那一轮。"""
         submission = self._submit()
-        assignment = submission.assignments.first()
+        assignment = self.review_tasks(submission).first()
         self.preliminary.is_reviewer = True
         self.preliminary.save(update_fields=["is_reviewer"])
 
         with self.assertRaises(ReviewError):
-            reassign_reviewer(
-                assignment=assignment,
+            reassign_task(
+                task=assignment,
                 new_reviewer=self.preliminary,
                 actor=self.admin,
             )
 
         # 候选名单同样不包含他。
-        candidates = eligible_reviewers(
+        candidates = eligible_holders(stage=ReviewTask.REVIEW, 
             group=self.group, submitter=self.contact, submission=submission
         )
         self.assertNotIn(self.preliminary, candidates)
@@ -228,7 +228,7 @@ class ReviewAssignmentReassignmentTests(ReviewTestCase):
 
     def test_admin_offers_the_reviewer_dropdown_for_a_pending_task(self):
         submission = self._submit()
-        assignment = submission.assignments.first()
+        assignment = self.review_tasks(submission).first()
         spare = self._spare_reviewer(submission)
         self.client.force_login(self.admin)
 
@@ -247,11 +247,11 @@ class ReviewAssignmentReassignmentTests(ReviewTestCase):
 
     def test_admin_change_page_is_read_only_for_a_completed_task(self):
         submission = self._submit()
-        assignment = submission.assignments.first()
-        complete_review(
-            assignment=assignment,
+        assignment = self.review_tasks(submission).first()
+        submit_verdict(
+            task=assignment,
             reviewer=assignment.reviewer,
-            decision=ReviewAssignment.APPROVE,
+            decision=ReviewTask.APPROVE,
             comment="同意。",
         )
         self.client.force_login(self.admin)
@@ -263,7 +263,7 @@ class ReviewAssignmentReassignmentTests(ReviewTestCase):
 
     def test_admin_swaps_the_reviewer(self):
         submission = self._submit()
-        assignment = submission.assignments.first()
+        assignment = self.review_tasks(submission).first()
         spare = self._spare_reviewer(submission)
         self.client.force_login(self.admin)
 
@@ -281,11 +281,11 @@ class ReviewAssignmentReassignmentTests(ReviewTestCase):
 
     def test_admin_cannot_post_a_swap_for_a_completed_task(self):
         submission = self._submit()
-        assignment = submission.assignments.first()
-        complete_review(
-            assignment=assignment,
+        assignment = self.review_tasks(submission).first()
+        submit_verdict(
+            task=assignment,
             reviewer=assignment.reviewer,
-            decision=ReviewAssignment.APPROVE,
+            decision=ReviewTask.APPROVE,
             comment="同意。",
         )
         assignment.refresh_from_db()
@@ -305,12 +305,12 @@ class ReviewAssignmentReassignmentTests(ReviewTestCase):
     def test_a_view_only_staff_account_cannot_swap_the_reviewer(self):
         """状态允许不等于有权改：只有查看权限的后台账号不能改派。"""
         submission = self._submit()
-        assignment = submission.assignments.first()
+        assignment = self.review_tasks(submission).first()
         original_reviewer_id = assignment.reviewer_id
         spare = self._spare_reviewer(submission)
         viewer = make_user("swap-viewer", is_staff=True)
         viewer.user_permissions.add(
-            Permission.objects.get(codename="view_reviewassignment")
+            Permission.objects.get(codename="view_reviewtask")
         )
         url = self._change_url(assignment)
         self.client.force_login(viewer)
@@ -327,14 +327,14 @@ class ReviewAssignmentReassignmentTests(ReviewTestCase):
 
     def test_admin_cannot_delete_a_task(self):
         submission = self._submit()
-        assignment = submission.assignments.first()
+        assignment = self.review_tasks(submission).first()
         self.client.force_login(self.admin)
 
         response = self.client.get(
-            reverse("admin:reviews_reviewassignment_delete", args=(assignment.pk,))
+            reverse("admin:reviews_reviewtask_delete", args=(assignment.pk,))
         )
 
         self.assertEqual(response.status_code, 403)
-        self.assertTrue(ReviewAssignment.objects.filter(pk=assignment.pk).exists())
+        self.assertTrue(ReviewTask.objects.filter(pk=assignment.pk).exists())
 
 

@@ -14,13 +14,11 @@ from django.test import TestCase, override_settings
 from ..models import (
     REVIEW_TYPE_INNOVATION_MIDTERM,
     REVIEW_TYPE_INNOVATION_START,
-    PreliminaryReview,
-    ReviewAssignment,
-    preliminary_review_of,
+    ReviewTask,
+    preliminary_task_of,
 )
 from ..services import (
-    complete_preliminary_review,
-    complete_review,
+    submit_verdict,
     submit_for_review,
 )
 from .factories import DEFAULT_PASSWORD
@@ -74,11 +72,11 @@ class ReviewTestCase(TestCase):
             message=message,
         )
 
-    def _pass_preliminary(self, submission, *, decision=PreliminaryReview.APPROVE, comment="同意送审。"):
+    def _pass_preliminary(self, submission, *, decision=ReviewTask.APPROVE, comment="同意送审。"):
         """答本轮初审，默认通过——这一步才会抽出评审人。"""
-        preliminary = preliminary_review_of(submission)
-        return complete_preliminary_review(
-            preliminary=preliminary,
+        preliminary = preliminary_task_of(submission)
+        return submit_verdict(
+            task=preliminary,
             reviewer=preliminary.reviewer,
             decision=decision,
             comment=comment,
@@ -93,15 +91,23 @@ class ReviewTestCase(TestCase):
 
     # --- 交卷与收尾 ---------------------------------------------------------
 
+    def review_tasks(self, submission):
+        """本轮的评审任务（不含初审那一张）。
+
+        合并成一张任务表之后 ``submission.tasks`` 两道关都在里面，而断言里说的几乎
+        都是「这一轮的评审任务」；写全一次，免得每条断言都要自己记得过滤阶段。
+        """
+        return submission.tasks.filter(stage=ReviewTask.REVIEW)
+
     def _assignment(self, submission, reviewer):
-        return submission.assignments.get(reviewer=reviewer)
+        return self.review_tasks(submission).get(reviewer=reviewer)
 
     def _approve_round(self, submission):
         """把本轮每条评审任务都判成通过，好让下一轮开得出来。"""
-        for assignment in submission.assignments.all():
-            complete_review(
-                assignment=assignment,
+        for assignment in self.review_tasks(submission).all():
+            submit_verdict(
+                task=assignment,
                 reviewer=assignment.reviewer,
-                decision=ReviewAssignment.APPROVE,
+                decision=ReviewTask.APPROVE,
                 comment="同意。",
             )

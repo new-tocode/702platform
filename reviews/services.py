@@ -4,10 +4,12 @@ Reviewer assignment, verdict aggregation and archiving live here so the rules
 "a round needs as many reviewers as its type demands" and "every reviewer must
 approve" each have exactly one implementation.
 
-A round has two stages. It is submitted to exactly one 初审人
-(:class:`~reviews.models.PreliminaryReview`); their 通过 is what draws the
-ordinary reviewers, so the "who may review" exclusions in
-:func:`_eligible_pool` are shared by both draws instead of written twice.
+A round has two stages, and both are :class:`~reviews.models.ReviewTask` rows
+distinguished by ``stage``: one 初审人 gets the proposal first, and only their
+通过 draws the ordinary reviewers (:func:`_open_review_stage`). Everything that
+is not stage-specific — who may hold a task, what a task may do next, how a
+verdict is recorded — is therefore written once (:func:`eligible_holders`,
+:func:`submit_verdict`) and parameterised by :data:`reviews.lifecycle.STAGES`.
 """
 
 import logging
@@ -17,6 +19,7 @@ from typing import NamedTuple
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from django.db.models import Count
 from django.utils import timezone
 
 from core.audit import record_audit
@@ -28,11 +31,10 @@ from .permissions import is_super_reviewer, may_receive_tasks
 from .models import (
     REVIEWER_QUOTA,
     ArchivedProposal,
-    PreliminaryReview,
+    ReviewTask,
     ProjectSubmission,
-    ReviewAssignment,
     ReviewerLeave,
-    preliminary_review_of,
+    preliminary_task_of,
 )
 
 
@@ -56,9 +58,9 @@ def _advance(submission, event, *, at=None):
     return lifecycle.transition(submission, event, at=at)
 
 
-#: 两道关卡各自的资格口径。抽人和"够不够"的提示都问这里，不再各写一份。
-REVIEWER_QUALIFICATION = {"is_reviewer": True}
-PRELIMINARY_QUALIFICATION = {"is_preliminary_reviewer": True}
+def _qualification(stage):
+    """这道关的资格条件，从 :data:`lifecycle.STAGES` 翻译成查询参数。"""
+    return {lifecycle.STAGES[stage].qualification: True}
 
 
 def _eligible_pool(*, group, submitter, qualification, submission=None):
@@ -70,20 +72,16 @@ def _eligible_pool(*, group, submitter, qualification, submission=None):
 
     * the submitter and the group's members (conflict of interest),
     * anyone on leave (their window covers both kinds of task),
-    * whoever already holds a task on this round, including its 初审人 —
-      a 初审人 who passed a round is not drawn as one of its reviewers, since
-      letting one person both open and judge the same round hands their single
-      opinion two slots in it.
+    * whoever already holds a task on this round — **两道关一起算**: a 初审人 who
+      passed a round is not drawn as one of its reviewers, since letting one
+      person both open and judge the same round hands their single opinion two
+      slots in it. (合并成一张任务表之前，这里要额外查一次初审任务；现在
+      ``submission.tasks`` 本身就含两道关，排除自然成立。)
     """
     excluded = set(group.members.values_list("pk", flat=True))
     excluded.add(submitter.pk)
     if submission is not None:
-        excluded |= set(
-            submission.assignments.values_list("reviewer_id", flat=True)
-        )
-        preliminary = preliminary_review_of(submission)
-        if preliminary is not None:
-            excluded.add(preliminary.reviewer_id)
+        excluded |= set(submission.tasks.values_list("reviewer_id", flat=True))
     on_leave = set(ReviewerLeave.objects.active().values_list("reviewer_id", flat=True))
     return (
         User.objects.filter(is_active=True, **qualification)
@@ -92,27 +90,18 @@ def _eligible_pool(*, group, submitter, qualification, submission=None):
     )
 
 
-def eligible_reviewers(*, group, submitter, submission=None):
-    """Users who may take a review task for this group's proposal right now.
+def eligible_holders(*, stage, group, submitter, submission=None):
+    """谁可以接手这一道关的任务——抽人与管理员改派共用同一份名单。
 
-    Pass ``submission`` to exclude the round's existing reviewers (a swap) and
-    its 初审人 (nobody reviews what they themselves passed on).
+    Pass ``submission`` to also exclude whoever already holds a task on the round
+    (both stages count, so a 初审人 is never offered the review seats of the round
+    they just let through).
     """
     return _eligible_pool(
         group=group,
         submitter=submitter,
         submission=submission,
-        qualification=REVIEWER_QUALIFICATION,
-    )
-
-
-def eligible_preliminary_reviewers(*, group, submitter, submission=None):
-    """Users who may take the 初审 task for this group's proposal right now."""
-    return _eligible_pool(
-        group=group,
-        submitter=submitter,
-        submission=submission,
-        qualification=PRELIMINARY_QUALIFICATION,
+        qualification=_qualification(stage),
     )
 
 
@@ -157,27 +146,15 @@ def _draw(*, candidates, count, label, qualification, hint):
     )
 
 
-def _pick_preliminary_reviewer(*, group, submitter):
-    """Draw the single 初审人 for a brand-new round."""
-    drawn = _draw(
-        candidates=eligible_preliminary_reviewers(group=group, submitter=submitter),
-        count=1,
-        label="初审人",
-        qualification=PRELIMINARY_QUALIFICATION,
-        hint="无法提交审核。",
-    )
-    return drawn[0]
-
-
-def _pick_reviewers(*, group, submitter, count, submission=None, hint="无法提交审核。"):
-    """Randomly draw the round's ordinary reviewers."""
+def _draw_tasks(*, stage, group, submitter, count, submission=None, hint="无法提交审核。"):
+    """从这一道关的候选里随机抽 ``count`` 个人。"""
     return _draw(
-        candidates=eligible_reviewers(
-            group=group, submitter=submitter, submission=submission
+        candidates=eligible_holders(
+            stage=stage, group=group, submitter=submitter, submission=submission
         ),
         count=count,
-        label="评审人",
-        qualification=REVIEWER_QUALIFICATION,
+        label=lifecycle.STAGES[stage].holder_label,
+        qualification=_qualification(stage),
         hint=hint,
     )
 
@@ -186,8 +163,8 @@ def submit_for_review(*, group, submitter, review_type, message="", request=None
     """Open a new review round and hand it to one 初审人.
 
     The round starts in 初审中 with no reviewers: the type's quota is spent by
-    :func:`complete_preliminary_review`, so a proposal that is not ready never
-    occupies the panel.
+    :func:`_open_review_stage` once the 初审 passes, so a proposal that is not
+    ready never occupies the panel.
 
     The reviewers themselves are *not* reserved here, but the round is only
     opened if the pool could fill the quota right now. Otherwise a club that has
@@ -217,19 +194,22 @@ def submit_for_review(*, group, submitter, review_type, message="", request=None
                 "请等本轮出结论后再提交下一轮。"
             )
 
-        preliminary_reviewer = _pick_preliminary_reviewer(
-            group=group, submitter=submitter
-        )
+        preliminary_reviewer = _draw_tasks(
+            stage=lifecycle.STAGE_PRELIMINARY,
+            group=group,
+            submitter=submitter,
+            count=1,
+        )[0]
         # Capacity check only — nothing is drawn yet. The round's own 初审人 is
         # excluded because the later draw excludes them too: a 初审人 who is
         # also a reviewer does not get to fill one of the round's seats.
         _ensure_pool(
-            candidates=eligible_reviewers(group=group, submitter=submitter).exclude(
-                pk=preliminary_reviewer.pk
-            ),
+            candidates=eligible_holders(
+                stage=lifecycle.STAGE_REVIEW, group=group, submitter=submitter
+            ).exclude(pk=preliminary_reviewer.pk),
             count=REVIEWER_QUOTA[review_type],
-            label="评审人",
-            qualification=REVIEWER_QUALIFICATION,
+            label=lifecycle.STAGES[lifecycle.STAGE_REVIEW].holder_label,
+            qualification=_qualification(lifecycle.STAGE_REVIEW),
             hint="无法提交审核。",
         )
         last = group.submissions.order_by("-round").first()
@@ -241,8 +221,9 @@ def submit_for_review(*, group, submitter, review_type, message="", request=None
             message=message,
             submitted_by=submitter,
         )
-        PreliminaryReview.objects.create(
+        ReviewTask.objects.create(
             submission=submission,
+            stage=ReviewTask.PRELIMINARY,
             reviewer=preliminary_reviewer,
         )
 
@@ -271,113 +252,21 @@ def submit_for_review(*, group, submitter, review_type, message="", request=None
     return submission
 
 
-def complete_preliminary_review(*, preliminary, reviewer, decision, comment, request=None):
-    """Record the round's 初审 verdict; a 通过 then draws the reviewers.
-
-    The draw happens here, inside the verdict's transaction, because 通过 is
-    exactly the event that opens the full review. The pool was checked when the
-    round was submitted, so a shortage here means it changed in between (a leave
-    window started, a qualification was revoked): the whole call fails and the
-    初审 task stays pending, so the 初审人 can submit again once reviewers are
-    free — nothing is left half-decided, and the round does not sit in 评审中
-    with nobody assigned to it.
-    """
-    if preliminary.reviewer_id != reviewer.pk:
-        raise ReviewError("这不是分配给你的初审任务。")
-    if decision not in dict(PreliminaryReview.DECISION_CHOICES):
-        raise ReviewError("请选择初审决定。")
-
-    with transaction.atomic():
-        # Same lock order as complete_review (submission → task): the draw below
-        # reads the round's state, so the parent row is what serialises it.
-        submission = ProjectSubmission.objects.select_for_update().get(
-            pk=preliminary.submission_id
-        )
-        locked = (
-            PreliminaryReview.objects.select_for_update()
-            .select_related("submission__group", "submission__submitted_by")
-            .get(pk=preliminary.pk)
-        )
-        # Any non-pending state is final, for the same reason as in
-        # complete_review: RELEASED means a super reviewer settled the round
-        # first, and reviving it would rewrite a decided round.
-        if locked.status != PreliminaryReview.PENDING:
-            raise ReviewError("该初审任务已经处理过了，无法再次提交。")
-        # 轮次必须还停在初审阶段——与评审侧同一条守卫，文案同样取自 StageRules。
-        reason = lifecycle.open_stage_refusal(submission, lifecycle.STAGE_PRELIMINARY)
-        if reason:
-            raise ReviewError(reason)
-
-        now = timezone.now()
-        locked.status = PreliminaryReview.COMPLETED
-        locked.decision = decision
-        locked.comment = comment
-        locked.completed_at = now
-        locked.save(
-            update_fields=["status", "decision", "comment", "completed_at"]
-        )
-
-        reviewers = []
-        if decision == PreliminaryReview.APPROVE:
-            # 先过闸再抽人：闸门不过是代码错误，抽人失败整次回滚，两者都不会
-            # 留下半截状态，但先过闸能省一次白抽。
-            _advance(submission, lifecycle.PRELIMINARY_APPROVED)
-            reviewers = _pick_reviewers(
-                group=submission.group,
-                submitter=submission.submitted_by,
-                count=submission.required_reviewers,
-                submission=submission,
-                hint="无法通过初审，请稍后重试或联系管理员补充评审人。",
-            )
-            for reviewer_user in reviewers:
-                ReviewAssignment.objects.create(
-                    submission=submission, reviewer=reviewer_user
-                )
-        else:
-            # 打回: the group revises the proposal and submits a new round,
-            # exactly as when a reviewer asks for changes.
-            _advance(submission, lifecycle.PRELIMINARY_REVISED, at=now)
-
-    record_audit(
-        action="reviews.preliminary.complete",
-        user=reviewer,
-        target=locked,
-        detail={
-            "submission_id": locked.submission_id,
-            "decision": decision,
-            "submission_status": submission.status,
-            "reviewer_ids": [user.pk for user in reviewers],
-        },
-        request=request,
-    )
-    logger.info(
-        "reviews.preliminary.complete preliminary_id=%s submission_id=%s decision=%s submission_status=%s reviewers=%s reviewer=%s",
-        locked.pk,
-        locked.submission_id,
-        decision,
-        submission.status,
-        [user.pk for user in reviewers],
-        reviewer.get_username(),
-        extra={"request_id": getattr(request, "request_id", "-")},
-    )
-    return locked
-
-
 def _archive_annotated_proposals(submission):
     """Copy every annotated proposal of an approved round into the archive.
 
     Reviewers who answered with text only leave no row: an archive entry
     without a file would carry no information. ``get_or_create`` plus the
-    uniqueness on ``source_assignment`` keeps a retried aggregation idempotent.
+    uniqueness on ``source_task`` keeps a retried aggregation idempotent.
     """
-    annotated = submission.assignments.filter(
-        status=ReviewAssignment.COMPLETED,
-        decision=ReviewAssignment.APPROVE,
+    annotated = submission.tasks.filter(
+        status=ReviewTask.COMPLETED,
+        decision=ReviewTask.APPROVE,
     ).exclude(annotated_file="")
     archived_count = 0
     for assignment in annotated:
         archived, created = ArchivedProposal.objects.get_or_create(
-            source_assignment=assignment,
+            source_task=assignment,
             defaults={"group": submission.group, "submission": submission},
         )
         if not created:
@@ -410,11 +299,11 @@ def _settle_submission(submission):
     """
     if submission.status != ProjectSubmission.PENDING:
         return submission
-    if submission.assignments.filter(status=ReviewAssignment.PENDING).exists():
+    if submission.tasks.filter(status=ReviewTask.PENDING).exists():
         return submission
 
-    has_revision_request = submission.assignments.filter(
-        decision=ReviewAssignment.REVISE
+    has_revision_request = submission.tasks.filter(
+        decision=ReviewTask.REVISE
     ).exists()
     lifecycle.transition(
         submission,
@@ -426,82 +315,131 @@ def _settle_submission(submission):
     return submission
 
 
-def complete_review(
+def submit_verdict(
     *,
-    assignment,
+    task,
     reviewer,
     decision,
     comment,
     annotated_file=None,
     request=None,
 ):
-    """Record one reviewer's verdict and aggregate the submission status."""
-    if assignment.reviewer_id != reviewer.pk:
-        raise ReviewError("这不是分配给你的评审任务。")
-    if decision not in dict(ReviewAssignment.DECISION_CHOICES):
-        raise ReviewError("请选择评审决定。")
+    """交一张任务卡：写下结论，并让这一轮该发生的后续发生。
+
+    两道关共用这一条路径——「是不是分配给你的、结论合不合法、这张卡还能不能交、
+    轮次还停不停止在这一关」这些校验、加锁顺序（submission → task）、审计与日志
+    的形状全都相同，差别只在交完之后：
+
+    * 初审**通过** → 当场按送审类型抽齐评审人，轮次转入评审（:func:`_open_review_stage`）；
+    * 初审**打回** → 本轮结束，项目组改稿后再送新一轮；
+    * 评审**交卷** → 尝试汇总本轮（:func:`_settle_submission`），全员通过才算通过。
+
+    批注版项目书只有评审阶段接收：初审给的是理由，不是稿子（表单也不给这个字段）。
+    """
+    stage = task.stage
+    rules = lifecycle.STAGES[stage]
+    if task.reviewer_id != reviewer.pk:
+        raise ReviewError(f"这不是分配给你的{rules.label}任务。")
+    if decision not in dict(ReviewTask.DECISION_CHOICES):
+        raise ReviewError(f"请选择{rules.label}决定。")
 
     with transaction.atomic():
         # Lock the parent row first. The aggregation in _settle_submission reads
-        # the round's other assignments, so locking only this assignment would
-        # let two reviewers finishing at the same time each see the other as
-        # still pending — and leave the round stuck at 评审中 forever. Lock order
-        # is always submission → assignment.
+        # the round's other tasks, so locking only this one would let two people
+        # finishing at the same time each see the other as still pending — and
+        # leave the round stuck at 评审中 forever. Lock order is always
+        # submission → task.
         submission = ProjectSubmission.objects.select_for_update().get(
-            pk=assignment.submission_id
+            pk=task.submission_id
         )
         locked = (
-            ReviewAssignment.objects.select_for_update()
-            .select_related("submission")
-            .get(pk=assignment.pk)
+            ReviewTask.objects.select_for_update()
+            .select_related("submission__group", "submission__submitted_by")
+            .get(pk=task.pk)
         )
-        # Any non-pending state is final: COMPLETED means this reviewer has
-        # already voted, RELEASED means a super reviewer settled the round
-        # first. Without this guard a released task could be revived into the
-        # record after the round was decided.
-        if locked.status != ReviewAssignment.PENDING:
-            raise ReviewError("该评审任务已经处理过了，无法再次提交。")
-        # 轮次必须还停在评审阶段。少了这一道，一条本该在「初审中」或已出结论的
-        # 轮次上的任务会被写成 COMPLETED，而汇总函数按设计静默早退——记录里于是
-        # 留下一票既没参与汇总、也没人解释的结论。
-        reason = lifecycle.open_stage_refusal(submission, lifecycle.STAGE_REVIEW)
+        # Any non-pending state is final: COMPLETED means this holder has already
+        # answered, RELEASED means a super reviewer settled the round first.
+        # Without this guard a released task could be revived into the record
+        # after the round was decided.
+        if locked.status != ReviewTask.PENDING:
+            raise ReviewError(f"该{rules.label}任务已经处理过了，无法再次提交。")
+        # 轮次必须还停在这道关上，否则这一票会写进一条已经走过的轮次。
+        reason = lifecycle.open_stage_refusal(submission, stage)
         if reason:
             raise ReviewError(reason)
 
-        locked.status = ReviewAssignment.COMPLETED
+        now = timezone.now()
+        locked.status = ReviewTask.COMPLETED
         locked.decision = decision
         locked.comment = comment
-        locked.completed_at = timezone.now()
+        locked.completed_at = now
         update_fields = ["status", "decision", "comment", "completed_at"]
-        if annotated_file is not None:
+        if stage == ReviewTask.REVIEW and annotated_file is not None:
             locked.annotated_file = annotated_file
             update_fields.append("annotated_file")
         locked.save(update_fields=update_fields)
 
-        _settle_submission(submission)
+        drawn = []
+        if stage == ReviewTask.PRELIMINARY:
+            if decision == ReviewTask.APPROVE:
+                drawn = _open_review_stage(submission)
+            else:
+                _advance(submission, lifecycle.PRELIMINARY_REVISED, at=now)
+        else:
+            _settle_submission(submission)
 
     record_audit(
-        action="reviews.assignment.complete",
+        action=rules.submit_action,
         user=reviewer,
         target=locked,
         detail={
             "submission_id": locked.submission_id,
+            "stage": stage,
             "decision": decision,
             "submission_status": submission.status,
             "annotated": annotated_file is not None,
+            # 初审通过时一并记下抽到的评审人（名单本身就是这一刻的结果）。
+            "reviewer_ids": [user.pk for user in drawn],
         },
         request=request,
     )
     logger.info(
-        "reviews.assignment.complete assignment_id=%s submission_id=%s decision=%s annotated=%s reviewer=%s",
+        "%s task_id=%s submission_id=%s stage=%s decision=%s submission_status=%s annotated=%s reviewer=%s",
+        rules.submit_action,
         locked.pk,
         locked.submission_id,
+        stage,
         decision,
+        submission.status,
         annotated_file is not None,
         reviewer.get_username(),
         extra={"request_id": getattr(request, "request_id", "-")},
     )
     return locked
+
+
+def _open_review_stage(submission):
+    """初审通过：轮次转「评审中」，并按送审类型把评审人抽齐。
+
+    先过闸再抽人，两者在同一事务里：池子不够就整次回滚——结论不落库、初审任务
+    仍待处理，初审人可以在有人空闲后原地重试，轮次也不会停在「评审中」却无人可派。
+    """
+    _advance(submission, lifecycle.PRELIMINARY_APPROVED)
+    reviewers = _draw_tasks(
+        stage=lifecycle.STAGE_REVIEW,
+        group=submission.group,
+        submitter=submission.submitted_by,
+        count=submission.required_reviewers,
+        submission=submission,
+        hint="无法通过初审，请稍后重试或联系管理员补充评审人。",
+    )
+    for reviewer_user in reviewers:
+        ReviewTask.objects.create(
+            submission=submission,
+            stage=ReviewTask.REVIEW,
+            reviewer=reviewer_user,
+        )
+    return reviewers
 
 
 def override_blocker(*, submission, user):
@@ -525,13 +463,13 @@ def override_blocker(*, submission, user):
         return "你是本轮的提交人"
     if submission.group.members.filter(pk=user.pk).exists():
         return "你是本项目组成员"
-    preliminary = preliminary_review_of(submission)
+    preliminary = preliminary_task_of(submission)
     if preliminary is not None and preliminary.reviewer_id == user.pk:
-        if preliminary.status == PreliminaryReview.PENDING:
+        if preliminary.status == ReviewTask.PENDING:
             label = lifecycle.STAGES[lifecycle.STAGE_PRELIMINARY].label
             return f"你在本轮已有{label}任务，请直接提交那一条"
         return "你是本轮的初审人，已经就该轮给出初审意见"
-    if submission.assignments.filter(reviewer=user).exists():
+    if submission.tasks.filter(reviewer=user).exists():
         return "你在本轮已有评审任务，请直接提交那一条"
     return None
 
@@ -558,7 +496,7 @@ def override_review(
     the decision this path exists to make. The verdict is written directly and
     the reviewers still waiting are released.
     """
-    if decision not in dict(ReviewAssignment.DECISION_CHOICES):
+    if decision not in dict(ReviewTask.DECISION_CHOICES):
         raise ReviewError("请选择评审决定。")
 
     with transaction.atomic():
@@ -568,33 +506,27 @@ def override_review(
             raise ReviewError(f"无法行使超级评审权：{blocker}。")
 
         now = timezone.now()
-        ReviewAssignment.objects.create(
+        ReviewTask.objects.create(
             submission=locked,
+            stage=ReviewTask.REVIEW,
             reviewer=super_reviewer,
-            status=ReviewAssignment.COMPLETED,
+            status=ReviewTask.COMPLETED,
             decision=decision,
             comment=comment,
             annotated_file=annotated_file or "",
             completed_at=now,
             is_override=True,
         )
-        # Whoever was still being waited on is let go: the round no longer needs
-        # them. Completed rows stay as they are — their verdict is history. A
-        # round settled during 初审 has no reviewers yet, only that one task.
-        released = locked.assignments.filter(status=ReviewAssignment.PENDING).update(
-            status=ReviewAssignment.RELEASED
+        # 等待中的所有任务一起放掉——两道关都算，本轮不再需要它们。已完成的行
+        # 原样保留：它们的结论是历史。（在初审中敲定时，等待的只有那一条初审。）
+        released = locked.tasks.filter(status=ReviewTask.PENDING).update(
+            status=ReviewTask.RELEASED
         )
-        preliminary = preliminary_review_of(locked)
-        released_preliminary = 0
-        if preliminary is not None and preliminary.status == PreliminaryReview.PENDING:
-            released_preliminary = PreliminaryReview.objects.filter(
-                pk=preliminary.pk
-            ).update(status=PreliminaryReview.RELEASED)
 
         lifecycle.transition(
             locked,
             lifecycle.OVERRIDE_APPROVED
-            if decision == ReviewAssignment.APPROVE
+            if decision == ReviewTask.APPROVE
             else lifecycle.OVERRIDE_REVISED,
             at=now,
         )
@@ -610,73 +542,75 @@ def override_review(
             "submission_id": locked.pk,
             "decision": decision,
             "released": released,
-            "released_preliminary": released_preliminary,
         },
         request=request,
     )
     logger.info(
-        "reviews.submission.override submission_id=%s decision=%s released=%s released_preliminary=%s actor=%s",
+        "reviews.submission.override submission_id=%s decision=%s released=%s actor=%s",
         locked.pk,
         decision,
         released,
-        released_preliminary,
         super_reviewer.get_username(),
         extra={"request_id": getattr(request, "request_id", "-")},
     )
     return locked
 
 
-def reassign_reviewer(*, assignment, new_reviewer, actor, request=None):
-    """Hand one pending review task to a different reviewer.
+def reassign_task(*, task, new_reviewer, actor, request=None):
+    """把一张还没交的任务卡换个人——管理员侧的补救路径。
 
-    Only a task that is still ``pending`` on a round that has not reached a
-    verdict may be reassigned. Once a verdict exists the task is a record of who
-    decided what: swapping the reviewer would re-attribute that decision (and
-    its comment and annotated file) to somebody who never made it. Because the
-    task stays pending, the round keeps the same number of open tasks, so
-    nothing has to be re-aggregated and no archive is touched.
+    两道关共用这一条：规则完全相同（原地换人、一轮一人一席、不重新判结论、不触碰
+    归档），只有措辞按阶段从 :data:`lifecycle.STAGES` 取。这是评审人／初审人失联，
+    或事后发现其与本项目组有利益冲突时**唯一**的补救路径——没有它，该轮会永久停在
+    「评审中」或「初审中」。
 
-    The replaced reviewer's row is mutated rather than deleted, so the roster
-    always shows exactly one task per (round, reviewer). Who held it before is
-    kept in the audit log.
+    Only a pending task on a round that has not moved past its stage may be
+    swapped. Once the round moves on, the row records who decided — swapping the
+    holder would re-attribute that decision (and its comment and annotated file)
+    to somebody who never made it.
     """
+    rules = lifecycle.STAGES[task.stage]
     with transaction.atomic():
-        # Same lock order as complete_review (submission → assignment): a
-        # reviewer finishing concurrently would settle the round, after which
-        # reassigning it would no longer be sound.
+        # Same lock order as submit_verdict (submission → task): someone
+        # answering concurrently would settle the round, after which reassigning
+        # it would no longer be sound.
         submission = ProjectSubmission.objects.select_for_update().get(
-            pk=assignment.submission_id
+            pk=task.submission_id
         )
         locked = (
-            ReviewAssignment.objects.select_for_update()
+            ReviewTask.objects.select_for_update()
             .select_related("submission__group", "submission__submitted_by")
-            .get(pk=assignment.pk)
+            .get(pk=task.pk)
         )
-        rules = lifecycle.STAGES[lifecycle.STAGE_REVIEW]
-        if locked.status != ReviewAssignment.PENDING:
+        if locked.status != ReviewTask.PENDING:
             raise ReviewError(rules.swap_not_pending)
-        if not lifecycle.stage_is_open(submission, lifecycle.STAGE_REVIEW):
+        if not lifecycle.stage_is_open(submission, locked.stage):
             raise ReviewError(rules.swap_phase)
         if locked.reviewer_id == new_reviewer.pk:
-            raise ReviewError("评审人没有变化。")
+            raise ReviewError(f"{rules.holder_label}没有变化。")
         # The admin form limits the choices already; these checks are what make
         # the rule hold for any other caller too.
         if new_reviewer.pk == submission.submitted_by_id:
-            raise ReviewError("提交人不能评审自己的项目书。")
+            raise ReviewError(f"提交人不能{rules.label}自己的项目书。")
         if submission.group.members.filter(pk=new_reviewer.pk).exists():
-            raise ReviewError("该项目组成员不能评审本组的项目书。")
-        # 一个人在一轮里只有一席：他要是已经持有本轮的（任何一条）任务，换过去
-        # 就破了这条不变式。初审侧同样检查，两侧的文案都取自 StageRules。
-        if submission.assignments.filter(reviewer=new_reviewer).exists():
+            raise ReviewError(f"该项目组成员不能{rules.label}本组的项目书。")
+        # 一人一轮一席：他要是已经持有本轮的（任何一条）任务，换过去就破了这条
+        # 不变式——同一条检查对两道关都成立，文案取自 StageRules。
+        if (
+            submission.tasks.filter(reviewer=new_reviewer)
+            .exclude(pk=locked.pk)
+            .exists()
+        ):
             raise ReviewError(rules.swap_holds)
-        if not eligible_reviewers(
+        if not eligible_holders(
+            stage=locked.stage,
             group=submission.group,
             submitter=submission.submitted_by,
             submission=submission,
         ).filter(pk=new_reviewer.pk).exists():
             raise ReviewError(
-                "该账号当前不能评审本轮的送审"
-                "（可能没有资格、正在请假，或是本轮的初审人）。"
+                f"该账号当前不能接手本轮的{rules.label}"
+                "（可能没有资格、正在请假，或已在本轮持有任务）。"
             )
 
         previous_reviewer_id = locked.reviewer_id
@@ -684,121 +618,29 @@ def reassign_reviewer(*, assignment, new_reviewer, actor, request=None):
         locked.save(update_fields=["reviewer"])
 
     record_audit(
-        action="reviews.assignment.reassign",
+        action=rules.reassign_action,
         user=actor,
         target=locked,
         detail={
             "submission_id": locked.submission_id,
+            "stage": locked.stage,
             "from_reviewer_id": previous_reviewer_id,
             "to_reviewer_id": new_reviewer.pk,
         },
         request=request,
     )
     logger.info(
-        "reviews.assignment.reassign assignment_id=%s submission_id=%s from_reviewer_id=%s to_reviewer_id=%s actor=%s",
+        "%s task_id=%s submission_id=%s stage=%s from_reviewer_id=%s to_reviewer_id=%s actor=%s",
+        rules.reassign_action,
         locked.pk,
         locked.submission_id,
+        locked.stage,
         previous_reviewer_id,
         new_reviewer.pk,
         actor.get_username(),
         extra={"request_id": getattr(request, "request_id", "-")},
     )
     return locked
-
-
-def reassign_preliminary_reviewer(*, preliminary, new_reviewer, actor, request=None):
-    """Hand one pending 初审 task to a different 初审人.
-
-    The same recovery path as :func:`reassign_reviewer`, and needed even more:
-    the 初审 is the only way into a round, so a 初审人 who goes quiet would hold
-    up the whole group, not just their own task. Only a pending task on a round
-    still in 初审中 may be swapped — once the round moves on, the row records who
-    passed it. The holder is mutated rather than replaced, so the round keeps
-    exactly one 初审 task.
-    """
-    with transaction.atomic():
-        # Same lock order as the rest of the app (submission → task).
-        submission = ProjectSubmission.objects.select_for_update().get(
-            pk=preliminary.submission_id
-        )
-        locked = (
-            PreliminaryReview.objects.select_for_update()
-            .select_related("submission__group", "submission__submitted_by")
-            .get(pk=preliminary.pk)
-        )
-        rules = lifecycle.STAGES[lifecycle.STAGE_PRELIMINARY]
-        if locked.status != PreliminaryReview.PENDING:
-            raise ReviewError(rules.swap_not_pending)
-        if not lifecycle.stage_is_open(submission, lifecycle.STAGE_PRELIMINARY):
-            raise ReviewError(rules.swap_phase)
-        if locked.reviewer_id == new_reviewer.pk:
-            raise ReviewError("初审人没有变化。")
-        # The admin form limits the choices already; these checks are what make
-        # the rule hold for any other caller too.
-        if new_reviewer.pk == submission.submitted_by_id:
-            raise ReviewError("提交人不能初审自己的项目书。")
-        if submission.group.members.filter(pk=new_reviewer.pk).exists():
-            raise ReviewError("该项目组成员不能初审本组的项目书。")
-        # 与评审改派对同一条不变式：一人一轮一席。初审中还没有评审任务，所以今天
-        # 这句不会触发——留着是为了两道关的规则真正对称，而不是靠「恰好没数据」。
-        if submission.assignments.filter(reviewer=new_reviewer).exists():
-            raise ReviewError(rules.swap_holds)
-        if not eligible_preliminary_reviewers(
-            group=submission.group,
-            submitter=submission.submitted_by,
-            submission=submission,
-        ).filter(pk=new_reviewer.pk).exists():
-            raise ReviewError("该账号当前不具备初审资格（可能已停用或正在请假）。")
-
-        previous_reviewer_id = locked.reviewer_id
-        locked.reviewer = new_reviewer
-        locked.save(update_fields=["reviewer"])
-
-    record_audit(
-        action="reviews.preliminary.reassign",
-        user=actor,
-        target=locked,
-        detail={
-            "submission_id": locked.submission_id,
-            "from_reviewer_id": previous_reviewer_id,
-            "to_reviewer_id": new_reviewer.pk,
-        },
-        request=request,
-    )
-    logger.info(
-        "reviews.preliminary.reassign preliminary_id=%s submission_id=%s from_reviewer_id=%s to_reviewer_id=%s actor=%s",
-        locked.pk,
-        locked.submission_id,
-        previous_reviewer_id,
-        new_reviewer.pk,
-        actor.get_username(),
-        extra={"request_id": getattr(request, "request_id", "-")},
-    )
-    return locked
-
-
-def count_pending_reviews(reviewer):
-    """How many review tasks await this reviewer.
-
-    Leave is deliberately not applied: taking leave does not excuse the reviews
-    a reviewer already holds.
-    """
-    return ReviewAssignment.objects.filter(
-        reviewer=reviewer,
-        status=ReviewAssignment.PENDING,
-    ).count()
-
-
-def count_pending_preliminary_reviews(reviewer):
-    """How many 初审 tasks await this reviewer.
-
-    Counted separately from :func:`count_pending_reviews` because the two are
-    worded differently wherever they are shown ("待初审" vs "待评审").
-    """
-    return PreliminaryReview.objects.filter(
-        reviewer=reviewer,
-        status=PreliminaryReview.PENDING,
-    ).count()
 
 
 class PendingTasks(NamedTuple):
@@ -840,16 +682,21 @@ class PendingTasks(NamedTuple):
 
 
 def pending_task_summary(reviewer):
-    """这个账号手上还没交的任务：两种分别计数。
+    """这个账号手上还没交的任务，按阶段计数——一次查询。
 
-    The single place that answers "how much is waiting for me" — the post-login
+    The single place that answers "how much is waiting for me": the post-login
     nudge, the member-centre card and the queue page all come through here.
-    Leave is deliberately not applied: taking leave does not excuse the tasks a
+    Leave is deliberately not applied — taking leave does not excuse the tasks a
     reviewer already holds.
     """
+    rows = dict(
+        ReviewTask.objects.filter(reviewer=reviewer, status=ReviewTask.PENDING)
+        .values_list("stage")
+        .annotate(count=Count("pk"))
+    )
     return PendingTasks(
-        preliminary=count_pending_preliminary_reviews(reviewer),
-        review=count_pending_reviews(reviewer),
+        preliminary=rows.get(ReviewTask.PRELIMINARY, 0),
+        review=rows.get(ReviewTask.REVIEW, 0),
     )
 
 

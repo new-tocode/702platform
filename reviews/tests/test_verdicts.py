@@ -13,12 +13,12 @@ from ..models import (
     REVIEW_TYPE_INNOVATION_START,
     ArchivedProposal,
     ProjectSubmission,
-    ReviewAssignment,
+    ReviewTask,
 )
 from ..services import (
     ReviewError,
     _settle_submission,
-    complete_review,
+    submit_verdict,
 )
 from .base import ReviewTestCase
 from .factories import (
@@ -44,17 +44,17 @@ class VerdictTests(ReviewTestCase):
 
     def _approve_both(self, submission, **files):
         """Complete both assignments as approve; ``files`` maps reviewer to a file."""
-        complete_review(
-            assignment=self._assignment(submission, self.reviewer_one),
+        submit_verdict(
+            task=self._assignment(submission, self.reviewer_one),
             reviewer=self.reviewer_one,
-            decision=ReviewAssignment.APPROVE,
+            decision=ReviewTask.APPROVE,
             comment="方案可行。",
             annotated_file=files.get("reviewer_one"),
         )
-        complete_review(
-            assignment=self._assignment(submission, self.reviewer_two),
+        submit_verdict(
+            task=self._assignment(submission, self.reviewer_two),
             reviewer=self.reviewer_two,
-            decision=ReviewAssignment.APPROVE,
+            decision=ReviewTask.APPROVE,
             comment="同意开题。",
             annotated_file=files.get("reviewer_two"),
         )
@@ -64,19 +64,19 @@ class VerdictTests(ReviewTestCase):
     def test_both_approve_marks_submission_and_group_approved(self):
         submission = self._submit()
 
-        complete_review(
-            assignment=self._assignment(submission, self.reviewer_one),
+        submit_verdict(
+            task=self._assignment(submission, self.reviewer_one),
             reviewer=self.reviewer_one,
-            decision=ReviewAssignment.APPROVE,
+            decision=ReviewTask.APPROVE,
             comment="方案可行。",
         )
         submission.refresh_from_db()
         self.assertEqual(submission.status, ProjectSubmission.PENDING)
 
-        complete_review(
-            assignment=self._assignment(submission, self.reviewer_two),
+        submit_verdict(
+            task=self._assignment(submission, self.reviewer_two),
             reviewer=self.reviewer_two,
-            decision=ReviewAssignment.APPROVE,
+            decision=ReviewTask.APPROVE,
             comment="同意开题。",
         )
         submission.refresh_from_db()
@@ -85,13 +85,13 @@ class VerdictTests(ReviewTestCase):
     def test_single_reviewer_type_is_decided_by_one_verdict(self):
         submission = self._submit(review_type=REVIEW_TYPE_INNOVATION_START)
 
-        self.assertEqual(submission.assignments.count(), 1)
+        self.assertEqual(self.review_tasks(submission).count(), 1)
         # Which of the two qualified reviewers is drawn is random.
-        assignment = submission.assignments.get()
-        complete_review(
-            assignment=assignment,
+        assignment = self.review_tasks(submission).get()
+        submit_verdict(
+            task=assignment,
             reviewer=assignment.reviewer,
-            decision=ReviewAssignment.APPROVE,
+            decision=ReviewTask.APPROVE,
             comment="同意立项。",
         )
 
@@ -101,16 +101,16 @@ class VerdictTests(ReviewTestCase):
     def test_one_revision_request_marks_needs_revision(self):
         submission = self._submit()
 
-        complete_review(
-            assignment=self._assignment(submission, self.reviewer_one),
+        submit_verdict(
+            task=self._assignment(submission, self.reviewer_one),
             reviewer=self.reviewer_one,
-            decision=ReviewAssignment.APPROVE,
+            decision=ReviewTask.APPROVE,
             comment="可以。",
         )
-        complete_review(
-            assignment=self._assignment(submission, self.reviewer_two),
+        submit_verdict(
+            task=self._assignment(submission, self.reviewer_two),
             reviewer=self.reviewer_two,
-            decision=ReviewAssignment.REVISE,
+            decision=ReviewTask.REVISE,
             comment="请补充预算。",
         )
         submission.refresh_from_db()
@@ -123,9 +123,9 @@ class VerdictTests(ReviewTestCase):
         settlement is reachable from any caller once the round is fully reviewed.
         """
         submission = self._submit()
-        submission.assignments.update(
-            status=ReviewAssignment.COMPLETED,
-            decision=ReviewAssignment.APPROVE,
+        self.review_tasks(submission).update(
+            status=ReviewTask.COMPLETED,
+            decision=ReviewTask.APPROVE,
         )
         submission.refresh_from_db()
 
@@ -136,16 +136,16 @@ class VerdictTests(ReviewTestCase):
 
     def test_resubmission_creates_next_round(self):
         first = self._submit()
-        complete_review(
-            assignment=self._assignment(first, self.reviewer_one),
+        submit_verdict(
+            task=self._assignment(first, self.reviewer_one),
             reviewer=self.reviewer_one,
-            decision=ReviewAssignment.REVISE,
+            decision=ReviewTask.REVISE,
             comment="修改后再来。",
         )
-        complete_review(
-            assignment=self._assignment(first, self.reviewer_two),
+        submit_verdict(
+            task=self._assignment(first, self.reviewer_two),
             reviewer=self.reviewer_two,
-            decision=ReviewAssignment.REVISE,
+            decision=ReviewTask.REVISE,
             comment="同上。",
         )
 
@@ -159,10 +159,10 @@ class VerdictTests(ReviewTestCase):
         assignment = self._assignment(submission, self.reviewer_one)
 
         with self.assertRaises(ReviewError):
-            complete_review(
-                assignment=assignment,
+            submit_verdict(
+                task=assignment,
                 reviewer=self.reviewer_two,
-                decision=ReviewAssignment.APPROVE,
+                decision=ReviewTask.APPROVE,
                 comment="越权。",
             )
 
@@ -180,10 +180,10 @@ class VerdictTests(ReviewTestCase):
         )
 
         with self.assertRaises(ReviewError) as caught:
-            complete_review(
-                assignment=assignment,
+            submit_verdict(
+                task=assignment,
                 reviewer=self.reviewer_one,
-                decision=ReviewAssignment.APPROVE,
+                decision=ReviewTask.APPROVE,
                 comment="我还是评一下。",
             )
 
@@ -192,7 +192,7 @@ class VerdictTests(ReviewTestCase):
             lifecycle.STAGES[lifecycle.STAGE_REVIEW].closed_refusal,
         )
         assignment.refresh_from_db()
-        self.assertEqual(assignment.status, ReviewAssignment.PENDING)
+        self.assertEqual(assignment.status, ReviewTask.PENDING)
 
     # --- annotated proposals and archiving -----------------------------------
 
@@ -217,8 +217,8 @@ class VerdictTests(ReviewTestCase):
         archived = ArchivedProposal.objects.filter(submission=submission)
         self.assertEqual(archived.count(), 2)
         self.assertEqual(
-            set(archived.values_list("source_assignment_id", flat=True)),
-            set(submission.assignments.values_list("pk", flat=True)),
+            set(archived.values_list("source_task_id", flat=True)),
+            set(self.review_tasks(submission).values_list("pk", flat=True)),
         )
         for record in archived:
             self.assertEqual(record.group_id, self.group.pk)
@@ -241,7 +241,7 @@ class VerdictTests(ReviewTestCase):
 
         record = ArchivedProposal.objects.get(submission=submission)
         self.assertEqual(
-            record.source_assignment,
+            record.source_task,
             self._assignment(submission, self.reviewer_one),
         )
 
@@ -257,17 +257,17 @@ class VerdictTests(ReviewTestCase):
     def test_needs_revision_does_not_archive(self):
         submission = self._submit()
 
-        complete_review(
-            assignment=self._assignment(submission, self.reviewer_one),
+        submit_verdict(
+            task=self._assignment(submission, self.reviewer_one),
             reviewer=self.reviewer_one,
-            decision=ReviewAssignment.APPROVE,
+            decision=ReviewTask.APPROVE,
             comment="可以。",
             annotated_file=pdf("annotated.pdf"),
         )
-        complete_review(
-            assignment=self._assignment(submission, self.reviewer_two),
+        submit_verdict(
+            task=self._assignment(submission, self.reviewer_two),
             reviewer=self.reviewer_two,
-            decision=ReviewAssignment.REVISE,
+            decision=ReviewTask.REVISE,
             comment="请补充预算。",
         )
 
@@ -281,7 +281,7 @@ class VerdictTests(ReviewTestCase):
 
     def test_annotated_file_validator_rejects_unsupported_extension(self):
         form = ReviewForm(
-            data={"decision": ReviewAssignment.APPROVE, "comment": "可以。"},
+            data={"decision": ReviewTask.APPROVE, "comment": "可以。"},
             files={"annotated_file": SimpleUploadedFile("notes.txt", b"hello")},
         )
 
@@ -291,10 +291,10 @@ class VerdictTests(ReviewTestCase):
     def test_annotated_download_honours_group_visibility(self):
         submission = self._submit()
         assignment = self._assignment(submission, self.reviewer_one)
-        complete_review(
-            assignment=assignment,
+        submit_verdict(
+            task=assignment,
             reviewer=self.reviewer_one,
-            decision=ReviewAssignment.APPROVE,
+            decision=ReviewTask.APPROVE,
             comment="已批注。",
             annotated_file=pdf("annotated.pdf"),
         )

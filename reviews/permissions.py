@@ -11,7 +11,8 @@
 外键，``projects`` → ``reviews`` 只在函数体内、且只指向本模块。
 """
 
-from .models import PreliminaryReview, ProjectSubmission, ReviewAssignment
+from . import lifecycle
+from .models import ProjectSubmission, ReviewTask
 
 
 def is_reviewer(user):
@@ -37,12 +38,25 @@ def is_super_reviewer(user):
     )
 
 
+def qualifies_for_stage(user, stage):
+    """持有这一道关的资格。资格字段名由 :data:`lifecycle.STAGES` 给出。
+
+    一个新阶段只要在阶段表里写好 ``qualification``，这里、抽人、改派与「谁看得见
+    这一组」就全跟着生效。
+    """
+    if not (user and user.is_authenticated):
+        return False
+    return bool(getattr(user, lifecycle.STAGES[stage].qualification, False))
+
+
 def has_review_qualification(user):
     """三种资格中的任意一种——「评审」入口与评审队列的门槛。
 
     超级评审也算：他们手上一份任务都没有时，整份工作是「看全部进行中的轮次」。
     """
-    return is_reviewer(user) or is_preliminary_reviewer(user) or is_super_reviewer(user)
+    return any(
+        qualifies_for_stage(user, stage) for stage in lifecycle.STAGES
+    ) or is_super_reviewer(user)
 
 
 def may_receive_tasks(user):
@@ -50,7 +64,7 @@ def may_receive_tasks(user):
 
     超级评审不接任务，也就没有「请假不收任务」这回事。
     """
-    return is_reviewer(user) or is_preliminary_reviewer(user)
+    return any(qualifies_for_stage(user, stage) for stage in lifecycle.STAGES)
 
 
 def has_review_claim(user, group):
@@ -65,13 +79,6 @@ def has_review_claim(user, group):
         status__in=ProjectSubmission.OPEN_STATUSES
     ).exists():
         return True
-    return (
-        ReviewAssignment.objects.filter(
-            reviewer=user,
-            submission__group=group,
-        ).exists()
-        or PreliminaryReview.objects.filter(
-            reviewer=user,
-            submission__group=group,
-        ).exists()
-    )
+    # 两道关的任务在同一张表里，一次查询同时覆盖「我是这轮的初审人」与
+    # 「我是这轮的评审人」。
+    return ReviewTask.objects.filter(reviewer=user, submission__group=group).exists()
