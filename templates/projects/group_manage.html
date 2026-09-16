@@ -43,7 +43,7 @@
         </div>
         <div>
             <div class="k">方案结论</div>
-            <div class="v mono {% if latest_submission.status == 'approved' %}ok{% elif latest_submission.status == 'needs_revision' %}warn{% endif %}">
+            <div class="v mono {{ latest_submission.status_tone }}">
                 {% if latest_submission %}{{ latest_submission.get_status_display }}{% else %}未提交{% endif %}
             </div>
         </div>
@@ -191,7 +191,7 @@
                 <div class="panel-body">
                     {% if latest_submission.is_open %}
                         <p class="help">
-                            {% if latest_submission.status == 'preliminary_pending' %}
+                            {% if latest_submission.is_preliminary_pending %}
                                 第 {{ latest_submission.round }} 轮送审正在初审中，等待初审人给出意见；
                                 初审通过后会随机分配 {{ latest_submission.required_reviewers }} 名评审人，
                                 初审打回则本轮直接结束。

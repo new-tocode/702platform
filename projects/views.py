@@ -93,7 +93,8 @@ def group_list(request):
                 "has_pending": group.pk in pending_ids,
                 "can_view": request.user.is_staff or group.pk in member_ids,
                 "status_label": latest.get_status_display() if latest else "",
-                "status": latest.status if latest else "",
+                # 语气色由模型给（见 reviews.lifecycle.STATUS_TONES），模板不再比状态字符串。
+                "status_tone": latest.status_tone if latest else "",
             }
         )
     logger.info(

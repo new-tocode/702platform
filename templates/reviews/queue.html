@@ -193,7 +193,7 @@
                                         </td>
                                         <td class="num">R{{ preliminary.submission.round }}</td>
                                         <td>
-                                            {% if preliminary.decision == "approve" %}
+                                            {% if preliminary.decision_tone == 'ok' %}
                                                 <span class="chip chip-ok">{{ preliminary.get_decision_display }}</span>
                                             {% else %}
                                                 <span class="chip chip-warn">{{ preliminary.get_decision_display }}</span>
@@ -258,7 +258,7 @@
                                         </td>
                                         <td class="num">R{{ assignment.submission.round }}</td>
                                         <td>
-                                            {% if assignment.decision == "approve" %}
+                                            {% if assignment.decision_tone == 'ok' %}
                                                 <span class="chip chip-ok">{{ assignment.get_decision_display }}</span>
                                             {% else %}
                                                 <span class="chip chip-warn">{{ assignment.get_decision_display }}</span>
