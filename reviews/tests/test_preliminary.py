@@ -14,6 +14,7 @@ from core.models import AuditLog
 from core.registry import get_entries_for_user
 
 from ..forms import PreliminaryReviewForm
+from .. import lifecycle
 from ..models import (
     REVIEW_TYPE_COMPETITION_PROJECT,
     ArchivedProposal,
@@ -439,6 +440,27 @@ class PreliminaryReviewTests(ReviewTestCase):
         self.assertEqual(count_pending_preliminary_reviews(self.preliminary), 0)
         audit = AuditLog.objects.get(action="reviews.preliminary.reassign")
         self.assertEqual(audit.detail["to_reviewer_id"], other.pk)
+
+    def test_swapping_in_someone_already_holding_a_task_is_refused(self):
+        """一人一轮一席：初审侧与评审侧同一条检查。
+
+        正常流程造不出这种数据（初审中还没有评审任务），所以直接落一条评审任务，
+        测的正是该检查要拦的那种形态。
+        """
+        submission = self._open_round()
+        preliminary = preliminary_review_of(submission)
+        holder = make_user("preliminary-holder")
+        ReviewAssignment.objects.create(submission=submission, reviewer=holder)
+
+        with self.assertRaises(ReviewError) as caught:
+            reassign_preliminary_reviewer(
+                preliminary=preliminary, new_reviewer=holder, actor=self.admin
+            )
+
+        self.assertEqual(
+            str(caught.exception),
+            lifecycle.STAGES[lifecycle.STAGE_PRELIMINARY].swap_holds,
+        )
 
     def test_a_completed_preliminary_cannot_be_swapped(self):
         submission = self._open_round()

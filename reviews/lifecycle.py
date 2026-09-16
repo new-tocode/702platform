@@ -78,7 +78,11 @@ DECISION_CHOICES = ((DECISION_APPROVE, "通过"), (DECISION_REVISE, "需修改")
 
 
 class StageRules(NamedTuple):
-    """一道关自己的全部口径——改规则只改这一条记录。"""
+    """一道关自己的全部口径——改规则只改这一条记录。
+
+    拒绝文案也在这里：同一句话过去在服务层、Admin 与表单里各写一遍，改一处就
+    会漏掉另一处。
+    """
 
     label: str  # 初审 / 评审
     holder_label: str  # 初审人 / 评审人
@@ -86,6 +90,10 @@ class StageRules(NamedTuple):
     open_status: str  # 轮次停在这个状态时，这道关才可提交、才可改派
     submit_action: str  # 审计动作名（沿用合并前的字符串，历史记录保持连续）
     reassign_action: str
+    closed_refusal: str  # 提交时轮次已过站
+    swap_not_pending: str  # 改派：任务已不是待处理
+    swap_phase: str  # 改派：轮次已过站
+    swap_holds: str  # 改派：这个人已在本轮持有任务
 
 
 STAGES = {
@@ -96,6 +104,10 @@ STAGES = {
         open_status=PRELIMINARY_PENDING,
         submit_action="reviews.preliminary.complete",
         reassign_action="reviews.preliminary.reassign",
+        closed_refusal="该轮送审已不在初审环节。",
+        swap_not_pending="只有待初审的任务可以更换初审人。",
+        swap_phase="该轮送审已不在初审环节，不能再更换初审人。",
+        swap_holds="该初审人已在本轮任务中。",
     ),
     STAGE_REVIEW: StageRules(
         label="评审",
@@ -104,8 +116,24 @@ STAGES = {
         open_status=PENDING,
         submit_action="reviews.assignment.complete",
         reassign_action="reviews.assignment.reassign",
+        closed_refusal="该轮送审已不在评审环节。",
+        swap_not_pending="只有待评审的任务可以更换评审人。",
+        swap_phase="该轮送审已给出结论，不能再更换评审人。",
+        swap_holds="该评审人已在本轮评审任务中。",
     ),
 }
+
+
+def stage_is_open(submission, stage):
+    """轮次此刻停在这道关上吗——提交与改派都问它，不要各比一次状态。"""
+    return submission.status == STAGES[stage].open_status
+
+
+def open_stage_refusal(submission, stage):
+    """这道关此刻轮不到时给用户看的那句话；轮得到则返回 ``None``。"""
+    if stage_is_open(submission, stage):
+        return None
+    return STAGES[stage].closed_refusal
 
 
 # --- 迁移表 -----------------------------------------------------------------

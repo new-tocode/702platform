@@ -217,7 +217,7 @@ class SuperReviewerOverrideTests(ReviewTestCase):
 
         self.assertEqual(
             override_blocker(submission=submission, user=self.preliminary),
-            "你在本轮有初审任务，请直接提交那一条",
+            "你在本轮已有初审任务，请直接提交那一条",
         )
         with self.assertRaises(ReviewError):
             self._override(submission, super_reviewer=self.preliminary)

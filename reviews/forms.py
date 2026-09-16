@@ -190,8 +190,11 @@ class AdminReassignPreliminaryReviewerForm(forms.ModelForm):
         fields = ("reviewer",)
         labels = {"reviewer": "初审人"}
         help_texts = {
+            # 与候选 queryset 逐项对齐：这里少写一项，管理员就会以为某个不在
+            # 列表里的人该出现。评审侧的同一句话在 AdminReassignReviewerForm。
             "reviewer": (
-                "只列出有初审资格、非本项目组成员、未请假、且未停用的人。"
+                "只列出有初审资格、启用中、非本项目组成员、未请假、"
+                "且本轮尚未持有任务的人。"
             ),
         }
 
