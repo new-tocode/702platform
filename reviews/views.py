@@ -10,13 +10,9 @@ from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
-from projects.permissions import (
-    can_view_group,
-    is_preliminary_reviewer,
-    is_project_reviewer,
-    is_super_reviewer,
-)
+from projects.permissions import can_view_group
 
+from . import panels, permissions
 from .forms import PreliminaryReviewForm, ReviewForm, ReviewerLeaveForm
 from .models import (
     ArchivedProposal,
@@ -29,7 +25,6 @@ from .services import (
     clear_reviewer_leave,
     complete_preliminary_review,
     complete_review,
-    override_blocker,
     override_review,
     set_reviewer_leave,
 )
@@ -39,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 
 def _require_reviewer(request):
-    if not is_project_reviewer(request.user):
+    if not permissions.has_review_qualification(request.user):
         logger.warning(
             "reviews.permission.denied username=%s path=%s",
             request.user.get_username(),
@@ -50,7 +45,7 @@ def _require_reviewer(request):
 
 
 def _require_preliminary_reviewer(request):
-    if not is_preliminary_reviewer(request.user):
+    if not permissions.is_preliminary_reviewer(request.user):
         logger.warning(
             "reviews.permission.denied username=%s path=%s reason=no_preliminary_qualification",
             request.user.get_username(),
@@ -61,7 +56,7 @@ def _require_preliminary_reviewer(request):
 
 
 def _require_super_reviewer(request):
-    if not is_super_reviewer(request.user):
+    if not permissions.is_super_reviewer(request.user):
         logger.warning(
             "reviews.permission.denied username=%s path=%s reason=not_super_reviewer",
             request.user.get_username(),
@@ -93,63 +88,7 @@ def _annotated_filename(file_field, round_number):
 @login_required
 def review_queue(request):
     _require_reviewer(request)
-    context = {
-        "show_preliminary": is_preliminary_reviewer(request.user),
-        # 超级评审没有自己的队列任务，但整页都归他们看，所以也算「评审」这一侧。
-        "show_review": bool(
-            getattr(request.user, "is_reviewer", False)
-            or is_super_reviewer(request.user)
-        ),
-    }
-    if context["show_preliminary"]:
-        # 初审任务与评审任务是两件事：同一个人可能两种都持有，各自排队。
-        preliminary = (
-            PreliminaryReview.objects.filter(reviewer=request.user)
-            .select_related("submission__group", "submission__submitted_by")
-            .order_by("-assigned_at", "-id")
-        )
-        context["preliminary_pending"] = [
-            item for item in preliminary if item.status == PreliminaryReview.PENDING
-        ]
-        context["preliminary_completed"] = [
-            item for item in preliminary if item.status == PreliminaryReview.COMPLETED
-        ]
-        # 被超级评审释放的那一条也要列出来：否则初审人只会看到任务凭空消失。
-        context["preliminary_released"] = [
-            item for item in preliminary if item.status == PreliminaryReview.RELEASED
-        ]
-    if context["show_review"]:
-        assignments = (
-            ReviewAssignment.objects.filter(reviewer=request.user)
-            .select_related("submission__group", "submission__submitted_by")
-            .order_by("-assigned_at", "-id")
-        )
-        context["pending"] = [
-            item for item in assignments if item.status == ReviewAssignment.PENDING
-        ]
-        context["completed"] = [
-            item for item in assignments if item.status == ReviewAssignment.COMPLETED
-        ]
-        context["released"] = [
-            item for item in assignments if item.status == ReviewAssignment.RELEASED
-        ]
-    if is_super_reviewer(request.user):
-        # The super reviewer's reach: every round still in progress, whether or
-        # not they hold a task on it — a round waiting on its 初审 is in progress
-        # too, and being able to settle it is the point of the role. Rounds they
-        # cannot act on stay listed — seeing the whole picture is the point — but
-        # each says why.
-        context["open_rounds"] = [
-            {
-                "submission": submission,
-                "blocker": override_blocker(submission=submission, user=request.user),
-            }
-            for submission in ProjectSubmission.objects.filter(
-                status__in=ProjectSubmission.OPEN_STATUSES
-            )
-            .select_related("group", "submitted_by")
-            .order_by("submitted_at", "id")
-        ]
+    context = panels.queue_context(user=request.user)
     logger.info(
         "reviews.queue.view preliminary_pending=%s preliminary_released=%s pending=%s completed=%s released=%s super=%s reviewer=%s",
         len(context.get("preliminary_pending", ())),
@@ -157,7 +96,7 @@ def review_queue(request):
         len(context.get("pending", ())),
         len(context.get("completed", ())),
         len(context.get("released", ())),
-        is_super_reviewer(request.user),
+        permissions.is_super_reviewer(request.user),
         request.user.get_username(),
         extra={"request_id": getattr(request, "request_id", "-")},
     )

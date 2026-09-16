@@ -145,7 +145,7 @@ class ReviewReminderTests(ReviewTestCase):
 
         response = self.client.get(reverse("accounts:member_home"))
 
-        self.assertEqual(response.context["pending_review_count"], 1)
+        self.assertEqual(response.context["pending"].review, 1)
         self.assertContains(response, "份项目书待你评审")
         self.assertContains(response, '<span class="n">1</span>')
 
@@ -154,7 +154,7 @@ class ReviewReminderTests(ReviewTestCase):
 
         response = self.client.get(reverse("accounts:member_home"))
 
-        self.assertEqual(response.context["pending_review_count"], 0)
+        self.assertEqual(response.context["pending"].review, 0)
         self.assertNotContains(response, "份项目书待你评审")
 
     def test_member_home_counts_preliminary_tasks_of_their_own(self):
@@ -163,8 +163,8 @@ class ReviewReminderTests(ReviewTestCase):
 
         response = self.client.get(reverse("accounts:member_home"))
 
-        self.assertEqual(response.context["pending_preliminary_count"], 1)
-        self.assertEqual(response.context["pending_review_count"], 0)
+        self.assertEqual(response.context["pending"].preliminary, 1)
+        self.assertEqual(response.context["pending"].review, 0)
         self.assertContains(response, "份项目书待你初审")
         self.assertContains(response, '<span class="n">1</span>')
 
@@ -173,7 +173,7 @@ class ReviewReminderTests(ReviewTestCase):
 
         response = self.client.get(reverse("accounts:member_home"))
 
-        self.assertNotIn("pending_review_count", response.context)
+        self.assertNotIn("pending", response.context)
         self.assertNotContains(response, "份项目书待你评审")
 
 

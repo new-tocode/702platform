@@ -10,13 +10,14 @@ class ReviewsConfig(AppConfig):
 
     def ready(self):
         from core.registry import register_entry
-        from projects.permissions import is_project_reviewer
+
+        from .permissions import has_review_qualification
 
         register_entry(
             key="reviews.queue",
             label="评审",
             description="初审并审阅分配给你的项目书，给出初审或评审意见",
             url_name="reviews:queue",
-            visible_when=is_project_reviewer,
+            visible_when=has_review_qualification,
             sort_order=80,
         )
