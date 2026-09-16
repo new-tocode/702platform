@@ -15,7 +15,7 @@ class ReviewsConfig(AppConfig):
         register_entry(
             key="reviews.queue",
             label="评审",
-            description="审阅分配给你的项目书并给出评审意见",
+            description="初审并审阅分配给你的项目书，给出初审或评审意见",
             url_name="reviews:queue",
             visible_when=is_project_reviewer,
             sort_order=80,

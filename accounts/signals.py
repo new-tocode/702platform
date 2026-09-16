@@ -50,30 +50,42 @@ def remind_reviewer_of_pending_reviews(sender, request, user, **kwargs):
 
     The reminder is a flash message rather than a redirect: logging in should
     not silently change the page the user asked for, and the same count is shown
-    persistently on the member centre.
+    persistently on the member centre. 初审 and 评审 are counted and named
+    separately — they are different tasks, and one number says nothing about the
+    other.
     """
     if request is None:
         return
     # Local imports keep accounts free of load-time dependencies on other apps.
     from projects.permissions import is_project_reviewer
-    from reviews.services import count_pending_reviews
+    from reviews.services import (
+        count_pending_preliminary_reviews,
+        count_pending_reviews,
+    )
 
     if not is_project_reviewer(user):
         return
+    pending_preliminary = count_pending_preliminary_reviews(user)
     pending = count_pending_reviews(user)
-    if not pending:
+    parts = []
+    if pending_preliminary:
+        parts.append(f"{pending_preliminary} 份项目书待初审")
+    if pending:
+        parts.append(f"{pending} 份项目书待评审")
+    if not parts:
         return
     # fail_silently: a login must never break because the reminder could not be
     # queued — e.g. a programmatic login outside the middleware chain, where the
     # request carries no message storage.
     messages.warning(
         request,
-        f"你有 {pending} 份项目书待评审，请前往「评审」处理。",
+        f"你有 {'、'.join(parts)}，请前往「评审」处理。",
         fail_silently=True,
     )
     logger.info(
-        "reviews.reminder.login user=%s pending=%s",
+        "reviews.reminder.login user=%s pending_preliminary=%s pending=%s",
         user.get_username(),
+        pending_preliminary,
         pending,
         extra={"request_id": getattr(request, "request_id", "-")},
     )

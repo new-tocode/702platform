@@ -26,20 +26,41 @@
         <div>
             <div class="k">评审资格</div>
             <div class="v mono">{% if user.is_reviewer %}有{% else %}无{% endif %}</div>
-            {% if reviewer_leave.is_active %}
-                <div class="help">请假中，{{ reviewer_leave.ends_at|date:"m-d H:i" }} 恢复</div>
-            {% endif %}
-            {% if user.is_super_reviewer %}
-                <div class="help">超级评审</div>
-            {% endif %}
         </div>
+        <div>
+            <div class="k">初审资格</div>
+            <div class="v mono">{% if user.is_preliminary_reviewer %}有{% else %}无{% endif %}</div>
+        </div>
+        {% if reviewer_leave.is_active %}
+            {# 请假窗口对两种资格都生效，所以它自己占一格，标题也不只写"评审"。 #}
+            <div>
+                <div class="k">初审／评审请假</div>
+                <div class="v mono">请假中</div>
+                <div class="help">{{ reviewer_leave.ends_at|date:"m-d H:i" }} 恢复</div>
+            </div>
+        {% endif %}
+        {% if user.is_super_reviewer %}
+            <div>
+                <div class="k">超级评审</div>
+                <div class="v mono">有</div>
+            </div>
+        {% endif %}
     </div>
 
-    {% if pending_review_count %}
+    {% if pending_preliminary_count or pending_review_count %}
         <div class="todo reveal">
             <a href="{% url 'reviews:queue' %}">
-                <span class="n">{{ pending_review_count }}</span>
-                <span class="t">份项目书待你评审 · 点击前往处理</span>
+                <span class="n">{{ pending_preliminary_count|add:pending_review_count }}</span>
+                <span class="t">
+                    {% if pending_preliminary_count and pending_review_count %}
+                        份项目书待你处理（初审 {{ pending_preliminary_count }} · 评审 {{ pending_review_count }}）
+                    {% elif pending_preliminary_count %}
+                        份项目书待你初审
+                    {% else %}
+                        份项目书待你评审
+                    {% endif %}
+                    · 点击前往处理
+                </span>
             </a>
         </div>
     {% endif %}
@@ -92,10 +113,10 @@
         </div>
     </div>
 
-    {% if user.is_reviewer %}
+    {% if user.is_reviewer or user.is_preliminary_reviewer %}
         <div class="panel reveal">
             <div class="panel-head">
-                <h2>评审请假</h2>
+                <h2>初审／评审请假</h2>
                 {% if reviewer_leave.is_active %}
                     <span class="chip chip-warn">请假中</span>
                 {% elif reviewer_leave %}
@@ -110,7 +131,7 @@
                             修改下面任一时间即可调整恢复评审的时间。
                         </p>
                     {% else %}
-                        <p class="help">请假期间不会被分配新的评审请求，到点自动恢复；已经分配给你的评审任务不受影响。</p>
+                        <p class="help">请假期间不会被分配新的初审或评审请求，到点自动恢复；已经分配给你的任务不受影响。</p>
                     {% endif %}
                     <form method="post" action="{% url 'reviews:set_leave' %}">
                         {% csrf_token %}

@@ -155,6 +155,9 @@ def home(request):
 
 @login_required
 def member_home(request):
+    # 局部导入：让 accounts 不在模块加载期就依赖 projects 与 reviews。
+    from projects.permissions import is_project_reviewer
+
     logger.debug(
         "member.home.view username=%s user_id=%s",
         request.user.get_username(),
@@ -165,12 +168,24 @@ def member_home(request):
     # 平台概览数字只对管理员与项目组联系人呈现，普通成员与访客都不显示。
     if can_view_platform_overview(request.user):
         context["overview"] = platform_overview()
-    # 评审相关块（待办提醒、请假面板）只对有评审资格的账号呈现；其他人不必触碰 reviews。
-    if request.user.is_reviewer:
-        from reviews.forms import ReviewerLeaveForm
-        from reviews.services import count_pending_reviews, open_leave_for
+    # 评审相关块只对相应资格的账号呈现，其他人不必触碰 reviews。
+    if is_project_reviewer(request.user):
+        # 待办分初审与评审两种：同一个账号可能两种都有，数字必须分开报。
+        from reviews.services import (
+            count_pending_preliminary_reviews,
+            count_pending_reviews,
+        )
 
+        context["pending_preliminary_count"] = count_pending_preliminary_reviews(
+            request.user
+        )
         context["pending_review_count"] = count_pending_reviews(request.user)
+    # 请假窗口对评审人与初审人都开放：它描述的是这个人有没有空，
+    # 与平台准备派给他的是哪一种任务无关。
+    if request.user.is_reviewer or request.user.is_preliminary_reviewer:
+        from reviews.forms import ReviewerLeaveForm
+        from reviews.services import open_leave_for
+
         leave = open_leave_for(request.user)
         initial = (
             {

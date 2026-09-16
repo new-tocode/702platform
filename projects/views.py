@@ -108,8 +108,12 @@ def group_list(request):
 
 @login_required
 def group_detail(request, pk):
-    from reviews.forms import ReviewForm
-    from reviews.models import ReviewAssignment
+    from reviews.forms import PreliminaryReviewForm, ReviewForm
+    from reviews.models import (
+        PreliminaryReview,
+        ReviewAssignment,
+        preliminary_review_of,
+    )
     from reviews.services import can_override_review
 
     group = get_object_or_404(
@@ -129,21 +133,31 @@ def group_detail(request, pk):
 
     submissions = list(
         group.submissions.select_related("submitted_by__profile")
-        .prefetch_related("assignments__reviewer__profile")
+        .prefetch_related("assignments__reviewer__profile", "preliminary_review")
         .order_by("-round", "-id")
     )
     latest = submissions[0] if submissions else None
     my_assignment = None
-    if latest is not None and getattr(request.user, "is_reviewer", False):
-        my_assignment = next(
-            (
-                assignment
-                for assignment in latest.assignments.all()
-                if assignment.reviewer_id == request.user.pk
-                and assignment.status == ReviewAssignment.PENDING
-            ),
-            None,
-        )
+    my_preliminary = None
+    if latest is not None:
+        if getattr(request.user, "is_reviewer", False):
+            my_assignment = next(
+                (
+                    assignment
+                    for assignment in latest.assignments.all()
+                    if assignment.reviewer_id == request.user.pk
+                    and assignment.status == ReviewAssignment.PENDING
+                ),
+                None,
+            )
+        if getattr(request.user, "is_preliminary_reviewer", False):
+            preliminary = preliminary_review_of(latest)
+            if (
+                preliminary is not None
+                and preliminary.reviewer_id == request.user.pk
+                and preliminary.status == PreliminaryReview.PENDING
+            ):
+                my_preliminary = preliminary
     can_override = latest is not None and can_override_review(
         submission=latest,
         user=request.user,
@@ -153,7 +167,9 @@ def group_detail(request, pk):
         "submissions": submissions,
         "latest_submission": latest,
         "my_assignment": my_assignment,
+        "my_preliminary": my_preliminary,
         "review_form": ReviewForm(),
+        "preliminary_form": PreliminaryReviewForm(),
         "archived_proposals": group.archived_proposals.select_related("submission"),
         "can_override": can_override,
         "can_manage": can_manage_group(request.user, group),
@@ -217,8 +233,9 @@ def group_submit_review(request, pk):
         messages.success(
             request,
             f"已提交第 {submission.round} 轮评审"
-            f"（{submission.get_review_type_display()}，需 {submission.required_reviewers} 名评审人），"
-            "等待评审人返回意见。",
+            f"（{submission.get_review_type_display()}），"
+            "等待初审人初审；初审通过后将随机分配 "
+            f"{submission.required_reviewers} 名评审人。",
         )
     return redirect("projects:group_detail", pk=group.pk)
 
