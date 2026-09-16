@@ -6,22 +6,52 @@ from django.contrib import admin
 
 from core.audit import record_audit
 
-from .models import GroupJoinRequest, ProjectContact, ProjectGroup
+from .models import (
+    MAX_ADVISORS_PER_GROUP,
+    GroupJoinRequest,
+    ProjectAdvisor,
+    ProjectContact,
+    ProjectGroup,
+)
 
 
 logger = logging.getLogger(__name__)
 
 
+class ProjectAdvisorInline(admin.TabularInline):
+    """指导老师随项目组一起编辑。
+
+    槽位选单里只有「第 1/2 位」「第 3 位」，加上 ``max_num`` 的封顶，
+    后台无法为同一项目组排出第 4 位；重复选同一槽位会撞上模型的唯一约束。
+    """
+
+    model = ProjectAdvisor
+    extra = 0
+    max_num = MAX_ADVISORS_PER_GROUP
+    fields = ("sort_order", "name")
+    ordering = ("sort_order",)
+
+
 @admin.register(ProjectGroup)
 class ProjectGroupAdmin(admin.ModelAdmin):
-    list_display = ("name", "leader", "member_count", "created_at", "updated_at")
+    inlines = (ProjectAdvisorInline,)
+    list_display = (
+        "name",
+        "leader",
+        "college",
+        "member_count",
+        "created_at",
+        "updated_at",
+    )
     search_fields = (
         "name",
         "description",
+        "college",
         "leader__username",
         "leader__profile__full_name",
         "members__username",
         "members__profile__full_name",
+        "advisors__name",
     )
     list_filter = ("created_at", "updated_at")
     filter_horizontal = ("members",)

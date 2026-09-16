@@ -3,7 +3,7 @@
 from django import forms
 from django.contrib.auth import get_user_model
 
-from .models import GroupJoinRequest, ProjectGroup
+from .models import MAX_ADVISORS_PER_GROUP, GroupJoinRequest, ProjectGroup
 
 
 User = get_user_model()
@@ -23,6 +23,39 @@ class GroupDescriptionForm(forms.ModelForm):
         fields = ("description",)
         labels = {"description": "项目组介绍"}
         widgets = {"description": forms.Textarea(attrs={"rows": 4})}
+
+
+class GroupInfoForm(forms.ModelForm):
+    """学院的填写，外加指导老师的三个槽位。
+
+    指导老师存成独立的 ``ProjectAdvisor`` 行，但界面上是固定的三行输入框——
+    上限就是 3 位，固定槽位比可增删的表单集更直观，空槽位即表示这一位不存在。
+    """
+
+    advisor_1 = forms.CharField(label="指导老师 1", max_length=128, required=False)
+    advisor_2 = forms.CharField(label="指导老师 2", max_length=128, required=False)
+    advisor_3 = forms.CharField(label="指导老师 3", max_length=128, required=False)
+
+    class Meta:
+        model = ProjectGroup
+        fields = ("college",)
+        labels = {"college": "学院"}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.instance.pk:
+            return
+        advisors = list(self.instance.advisors.all()[:MAX_ADVISORS_PER_GROUP])
+        for index, advisor in enumerate(advisors, start=1):
+            self.fields[f"advisor_{index}"].initial = advisor.name
+
+    def advisor_names(self):
+        """按槽位顺序返回已填写的姓名；空槽位不占位，不留空洞。"""
+        return [
+            self.cleaned_data[f"advisor_{index}"].strip()
+            for index in range(1, MAX_ADVISORS_PER_GROUP + 1)
+            if self.cleaned_data.get(f"advisor_{index}", "").strip()
+        ]
 
 
 class GroupProposalForm(forms.ModelForm):

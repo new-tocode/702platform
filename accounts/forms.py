@@ -87,6 +87,7 @@ class ProfileForm(forms.ModelForm):
             "student_id",
             "college",
             "major",
+            "specialty",
             "phone",
             "contact",
         )

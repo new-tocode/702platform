@@ -140,6 +140,7 @@ class MemberAuthenticationAcceptanceTests(TestCase):
                 "full_name": "成员一",
                 "college": "计算机学院",
                 "major": "软件工程",
+                "specialty": "算法设计、机器人调试",
                 "phone": "13800000000",
                 "contact": "竞赛社团成员",
             },
@@ -150,6 +151,7 @@ class MemberAuthenticationAcceptanceTests(TestCase):
         self.assertEqual(self.user.profile.full_name, "成员一")
         self.assertEqual(self.user.profile.student_id, "20260001")
         self.assertEqual(self.user.profile.college, "计算机学院")
+        self.assertEqual(self.user.profile.specialty, "算法设计、机器人调试")
 
     def test_later_password_change_requires_old_password(self):
         self.complete_first_password_change()

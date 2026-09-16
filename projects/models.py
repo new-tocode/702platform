@@ -1,4 +1,4 @@
-"""Project groups and their leader/member relationships."""
+"""Project groups, their leader/member relationships, and their advisors."""
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -22,6 +22,7 @@ class ProjectGroup(models.Model):
         verbose_name="成员",
     )
     description = models.TextField("简介", blank=True)
+    college = models.CharField("学院", max_length=128, blank=True)
     proposal = models.FileField(
         "项目书",
         upload_to="project_proposals/%Y/%m/",
@@ -40,12 +41,76 @@ class ProjectGroup(models.Model):
     def __str__(self):
         return self.name
 
+    @property
+    def advisor_names(self):
+        """Advisor names in slot order, joined for display; empty when none.
+
+        Relies on the caller prefetching ``advisors`` (the group list and detail
+        views both do) — without that this costs one query per group.
+        """
+        return "、".join(advisor.name for advisor in self.advisors.all())
+
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
         # A group's leader is always a member of that group. This keeps the
         # registration form and all membership displays internally consistent.
         if self.leader_id:
             self.members.add(self.leader_id)
+
+
+#: Advisors one project group may have, and the only place the cap is written
+#: down — the model's two constraints and the group forms both derive from it.
+MAX_ADVISORS_PER_GROUP = 3
+
+#: Slots an advisor can occupy; ``第 1 位`` … ``第 3 位``.
+ADVISOR_SLOT_CHOICES = tuple(
+    (slot, f"第 {slot + 1} 位") for slot in range(MAX_ADVISORS_PER_GROUP)
+)
+
+
+class ProjectAdvisor(models.Model):
+    """A supervising teacher of a project group.
+
+    Kept in its own table rather than as fixed columns on :class:`ProjectGroup`
+    so a group carries anywhere from zero to :data:`MAX_ADVISORS_PER_GROUP`
+    advisors with no empty gaps. Advisors are plain names — the platform has no
+    teacher accounts to point at.
+    """
+
+    group = models.ForeignKey(
+        ProjectGroup,
+        on_delete=models.CASCADE,
+        related_name="advisors",
+        verbose_name="项目组",
+    )
+    name = models.CharField("指导老师", max_length=128)
+    sort_order = models.PositiveSmallIntegerField(
+        "顺序",
+        choices=ADVISOR_SLOT_CHOICES,
+        default=0,
+    )
+    created_at = models.DateTimeField("创建时间", auto_now_add=True)
+    updated_at = models.DateTimeField("更新时间", auto_now=True)
+
+    class Meta:
+        verbose_name = "指导老师"
+        verbose_name_plural = "指导老师"
+        ordering = ("sort_order", "id")
+        constraints = [
+            # 「最多 3 位」落在数据库层：槽位只有 0/1/2，且同组内不重复，
+            # 两条合起来即「每组至多 3 条」。
+            models.UniqueConstraint(
+                fields=("group", "sort_order"),
+                name="unique_project_advisor_slot",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(sort_order__lt=MAX_ADVISORS_PER_GROUP),
+                name="project_advisor_slot_within_three",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.group.name} · {self.name}"
 
 
 class GroupJoinRequest(models.Model):
