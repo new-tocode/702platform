@@ -13,6 +13,7 @@ ordinary reviewers, so the "who may review" exclusions in
 import logging
 import os
 import random
+from typing import NamedTuple
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
@@ -20,7 +21,8 @@ from django.utils import timezone
 
 from core.audit import record_audit
 from projects.models import ProjectGroup
-from projects.permissions import is_super_reviewer
+
+from .permissions import is_super_reviewer, may_receive_tasks
 
 from .models import (
     REVIEWER_QUOTA,
@@ -750,9 +752,8 @@ def reassign_preliminary_reviewer(*, preliminary, new_reviewer, actor, request=N
 def count_pending_reviews(reviewer):
     """How many review tasks await this reviewer.
 
-    Drives the platform's reminders (the post-login nudge and the member-centre
-    todo card). Leave is deliberately not applied: taking leave does not excuse
-    the reviews a reviewer already holds.
+    Leave is deliberately not applied: taking leave does not excuse the reviews
+    a reviewer already holds.
     """
     return ReviewAssignment.objects.filter(
         reviewer=reviewer,
@@ -764,13 +765,64 @@ def count_pending_preliminary_reviews(reviewer):
     """How many 初审 tasks await this reviewer.
 
     Counted separately from :func:`count_pending_reviews` because the two are
-    worded differently wherever they are shown ("待初审" vs "待评审"); a
-    reviewer holding both kinds gets one reminder naming both.
+    worded differently wherever they are shown ("待初审" vs "待评审").
     """
     return PreliminaryReview.objects.filter(
         reviewer=reviewer,
         status=PreliminaryReview.PENDING,
     ).count()
+
+
+class PendingTasks(NamedTuple):
+    """待办的唯一口径：两种数量，以及两处页面各自要的措辞。
+
+    措辞写在这里而不是各处页面上：登录提醒、成员中心的待办卡片与队列页统计条
+    用的是同一批数字，三处各拼一句就会慢慢长歪。
+    """
+
+    preliminary: int
+    review: int
+
+    @property
+    def total(self):
+        return self.preliminary + self.review
+
+    @property
+    def parts(self):
+        """登录提醒用：``["2 份项目书待初审", "1 份项目书待评审"]``。"""
+        parts = []
+        if self.preliminary:
+            parts.append(f"{self.preliminary} 份项目书待初审")
+        if self.review:
+            parts.append(f"{self.review} 份项目书待评审")
+        return parts
+
+    @property
+    def headline(self):
+        """成员中心卡片用；数字由模板单独渲染，这里只给后面那半句。"""
+        if self.preliminary and self.review:
+            return (
+                f"份项目书待你处理（初审 {self.preliminary} · 评审 {self.review}）"
+            )
+        if self.preliminary:
+            return "份项目书待你初审"
+        if self.review:
+            return "份项目书待你评审"
+        return ""
+
+
+def pending_task_summary(reviewer):
+    """这个账号手上还没交的任务：两种分别计数。
+
+    The single place that answers "how much is waiting for me" — the post-login
+    nudge, the member-centre card and the queue page all come through here.
+    Leave is deliberately not applied: taking leave does not excuse the tasks a
+    reviewer already holds.
+    """
+    return PendingTasks(
+        preliminary=count_pending_preliminary_reviews(reviewer),
+        review=count_pending_reviews(reviewer),
+    )
 
 
 def open_leave_for(reviewer, at=None):
@@ -790,7 +842,7 @@ def set_reviewer_leave(*, reviewer, starts_at, ends_at, reason="", actor, reques
     one instead of stacking a second. This is also how a reviewer or an
     administrator moves the recovery time earlier or later.
     """
-    if not (reviewer.is_reviewer or reviewer.is_preliminary_reviewer):
+    if not may_receive_tasks(reviewer):
         raise ReviewError("该账号没有评审或初审资格，无需请假。")
     if ends_at <= starts_at:
         raise ReviewError("请假结束时间必须晚于开始时间。")
