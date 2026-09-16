@@ -17,6 +17,7 @@ from django.contrib import admin, messages
 
 from core.audit import record_audit
 
+from . import lifecycle
 from .forms import AdminReassignPreliminaryReviewerForm, AdminReassignReviewerForm
 from .models import (
     ArchivedProposal,
@@ -182,7 +183,7 @@ class ReviewAssignmentAdmin(admin.ModelAdmin):
             obj is not None
             and obj.pk is not None
             and obj.status == ReviewAssignment.PENDING
-            and obj.submission.status == ProjectSubmission.PENDING
+            and lifecycle.stage_is_open(obj.submission, lifecycle.STAGE_REVIEW)
         ) and super().has_change_permission(request, obj)
 
     def has_change_permission(self, request, obj=None):
@@ -281,7 +282,7 @@ class PreliminaryReviewAdmin(admin.ModelAdmin):
             obj is not None
             and obj.pk is not None
             and obj.status == PreliminaryReview.PENDING
-            and obj.submission.status == ProjectSubmission.PRELIMINARY_PENDING
+            and lifecycle.stage_is_open(obj.submission, lifecycle.STAGE_PRELIMINARY)
         ) and super().has_change_permission(request, obj)
 
     def has_change_permission(self, request, obj=None):

@@ -7,6 +7,7 @@
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 
+from .. import lifecycle
 from ..forms import ReviewForm
 from ..models import (
     REVIEW_TYPE_INNOVATION_START,
@@ -164,6 +165,34 @@ class VerdictTests(ReviewTestCase):
                 decision=ReviewAssignment.APPROVE,
                 comment="越权。",
             )
+
+    def test_a_verdict_on_a_settled_round_is_refused(self):
+        """轮次已经出过结论时不能再交卷。
+
+        少了这道守卫，这一票会被写成「已完成」，而汇总函数按设计对已定论的轮次
+        静默早退——记录里于是留下一票没人汇总、也没人解释的结论。
+        """
+        submission = self._submit()
+        assignment = self._assignment(submission, self.reviewer_one)
+        # 手工把轮次推到已通过：正常流程走不到这里（出结论的前提就是没有待评审任务）。
+        ProjectSubmission.objects.filter(pk=submission.pk).update(
+            status=ProjectSubmission.APPROVED
+        )
+
+        with self.assertRaises(ReviewError) as caught:
+            complete_review(
+                assignment=assignment,
+                reviewer=self.reviewer_one,
+                decision=ReviewAssignment.APPROVE,
+                comment="我还是评一下。",
+            )
+
+        self.assertEqual(
+            str(caught.exception),
+            lifecycle.STAGES[lifecycle.STAGE_REVIEW].closed_refusal,
+        )
+        assignment.refresh_from_db()
+        self.assertEqual(assignment.status, ReviewAssignment.PENDING)
 
     # --- annotated proposals and archiving -----------------------------------
 
