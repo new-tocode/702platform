@@ -92,7 +92,7 @@
 | `projects` | 项目组（项目组联系人、成员） |
 | `competitions` | 竞赛信息发布 + 项目组联系人报名登记 |
 | `equipment` | 设备台账 + 借用登记（借/还状态） |
-| `reviews` | 项目书同行评审（初审关卡 + 送审类型、初审与评审任务、批注版项目书、结论汇总与归档） |
+| `reviews` | 项目书同行评审（送审类型与配额、初审关卡与评审同表任务、批注版项目书、结论汇总与归档、超级评审、评审资格与可见性判定） |
 | `media` | 媒体库：图片/视频统一上传、校验、引用 |
 | `core` | 公共工具、操作入口注册表、审计日志 |
 
@@ -291,32 +291,29 @@ ProjectSubmission（每轮送审）
   - required_reviewers  由 review_type 推导；留空的旧轮次回退为 2 人
   - OPEN_STATUSES  尚未出结论的两个状态（初审中、评审中），「本轮是否还在进行」一律问它
 
-PreliminaryReview（初审任务，每轮恰好一条）
-  - submission     OneToOne(ProjectSubmission)
-  - reviewer       FK(User，须有 is_preliminary_reviewer 资格)  初审人
-  - status         pending（待初审）| completed（已初审）| released（已释放）
-  - decision       approve（通过）| revise（需修改）
-  - comment        初审意见
-  - assigned_at / completed_at
-
-ReviewAssignment（评审任务）
+ReviewTask（任务卡：初审一道关、评审一个评审团，两张表合并成一张）
   - submission     FK(ProjectSubmission)
-  - reviewer       FK(User，须有 is_reviewer 资格)
-  - status         pending（待评审）| completed（已完成）| released（已释放）
+  - stage          preliminary（初审）| review（评审）
+  - reviewer       FK(User，资格按阶段取 STAGES[stage].qualification)
+  - status         pending（待处理）| completed（已完成）| released（已释放）
+                   —— 字段只存中性取值，阶段化的叫法（待初审／已初审／待评审）
+                   由 ReviewTask.status_label 按 (stage, status) 给出
   - decision       approve（通过）| revise（需修改）
-  - comment        评审意见
-  - annotated_file 批注版项目书（选填，doc/docx/pdf）
-  - is_override    该行来自超级评审的一票决定
+  - comment        意见
+  - annotated_file 批注版项目书（选填；只有评审阶段会填）
+  - is_override    该行来自超级评审的一票决定（只有评审阶段会有）
   - assigned_at / completed_at
-  - 唯一约束：(submission, reviewer)
+  - 唯一约束：① (submission, reviewer)——一人一轮一席；② (submission) WHERE
+    stage='preliminary'——每轮恰好一条初审（允许零条：升级前留下的老轮次）；
+    ③ is_override=false OR stage='review'——超级评审那一票只属于评审阶段
 
 ArchivedProposal（批注版项目书归档）
-  - group             FK(ProjectGroup)
-  - submission        FK(ProjectSubmission)
-  - source_assignment FK(ReviewAssignment)
-  - file              批注版项目书
+  - group        FK(ProjectGroup)
+  - submission   FK(ProjectSubmission)
+  - source_task  FK(ReviewTask)
+  - file         批注版项目书
   - archived_at
-  - 唯一约束：(source_assignment)，保证归档幂等
+  - 唯一约束：(source_task)，保证归档幂等
 
 ReviewerLeave（评审人请假）
   - reviewer   FK(User，须有 is_reviewer 资格)
@@ -333,7 +330,7 @@ ReviewerLeave（评审人请假）
 
 - 送审**不复制项目书**：项目书只存一份在 `ProjectGroup.proposal`（doc/docx/pdf，≤20MB），初审人与评审人都从项目组详情页下载当前项目书。
 - 联系人上传项目书后点「提交审核」，**必须先选送审类型**并可选填一段说明；这一轮随即以 `preliminary_pending`（初审中）落到 **1 名初审人**手里，此时**还没有任何评审任务**——送审类型决定的评审人数要等初审通过才用得上。
-- 抽初审人用的是 `eligible_preliminary_reviewers()`：只从有初审资格（`User.is_preliminary_reviewer`）、启用中、未请假、且不是提交人或本组成员的账号里随机抽 1 人；一个都没有时拒绝提交并提示。
+- 抽初审人用的是 `eligible_holders(stage="preliminary")`：只从有初审资格（`User.is_preliminary_reviewer`）、启用中、未请假、且不是提交人或本组成员的账号里随机抽 1 人；一个都没有时拒绝提交并提示。
 - **提交时就先确认评审人够不够**：不够则拒绝开这一轮（提示“当前可用的评审人不足 N 人…”），预检把**本轮的初审人排除在外**——初审人不能占评审席位（后面的抽人同样排除他）。这一条守的是「不开出一轮谁也推进不了的送审」：真开出来，联系人被单轮次约束挡住、初审人也通不过，只能等管理员补资格或超级评审来收场。抽人本身仍留到初审通过时。
 - 初审的结论与评审**共用同一对取值**（`approve` 通过 / `revise` 需修改）。通过 → 该轮转 `pending`，并在**同一次事务**里按送审类型随机抽齐评审人；打回 → 该轮直接 `needs_revision`，一个评审人也不分配——没准备好的项目书不占用评审人的时间。
 - **本人初审通过的那一轮不会再抽到本人**（`User.is_reviewer` 与 `User.is_preliminary_reviewer` 同时具备时）。排除写在 `_eligible_pool()` 里，与「谁可以评审」的其余条件同处一地，因此抽人、容量预检与管理员改派三条路径都自动生效；只针对他初审过的那一轮，在别的轮次里他照常可以被抽为评审人。
@@ -359,7 +356,7 @@ ReviewerLeave（评审人请假）
 **待评审提醒**
 
 - 评审人或初审人登录时若手上有未完成的任务，登录后立刻收到一条 `messages` 提醒（amber flash）告知份数。用消息而不用跳转：登录不该悄悄改变用户原本要去的页面。
-- 两种任务**分开计数、分开措辞**（“2 份项目书待初审、1 份项目书待评审”）：它们是两件事，一个数字说明不了另一个。计数函数分别是 `count_pending_preliminary_reviews()` 与 `count_pending_reviews()`。
+- 两种任务**分开计数、分开措辞**（“2 份项目书待初审、1 份项目书待评审”）：它们是两件事，一个数字说明不了另一个。计数由 `pending_task_summary()` 一处给出（一次查询按阶段聚合，措辞也在那里）。
 - 成员中心顶部对同一批数字另给一张常驻待办卡片（`.todo`：琥珀色左边框 + 大号数字），点击直达评审队列；没有待办时整块不渲染。两种都持有时卡片写“份项目书待处理（初审 X · 评审 Y）”。
 - 计数只统计 `status=pending` 的任务，且**不扣除请假**——请假不免除已经分到手的任务。
 - 已被撤销相应资格者不提醒：他们进不去评审队列（`_require_reviewer` 会 403），提醒只会误导。
@@ -368,12 +365,12 @@ ReviewerLeave（评审人请假）
 **更换评审人（管理员）**
 
 - 管理员可在「项目评审 → 评审任务」的详情页把一条**待评审**的任务改派给另一位评审人。这是评审人失联、或事后发现其与本项目组有利益冲突时**唯一的补救路径**——没有它，该轮会永久停在「评审中」。
-- 初审任务有**完全对应的一套**（「项目评审 → 初审任务」，`reassign_preliminary_reviewer()`）：初审是进入一轮的唯一入口，初审人失联比评审人失联更致命——整组人都被卡住，所以这条补救路径不是可选项。开放条件同样是「任务待初审 且 该轮仍在初审中」。
-- **只在「任务待评审 且 该轮尚未判结论」时开放，且该管理员确实持有该模型的修改权限**：逐对象的状态判断是**叠加**在普通权限判断之上，不是替代它——否则只有 `view_reviewassignment`（只读观察者）的账号也能改派。逐对象判断同时决定详情页是否把「评审人」渲染成可编辑的下拉；其余记录与另外几个 reviews admin 一样全字段只读。理由：结论一旦落下，这条任务就是「谁判了什么」的记录，换人等于把结论、意见与批注文件记到别人名下。
-- 由于任务仍是 `pending`、该轮的待评审任务数不变，**换人不需要重新判结论，也完全不触碰归档**。被替换者那一行是**原地改派**而不是删除（保持「每（轮次，评审人）恰好一条任务」），换人前的持有人记在审计日志里。
-- 候选名单来自与抽人**同一个** `eligible_reviewers()`（初审任务则用 `eligible_preliminary_reviewers()`；两者共用 `_eligible_pool()`，排除提交人、本组成员、请假中、资格不符或已停用，评审一侧还额外排除本轮已有的评审人**与本轮的初审人**）；服务层对这些规则再校验一遍，所以绕过表单的调用方也拦得住。表单会把当前持有人单独加回候选，否则下拉看不出现在是谁。
-- 两种任务在 Admin 中**都禁止新增与删除**：删除一条评审任务会**悄悄改变该轮所需的评审人数**，删除初审任务会让这一轮再也进不去评审。但**整轮可以删**——`ProjectSubmissionAdmin.get_deleted_objects` 专门豁免了这两项权限，删除的单位因此是「整轮」（Django 的级联检查会拿被级联的任务去问任务自己的 admin，不豁免就会连整轮也删不掉）。已通过并归档的轮次由 `ArchivedProposal` 的 PROTECT 挡住，删不掉；删除写审计日志（含该轮有几条评审任务、有没有初审任务）。
-- 写入必须经 `reassign_reviewer()` / `reassign_preliminary_reviewer()`（`save_model` 不使用 `form.save()`），校验、加锁（沿用 submission → 任务 的锁序）与审计都在服务层。
+- 两道关在 Admin 里是**同一屏**（「项目评审 → 评审任务」，按「阶段」列区分）：初审是进入一轮的唯一入口，初审人失联比评审人失联更致命——整组人都被卡住，所以这条补救路径不是可选项。开放条件同样是「任务待处理 且 该轮仍停在这一关」。
+- **只在「任务待处理 且 该轮尚未走出这一关」时开放，且该管理员确实持有该模型的修改权限**：逐对象的状态判断是**叠加**在普通权限判断之上，不是替代它——否则只有 `view_reviewtask`（只读观察者）的账号也能改派。逐对象判断同时决定详情页是否把「评审人」渲染成可编辑的下拉；其余记录与另外几个 reviews admin 一样全字段只读。理由：结论一旦落下，这条任务就是「谁判了什么」的记录，换人等于把结论、意见与批注文件记到别人名下。
+- 由于任务仍是 `pending`、该轮的待处理任务数不变，**换人不需要重新判结论，也完全不触碰归档**。被替换者那一行是**原地改派**而不是删除（保持「每（轮次，人）恰好一条任务」——这条现在由 `(submission, reviewer)` 唯一约束背书），换人前的持有人记在审计日志里。
+- 候选名单来自与抽人**同一个** `eligible_holders(stage=…)`（内部共用 `_eligible_pool()`：排除提交人、本组成员、请假中、资格不符或已停用；带 `submission` 时再排除本轮已持有任务的人——**两道关一起算**，所以本轮的初审人不会出现在评审席位的候选里）；服务层对这些规则再校验一遍，所以绕过表单的调用方也拦得住。表单会把当前持有人单独加回候选，否则下拉看不出现在是谁。
+- 任务在 Admin 中**禁止新增与删除**：删除一条评审任务会**悄悄改变该轮所需的评审人数**，删除初审任务会让这一轮再也进不去评审。但**整轮可以删**——`ProjectSubmissionAdmin.get_deleted_objects` 专门豁免了这两项权限，删除的单位因此是「整轮」（Django 的级联检查会拿被级联的任务去问任务自己的 admin，不豁免就会连整轮也删不掉）。已通过并归档的轮次由 `ArchivedProposal` 的 PROTECT 挡住，删不掉；删除写审计日志（含该轮有几条评审任务、有没有初审任务）。
+- 写入必须经 `reassign_task()`（`save_model` 不使用 `form.save()`），校验、加锁（沿用 submission → 任务 的锁序）与审计都在服务层。
 
 **超级评审（一票敲定）**
 
@@ -386,7 +383,7 @@ ReviewerLeave（评审人请假）
 - 可否行使该权由 `override_blocker()` 一处判定，它返回**不可行使的具体原因**（`None` 表示可以行使），`can_override_review()` 只是它的布尔包装：超级评审资格；轮次尚未出结论；提交人、项目组成员不得行使（利益冲突）；**已在本轮持有任务的超级评审人不得行使**（请直接提交那条任务，否则同一轮会被记两票）——初审任务同样算数，且提示语按它是否已提交分成两句（“请直接提交那一条” / “你是本轮的初审人，已经就该轮给出初审意见”），不复用一句做不到的建议。表单显隐、拒绝信息、以及队列页对「不可行使」的标注全部取自这一个函数，不另写一份判定。
 - 队列页的「全部进行中」**列出全部进行中的轮次**（含初审中，看到全貌正是这个角色的意义），但对当前账号不可行使的那些会标出原因（`不可行使 · 你是本轮的提交人`），按钮也只写「查看项目书」而不是「查看项目书并决定」——不承诺做不到的事。
 - 因为「已释放」不等于「待处理」，请假、待办提醒、管理员改派、单轮次约束这些机制天然把它排除在外。
-- 相配套的守卫：`complete_review()` 与 `complete_preliminary_review()` 都**非 `pending` 一律拒绝**（不写“拒绝 `completed`”）。否则被释放的人仍能提交，把任务从「已释放」翻成「已完成」——在该轮已经出结论之后改写记录。
+- 相配套的守卫：`submit_verdict()` **非 `pending` 一律拒绝**（不写“拒绝 `completed`”）。否则被释放的人仍能提交，把任务从「已释放」翻成「已完成」——在该轮已经出结论之后改写记录。
 
 ### 6.8 core
 
@@ -440,6 +437,7 @@ MediaFile（统一媒体库，供各内容模型通过 M2M/FK 引用）
 | 管理员 | 系统管理 | `is_staff`（Django Admin）+ 自定义 `Permission` |
 
 - 「项目组联系人」**不新建用户组存储**：身份由 `ProjectGroup.leader` 计算，判定收敛在 `projects/permissions.py`（`is_project_contact` / `is_project_member` / `can_manage_group` / `can_use_equipment` / `groups_visible_to`），其他模块复用这些函数，避免出现会漂移的副本。
+- **评审资格的判定归评审应用**：`reviews/permissions.py`（`is_reviewer` / `is_preliminary_reviewer` / `is_super_reviewer` / `qualifies_for_stage` / `has_review_qualification` / `may_receive_tasks` / `has_review_claim`）。projects 与 accounts 只在函数体内局部 import 这一个模块——依赖方向因此是单向的，projects 不会再为了问一句「他是不是评审人」而去读评审的模型。
 - 「组成员关系」通过 `ProjectGroup.members` 表达；「内部通知的用户组」仍是 Django `auth.Group`（`Notice.visible_groups`），两套"组"语义不同，不可混淆。
 
 ### 7.2 权限矩阵
@@ -463,7 +461,7 @@ MediaFile（统一媒体库，供各内容模型通过 M2M/FK 引用）
 
 **评审人（`User.is_reviewer`）**：额外获得「评审」入口，只能看到分配给自己的送审；可下载项目书、在项目组详情页提交评审意见与决定，并可选附一份批注版项目书；成员中心另有「初审／评审请假」面板，可登记一段不收新任务的时间窗。手上有未完成评审任务时，登录会收到提醒，成员中心顶部也常驻一张待办卡片。项目组详情页对 staff、该组成员、本轮初审人、被分配任务（初审或评审）的账号，以及该组有未结束轮次时的超级评审可见——这几项授权是**并集**，同时具备多种资格的账号不会因为走了某一支而丢掉自己任务带来的可见性（`can_view_group`）。
 
-**初审人（`User.is_preliminary_reviewer`）**：「评审」入口与队列对**三种资格中的任意一种**开放（`is_project_reviewer`），但队列里各自只看到自己那一侧：初审人看到「待初审／已完成的初审／已释放的初审」，评审人看到「待评审／已完成的评审／已释放的评审」。初审人在项目组详情页拿到的是「我的初审」面板（通过 / 需修改 + 意见，没有批注版），可下载项目书；初审**通过**即让该轮进入评审并抽齐评审人，**打回**则本轮直接结束。请假窗口对初审人同样开放（面板与时长口径都叫「初审／评审请假」）。初审人身份对项目组匿名（页面上只写「初审」）。
+**初审人（`User.is_preliminary_reviewer`）**：「评审」入口与队列对**三种资格中的任意一种**开放（`reviews/permissions.py` 的 `has_review_qualification`），但队列里各自只看到自己那一侧：初审人看到「待初审／已完成的初审／已释放的初审」，评审人看到「待评审／已完成的评审／已释放的评审」。初审人在项目组详情页拿到的是「我的初审」面板（通过 / 需修改 + 意见，没有批注版），可下载项目书；初审**通过**即让该轮进入评审并抽齐评审人，**打回**则本轮直接结束。请假窗口对初审人同样开放（面板与时长口径都叫「初审／评审请假」）。初审人身份对项目组匿名（页面上只写「初审」）。
 
 ### 7.3 对象级权限（唯一的复杂度点）
 
@@ -553,7 +551,7 @@ core / registry.py
 | `/member/reviews/` | 我的评审队列（初审与评审各三档：待办 / 已完成 / 已释放；超级评审另有「全部进行中」） | 初审人 / 评审人 / 超级评审 |
 | `/member/reviews/leave/` | 登记/修改本人「初审／评审请假」窗口（POST） | 初审人 / 评审人 |
 | `/member/reviews/leave/cancel/` | 取消本人「初审／评审请假」（POST） | 初审人 / 评审人 |
-| `/member/reviews/preliminary/<id>/complete/` | 提交初审意见与决定（POST） | 该任务的初审人 |
+| `/member/reviews/preliminary/<id>/complete/` | 提交初审意见与决定（POST）——与下一条是**同一个视图**，按任务的阶段选门槛与表单；两条路径都保留，历史链接不变 | 该任务的初审人 |
 | `/member/reviews/<id>/complete/` | 提交评审意见与决定，可选附批注版项目书（POST） | 该任务的评审人 |
 | `/member/reviews/override/<id>/` | 超级评审对进行中的轮次直接通过或打回（POST） | 超级评审 |
 | `/member/reviews/<id>/annotated/` | 下载某条评审任务的批注版项目书 | 同上（staff / 该组成员 / 被分配评审人） |

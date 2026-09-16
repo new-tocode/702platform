@@ -147,6 +147,16 @@ systemctl restart club702
 
 删字段/删表/改类型**不要与依赖旧字段的功能同一次发布**：先加新列 + 双写，下次发布再删旧列。保证任意一版代码与当版数据库兼容，回滚才安全。
 
+### 迁移删过模型时：清理陈旧权限项
+
+删掉模型的迁移（如评审的 `0006` 把两张任务表并成 `ReviewTask`）不会顺带删掉 `django_content_type` 与 `auth_permission` 里指向旧模型的记录。发布后在服务器上跑一次：
+
+```bash
+.venv/bin/python manage.py remove_stale_contenttypes --noinput
+```
+
+`auth.Permission.content_type` 是 CASCADE（权限随之消失），`admin.LogEntry.content_type` 是 SET_NULL（后台操作历史保留、只是内容类型置空），所以这一步是安全的；不做的话，Admin 的权限列表里会出现指向已不存在模型的条目。
+
 ## 4. 备份与恢复
 
 备份由 **`club702-backup.service`（oneshot）+ `club702-backup.timer`** 驱动，不用 cron：统一由 systemd 管理、`systemctl list-timers` 可查、`Persistent=true` 可补跑错过的备份。
