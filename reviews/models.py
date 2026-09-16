@@ -30,6 +30,8 @@ from django.utils import timezone
 from projects.models import ProjectGroup
 from projects.validators import validate_proposal_file
 
+from . import lifecycle
+
 
 REVIEW_TYPE_COMPETITION_PROJECT = "competition_project"
 REVIEW_TYPE_COMPETITION_PROVINCIAL = "competition_provincial"
@@ -84,24 +86,14 @@ def upload_archived_proposal(instance, filename):
 
 
 class ProjectSubmission(models.Model):
-    PRELIMINARY_PENDING = "preliminary_pending"
-    PENDING = "pending"
-    APPROVED = "approved"
-    NEEDS_REVISION = "needs_revision"
-    STATUS_CHOICES = (
-        (PRELIMINARY_PENDING, "初审中"),
-        (PENDING, "评审中"),
-        (APPROVED, "已通过"),
-        (NEEDS_REVISION, "需修改"),
-    )
-
-    #: Statuses of a round that is still running. A round is "open" from the
-    #: moment it is submitted until it reaches a verdict, and 初审中 counts: the
-    #: proposal is with the platform, so the group may not open another round and
-    #: deleting or settling the round still applies. Everything that asks "is
-    #: this round still in progress?" must ask it here rather than compare
-    #: against ``PENDING``, which now means "past 初审, with the reviewers".
-    OPEN_STATUSES = (PRELIMINARY_PENDING, PENDING)
+    #: 取值、迁移表与拒绝文案都在 :mod:`reviews.lifecycle`；模型上留同名别名，
+    #: 历史代码与模板的语义不变。
+    PRELIMINARY_PENDING = lifecycle.PRELIMINARY_PENDING
+    PENDING = lifecycle.PENDING
+    APPROVED = lifecycle.APPROVED
+    NEEDS_REVISION = lifecycle.NEEDS_REVISION
+    STATUS_CHOICES = lifecycle.STATUS_CHOICES
+    OPEN_STATUSES = lifecycle.OPEN_STATUSES
 
     group = models.ForeignKey(
         ProjectGroup,
@@ -156,6 +148,22 @@ class ProjectSubmission(models.Model):
     @property
     def is_approved(self):
         return self.status == self.APPROVED
+
+    @property
+    def is_needs_revision(self):
+        return self.status == self.NEEDS_REVISION
+
+    @property
+    def is_preliminary_pending(self):
+        return self.status == self.PRELIMINARY_PENDING
+
+    @property
+    def status_tone(self):
+        """模板语气：``chip-{{ status_tone }}``／``.v.{{ status_tone }}``。
+
+        进行中的两个状态给空串，与今天「只有已通过／需修改才套色」的输出一致。
+        """
+        return lifecycle.STATUS_TONES.get(self.status, "")
 
     @property
     def is_open(self):
@@ -273,8 +281,21 @@ class ReviewAssignment(models.Model):
         return f"{self.reviewer} 评审 {self.submission}"
 
     @property
+    def is_pending(self):
+        return self.status == self.PENDING
+
+    @property
     def is_completed(self):
         return self.status == self.COMPLETED
+
+    @property
+    def is_released(self):
+        return self.status == self.RELEASED
+
+    @property
+    def decision_tone(self):
+        """结论对应的 chip 语气：通过=ok，需修改=warn。"""
+        return "ok" if self.decision == self.APPROVE else "warn"
 
 
 class PreliminaryReview(models.Model):
@@ -345,8 +366,21 @@ class PreliminaryReview(models.Model):
         return f"{self.reviewer} 初审 {self.submission}"
 
     @property
+    def is_pending(self):
+        return self.status == self.PENDING
+
+    @property
     def is_completed(self):
         return self.status == self.COMPLETED
+
+    @property
+    def is_released(self):
+        return self.status == self.RELEASED
+
+    @property
+    def decision_tone(self):
+        """结论对应的 chip 语气：通过=ok，需修改=warn。"""
+        return "ok" if self.decision == self.APPROVE else "warn"
 
 
 def preliminary_review_of(submission):

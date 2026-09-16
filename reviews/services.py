@@ -22,6 +22,7 @@ from django.utils import timezone
 from core.audit import record_audit
 from projects.models import ProjectGroup
 
+from . import lifecycle
 from .permissions import is_super_reviewer, may_receive_tasks
 
 from .models import (
@@ -41,6 +42,18 @@ User = get_user_model()
 
 class ReviewError(Exception):
     """A submission or review action violates a business rule."""
+
+
+def _advance(submission, event, *, at=None):
+    """把这一轮推到事件的落点；不允许时用事件自带的那句话拒绝。
+
+    状态怎么走由 :mod:`reviews.lifecycle` 的迁移表说了算，这里只负责把「给用户
+    看的话」翻译成 :class:`ReviewError`——lifecycle 不认识这个异常，两边互不 import。
+    """
+    reason = lifecycle.transition_refusal(submission, event)
+    if reason:
+        raise ReviewError(reason)
+    return lifecycle.transition(submission, event, at=at)
 
 
 #: 两道关卡各自的资格口径。抽人和"够不够"的提示都问这里，不再各写一份。
@@ -304,6 +317,9 @@ def complete_preliminary_review(*, preliminary, reviewer, decision, comment, req
 
         reviewers = []
         if decision == PreliminaryReview.APPROVE:
+            # 先过闸再抽人：闸门不过是代码错误，抽人失败整次回滚，两者都不会
+            # 留下半截状态，但先过闸能省一次白抽。
+            _advance(submission, lifecycle.PRELIMINARY_APPROVED)
             reviewers = _pick_reviewers(
                 group=submission.group,
                 submitter=submission.submitted_by,
@@ -315,14 +331,10 @@ def complete_preliminary_review(*, preliminary, reviewer, decision, comment, req
                 ReviewAssignment.objects.create(
                     submission=submission, reviewer=reviewer_user
                 )
-            submission.status = ProjectSubmission.PENDING
-            submission.save(update_fields=["status"])
         else:
             # 打回: the group revises the proposal and submits a new round,
             # exactly as when a reviewer asks for changes.
-            submission.status = ProjectSubmission.NEEDS_REVISION
-            submission.decided_at = now
-            submission.save(update_fields=["status", "decided_at"])
+            _advance(submission, lifecycle.PRELIMINARY_REVISED, at=now)
 
     record_audit(
         action="reviews.preliminary.complete",
@@ -400,13 +412,10 @@ def _settle_submission(submission):
     has_revision_request = submission.assignments.filter(
         decision=ReviewAssignment.REVISE
     ).exists()
-    submission.status = (
-        ProjectSubmission.NEEDS_REVISION
-        if has_revision_request
-        else ProjectSubmission.APPROVED
+    lifecycle.transition(
+        submission,
+        lifecycle.REVIEWS_REVISED if has_revision_request else lifecycle.REVIEWS_APPROVED,
     )
-    submission.decided_at = timezone.now()
-    submission.save(update_fields=["status", "decided_at"])
 
     if submission.status == ProjectSubmission.APPROVED:
         _archive_annotated_proposals(submission)
@@ -571,13 +580,13 @@ def override_review(
                 pk=preliminary.pk
             ).update(status=PreliminaryReview.RELEASED)
 
-        locked.status = (
-            ProjectSubmission.APPROVED
+        lifecycle.transition(
+            locked,
+            lifecycle.OVERRIDE_APPROVED
             if decision == ReviewAssignment.APPROVE
-            else ProjectSubmission.NEEDS_REVISION
+            else lifecycle.OVERRIDE_REVISED,
+            at=now,
         )
-        locked.decided_at = now
-        locked.save(update_fields=["status", "decided_at"])
 
         if locked.status == ProjectSubmission.APPROVED:
             _archive_annotated_proposals(locked)

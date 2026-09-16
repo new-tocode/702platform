@@ -46,7 +46,7 @@
         </div>
         <div>
             <div class="k">方案结论</div>
-            <div class="v mono {% if latest_submission.status == 'approved' %}ok{% elif latest_submission.status == 'needs_revision' %}warn{% endif %}">
+            <div class="v mono {{ latest_submission.status_tone }}">
                 {% if latest_submission %}{{ latest_submission.get_status_display }}{% else %}未提交{% endif %}
             </div>
         </div>
@@ -122,7 +122,7 @@
                                                     <dd>
                                                         {% if preliminary.is_completed %}
                                                             {{ preliminary.get_decision_display }} · {{ preliminary.comment|default:"—" }}
-                                                        {% elif preliminary.status == 'released' %}
+                                                        {% elif preliminary.is_released %}
                                                             <span class="chip chip-off">已释放</span>
                                                             <span class="muted">本轮已由超级评审敲定，该初审任务随之结束</span>
                                                         {% else %}
@@ -147,7 +147,7 @@
                                                                 <a class="btn btn-sm" href="{% url 'reviews:annotated' assignment.pk %}">下载批注版</a>
                                                             </div>
                                                         {% endif %}
-                                                    {% elif assignment.status == 'released' %}
+                                                    {% elif assignment.is_released %}
                                                         <span class="chip chip-off">已释放</span>
                                                         <span class="muted">本轮已由超级评审敲定，该评审任务随之结束</span>
                                                     {% else %}
@@ -224,7 +224,7 @@
                         <dl class="dl">
                             <div><dt>轮次</dt><dd class="mono">R{{ latest_submission.round }}</dd></div>
                             <div><dt>评审类型</dt><dd>{{ latest_submission.get_review_type_display|default:"—" }}</dd></div>
-                            {% if latest_submission.status == 'preliminary_pending' %}
+                            {% if latest_submission.is_preliminary_pending %}
                                 <div><dt>初审</dt><dd class="mono">进行中</dd></div>
                             {% else %}
                                 <div><dt>评审进度</dt><dd class="mono">{{ latest_submission.completed_count }} / {{ latest_submission.required_reviewers }}</dd></div>
@@ -232,15 +232,15 @@
                             <div><dt>结论</dt><dd>{{ latest_submission.get_status_display }}</dd></div>
                         </dl>
                         <p class="help">
-                            {% if latest_submission.status == "approved" %}
+                            {% if latest_submission.is_approved %}
                                 方案已通过，可按此推进项目。
-                            {% elif latest_submission.status == "needs_revision" %}
+                            {% elif latest_submission.is_needs_revision %}
                                 {% if latest_submission.assignments.all %}
                                     请根据评审意见修改项目书后重新提交。
                                 {% else %}
                                     本轮由初审打回（没有进入评审），请根据初审意见修改项目书后重新提交。
                                 {% endif %}
-                            {% elif latest_submission.status == "preliminary_pending" %}
+                            {% elif latest_submission.is_preliminary_pending %}
                                 等待初审人给出意见；初审通过后会随机分配
                                 {{ latest_submission.required_reviewers }} 名评审人。
                             {% else %}
