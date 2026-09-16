@@ -47,20 +47,11 @@
         {% endif %}
     </div>
 
-    {% if pending_preliminary_count or pending_review_count %}
+    {% if pending.total %}
         <div class="todo reveal">
             <a href="{% url 'reviews:queue' %}">
-                <span class="n">{{ pending_preliminary_count|add:pending_review_count }}</span>
-                <span class="t">
-                    {% if pending_preliminary_count and pending_review_count %}
-                        份项目书待你处理（初审 {{ pending_preliminary_count }} · 评审 {{ pending_review_count }}）
-                    {% elif pending_preliminary_count %}
-                        份项目书待你初审
-                    {% else %}
-                        份项目书待你评审
-                    {% endif %}
-                    · 点击前往处理
-                </span>
+                <span class="n">{{ pending.total }}</span>
+                <span class="t">{{ pending.headline }} · 点击前往处理</span>
             </a>
         </div>
     {% endif %}
