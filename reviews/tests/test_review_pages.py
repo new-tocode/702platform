@@ -108,6 +108,25 @@ class ReviewPagesTests(ReviewTestCase):
         # 初审人同样匿名：页面上只写「初审」，不写账号。
         self.assertNotContains(response, "preliminary-one")
 
+    def test_the_roster_shows_the_preliminary_line_exactly_once(self):
+        """名册里初审只占一行，评审人编号只数评审任务。
+
+        合并成一张任务表后这两件事很容易写坏：直接遍历 ``submission.tasks`` 会把
+        初审那条也当成评审人，于是初审出现两行、编号从 2 开始。
+        """
+        self._submit()
+        self.client.force_login(self.member)
+
+        response = self.client.get(
+            reverse("projects:group_detail", args=(self.group.pk,))
+        )
+
+        html = response.content.decode()
+        self.assertEqual(html.count("<dt>初审</dt>"), 1)
+        self.assertIn("<dt>评审人 1</dt>", html)
+        self.assertIn("<dt>评审人 2</dt>", html)
+        self.assertNotIn("<dt>评审人 3</dt>", html)
+
     def test_review_form_posts_multipart(self):
         """A browser only sends the annotated file if the form is multipart.
 

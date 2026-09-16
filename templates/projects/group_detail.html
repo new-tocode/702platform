@@ -132,7 +132,9 @@
                                                 </div>
                                             {% endif %}
                                         {% endwith %}
-                                        {% for assignment in submission.tasks.all %}
+                                        {# 只循环评审任务：初审那一行上面已经单独渲染过，#}
+                                        {# 直接遍历 tasks 会让初审多出一行、评审人编号也跟着错位。 #}
+                                        {% for assignment in submission.review_tasks %}
                                             <div>
                                                 {% if assignment.is_override %}
                                                     <dt>超级评审</dt>
