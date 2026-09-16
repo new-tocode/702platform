@@ -128,7 +128,7 @@ def group_detail(request, pk):
 
     submissions = list(
         group.submissions.select_related("submitted_by__profile")
-        .prefetch_related("assignments__reviewer__profile", "preliminary_review")
+        .prefetch_related("tasks__reviewer__profile")
         .order_by("-round", "-id")
     )
     context = {

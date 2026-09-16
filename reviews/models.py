@@ -1,10 +1,10 @@
 """Journal-style peer review of project proposals.
 
 Each :class:`ProjectSubmission` is one review round of a project group's
-proposal. A round starts in the hands of one :class:`PreliminaryReview` (初审):
+proposal. A round starts in the hands of one :class:`ReviewTask` (初审):
 that single reviewer passes the proposal on — which is when the round draws the
 reviewers its type calls for — or sends it back for revision. From then on
-:class:`ReviewAssignment` records one reviewer's verdict, and a submission is
+:class:`ReviewTask` records one reviewer's verdict, and a submission is
 approved only when every assignment is complete and every verdict approves.
 
 The proposal itself is **not** copied here: reviewers download the project
@@ -161,7 +161,8 @@ class ProjectSubmission(models.Model):
     def status_tone(self):
         """模板语气：``chip-{{ status_tone }}``／``.v.{{ status_tone }}``。
 
-        进行中的两个状态给空串，与今天「只有已通过／需修改才套色」的输出一致。
+        进行中给 ``on``（项目组列表的 chip 用它），详情页的 ``.v`` 只有
+        ``.ok``／``.warn`` 两条样式，多出来的类不落地任何外观。
         """
         return lifecycle.STATUS_TONES.get(self.status, "")
 
@@ -176,63 +177,79 @@ class ProjectSubmission(models.Model):
         return REVIEWER_QUOTA.get(self.review_type, DEFAULT_REVIEWERS)
 
     @property
+    def preliminary_task(self):
+        """本轮的初审任务（模板用；配合 prefetch_related("tasks") 不额外查询）。
+
+        服务层请用 :func:`preliminary_task_of`：它会现查一遍，避开缓存里的旧副本。
+        """
+        return next((task for task in self.tasks.all() if task.is_preliminary), None)
+
+    @property
+    def review_tasks(self):
+        """本轮的评审任务，顺序沿用模型默认排序（模板用）。"""
+        return [task for task in self.tasks.all() if task.is_review]
+
+    @property
     def completed_count(self):
-        return self.assignments.filter(status=ReviewAssignment.COMPLETED).count()
+        return self.tasks.filter(
+            stage=ReviewTask.REVIEW, status=ReviewTask.COMPLETED
+        ).count()
 
     @property
     def pending_count(self):
-        return self.assignments.filter(status=ReviewAssignment.PENDING).count()
+        return self.tasks.filter(
+            stage=ReviewTask.REVIEW, status=ReviewTask.PENDING
+        ).count()
 
     @property
     def open_task_count(self):
-        """Tasks of this round still awaiting a verdict, 初审 included.
+        """本轮还没交的任务数，两道关都算。
 
-        ``pending_count`` counts review tasks only, which is what the reviewer
-        progress figures want; this is the one a super reviewer is about to let
-        go, so the pending 初审 must be in it.
+        ``pending_count`` 只数评审任务（评审进度要那个口径）；这个数字是超级评审
+        即将放掉的量，所以待初审也算进来。
         """
-        count = self.pending_count
-        preliminary = preliminary_review_of(self)
-        if preliminary is not None and preliminary.status == PreliminaryReview.PENDING:
-            count += 1
-        return count
+        return self.tasks.filter(status=ReviewTask.PENDING).count()
 
 
-class ReviewAssignment(models.Model):
-    """One reviewer's task on one round.
+class ReviewTask(models.Model):
+    """一轮送审里的一张任务卡：初审一道关，评审一个评审团。
 
-    ``RELEASED`` is the end state of a task whose round was decided by a super
-    reviewer before this reviewer got to it: the task is no longer in 待评审, so
-    it stops counting towards reminders and can no longer be submitted — but the
-    row stays, so the roster still shows who had been asked.
+    两道关的任务**形状相同**——同一个持有人概念、同一个状态机、同一对结论、同样的
+    改派与释放规则——所以只有一张表，``stage`` 说明这是哪一道。差异只有三处，都由
+    约束或 :data:`reviews.lifecycle.STAGES` 表达：
+
+    * 一轮恰好一条初审（``unique_preliminary_task_per_submission``）；
+    * 批注版项目书只有评审阶段会填（初审给的是理由，不是稿子）；
+    * 超级评审那一票属于评审阶段（``override_is_review_stage_only``）。
+
+    ``RELEASED`` 是「本轮已被超级评审敲定，这张卡不必再交」的终态：不再计入待办、
+    不能再提交，但行保留——名单上仍看得出曾请过谁。
     """
 
-    PENDING = "pending"
-    COMPLETED = "completed"
-    RELEASED = "released"
-    STATUS_CHOICES = (
-        (PENDING, "待评审"),
-        (COMPLETED, "已完成"),
-        (RELEASED, "已释放"),
-    )
+    PRELIMINARY = lifecycle.STAGE_PRELIMINARY
+    REVIEW = lifecycle.STAGE_REVIEW
+    STAGE_CHOICES = lifecycle.STAGE_CHOICES
 
-    APPROVE = "approve"
-    REVISE = "revise"
-    DECISION_CHOICES = (
-        (APPROVE, "通过"),
-        (REVISE, "需修改"),
-    )
+    PENDING = lifecycle.TASK_PENDING
+    COMPLETED = lifecycle.TASK_COMPLETED
+    RELEASED = lifecycle.TASK_RELEASED
+    STATUS_CHOICES = lifecycle.TASK_STATUS_CHOICES
+
+    APPROVE = lifecycle.DECISION_APPROVE
+    REVISE = lifecycle.DECISION_REVISE
+    DECISION_CHOICES = lifecycle.DECISION_CHOICES
 
     submission = models.ForeignKey(
         ProjectSubmission,
         on_delete=models.CASCADE,
-        related_name="assignments",
+        related_name="tasks",
         verbose_name="送审",
     )
+    stage = models.CharField("阶段", max_length=16, choices=STAGE_CHOICES)
     reviewer = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
-        related_name="review_assignments",
+        related_name="review_tasks",
         verbose_name="评审人",
     )
     status = models.CharField(
@@ -242,16 +259,16 @@ class ReviewAssignment(models.Model):
         default=PENDING,
     )
     decision = models.CharField(
-        "评审决定",
+        "结论",
         max_length=16,
         choices=DECISION_CHOICES,
         blank=True,
     )
-    comment = models.TextField("评审意见", blank=True)
+    comment = models.TextField("意见", blank=True)
     is_override = models.BooleanField(
         "超级评审决定",
         default=False,
-        help_text="该行来自超级评审的一票决定：本轮结论由它单独敲定，等待中的任务（初审一并）随即被释放。",
+        help_text="该行来自超级评审的一票决定：本轮结论由它单独敲定，等待中的任务随即被释放。",
     )
     annotated_file = models.FileField(
         "批注版项目书",
@@ -266,11 +283,24 @@ class ReviewAssignment(models.Model):
     class Meta:
         verbose_name = "评审任务"
         verbose_name_plural = "评审任务"
-        ordering = ("status", "-assigned_at", "-id")
+        ordering = ("status", "stage", "-assigned_at", "-id")
         constraints = [
+            # 一人一轮一席：初审人不会被抽为同一轮的评审人，所以这条约束与所有
+            # 合法路径相容，且把「一人两票」挡在数据库层。
             models.UniqueConstraint(
                 fields=("submission", "reviewer"),
-                name="unique_submission_reviewer",
+                name="unique_submission_task_reviewer",
+            ),
+            # 一轮恰好一条初审；升级前留下的老轮次没有，所以允许零条。
+            models.UniqueConstraint(
+                fields=("submission",),
+                condition=models.Q(stage=lifecycle.STAGE_PRELIMINARY),
+                name="unique_preliminary_task_per_submission",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(is_override=False)
+                | models.Q(stage=lifecycle.STAGE_REVIEW),
+                name="override_is_review_stage_only",
             ),
         ]
         indexes = [
@@ -278,7 +308,15 @@ class ReviewAssignment(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.reviewer} 评审 {self.submission}"
+        return f"{self.reviewer} {self.get_stage_display()} {self.submission}"
+
+    @property
+    def is_preliminary(self):
+        return self.stage == self.PRELIMINARY
+
+    @property
+    def is_review(self):
+        return self.stage == self.REVIEW
 
     @property
     def is_pending(self):
@@ -293,89 +331,19 @@ class ReviewAssignment(models.Model):
         return self.status == self.RELEASED
 
     @property
-    def decision_tone(self):
-        """结论对应的 chip 语气：通过=ok，需修改=warn。"""
-        return "ok" if self.decision == self.APPROVE else "warn"
-
-
-class PreliminaryReview(models.Model):
-    """The 初审 gate of one round: one reviewer decides whether it goes on.
-
-    A round is submitted to exactly one 初审人 — the one-to-one is the point of
-    the stage, not an accident — and only their 通过 draws the round's ordinary
-    reviewers. A 打回 sends the round straight back to the group, so a proposal
-    that is not ready never spends the panel's time.
-
-    Statuses mirror :class:`ReviewAssignment`, ``RELEASED`` included: it is the
-    end state of a task whose round a super reviewer settled first.
-    """
-
-    #: 初审与评审回答的是同一个问题——放行还是打回——所以共用同一对结论取值，
-    #: 免得两处各写一份再慢慢长歪。
-    APPROVE = ReviewAssignment.APPROVE
-    REVISE = ReviewAssignment.REVISE
-    DECISION_CHOICES = ReviewAssignment.DECISION_CHOICES
-
-    PENDING = "pending"
-    COMPLETED = "completed"
-    RELEASED = "released"
-    STATUS_CHOICES = (
-        (PENDING, "待初审"),
-        (COMPLETED, "已初审"),
-        (RELEASED, "已释放"),
-    )
-
-    submission = models.OneToOneField(
-        ProjectSubmission,
-        on_delete=models.CASCADE,
-        related_name="preliminary_review",
-        verbose_name="送审",
-    )
-    reviewer = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.PROTECT,
-        related_name="preliminary_reviews",
-        verbose_name="初审人",
-        help_text="须有初审资格（User.is_preliminary_reviewer）。",
-    )
-    status = models.CharField(
-        "状态",
-        max_length=16,
-        choices=STATUS_CHOICES,
-        default=PENDING,
-    )
-    decision = models.CharField(
-        "初审决定",
-        max_length=16,
-        choices=DECISION_CHOICES,
-        blank=True,
-    )
-    comment = models.TextField("初审意见", blank=True)
-    assigned_at = models.DateTimeField("分配时间", auto_now_add=True)
-    completed_at = models.DateTimeField("完成时间", null=True, blank=True)
-
-    class Meta:
-        verbose_name = "初审任务"
-        verbose_name_plural = "初审任务"
-        ordering = ("-assigned_at", "-id")
-        indexes = [
-            models.Index(fields=("reviewer", "status")),
-        ]
-
-    def __str__(self):
-        return f"{self.reviewer} 初审 {self.submission}"
+    def stage_label(self):
+        """这一道关自己的叫法（初审／评审）——模板文案与拒绝语都用它。"""
+        return lifecycle.STAGES[self.stage].label
 
     @property
-    def is_pending(self):
-        return self.status == self.PENDING
+    def status_label(self):
+        """状态按阶段叫：待初审／已初审／待评审／已完成。
 
-    @property
-    def is_completed(self):
-        return self.status == self.COMPLETED
-
-    @property
-    def is_released(self):
-        return self.status == self.RELEASED
+        字段只能存一套中性 choices，叫法是这里按 ``(stage, status)`` 取的。
+        """
+        return lifecycle.TASK_STATUS_LABELS.get(
+            (self.stage, self.status), self.get_status_display()
+        )
 
     @property
     def decision_tone(self):
@@ -383,19 +351,18 @@ class PreliminaryReview(models.Model):
         return "ok" if self.decision == self.APPROVE else "warn"
 
 
-def preliminary_review_of(submission):
-    """This round's 初审 task, or ``None``.
+def preliminary_task_of(submission):
+    """这一轮的初审任务，或 ``None``。
 
     Rounds created before the 初审 stage existed have none, so every caller has
-    to cope with the absence. The row is read fresh instead of through the
-    reverse one-to-one accessor: that accessor caches whatever it saw first, and
-    the row is mutated in place — it gets a verdict, a super reviewer releases
-    it, an administrator swaps its holder — so a cached copy goes stale in
-    exactly the places where it decides something.
+    to cope with the absence. The row is read fresh instead of through
+    ``submission.tasks``: it is mutated in place — it gets a verdict, a super
+    reviewer releases it, an administrator swaps its holder — so a cached copy
+    goes stale in exactly the places where it decides something.
     """
     if submission is None or submission.pk is None:
         return None
-    return PreliminaryReview.objects.filter(submission_id=submission.pk).first()
+    return submission.tasks.filter(stage=ReviewTask.PRELIMINARY).first()
 
 
 class ArchivedProposal(models.Model):
@@ -419,11 +386,11 @@ class ArchivedProposal(models.Model):
         related_name="archived_proposals",
         verbose_name="送审",
     )
-    source_assignment = models.ForeignKey(
-        ReviewAssignment,
+    source_task = models.ForeignKey(
+        ReviewTask,
         on_delete=models.PROTECT,
         related_name="archived_proposals",
-        verbose_name="来源评审任务",
+        verbose_name="来源任务",
     )
     file = models.FileField(
         "批注版项目书",
@@ -439,8 +406,8 @@ class ArchivedProposal(models.Model):
             # Archiving runs inside the verdict aggregation, which may be
             # retried; one archive per source assignment keeps it idempotent.
             models.UniqueConstraint(
-                fields=("source_assignment",),
-                name="unique_archived_proposal_assignment",
+                fields=("source_task",),
+                name="unique_archived_proposal_task",
             ),
         ]
         indexes = [

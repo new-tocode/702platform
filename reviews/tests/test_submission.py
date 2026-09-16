@@ -12,9 +12,9 @@ from ..models import (
     REVIEWER_QUOTA,
     REVIEW_TYPE_CHOICES,
     REVIEW_TYPE_COMPETITION_PROJECT,
-    PreliminaryReview,
+    ReviewTask,
     ProjectSubmission,
-    preliminary_review_of,
+    preliminary_task_of,
 )
 from ..services import ReviewError
 from .base import (
@@ -54,11 +54,11 @@ class SubmissionTests(ReviewTestCase):
         submission = self._open_round()
 
         self.assertEqual(submission.status, ProjectSubmission.PRELIMINARY_PENDING)
-        self.assertEqual(submission.assignments.count(), 0)
-        preliminary = preliminary_review_of(submission)
+        self.assertEqual(self.review_tasks(submission).count(), 0)
+        preliminary = preliminary_task_of(submission)
         self.assertIsNotNone(preliminary)
         self.assertEqual(preliminary.reviewer, self.preliminary)
-        self.assertEqual(preliminary.status, PreliminaryReview.PENDING)
+        self.assertEqual(preliminary.status, ReviewTask.PENDING)
         # 需要的评审人数照旧由类型决定，只是要等初审通过才分配。
         self.assertEqual(submission.required_reviewers, 2)
 
@@ -67,14 +67,14 @@ class SubmissionTests(ReviewTestCase):
 
         self.assertEqual(submission.round, 1)
         self.assertEqual(submission.status, ProjectSubmission.PENDING)
-        self.assertEqual(submission.assignments.count(), 2)
+        self.assertEqual(self.review_tasks(submission).count(), 2)
         self.assertEqual(
-            set(submission.assignments.values_list("reviewer_id", flat=True)),
+            set(self.review_tasks(submission).values_list("reviewer_id", flat=True)),
             {self.reviewer_one.pk, self.reviewer_two.pk},
         )
-        preliminary = preliminary_review_of(submission)
-        self.assertEqual(preliminary.status, PreliminaryReview.COMPLETED)
-        self.assertEqual(preliminary.decision, PreliminaryReview.APPROVE)
+        preliminary = preliminary_task_of(submission)
+        self.assertEqual(preliminary.status, ReviewTask.COMPLETED)
+        self.assertEqual(preliminary.decision, ReviewTask.APPROVE)
 
     def test_review_type_determines_reviewer_quota(self):
         make_reviewer("reviewer-three")
@@ -84,7 +84,7 @@ class SubmissionTests(ReviewTestCase):
                 submission = self._submit(review_type=review_type)
 
                 self.assertEqual(submission.required_reviewers, expected)
-                self.assertEqual(submission.assignments.count(), expected)
+                self.assertEqual(self.review_tasks(submission).count(), expected)
                 # 收尾，否则下一轮会被「本轮未结束」挡住。
                 self._approve_round(submission)
 
@@ -119,7 +119,7 @@ class SubmissionTests(ReviewTestCase):
     def test_a_new_round_opens_after_the_preliminary_bounces_it(self):
         first = self._open_round()
         self._pass_preliminary(
-            first, decision=PreliminaryReview.REVISE, comment="请先补齐预算。"
+            first, decision=ReviewTask.REVISE, comment="请先补齐预算。"
         )
         first.refresh_from_db()
         self.assertEqual(first.status, ProjectSubmission.NEEDS_REVISION)

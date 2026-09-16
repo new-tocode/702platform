@@ -115,7 +115,7 @@
                                     </div>
                                     <dl class="dl review-lines">
                                         {# 初审那一行在评审之前：它是这一轮的第一道关。 #}
-                                        {% with preliminary=submission.preliminary_review %}
+                                        {% with preliminary=submission.preliminary_task %}
                                             {% if preliminary %}
                                                 <div>
                                                     <dt>初审</dt>
@@ -132,7 +132,7 @@
                                                 </div>
                                             {% endif %}
                                         {% endwith %}
-                                        {% for assignment in submission.assignments.all %}
+                                        {% for assignment in submission.tasks.all %}
                                             <div>
                                                 {% if assignment.is_override %}
                                                     <dt>超级评审</dt>
@@ -235,7 +235,7 @@
                             {% if latest_submission.is_approved %}
                                 方案已通过，可按此推进项目。
                             {% elif latest_submission.is_needs_revision %}
-                                {% if latest_submission.assignments.all %}
+                                {% if latest_submission.review_tasks %}
                                     请根据评审意见修改项目书后重新提交。
                                 {% else %}
                                     本轮由初审打回（没有进入评审），请根据初审意见修改项目书后重新提交。

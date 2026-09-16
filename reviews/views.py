@@ -16,17 +16,15 @@ from . import panels, permissions
 from .forms import PreliminaryReviewForm, ReviewForm, ReviewerLeaveForm
 from .models import (
     ArchivedProposal,
-    PreliminaryReview,
+    ReviewTask,
     ProjectSubmission,
-    ReviewAssignment,
 )
 from .services import (
     ReviewError,
     clear_reviewer_leave,
-    complete_preliminary_review,
-    complete_review,
     override_review,
     set_reviewer_leave,
+    submit_verdict,
 )
 
 
@@ -138,68 +136,48 @@ def override_submission(request, pk):
     return redirect("projects:group_detail", pk=submission.group_id)
 
 
+def _success_message(task, decision):
+    """交卷之后的三种回执——逐字沿用合并前的版本。"""
+    if task.is_preliminary:
+        if decision == ReviewTask.APPROVE:
+            return (
+                "初审已通过，已随机分配 "
+                f"{task.submission.required_reviewers} 名评审人。"
+            )
+        return "初审已打回，项目组修改项目书后可重新提交。"
+    return "评审已提交，感谢你的评审意见。"
+
+
 @login_required
 @require_POST
-def complete_preliminary(request, pk):
-    """Record the 初审 verdict; a 通过 hands the round to its reviewers."""
-    _require_preliminary_reviewer(request)
-    preliminary = get_object_or_404(
-        PreliminaryReview.objects.select_related("submission__group"),
+def complete_task(request, pk):
+    """交一张任务卡——初审与评审共用这一个视图。
+
+    两条路由都指到这里（``preliminary/<pk>/complete/`` 与 ``<pk>/complete/``），
+    URL 名与路径保持合并前的样子不变；走哪条只影响权限门槛与用哪张表单，而这两件
+    事都由任务自己的 ``stage`` 决定。
+    """
+    task = get_object_or_404(
+        ReviewTask.objects.select_related("submission__group"),
         pk=pk,
     )
-    if preliminary.reviewer_id != request.user.pk:
+    if task.is_preliminary:
+        _require_preliminary_reviewer(request)
+        form_class = PreliminaryReviewForm
+    else:
+        _require_reviewer(request)
+        form_class = ReviewForm
+    if task.reviewer_id != request.user.pk:
         raise PermissionDenied
 
-    form = PreliminaryReviewForm(request.POST)
+    form = form_class(request.POST, request.FILES)
     if form.is_valid():
         decision = form.cleaned_data["decision"]
         try:
-            reviewed = complete_preliminary_review(
-                preliminary=preliminary,
+            answered = submit_verdict(
+                task=task,
                 reviewer=request.user,
                 decision=decision,
-                comment=form.cleaned_data["comment"],
-                request=request,
-            )
-        except ReviewError as exc:
-            messages.error(request, str(exc))
-        else:
-            if decision == PreliminaryReview.APPROVE:
-                messages.success(
-                    request,
-                    "初审已通过，已随机分配 "
-                    f"{reviewed.submission.required_reviewers} 名评审人。",
-                )
-            else:
-                messages.success(
-                    request,
-                    "初审已打回，项目组修改项目书后可重新提交。",
-                )
-    else:
-        for field_errors in form.errors.values():
-            for error in field_errors:
-                messages.error(request, error)
-    return redirect("projects:group_detail", pk=preliminary.submission.group_id)
-
-
-@login_required
-@require_POST
-def complete_assignment(request, pk):
-    _require_reviewer(request)
-    assignment = get_object_or_404(
-        ReviewAssignment.objects.select_related("submission__group"),
-        pk=pk,
-    )
-    if assignment.reviewer_id != request.user.pk:
-        raise PermissionDenied
-
-    form = ReviewForm(request.POST, request.FILES)
-    if form.is_valid():
-        try:
-            complete_review(
-                assignment=assignment,
-                reviewer=request.user,
-                decision=form.cleaned_data["decision"],
                 comment=form.cleaned_data["comment"],
                 annotated_file=form.cleaned_data.get("annotated_file"),
                 request=request,
@@ -207,12 +185,12 @@ def complete_assignment(request, pk):
         except ReviewError as exc:
             messages.error(request, str(exc))
         else:
-            messages.success(request, "评审已提交，感谢你的评审意见。")
+            messages.success(request, _success_message(answered, decision))
     else:
         for field_errors in form.errors.values():
             for error in field_errors:
                 messages.error(request, error)
-    return redirect("projects:group_detail", pk=assignment.submission.group_id)
+    return redirect("projects:group_detail", pk=task.submission.group_id)
 
 
 @login_required
@@ -268,7 +246,7 @@ def cancel_leave(request):
 def annotated_file_download(request, pk):
     """Serve one reviewer's annotated copy to whoever may view the group."""
     assignment = get_object_or_404(
-        ReviewAssignment.objects.select_related("submission__group"),
+        ReviewTask.objects.select_related("submission__group"),
         pk=pk,
     )
     _require_group_visibility(request, assignment.submission.group, "annotated")
