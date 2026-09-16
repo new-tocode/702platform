@@ -23,7 +23,7 @@
             <div class="panel-head">
                 <h2>{{ row.group.name }}</h2>
                 {% if row.status %}
-                    <span class="chip {% if row.status == 'approved' %}chip-ok{% elif row.status == 'needs_revision' %}chip-warn{% else %}chip-on{% endif %}">{{ row.status_label }}</span>
+                    <span class="chip chip-{{ row.status_tone }}">{{ row.status_label }}</span>
                 {% endif %}
             </div>
             <div class="panel-body">
