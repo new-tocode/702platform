@@ -1,8 +1,11 @@
 """Journal-style peer review of project proposals.
 
 Each :class:`ProjectSubmission` is one review round of a project group's
-proposal; :class:`ReviewAssignment` records one reviewer's verdict. A submission
-is approved only when every assignment is complete and every verdict approves.
+proposal. A round starts in the hands of one :class:`PreliminaryReview` (初审):
+that single reviewer passes the proposal on — which is when the round draws the
+reviewers its type calls for — or sends it back for revision. From then on
+:class:`ReviewAssignment` records one reviewer's verdict, and a submission is
+approved only when every assignment is complete and every verdict approves.
 
 The proposal itself is **not** copied here: reviewers download the project
 group's current proposal (``ProjectGroup.proposal``) from the group detail page,
@@ -81,14 +84,24 @@ def upload_archived_proposal(instance, filename):
 
 
 class ProjectSubmission(models.Model):
+    PRELIMINARY_PENDING = "preliminary_pending"
     PENDING = "pending"
     APPROVED = "approved"
     NEEDS_REVISION = "needs_revision"
     STATUS_CHOICES = (
+        (PRELIMINARY_PENDING, "初审中"),
         (PENDING, "评审中"),
         (APPROVED, "已通过"),
         (NEEDS_REVISION, "需修改"),
     )
+
+    #: Statuses of a round that is still running. A round is "open" from the
+    #: moment it is submitted until it reaches a verdict, and 初审中 counts: the
+    #: proposal is with the platform, so the group may not open another round and
+    #: deleting or settling the round still applies. Everything that asks "is
+    #: this round still in progress?" must ask it here rather than compare
+    #: against ``PENDING``, which now means "past 初审, with the reviewers".
+    OPEN_STATUSES = (PRELIMINARY_PENDING, PENDING)
 
     group = models.ForeignKey(
         ProjectGroup,
@@ -110,7 +123,8 @@ class ProjectSubmission(models.Model):
         "状态",
         max_length=20,
         choices=STATUS_CHOICES,
-        default=PENDING,
+        default=PRELIMINARY_PENDING,
+        help_text="新建的轮次从「初审中」开始；初审通过后才进入「评审中」。",
     )
     submitted_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -144,6 +158,11 @@ class ProjectSubmission(models.Model):
         return self.status == self.APPROVED
 
     @property
+    def is_open(self):
+        """Whether the round is still running — 初审中 or 评审中."""
+        return self.status in self.OPEN_STATUSES
+
+    @property
     def required_reviewers(self):
         """How many reviewers this round needs; rounds without a type keep the old rule."""
         return REVIEWER_QUOTA.get(self.review_type, DEFAULT_REVIEWERS)
@@ -155,6 +174,20 @@ class ProjectSubmission(models.Model):
     @property
     def pending_count(self):
         return self.assignments.filter(status=ReviewAssignment.PENDING).count()
+
+    @property
+    def open_task_count(self):
+        """Tasks of this round still awaiting a verdict, 初审 included.
+
+        ``pending_count`` counts review tasks only, which is what the reviewer
+        progress figures want; this is the one a super reviewer is about to let
+        go, so the pending 初审 must be in it.
+        """
+        count = self.pending_count
+        preliminary = preliminary_review_of(self)
+        if preliminary is not None and preliminary.status == PreliminaryReview.PENDING:
+            count += 1
+        return count
 
 
 class ReviewAssignment(models.Model):
@@ -210,7 +243,7 @@ class ReviewAssignment(models.Model):
     is_override = models.BooleanField(
         "超级评审决定",
         default=False,
-        help_text="该行来自超级评审的一票决定：本轮结论由它单独敲定，等待中的评审人随即被释放。",
+        help_text="该行来自超级评审的一票决定：本轮结论由它单独敲定，等待中的任务（初审一并）随即被释放。",
     )
     annotated_file = models.FileField(
         "批注版项目书",
@@ -242,6 +275,93 @@ class ReviewAssignment(models.Model):
     @property
     def is_completed(self):
         return self.status == self.COMPLETED
+
+
+class PreliminaryReview(models.Model):
+    """The 初审 gate of one round: one reviewer decides whether it goes on.
+
+    A round is submitted to exactly one 初审人 — the one-to-one is the point of
+    the stage, not an accident — and only their 通过 draws the round's ordinary
+    reviewers. A 打回 sends the round straight back to the group, so a proposal
+    that is not ready never spends the panel's time.
+
+    Statuses mirror :class:`ReviewAssignment`, ``RELEASED`` included: it is the
+    end state of a task whose round a super reviewer settled first.
+    """
+
+    #: 初审与评审回答的是同一个问题——放行还是打回——所以共用同一对结论取值，
+    #: 免得两处各写一份再慢慢长歪。
+    APPROVE = ReviewAssignment.APPROVE
+    REVISE = ReviewAssignment.REVISE
+    DECISION_CHOICES = ReviewAssignment.DECISION_CHOICES
+
+    PENDING = "pending"
+    COMPLETED = "completed"
+    RELEASED = "released"
+    STATUS_CHOICES = (
+        (PENDING, "待初审"),
+        (COMPLETED, "已初审"),
+        (RELEASED, "已释放"),
+    )
+
+    submission = models.OneToOneField(
+        ProjectSubmission,
+        on_delete=models.CASCADE,
+        related_name="preliminary_review",
+        verbose_name="送审",
+    )
+    reviewer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="preliminary_reviews",
+        verbose_name="初审人",
+        help_text="须有初审资格（User.is_preliminary_reviewer）。",
+    )
+    status = models.CharField(
+        "状态",
+        max_length=16,
+        choices=STATUS_CHOICES,
+        default=PENDING,
+    )
+    decision = models.CharField(
+        "初审决定",
+        max_length=16,
+        choices=DECISION_CHOICES,
+        blank=True,
+    )
+    comment = models.TextField("初审意见", blank=True)
+    assigned_at = models.DateTimeField("分配时间", auto_now_add=True)
+    completed_at = models.DateTimeField("完成时间", null=True, blank=True)
+
+    class Meta:
+        verbose_name = "初审任务"
+        verbose_name_plural = "初审任务"
+        ordering = ("-assigned_at", "-id")
+        indexes = [
+            models.Index(fields=("reviewer", "status")),
+        ]
+
+    def __str__(self):
+        return f"{self.reviewer} 初审 {self.submission}"
+
+    @property
+    def is_completed(self):
+        return self.status == self.COMPLETED
+
+
+def preliminary_review_of(submission):
+    """This round's 初审 task, or ``None``.
+
+    Rounds created before the 初审 stage existed have none, so every caller has
+    to cope with the absence. The row is read fresh instead of through the
+    reverse one-to-one accessor: that accessor caches whatever it saw first, and
+    the row is mutated in place — it gets a verdict, a super reviewer releases
+    it, an administrator swaps its holder — so a cached copy goes stale in
+    exactly the places where it decides something.
+    """
+    if submission is None or submission.pk is None:
+        return None
+    return PreliminaryReview.objects.filter(submission_id=submission.pk).first()
 
 
 class ArchivedProposal(models.Model):
@@ -312,10 +432,13 @@ class ReviewerLeaveQuerySet(models.QuerySet):
 class ReviewerLeave(models.Model):
     """A window during which a reviewer takes no new review requests.
 
-    Leave never touches ``User.is_reviewer``: the qualification stays and the
-    reviewer is merely skipped when a round draws its reviewers. Because the
-    window is stored as two timestamps, eligibility returns on its own once
-    ``ends_at`` passes — there is no scheduled job to run and nothing to undo.
+    The window covers both kinds of task a reviewer may be handed — a 初审 and an
+    ordinary 评审 — because it describes the person's availability, not a stage.
+    Leave never touches ``User.is_reviewer`` or ``User.is_preliminary_reviewer``:
+    the qualifications stay and the reviewer is merely skipped when a draw runs.
+    Because the window is stored as two timestamps, eligibility returns on its
+    own once ``ends_at`` passes — there is no scheduled job to run and nothing to
+    undo.
 
     A reviewer has at most one open window at a time; re-registering edits that
     window rather than stacking a second one. Overlap cannot be expressed as a

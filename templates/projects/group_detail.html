@@ -114,6 +114,24 @@
                                         提交人 {{ submission.submitted_by.profile.full_name|default:submission.submitted_by.username }}
                                     </div>
                                     <dl class="dl review-lines">
+                                        {# 初审那一行在评审之前：它是这一轮的第一道关。 #}
+                                        {% with preliminary=submission.preliminary_review %}
+                                            {% if preliminary %}
+                                                <div>
+                                                    <dt>初审</dt>
+                                                    <dd>
+                                                        {% if preliminary.is_completed %}
+                                                            {{ preliminary.get_decision_display }} · {{ preliminary.comment|default:"—" }}
+                                                        {% elif preliminary.status == 'released' %}
+                                                            <span class="chip chip-off">已释放</span>
+                                                            <span class="muted">本轮已由超级评审敲定，该初审任务随之结束</span>
+                                                        {% else %}
+                                                            <span class="muted">待初审</span>
+                                                        {% endif %}
+                                                    </dd>
+                                                </div>
+                                            {% endif %}
+                                        {% endwith %}
                                         {% for assignment in submission.assignments.all %}
                                             <div>
                                                 {% if assignment.is_override %}
@@ -206,14 +224,25 @@
                         <dl class="dl">
                             <div><dt>轮次</dt><dd class="mono">R{{ latest_submission.round }}</dd></div>
                             <div><dt>评审类型</dt><dd>{{ latest_submission.get_review_type_display|default:"—" }}</dd></div>
-                            <div><dt>评审进度</dt><dd class="mono">{{ latest_submission.completed_count }} / {{ latest_submission.required_reviewers }}</dd></div>
+                            {% if latest_submission.status == 'preliminary_pending' %}
+                                <div><dt>初审</dt><dd class="mono">进行中</dd></div>
+                            {% else %}
+                                <div><dt>评审进度</dt><dd class="mono">{{ latest_submission.completed_count }} / {{ latest_submission.required_reviewers }}</dd></div>
+                            {% endif %}
                             <div><dt>结论</dt><dd>{{ latest_submission.get_status_display }}</dd></div>
                         </dl>
                         <p class="help">
                             {% if latest_submission.status == "approved" %}
                                 方案已通过，可按此推进项目。
                             {% elif latest_submission.status == "needs_revision" %}
-                                请根据评审意见修改项目书后重新提交。
+                                {% if latest_submission.assignments.all %}
+                                    请根据评审意见修改项目书后重新提交。
+                                {% else %}
+                                    本轮由初审打回（没有进入评审），请根据初审意见修改项目书后重新提交。
+                                {% endif %}
+                            {% elif latest_submission.status == "preliminary_pending" %}
+                                等待初审人给出意见；初审通过后会随机分配
+                                {{ latest_submission.required_reviewers }} 名评审人。
                             {% else %}
                                 等待评审人提交意见；{{ latest_submission.required_reviewers }} 名评审人全部通过后方案即为通过。
                             {% endif %}
@@ -232,8 +261,8 @@
                     </div>
                     <div class="panel-body">
                         <p class="help">
-                            你的决定会立即敲定第 {{ latest_submission.round }} 轮，正在等待的
-                            {{ latest_submission.pending_count }} 名评审人会随即被释放。
+                            你的决定会立即敲定第 {{ latest_submission.round }} 轮，本轮尚未提交的
+                            {{ latest_submission.open_task_count }} 个任务（初审／评审）会随即被释放。
                             请先下载项目书阅读，需要时附上批注版。
                         </p>
                         <div class="btn-row">
@@ -260,6 +289,45 @@
                             </div>
                             <div class="form-actions">
                                 <button class="btn btn-primary" type="submit">提交超级评审</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            {% endif %}
+
+            {% if my_preliminary %}
+                <div class="panel">
+                    <div class="panel-head">
+                        <h2>我的初审</h2>
+                        <span class="chip chip-warn">待处理</span>
+                    </div>
+                    <div class="panel-body">
+                        <p class="muted">
+                            你是第 {{ latest_submission.round }} 轮的初审人：请先下载项目书阅读，
+                            再决定放行还是打回。通过后系统会按送审类型随机分配
+                            {{ latest_submission.required_reviewers }} 名评审人；打回则本轮直接结束，
+                            项目组修改后可重新提交。
+                        </p>
+                        <div class="btn-row">
+                            <a class="btn btn-sm" href="{% url 'projects:group_proposal_download' group.pk %}">下载项目书</a>
+                        </div>
+                        <form method="post" action="{% url 'reviews:preliminary_complete' my_preliminary.pk %}">
+                            {% csrf_token %}
+                            {{ preliminary_form.non_field_errors }}
+                            <div class="field">
+                                <span class="field-label">{{ preliminary_form.decision.label }}</span>
+                                <div class="radiogroup">{{ preliminary_form.decision }}</div>
+                                {% if preliminary_form.decision.help_text %}<p class="help">{{ preliminary_form.decision.help_text }}</p>{% endif %}
+                                {{ preliminary_form.decision.errors }}
+                            </div>
+                            <div class="field">
+                                <label for="{{ preliminary_form.comment.id_for_label }}">{{ preliminary_form.comment.label }}</label>
+                                {{ preliminary_form.comment }}
+                                {% if preliminary_form.comment.help_text %}<p class="help">{{ preliminary_form.comment.help_text }}</p>{% endif %}
+                                {{ preliminary_form.comment.errors }}
+                            </div>
+                            <div class="form-actions">
+                                <button class="btn btn-primary" type="submit">提交初审</button>
                             </div>
                         </form>
                     </div>
