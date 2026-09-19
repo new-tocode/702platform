@@ -12,7 +12,13 @@ from django.utils import timezone
 
 from core.audit import record_audit
 
-from .models import MAX_ADVISORS_PER_GROUP, GroupJoinRequest, ProjectAdvisor
+from .models import (
+    MAX_ADVISORS_PER_GROUP,
+    GroupCreateRequest,
+    GroupJoinRequest,
+    ProjectAdvisor,
+    ProjectGroup,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -24,6 +30,18 @@ class JoinRequestError(Exception):
 
 class GroupManagementError(Exception):
     """A group management action violates a business rule."""
+
+
+class GroupCreateRequestError(Exception):
+    """创建项目组的申请不能被提交或处理。"""
+
+
+def _advisor_slots(names):
+    """把已填写的指导老师姓名摊回三个固定槽位，空槽位写空串。"""
+    return {
+        f"advisor_{slot + 1}": (names[slot] if slot < len(names) else "")
+        for slot in range(MAX_ADVISORS_PER_GROUP)
+    }
 
 
 def apply_to_group(*, group, applicant, message="", request=None):
@@ -102,6 +120,142 @@ def reject_join_request(*, join_request, actor, request=None):
         user=actor,
         target=locked,
         detail={"group_id": locked.group_id, "applicant_id": locked.applicant_id},
+        request=request,
+    )
+    return locked
+
+
+def apply_to_create_group(
+    *,
+    applicant,
+    name,
+    description,
+    college="",
+    advisor_names=(),
+    request=None,
+):
+    """Create (or refresh) the applicant's pending request to found a group.
+
+    Any logged-in member may apply. Applying again while one is pending rewrites
+    that same record rather than adding a second — the partial unique constraint
+    on ``(applicant) WHERE status='pending'`` allows only one.
+    """
+    if not applicant.is_authenticated:
+        raise GroupCreateRequestError("请先登录。")
+    names = [name.strip() for name in advisor_names if name.strip()]
+    if len(names) > MAX_ADVISORS_PER_GROUP:
+        raise GroupCreateRequestError(f"指导老师最多 {MAX_ADVISORS_PER_GROUP} 位。")
+    fields = {
+        "name": name,
+        "description": description,
+        "college": college,
+        **_advisor_slots(names),
+    }
+    try:
+        with transaction.atomic():
+            create_request, created = GroupCreateRequest.objects.get_or_create(
+                applicant=applicant,
+                status=GroupCreateRequest.PENDING,
+                defaults=fields,
+            )
+            if not created:
+                for field, value in fields.items():
+                    setattr(create_request, field, value)
+                create_request.save(update_fields=[*fields, "updated_at"])
+    except IntegrityError as exc:  # 并发提交撞上部分唯一约束
+        raise GroupCreateRequestError(
+            "你已经提交过创建项目组的申请，请等待管理员审核。"
+        ) from exc
+    record_audit(
+        action="projects.group.create.apply",
+        user=applicant,
+        target=create_request,
+        detail={"name": name, "refreshed": not created},
+        request=request,
+    )
+    logger.info(
+        "project_group.create.apply applicant_id=%s create_request_id=%s created=%s",
+        applicant.pk,
+        create_request.pk,
+        created,
+        extra={"request_id": getattr(request, "request_id", "-")},
+    )
+    return create_request
+
+
+def approve_create_request(*, create_request, actor, request=None):
+    """Approve a pending creation request and found the project group.
+
+    One administrator's approval is enough: the row is locked and its status
+    re-checked inside the transaction, so a second administrator clicking at the
+    same time is told the request is already handled instead of creating a
+    duplicate group. The applicant becomes the new group's contact.
+    """
+    with transaction.atomic():
+        locked = (
+            GroupCreateRequest.objects.select_for_update()
+            .select_related("applicant")
+            .get(pk=create_request.pk)
+        )
+        if locked.status != GroupCreateRequest.PENDING:
+            raise GroupCreateRequestError("该申请已被处理。")
+        group = ProjectGroup.objects.create(
+            name=locked.name,
+            leader=locked.applicant,
+            description=locked.description,
+            college=locked.college,
+        )
+        for slot, advisor_name in enumerate(locked.filled_advisor_names):
+            ProjectAdvisor.objects.create(
+                group=group,
+                name=advisor_name,
+                sort_order=slot,
+            )
+        locked.status = GroupCreateRequest.APPROVED
+        locked.decided_by = actor
+        locked.decided_at = timezone.now()
+        locked.created_group = group
+        locked.save(
+            update_fields=[
+                "status",
+                "decided_by",
+                "decided_at",
+                "created_group",
+                "updated_at",
+            ]
+        )
+    record_audit(
+        action="projects.group.create.approve",
+        user=actor,
+        target=locked,
+        detail={"group_id": group.pk, "applicant_id": locked.applicant_id},
+        request=request,
+    )
+    logger.info(
+        "project_group.create.approve create_request_id=%s group_id=%s actor_id=%s",
+        locked.pk,
+        group.pk,
+        actor.pk,
+        extra={"request_id": getattr(request, "request_id", "-")},
+    )
+    return locked
+
+
+def reject_create_request(*, create_request, actor, request=None):
+    """Reject a pending creation request; the applicant may apply again later."""
+    with transaction.atomic():
+        locked = GroupCreateRequest.objects.select_for_update().get(pk=create_request.pk)
+        if locked.status != GroupCreateRequest.PENDING:
+            raise GroupCreateRequestError("该申请已被处理。")
+        locked.status = GroupCreateRequest.REJECTED
+        locked.decided_by = actor
+        locked.decided_at = timezone.now()
+        locked.save(update_fields=["status", "decided_by", "decided_at", "updated_at"])
+    record_audit(
+        action="projects.group.create.reject",
+        user=actor,
+        target=locked,
+        detail={"applicant_id": locked.applicant_id},
         request=request,
     )
     return locked

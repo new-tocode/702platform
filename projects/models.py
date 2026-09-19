@@ -178,6 +178,96 @@ class GroupJoinRequest(models.Model):
         return f"{self.applicant} → {self.group}（{self.get_status_display()}）"
 
 
+class GroupCreateRequest(models.Model):
+    """An application to found a new project group, decided by any administrator.
+
+    Any logged-in member may apply, whatever their current role; the applicant
+    becomes the new group's contact. Reviewers are the administrators, and one
+    approval settles it for all of them — the rest of the queue drops the entry.
+    """
+
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    STATUS_CHOICES = (
+        (PENDING, "待审核"),
+        (APPROVED, "已通过"),
+        (REJECTED, "已拒绝"),
+    )
+
+    name = models.CharField("项目组名称", max_length=200)
+    description = models.TextField("项目组描述")
+    college = models.CharField("学院", max_length=128, blank=True)
+    # 指导老师在申请上先占三个固定槽位（与 MAX_ADVISORS_PER_GROUP 一一对应），
+    # 审核通过时转成 ProjectAdvisor 行。申请记录不是项目组，不另建一张子表。
+    advisor_1 = models.CharField("指导老师 1", max_length=128, blank=True)
+    advisor_2 = models.CharField("指导老师 2", max_length=128, blank=True)
+    advisor_3 = models.CharField("指导老师 3", max_length=128, blank=True)
+    applicant = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="group_create_requests",
+        verbose_name="申请人",
+    )
+    status = models.CharField(
+        "状态",
+        max_length=16,
+        choices=STATUS_CHOICES,
+        default=PENDING,
+    )
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="decided_group_create_requests",
+        verbose_name="处理人",
+    )
+    decided_at = models.DateTimeField("处理时间", null=True, blank=True)
+    created_group = models.OneToOneField(
+        ProjectGroup,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="create_request",
+        verbose_name="创建的项目组",
+    )
+    created_at = models.DateTimeField("提交时间", auto_now_add=True)
+    updated_at = models.DateTimeField("更新时间", auto_now=True)
+
+    class Meta:
+        verbose_name = "创建项目组申请"
+        verbose_name_plural = "创建项目组申请"
+        ordering = ("-created_at", "-id")
+        constraints = [
+            # 同一申请人同时只有一条待审申请；被拒绝后可以重新申请。
+            models.UniqueConstraint(
+                fields=("applicant",),
+                condition=models.Q(status="pending"),
+                name="unique_pending_group_create_request",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=("status", "created_at")),
+        ]
+
+    def __str__(self):
+        return f"{self.applicant} → {self.name}（{self.get_status_display()}）"
+
+    @property
+    def filled_advisor_names(self):
+        """已填写的指导老师姓名**列表**，按槽位顺序；空槽位不占位。
+
+        刻意不叫 ``advisor_names``：那是 :class:`ProjectGroup` 上拼好的展示串，
+        这边是供服务层逐位建行的列表，同名会让两处读起来像同一件东西。
+        """
+        return [
+            name.strip()
+            for name in (self.advisor_1, self.advisor_2, self.advisor_3)
+            if name.strip()
+        ]
+
+
 class ProjectContact(get_user_model()):
     """Read-only proxy giving administrators a single list of all contacts.
 

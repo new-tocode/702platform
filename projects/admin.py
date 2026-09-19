@@ -8,6 +8,7 @@ from core.audit import record_audit
 
 from .models import (
     MAX_ADVISORS_PER_GROUP,
+    GroupCreateRequest,
     GroupJoinRequest,
     ProjectAdvisor,
     ProjectContact,
@@ -135,6 +136,56 @@ class ProjectContactAdmin(admin.ModelAdmin):
     def contact_groups(self, obj):
         names = [group.name for group in obj.led_project_groups.all()]
         return "、".join(names) or "—"
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(GroupCreateRequest)
+class GroupCreateRequestAdmin(admin.ModelAdmin):
+    """Oversight list for project-group creation applications.
+
+    Requests are decided from the member-facing project-group page (any one
+    administrator settles it), so the backend keeps this list read-only.
+    """
+
+    list_display = (
+        "name",
+        "applicant",
+        "college",
+        "status",
+        "created_at",
+        "decided_by",
+        "decided_at",
+    )
+    list_filter = ("status", "created_at")
+    search_fields = (
+        "name",
+        "description",
+        "college",
+        "applicant__username",
+        "applicant__profile__full_name",
+    )
+    list_select_related = ("applicant", "decided_by")
+    readonly_fields = (
+        "name",
+        "description",
+        "college",
+        "advisor_1",
+        "advisor_2",
+        "advisor_3",
+        "applicant",
+        "status",
+        "decided_by",
+        "decided_at",
+        "created_group",
+        "created_at",
+        "updated_at",
+    )
+    date_hierarchy = "created_at"
 
     def has_add_permission(self, request):
         return False

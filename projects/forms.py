@@ -3,7 +3,12 @@
 from django import forms
 from django.contrib.auth import get_user_model
 
-from .models import MAX_ADVISORS_PER_GROUP, GroupJoinRequest, ProjectGroup
+from .models import (
+    MAX_ADVISORS_PER_GROUP,
+    GroupCreateRequest,
+    GroupJoinRequest,
+    ProjectGroup,
+)
 
 
 User = get_user_model()
@@ -15,6 +20,38 @@ class GroupJoinRequestForm(forms.ModelForm):
         fields = ("message",)
         labels = {"message": "申请理由"}
         widgets = {"message": forms.Textarea(attrs={"rows": 4})}
+
+
+class GroupCreateRequestForm(forms.ModelForm):
+    """申请创建项目组：名称与描述必填，其余（学院、指导老师）可先不填。"""
+
+    class Meta:
+        model = GroupCreateRequest
+        fields = (
+            "name",
+            "description",
+            "college",
+            "advisor_1",
+            "advisor_2",
+            "advisor_3",
+        )
+        labels = {
+            "name": "项目组名称",
+            "description": "项目组描述",
+            "college": "学院（选填）",
+            "advisor_1": "指导老师 1（选填）",
+            "advisor_2": "指导老师 2（选填）",
+            "advisor_3": "指导老师 3（选填）",
+        }
+        widgets = {"description": forms.Textarea(attrs={"rows": 5})}
+
+    def advisor_names(self):
+        """按槽位顺序返回已填写的指导老师姓名；空槽位不占位，不留空洞。"""
+        return [
+            self.cleaned_data[f"advisor_{slot}"].strip()
+            for slot in range(1, MAX_ADVISORS_PER_GROUP + 1)
+            if self.cleaned_data.get(f"advisor_{slot}", "").strip()
+        ]
 
 
 class GroupDescriptionForm(forms.ModelForm):
