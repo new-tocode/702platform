@@ -42,6 +42,21 @@ def _require_reviewer(request):
         raise PermissionDenied
 
 
+def _require_queue_access(request):
+    """队列页的门槛比单张任务宽：管理员没有评审资格也进得来。
+
+    项目组创建申请就送到这一页，见 ``permissions.can_open_queue``。
+    """
+    if not permissions.can_open_queue(request.user):
+        logger.warning(
+            "reviews.permission.denied username=%s path=%s reason=no_queue_access",
+            request.user.get_username(),
+            request.path,
+            extra={"request_id": getattr(request, "request_id", "-")},
+        )
+        raise PermissionDenied
+
+
 def _require_preliminary_reviewer(request):
     if not permissions.is_preliminary_reviewer(request.user):
         logger.warning(
@@ -85,15 +100,16 @@ def _annotated_filename(file_field, round_number):
 
 @login_required
 def review_queue(request):
-    _require_reviewer(request)
+    _require_queue_access(request)
     context = panels.queue_context(user=request.user)
     logger.info(
-        "reviews.queue.view preliminary_pending=%s preliminary_released=%s pending=%s completed=%s released=%s super=%s reviewer=%s",
+        "reviews.queue.view preliminary_pending=%s preliminary_released=%s pending=%s completed=%s released=%s create_requests=%s super=%s reviewer=%s",
         len(context.get("preliminary_pending", ())),
         len(context.get("preliminary_released", ())),
         len(context.get("pending", ())),
         len(context.get("completed", ())),
         len(context.get("released", ())),
+        len(context.get("create_requests", ())),
         permissions.is_super_reviewer(request.user),
         request.user.get_username(),
         extra={"request_id": getattr(request, "request_id", "-")},
