@@ -1,6 +1,7 @@
 """Register the project-group member operation entry."""
 
 from django.apps import AppConfig
+from django.utils.translation import gettext_lazy as _
 
 
 class ProjectsConfig(AppConfig):
@@ -13,8 +14,8 @@ class ProjectsConfig(AppConfig):
 
         register_entry(
             key="projects.groups",
-            label="项目组",
-            description="查看项目组、联系人和成员",
+            label=_("项目组"),
+            description=_("查看项目组、联系人和成员"),
             url_name="projects:group_list",
             sort_order=40,
         )

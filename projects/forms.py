@@ -2,6 +2,7 @@
 
 from django import forms
 from django.contrib.auth import get_user_model
+from django.utils.translation import gettext_lazy as _
 
 from .models import (
     MAX_ADVISORS_PER_GROUP,
@@ -18,7 +19,7 @@ class GroupJoinRequestForm(forms.ModelForm):
     class Meta:
         model = GroupJoinRequest
         fields = ("message",)
-        labels = {"message": "申请理由"}
+        labels = {"message": _("申请理由")}
         widgets = {"message": forms.Textarea(attrs={"rows": 4})}
 
 
@@ -36,12 +37,12 @@ class GroupCreateRequestForm(forms.ModelForm):
             "advisor_3",
         )
         labels = {
-            "name": "项目组名称",
-            "description": "项目组描述",
-            "college": "学院（选填）",
-            "advisor_1": "指导老师 1（选填）",
-            "advisor_2": "指导老师 2（选填）",
-            "advisor_3": "指导老师 3（选填）",
+            "name": _("项目组名称"),
+            "description": _("项目组描述"),
+            "college": _("学院（选填）"),
+            "advisor_1": _("指导老师 1（选填）"),
+            "advisor_2": _("指导老师 2（选填）"),
+            "advisor_3": _("指导老师 3（选填）"),
         }
         widgets = {"description": forms.Textarea(attrs={"rows": 5})}
 
@@ -58,7 +59,7 @@ class GroupDescriptionForm(forms.ModelForm):
     class Meta:
         model = ProjectGroup
         fields = ("description",)
-        labels = {"description": "项目组介绍"}
+        labels = {"description": _("项目组介绍")}
         widgets = {"description": forms.Textarea(attrs={"rows": 4})}
 
 
@@ -69,14 +70,14 @@ class GroupInfoForm(forms.ModelForm):
     上限就是 3 位，固定槽位比可增删的表单集更直观，空槽位即表示这一位不存在。
     """
 
-    advisor_1 = forms.CharField(label="指导老师 1", max_length=128, required=False)
-    advisor_2 = forms.CharField(label="指导老师 2", max_length=128, required=False)
-    advisor_3 = forms.CharField(label="指导老师 3", max_length=128, required=False)
+    advisor_1 = forms.CharField(label=_("指导老师 1"), max_length=128, required=False)
+    advisor_2 = forms.CharField(label=_("指导老师 2"), max_length=128, required=False)
+    advisor_3 = forms.CharField(label=_("指导老师 3"), max_length=128, required=False)
 
     class Meta:
         model = ProjectGroup
         fields = ("college",)
-        labels = {"college": "学院"}
+        labels = {"college": _("学院")}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -99,17 +100,17 @@ class GroupProposalForm(forms.ModelForm):
     class Meta:
         model = ProjectGroup
         fields = ("proposal",)
-        labels = {"proposal": "项目书"}
-        help_texts = {"proposal": "支持 doc、docx、pdf，上传后即可提交审核。"}
+        labels = {"proposal": _("项目书")}
+        help_texts = {"proposal": _("支持 doc、docx、pdf，上传后即可提交审核。")}
 
 
 class ContactTransferForm(forms.Form):
     """Choose the member who becomes the new project-group contact."""
 
     new_contact = forms.ModelChoiceField(
-        label="新联系人",
+        label=_("新联系人"),
         queryset=User.objects.none(),
-        help_text="只能从当前项目组成员中选择。",
+        help_text=_("只能从当前项目组成员中选择。"),
     )
 
     def __init__(self, group, *args, **kwargs):
@@ -124,5 +125,5 @@ class ContactTransferForm(forms.Form):
     def clean_new_contact(self):
         new_contact = self.cleaned_data["new_contact"]
         if not self.group.members.filter(pk=new_contact.pk).exists():
-            raise forms.ValidationError("新联系人必须是该项目组成员。")
+            raise forms.ValidationError(_("新联系人必须是该项目组成员。"))
         return new_contact

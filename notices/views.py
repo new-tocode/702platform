@@ -4,6 +4,7 @@ import logging
 
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, render
+from django.utils.translation import gettext_lazy as _
 
 from .models import Notice
 from .visibility import member_visible_notices, public_visible_notices
@@ -25,8 +26,8 @@ def public_list(request):
         "notices/list.html",
         {
             "notices": notices,
-            "page_title": "公开通知",
-            "empty_message": "暂时没有公开通知。",
+            "page_title": _("公开通知"),
+            "empty_message": _("暂时没有公开通知。"),
             "detail_namespace": "notices",
             "detail_name": "public_detail",
         },
@@ -51,7 +52,7 @@ def public_detail(request, pk):
         {
             "notice": notice,
             "back_url_name": "notices:public_list",
-            "back_label": "返回公开通知",
+            "back_label": _("返回公开通知"),
         },
     )
 
@@ -70,8 +71,8 @@ def internal_list(request):
         "notices/list.html",
         {
             "notices": notices,
-            "page_title": "内部通知",
-            "empty_message": "暂时没有内部通知。",
+            "page_title": _("内部通知"),
+            "empty_message": _("暂时没有内部通知。"),
             "detail_namespace": "member_notices",
             "detail_name": "internal_detail",
         },
@@ -96,6 +97,6 @@ def internal_detail(request, pk):
         {
             "notice": notice,
             "back_url_name": "member_notices:internal_list",
-            "back_label": "返回内部通知",
+            "back_label": _("返回内部通知"),
         },
     )

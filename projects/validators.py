@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from django.core.exceptions import ValidationError
+from django.utils.translation import gettext_lazy as _
 
 
 PROPOSAL_EXTENSIONS = {"pdf", "doc", "docx"}
@@ -10,9 +11,9 @@ PROPOSAL_MAX_BYTES = 20 * 1024 * 1024
 
 # Leading bytes of the common office/PDF container formats.
 _SIGNATURES = {
-    "pdf": (b"%PDF", "文件不是有效的 PDF。"),
-    "docx": (b"PK", "文件不是有效的 docx。"),
-    "doc": (b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1", "文件不是有效的 doc。"),
+    "pdf": (b"%PDF", _("文件不是有效的 PDF。")),
+    "docx": (b"PK", _("文件不是有效的 docx。")),
+    "doc": (b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1", _("文件不是有效的 doc。")),
 }
 
 
@@ -30,14 +31,14 @@ def _reset_file_position(uploaded_file):
 def validate_proposal_file(uploaded_file):
     """Validate the extension, size and basic binary signature of a proposal."""
     if not uploaded_file:
-        raise ValidationError("请选择项目书文件。")
+        raise ValidationError(_("请选择项目书文件。"))
 
     extension = _extension(uploaded_file.name)
     if extension not in PROPOSAL_EXTENSIONS:
-        raise ValidationError("项目书仅支持 doc、docx、pdf 格式。")
+        raise ValidationError(_("项目书仅支持 doc、docx、pdf 格式。"))
     if uploaded_file.size and uploaded_file.size > PROPOSAL_MAX_BYTES:
         limit_mb = PROPOSAL_MAX_BYTES // (1024 * 1024)
-        raise ValidationError(f"项目书不能超过 {limit_mb} MB。")
+        raise ValidationError(_("项目书不能超过 %(limit)s MB。") % {"limit": limit_mb})
 
     prefix, message = _SIGNATURES[extension]
     _reset_file_position(uploaded_file)

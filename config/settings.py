@@ -53,6 +53,9 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    # 中英双语：按地址上的 /en/ 前缀激活对应语言（i18n_patterns 必需）。
+    # 必须排在 SessionMiddleware 之后、CommonMiddleware 之前（Django 的要求）。
+    "django.middleware.locale.LocaleMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -122,6 +125,15 @@ LANGUAGE_CODE = "zh-hans"
 TIME_ZONE = os.environ.get("DJANGO_TIME_ZONE", "Asia/Shanghai")
 USE_I18N = True
 USE_TZ = True
+
+# 界面中英双语。中文是**源语言**：模板与代码里写的 msgid 本身就是中文，所以中文
+# 不需要翻译文件（取不到译文时 gettext 原样返回 msgid）；英文译文在
+# locale/en/LC_MESSAGES/django.po。后台 /admin/ 不在双语范围内，见 config/urls.py。
+LANGUAGES = [
+    ("zh-hans", "中文"),
+    ("en", "English"),
+]
+LOCALE_PATHS = [BASE_DIR / "locale"]
 
 
 STATIC_URL = "/static/"

@@ -6,6 +6,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.translation import gettext as _
 from django.views.decorators.http import require_http_methods, require_POST
 
 from core.audit import record_audit
@@ -69,7 +70,7 @@ def equipment_borrow(request, pk):
                 actor=request.user,
             )
         except EquipmentUnavailable:
-            form.add_error(None, "该设备当前没有可借数量。")
+            form.add_error(None, _("该设备当前没有可借数量。"))
             logger.warning(
                 "equipment.borrow.failure equipment_id=%s username=%s reason=out_of_stock",
                 equipment.pk,
@@ -84,7 +85,7 @@ def equipment_borrow(request, pk):
                 detail={"equipment_id": equipment.pk},
                 request=request,
             )
-            messages.success(request, f"已登记借用：{equipment.name}。")
+            messages.success(request, _("已登记借用：%(name)s。") % {"name": equipment.name})
             return redirect("equipment_borrows:list")
     elif request.method == "POST":
         logger.warning(
@@ -136,7 +137,7 @@ def borrow_return(request, pk):
     try:
         return_borrow(borrow_id=borrow.pk, actor=request.user)
     except BorrowAlreadyReturned:
-        messages.warning(request, "该设备借用记录已经归还。")
+        messages.warning(request, _("该设备借用记录已经归还。"))
     else:
         record_audit(
             action="equipment.return",
@@ -145,5 +146,5 @@ def borrow_return(request, pk):
             detail={"equipment_id": borrow.equipment_id},
             request=request,
         )
-        messages.success(request, f"已登记归还：{borrow.equipment.name}。")
+        messages.success(request, _("已登记归还：%(name)s。") % {"name": borrow.equipment.name})
     return redirect("equipment_borrows:list")

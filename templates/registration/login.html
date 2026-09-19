@@ -1,6 +1,7 @@
 {% extends "base.html" %}
+{% load i18n %}
 
-{% block title %}成员登录 - 竞赛社团管理平台{% endblock %}
+{% block title %}{% translate "成员登录" %} - {% translate "竞赛社团管理平台" %}{% endblock %}
 
 {% block content %}
 <div class="wrap">
@@ -14,8 +15,8 @@
 
     <div class="col-center">
         <div class="frame reveal">
-            <h1>成员登录</h1>
-            <p class="muted login-note">账号由管理员统一发放，不开放自行注册。</p>
+            <h1>{% translate "成员登录" %}</h1>
+            <p class="muted login-note">{% translate "账号由管理员统一发放，不开放自行注册。" %}</p>
             <form method="post">
                 {% csrf_token %}
                 {{ form.non_field_errors }}
@@ -28,7 +29,7 @@
                 {% endfor %}
                 {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
                 <div class="form-actions">
-                    <button class="btn btn-primary btn-block" type="submit">登录</button>
+                    <button class="btn btn-primary btn-block" type="submit">{% translate "登录" %}</button>
                 </div>
             </form>
         </div>

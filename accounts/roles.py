@@ -3,13 +3,18 @@
 平台有五类使用者：未登录游客、未加入项目组的成员、项目组成员、项目组联系人、
 管理员。这里把「已登录的这个人是谁」收敛成一个标签供界面显示；判定依据仍是
 ``projects.permissions`` 里的唯一真相源，本模块不自己查 ProjectGroup。
+
+标签是惰性的翻译串：谁取用谁按当时的语言取值，模块级只写一次。
 """
 
-ADMIN = "管理员"
-CONTACT = "项目组联系人"
-GROUP_MEMBER = "项目组成员"
-NO_GROUP = "未加入项目组"
-GUEST = "游客"
+from django.utils.translation import gettext_lazy as _
+
+
+ADMIN = _("管理员")
+CONTACT = _("项目组联系人")
+GROUP_MEMBER = _("项目组成员")
+NO_GROUP = _("未加入项目组")
+GUEST = _("游客")
 
 
 def describe_member(user):

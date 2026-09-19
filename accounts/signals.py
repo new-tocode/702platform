@@ -6,6 +6,7 @@ from django.contrib import messages
 from django.contrib.auth.signals import user_logged_in, user_login_failed
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+from django.utils.translation import gettext as _
 
 from .models import Profile, User
 
@@ -70,7 +71,8 @@ def remind_reviewer_of_pending_reviews(sender, request, user, **kwargs):
     # request carries no message storage.
     messages.warning(
         request,
-        f"你有 {'、'.join(pending.parts)}，请前往「评审」处理。",
+        _("你有 %(tasks)s，请前往「评审」处理。")
+        % {"tasks": _("、").join(pending.parts)},
         fail_silently=True,
     )
     logger.info(

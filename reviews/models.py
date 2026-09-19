@@ -26,6 +26,7 @@ import uuid
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 
 from projects.models import ProjectGroup
 from projects.validators import validate_proposal_file
@@ -41,12 +42,12 @@ REVIEW_TYPE_INNOVATION_MIDTERM = "innovation_midterm"
 REVIEW_TYPE_INNOVATION_FINAL = "innovation_final"
 
 REVIEW_TYPE_CHOICES = (
-    (REVIEW_TYPE_COMPETITION_PROJECT, "竞赛立项"),
-    (REVIEW_TYPE_COMPETITION_PROVINCIAL, "竞赛省赛"),
-    (REVIEW_TYPE_COMPETITION_NATIONAL, "竞赛国赛"),
-    (REVIEW_TYPE_INNOVATION_START, "大创立项"),
-    (REVIEW_TYPE_INNOVATION_MIDTERM, "大创中期"),
-    (REVIEW_TYPE_INNOVATION_FINAL, "大创结题"),
+    (REVIEW_TYPE_COMPETITION_PROJECT, _("竞赛立项")),
+    (REVIEW_TYPE_COMPETITION_PROVINCIAL, _("竞赛省赛")),
+    (REVIEW_TYPE_COMPETITION_NATIONAL, _("竞赛国赛")),
+    (REVIEW_TYPE_INNOVATION_START, _("大创立项")),
+    (REVIEW_TYPE_INNOVATION_MIDTERM, _("大创中期")),
+    (REVIEW_TYPE_INNOVATION_FINAL, _("大创结题")),
 )
 
 #: Reviewers required per submission type; the single place that decides it.
@@ -464,7 +465,8 @@ class ReviewerLeave(models.Model):
     )
     starts_at = models.DateTimeField("请假开始")
     ends_at = models.DateTimeField("请假结束")
-    reason = models.TextField("事由", blank=True)
+    # 成员中心用 ModelForm 的默认标签渲染这一栏，所以这个 verbose_name 是前台文案。
+    reason = models.TextField(_("事由"), blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,

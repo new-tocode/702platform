@@ -1,6 +1,7 @@
 {% extends "base.html" %}
+{% load i18n %}
 
-{% block title %}登记设备借用 - 竞赛社团管理平台{% endblock %}
+{% block title %}{% translate "登记设备借用" %} - {% translate "竞赛社团管理平台" %}{% endblock %}
 
 {% block content %}
 <div class="wrap">
@@ -12,20 +13,20 @@
         </div>
         <div class="head-row">
             <div>
-                <h1>登记借用：{{ equipment.name }}</h1>
-                <div class="sub">提交后库存立即扣减，归还时回补。</div>
+                <h1>{% blocktranslate with name=equipment.name %}登记借用：{{ name }}{% endblocktranslate %}</h1>
+                <div class="sub">{% translate "提交后库存立即扣减，归还时回补。" %}</div>
             </div>
         </div>
     </div>
 
     <div class="spec reveal">
         <div>
-            <div class="k">可借 / 总数</div>
+            <div class="k">{% translate "可借 / 总数" %}</div>
             <div class="v mono">{{ equipment.available_count }} / {{ equipment.total_count }}</div>
         </div>
         <div>
-            <div class="k">分类</div>
-            <div class="v mono">{{ equipment.category|default:"未分类" }}</div>
+            <div class="k">{% translate "分类" %}</div>
+            <div class="v mono">{{ equipment.category|default:_("未分类") }}</div>
         </div>
     </div>
 
@@ -43,8 +44,8 @@
                     </div>
                 {% endfor %}
                 <div class="form-actions">
-                    <button class="btn btn-primary" type="submit">提交借用登记</button>
-                    <a class="btn" href="{% url 'equipment:list' %}">返回设备列表</a>
+                    <button class="btn btn-primary" type="submit">{% translate "提交借用登记" %}</button>
+                    <a class="btn" href="{% url 'equipment:list' %}">{% translate "返回设备列表" %}</a>
                 </div>
             </form>
         </div>

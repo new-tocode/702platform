@@ -1,9 +1,9 @@
-{% load static %}<!doctype html>
-<html lang="zh-CN">
+{% load static i18n language_urls %}{% get_current_language as LANGUAGE_CODE %}<!doctype html>
+<html lang="{{ LANGUAGE_CODE }}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}竞赛社团管理平台{% endblock %}</title>
+    <title>{% block title %}{% translate "竞赛社团管理平台" %}{% endblock %}</title>
     <link rel="stylesheet" href="{% static 'css/app.css' %}">
     {% block extra_head %}{% endblock %}
 </head>
@@ -13,28 +13,36 @@
             <a class="brand" href="{% url 'accounts:home' %}">
                 <span class="brand-mark">702</span>
                 <span>
-                    <span class="brand-name">竞赛社团平台</span>
+                    <span class="brand-name">{% translate "竞赛社团平台" %}</span>
                     <span class="brand-code">CLUB-702</span>
                 </span>
             </a>
             <nav class="nav">
-                <a href="{% url 'accounts:home' %}"{% if nav_section == "home" %} aria-current="page"{% endif %}>首页</a>
-                <a href="{% url 'content:about' %}"{% if nav_section == "about" %} aria-current="page"{% endif %}>社团简介</a>
-                <a href="{% url 'content:awards' %}"{% if nav_section == "awards" %} aria-current="page"{% endif %}>历年获奖</a>
-                <a href="{% url 'content:showcase' %}"{% if nav_section == "showcase" %} aria-current="page"{% endif %}>成员风采</a>
-                <a href="{% url 'content:page_index' %}"{% if nav_section == "pages" %} aria-current="page"{% endif %}>更多页面</a>
-                <a href="{% url 'notices:public_list' %}"{% if nav_section == "notices" %} aria-current="page"{% endif %}>公开通知</a>
+                <a href="{% url 'accounts:home' %}"{% if nav_section == "home" %} aria-current="page"{% endif %}>{% translate "首页" %}</a>
+                <a href="{% url 'content:about' %}"{% if nav_section == "about" %} aria-current="page"{% endif %}>{% translate "社团简介" %}</a>
+                <a href="{% url 'content:awards' %}"{% if nav_section == "awards" %} aria-current="page"{% endif %}>{% translate "历年获奖" %}</a>
+                <a href="{% url 'content:showcase' %}"{% if nav_section == "showcase" %} aria-current="page"{% endif %}>{% translate "成员风采" %}</a>
+                <a href="{% url 'content:page_index' %}"{% if nav_section == "pages" %} aria-current="page"{% endif %}>{% translate "更多页面" %}</a>
+                <a href="{% url 'notices:public_list' %}"{% if nav_section == "notices" %} aria-current="page"{% endif %}>{% translate "公开通知" %}</a>
             </nav>
             <div class="topbar-end">
+                {# 语言切换：两种语言各有一个地址（中文不带前缀、英文带 /en/）， #}
+                {# 所以这里只是指向当前页面的另一种语言版本，不写 cookie。 #}
+                {# 链接文字用各语言自己的写法（中文 / English），提示语跟着界面语言走。 #}
+                {% if LANGUAGE_CODE == "en" %}
+                    <a class="langbtn" href="{% language_url 'zh-hans' %}" lang="zh-Hans" hreflang="zh-Hans" title="{% translate '切换到中文' %}">中文</a>
+                {% else %}
+                    <a class="langbtn" href="{% language_url 'en' %}" lang="en" hreflang="en" title="{% translate '切换到英文' %}">English</a>
+                {% endif %}
                 {% if user.is_authenticated %}
-                    <a href="{% url 'accounts:member_home' %}"{% if nav_section == "member" %} aria-current="page"{% endif %}>成员中心</a>
-                    {% if user.is_staff %}<a href="{% url 'admin:index' %}">管理后台</a>{% endif %}
+                    <a href="{% url 'accounts:member_home' %}"{% if nav_section == "member" %} aria-current="page"{% endif %}>{% translate "成员中心" %}</a>
+                    {% if user.is_staff %}<a href="{% url 'admin:index' %}">{% translate "管理后台" %}</a>{% endif %}
                     <form method="post" action="{% url 'accounts:logout' %}">
                         {% csrf_token %}
-                        <button class="linkbtn" type="submit">退出</button>
+                        <button class="linkbtn" type="submit">{% translate "退出" %}</button>
                     </form>
                 {% else %}
-                    <a href="{% url 'accounts:login' %}">成员登录</a>
+                    <a href="{% url 'accounts:login' %}">{% translate "成员登录" %}</a>
                 {% endif %}
             </div>
         </div>
@@ -55,8 +63,8 @@
 
     <footer class="foot">
         <div class="wrap">
-            <span>竞赛社团管理平台</span>
-            <span>账号由管理员统一发放，不开放公开注册</span>
+            <span>{% translate "竞赛社团管理平台" %}</span>
+            <span>{% translate "账号由管理员统一发放，不开放公开注册" %}</span>
         </div>
     </footer>
 </body>

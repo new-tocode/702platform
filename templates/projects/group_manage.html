@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% load files %}
+{% load i18n files %}
 
-{% block title %}管理 {{ group.name }} - 竞赛社团管理平台{% endblock %}
+{% block title %}{% blocktranslate with name=group.name %}管理 {{ name }}{% endblocktranslate %} - {% translate "竞赛社团管理平台" %}{% endblock %}
 
 {% block content %}
 <div class="wrap">
@@ -15,36 +15,39 @@
         </div>
         <div class="head-row">
             <div>
-                <h1>管理「{{ group.name }}」</h1>
+                <h1>{% blocktranslate with name=group.name %}管理「{{ name }}」{% endblocktranslate %}</h1>
                 <div class="sub">
-                    项目组联系人 {{ group.leader.profile.full_name|default:group.leader.username }} ·
-                    成员 {{ members|length }} 人
-                    {% if latest_submission %} · 第 {{ latest_submission.round }} 轮 {{ latest_submission.get_status_display }}{% endif %}
+                    {% blocktranslate trimmed with contact=group.leader.profile.full_name|default:group.leader.username count counter=members|length %}
+                        项目组联系人 {{ contact }} · 成员 1 人
+                    {% plural %}
+                        项目组联系人 {{ contact }} · 成员 {{ counter }} 人
+                    {% endblocktranslate %}
+                    {% if latest_submission %} · {% blocktranslate with round=latest_submission.round status=latest_submission.get_status_display %}第 {{ round }} 轮 {{ status }}{% endblocktranslate %}{% endif %}
                 </div>
             </div>
             <div class="head-actions">
-                <a class="btn" href="{% url 'projects:group_detail' group.pk %}">查看项目组详情</a>
+                <a class="btn" href="{% url 'projects:group_detail' group.pk %}">{% translate "查看项目组详情" %}</a>
             </div>
         </div>
     </div>
 
     <div class="spec reveal">
         <div>
-            <div class="k">待处理申请</div>
-            <div class="v {% if join_requests %}warn{% endif %}">{{ join_requests|length }}<small>条</small></div>
+            <div class="k">{% translate "待处理申请" %}</div>
+            <div class="v {% if join_requests %}warn{% endif %}">{% blocktranslate count counter=join_requests|length %}1<small>条</small>{% plural %}{{ counter }}<small>条</small>{% endblocktranslate %}</div>
         </div>
         <div>
-            <div class="k">项目组成员</div>
-            <div class="v">{{ members|length }}<small>人</small></div>
+            <div class="k">{% translate "项目组成员" %}</div>
+            <div class="v">{% blocktranslate count counter=members|length %}1<small>人</small>{% plural %}{{ counter }}<small>人</small>{% endblocktranslate %}</div>
         </div>
         <div>
-            <div class="k">当前轮次</div>
+            <div class="k">{% translate "当前轮次" %}</div>
             <div class="v mono">{% if latest_submission %}R{{ latest_submission.round }}{% else %}—{% endif %}</div>
         </div>
         <div>
-            <div class="k">方案结论</div>
+            <div class="k">{% translate "方案结论" %}</div>
             <div class="v mono {{ latest_submission.status_tone }}">
-                {% if latest_submission %}{{ latest_submission.get_status_display }}{% else %}未提交{% endif %}
+                {% if latest_submission %}{{ latest_submission.get_status_display }}{% else %}{% translate "未提交" %}{% endif %}
             </div>
         </div>
     </div>
@@ -53,7 +56,7 @@
         <div class="stack reveal">
             <div class="panel">
                 <div class="panel-head">
-                    <h2>入组申请</h2>
+                    <h2>{% translate "入组申请" %}</h2>
                     <span class="count">{{ join_requests|length }} pending</span>
                 </div>
                 <div class="panel-body tight">
@@ -70,17 +73,17 @@
                                     <div class="btn-row">
                                         <form method="post" action="{% url 'projects:group_request_decide' group.pk join_request.pk 'approve' %}">
                                             {% csrf_token %}
-                                            <button class="btn btn-primary btn-sm" type="submit">通过</button>
+                                            <button class="btn btn-primary btn-sm" type="submit">{% translate "通过" %}</button>
                                         </form>
                                         <form method="post" action="{% url 'projects:group_request_decide' group.pk join_request.pk 'reject' %}">
                                             {% csrf_token %}
-                                            <button class="btn btn-sm" type="submit">拒绝</button>
+                                            <button class="btn btn-sm" type="submit">{% translate "拒绝" %}</button>
                                         </form>
                                     </div>
                                 </div>
                             </div>
                         {% empty %}
-                            <div class="empty">暂无待审核申请。</div>
+                            <div class="empty">{% translate "暂无待审核申请。" %}</div>
                         {% endfor %}
                     </div>
                 </div>
@@ -88,13 +91,13 @@
 
             <div class="panel">
                 <div class="panel-head">
-                    <h2>成员</h2>
+                    <h2>{% translate "成员" %}</h2>
                     <span class="count">{{ members|length }} members</span>
                 </div>
                 <div class="panel-body tight">
                     <table>
                         <thead>
-                            <tr><th>姓名</th><th>角色</th><th class="right">操作</th></tr>
+                            <tr><th>{% translate "姓名" %}</th><th>{% translate "角色" %}</th><th class="right">{% translate "操作" %}</th></tr>
                         </thead>
                         <tbody>
                             {% for member in members %}
@@ -102,9 +105,9 @@
                                     <td>{{ member.profile.full_name|default:member.username }}</td>
                                     <td>
                                         {% if member.pk == group.leader_id %}
-                                            <span class="chip chip-on">项目组联系人</span>
+                                            <span class="chip chip-on">{% translate "项目组联系人" %}</span>
                                         {% else %}
-                                            <span class="chip chip-off">成员</span>
+                                            <span class="chip chip-off">{% translate "成员" %}</span>
                                         {% endif %}
                                     </td>
                                     <td class="right">
@@ -113,13 +116,13 @@
                                         {% else %}
                                             <form method="post" action="{% url 'projects:group_member_remove' group.pk member.pk %}">
                                                 {% csrf_token %}
-                                                <button class="btn btn-danger btn-sm" type="submit">移出</button>
+                                                <button class="btn btn-danger btn-sm" type="submit">{% translate "移出" %}</button>
                                             </form>
                                         {% endif %}
                                     </td>
                                 </tr>
                             {% empty %}
-                                <tr><td colspan="3"><div class="empty">暂无成员。</div></td></tr>
+                                <tr><td colspan="3"><div class="empty">{% translate "暂无成员。" %}</div></td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -127,7 +130,7 @@
             </div>
 
             <div class="panel">
-                <div class="panel-head"><h2>项目组介绍</h2></div>
+                <div class="panel-head"><h2>{% translate "项目组介绍" %}</h2></div>
                 <div class="panel-body">
                     <form method="post">
                         {% csrf_token %}
@@ -138,7 +141,7 @@
                             {{ description_form.description.errors }}
                         </div>
                         <div class="form-actions">
-                            <button class="btn btn-primary" type="submit">保存介绍</button>
+                            <button class="btn btn-primary" type="submit">{% translate "保存介绍" %}</button>
                         </div>
                     </form>
                 </div>
@@ -146,8 +149,8 @@
 
             <div class="panel">
                 <div class="panel-head">
-                    <h2>学院与指导老师</h2>
-                    <span class="count">指导老师最多 3 位</span>
+                    <h2>{% translate "学院与指导老师" %}</h2>
+                    <span class="count">{% translate "指导老师最多 3 位" %}</span>
                 </div>
                 <div class="panel-body">
                     <form method="post">
@@ -162,9 +165,9 @@
                                 {{ field.errors }}
                             </div>
                         {% endfor %}
-                        <p class="help">指导老师最多 3 位，留空表示没有这一位；保存后按填写顺序依次排列。</p>
+                        <p class="help">{% translate "指导老师最多 3 位，留空表示没有这一位；保存后按填写顺序依次排列。" %}</p>
                         <div class="form-actions">
-                            <button class="btn btn-primary" type="submit">保存学院与指导老师</button>
+                            <button class="btn btn-primary" type="submit">{% translate "保存学院与指导老师" %}</button>
                         </div>
                     </form>
                 </div>
@@ -174,7 +177,7 @@
         <div class="stack reveal">
             <div class="panel">
                 <div class="panel-head">
-                    <h2>项目书</h2>
+                    <h2>{% translate "项目书" %}</h2>
                     {% if latest_submission %}<span class="count">R{{ latest_submission.round }}</span>{% endif %}
                 </div>
                 <div class="panel-body">
@@ -183,14 +186,14 @@
                             <span class="doc-ext">{{ group.proposal.name|file_ext }}</span>
                             <div>
                                 <div class="doc-name">{{ group.proposal.name|basename }}</div>
-                                <div class="doc-spec">doc / docx / pdf · 不超过 20 MB</div>
+                                <div class="doc-spec">doc / docx / pdf · {% translate "不超过 20 MB" %}</div>
                             </div>
                         </div>
                         <div class="btn-row">
-                            <a class="btn btn-sm" href="{% url 'projects:group_proposal_download' group.pk %}">下载当前项目书</a>
+                            <a class="btn btn-sm" href="{% url 'projects:group_proposal_download' group.pk %}">{% translate "下载当前项目书" %}</a>
                         </div>
                     {% else %}
-                        <p class="muted">尚未上传项目书。</p>
+                        <p class="muted">{% translate "尚未上传项目书。" %}</p>
                     {% endif %}
                     <form method="post" action="{% url 'projects:group_proposal_update' group.pk %}" enctype="multipart/form-data">
                         {% csrf_token %}
@@ -201,7 +204,7 @@
                             {{ proposal_form.proposal.errors }}
                         </div>
                         <div class="form-actions">
-                            <button class="btn btn-sm" type="submit">上传 / 更新项目书</button>
+                            <button class="btn btn-sm" type="submit">{% translate "上传 / 更新项目书" %}</button>
                         </div>
                     </form>
                 </div>
@@ -209,24 +212,28 @@
 
             <div class="panel">
                 <div class="panel-head">
-                    <h2>提交审核</h2>
+                    <h2>{% translate "提交审核" %}</h2>
                     {% if latest_submission.is_open %}
-                        <span class="chip chip-warn">本轮未结束</span>
+                        <span class="chip chip-warn">{% translate "本轮未结束" %}</span>
                     {% endif %}
                 </div>
                 <div class="panel-body">
                     {% if latest_submission.is_open %}
                         <p class="help">
                             {% if latest_submission.is_preliminary_pending %}
-                                第 {{ latest_submission.round }} 轮送审正在初审中，等待初审人给出意见；
-                                初审通过后会随机分配 {{ latest_submission.required_reviewers }} 名评审人，
-                                初审打回则本轮直接结束。
+                                {% blocktranslate trimmed with round=latest_submission.round required=latest_submission.required_reviewers %}
+                                    第 {{ round }} 轮送审正在初审中，等待初审人给出意见；
+                                    初审通过后会随机分配 {{ required }} 名评审人，
+                                    初审打回则本轮直接结束。
+                                {% endblocktranslate %}
                             {% else %}
-                                第 {{ latest_submission.round }} 轮评审尚未结束
-                                （已审结 {{ latest_submission.completed_count }} / {{ latest_submission.required_reviewers }}），
-                                需等本轮出结论后才能提交下一轮。
+                                {% blocktranslate trimmed with round=latest_submission.round done=latest_submission.completed_count required=latest_submission.required_reviewers %}
+                                    第 {{ round }} 轮评审尚未结束
+                                    （已审结 {{ done }} / {{ required }}），
+                                    需等本轮出结论后才能提交下一轮。
+                                {% endblocktranslate %}
                             {% endif %}
-                            同一条送审不会被重复提交。
+                            {% translate "同一条送审不会被重复提交。" %}
                         </p>
                     {% else %}
                         <form method="post" action="{% url 'projects:group_submit_review' group.pk %}">
@@ -241,14 +248,13 @@
                                 <label for="{{ submit_form.message.id_for_label }}">{{ submit_form.message.label }}</label>
                                 {{ submit_form.message }}
                                 <p class="help">
-                                    提交后先由 1 名初审人初审，通过后才按所选类型随机分配评审人；
-                                    全部评审人通过后，本项目组方案即通过。初审人、评审人身份对项目组匿名，
-                                    评审人可另附批注版项目书。
+                                    {% translate "提交后先由 1 名初审人初审，通过后才按所选类型随机分配评审人；全部评审人通过后，本项目组方案即通过。" %}
+                                    {% translate "初审人、评审人身份对项目组匿名，评审人可另附批注版项目书。" %}
                                 </p>
                                 {{ submit_form.message.errors }}
                             </div>
                             <div class="form-actions">
-                                <button class="btn btn-primary btn-block" type="submit">提交审核</button>
+                                <button class="btn btn-primary btn-block" type="submit">{% translate "提交审核" %}</button>
                             </div>
                         </form>
                     {% endif %}
@@ -256,10 +262,10 @@
             </div>
 
             <div class="panel">
-                <div class="panel-head"><h2>转让联系人</h2></div>
+                <div class="panel-head"><h2>{% translate "转让联系人" %}</h2></div>
                 <div class="panel-body">
                     {% if transfer_form.fields.new_contact.queryset %}
-                        <p class="muted">转让后你仍是本项目组的普通成员。</p>
+                        <p class="muted">{% translate "转让后你仍是本项目组的普通成员。" %}</p>
                         <form method="post">
                             {% csrf_token %}
                             <input type="hidden" name="action" value="transfer">
@@ -270,11 +276,11 @@
                                 {{ transfer_form.new_contact.errors }}
                             </div>
                             <div class="form-actions">
-                                <button class="btn btn-sm" type="submit">转让</button>
+                                <button class="btn btn-sm" type="submit">{% translate "转让" %}</button>
                             </div>
                         </form>
                     {% else %}
-                        <p class="muted">暂无可转让的成员。</p>
+                        <p class="muted">{% translate "暂无可转让的成员。" %}</p>
                     {% endif %}
                 </div>
             </div>

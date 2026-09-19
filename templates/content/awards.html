@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% load rendering %}
+{% load i18n rendering %}
 
-{% block title %}历年获奖 - 竞赛社团管理平台{% endblock %}
+{% block title %}{% translate "历年获奖" %} - {% translate "竞赛社团管理平台" %}{% endblock %}
 
 {% block content %}
 <div class="wrap">
@@ -9,12 +9,12 @@
         <div class="path">
             <a href="{% url 'accounts:home' %}">/</a>
             <span>/</span>
-            <span>历年获奖</span>
+            <span>{% translate "历年获奖" %}</span>
         </div>
         <div class="head-row">
             <div>
-                <h1>历年获奖</h1>
-                {% if awards %}<div class="sub">共 {{ awards|length }} 项记录</div>{% endif %}
+                <h1>{% translate "历年获奖" %}</h1>
+                {% if awards %}<div class="sub">{% blocktranslate count counter=awards|length %}共 1 项记录{% plural %}共 {{ counter }} 项记录{% endblocktranslate %}</div>{% endif %}
             </div>
         </div>
     </div>
@@ -27,20 +27,20 @@
             </div>
             <div class="panel-body">
                 <dl class="dl">
-                    <div><dt>赛事名称</dt><dd>{{ award.competition }}</dd></div>
+                    <div><dt>{% translate "赛事名称" %}</dt><dd>{{ award.competition }}</dd></div>
                     {% if award.level %}
-                        <div><dt>获奖级别</dt><dd>{{ award.level }}</dd></div>
+                        <div><dt>{% translate "获奖级别" %}</dt><dd>{{ award.level }}</dd></div>
                     {% endif %}
                 </dl>
                 {% if award.winners %}
-                    <h3 class="award-subtitle">获奖人 / 团队</h3>
+                    <h3 class="award-subtitle">{% translate "获奖人 / 团队" %}</h3>
                     <div class="prose">{{ award.winners|render_markdown }}</div>
                 {% endif %}
                 {% include "includes/media.html" with media_files=award.attachments.all %}
             </div>
         </div>
     {% empty %}
-        <div class="empty">暂时没有获奖记录。</div>
+        <div class="empty">{% translate "暂时没有获奖记录。" %}</div>
     {% endfor %}
 </div>
 {% endblock %}

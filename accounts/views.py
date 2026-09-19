@@ -10,6 +10,7 @@ from django.db import transaction
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.utils.translation import gettext as _
 from django.views.decorators.http import require_http_methods
 from django.views.generic.edit import FormView
 
@@ -107,7 +108,7 @@ class PasswordChangeView(FormView):
             was_forced,
             extra={"request_id": getattr(self.request, "request_id", "-")},
         )
-        messages.success(self.request, "密码修改成功。")
+        messages.success(self.request, _("密码修改成功。"))
         return super().form_valid(form)
 
     def form_invalid(self, form):
@@ -204,7 +205,7 @@ def profile(request):
                 saved_profile.pk,
                 extra={"request_id": getattr(request, "request_id", "-")},
             )
-            messages.success(request, "个人信息已保存。")
+            messages.success(request, _("个人信息已保存。"))
             return redirect("accounts:profile")
         logger.warning(
             "profile.update.failure username=%s errors=%s",

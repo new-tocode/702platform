@@ -1,6 +1,7 @@
 {% extends "base.html" %}
+{% load i18n %}
 
-{% block title %}申请加入 {{ group.name }} - 竞赛社团管理平台{% endblock %}
+{% block title %}{% blocktranslate with name=group.name %}申请加入 {{ name }}{% endblocktranslate %} - {% translate "竞赛社团管理平台" %}{% endblock %}
 
 {% block content %}
 <div class="wrap">
@@ -12,8 +13,8 @@
         </div>
         <div class="head-row">
             <div>
-                <h1>申请加入「{{ group.name }}」</h1>
-                <div class="sub">项目组联系人 {{ group.leader.profile.full_name|default:group.leader.username }} · 审核通过后即成为项目组成员。</div>
+                <h1>{% blocktranslate with name=group.name %}申请加入「{{ name }}」{% endblocktranslate %}</h1>
+                <div class="sub">{% blocktranslate with contact=group.leader.profile.full_name|default:group.leader.username %}项目组联系人 {{ contact }} · 审核通过后即成为项目组成员。{% endblocktranslate %}</div>
             </div>
         </div>
     </div>
@@ -30,8 +31,8 @@
                     {{ form.message.errors }}
                 </div>
                 <div class="form-actions">
-                    <button class="btn btn-primary" type="submit">提交申请</button>
-                    <a class="btn" href="{% url 'projects:group_list' %}">返回项目组列表</a>
+                    <button class="btn btn-primary" type="submit">{% translate "提交申请" %}</button>
+                    <a class="btn" href="{% url 'projects:group_list' %}">{% translate "返回项目组列表" %}</a>
                 </div>
             </form>
         </div>

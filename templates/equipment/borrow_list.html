@@ -1,6 +1,7 @@
 {% extends "base.html" %}
+{% load i18n %}
 
-{% block title %}借用记录 - 竞赛社团管理平台{% endblock %}
+{% block title %}{% translate "借用记录" %} - {% translate "竞赛社团管理平台" %}{% endblock %}
 
 {% block content %}
 <div class="wrap">
@@ -12,9 +13,9 @@
         </div>
         <div class="head-row">
             <div>
-                <h1>{% if user.is_staff %}全部借用记录{% else %}我的借用记录{% endif %}</h1>
+                <h1>{% if user.is_staff %}{% translate "全部借用记录" %}{% else %}{% translate "我的借用记录" %}{% endif %}</h1>
                 <div class="sub">
-                    {% if user.is_staff %}管理员可代成员登记归还。{% else %}只显示你自己的借用记录；归还后库存回补。{% endif %}
+                    {% if user.is_staff %}{% translate "管理员可代成员登记归还。" %}{% else %}{% translate "只显示你自己的借用记录；归还后库存回补。" %}{% endif %}
                 </div>
             </div>
         </div>
@@ -25,13 +26,13 @@
             <table>
                 <thead>
                     <tr>
-                        <th>设备</th>
-                        {% if user.is_staff %}<th>借用人</th>{% endif %}
-                        <th class="num">借用日期</th>
-                        <th class="num">计划归还</th>
-                        <th>状态</th>
-                        <th class="num">实际归还</th>
-                        <th class="right">操作</th>
+                        <th>{% translate "设备" %}</th>
+                        {% if user.is_staff %}<th>{% translate "借用人" %}</th>{% endif %}
+                        <th class="num">{% translate "借用日期" %}</th>
+                        <th class="num">{% translate "计划归还" %}</th>
+                        <th>{% translate "状态" %}</th>
+                        <th class="num">{% translate "实际归还" %}</th>
+                        <th class="right">{% translate "操作" %}</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -55,7 +56,7 @@
                                 {% if borrow.status == "borrowed" and user.is_staff or borrow.status == "borrowed" and borrow.borrower_id == user.pk %}
                                     <form method="post" action="{% url 'equipment_borrows:return' borrow.pk %}">
                                         {% csrf_token %}
-                                        <button class="btn btn-primary btn-sm" type="submit">登记归还</button>
+                                        <button class="btn btn-primary btn-sm" type="submit">{% translate "登记归还" %}</button>
                                     </form>
                                 {% else %}
                                     <span class="muted">—</span>
@@ -67,7 +68,7 @@
             </table>
         </div>
     {% else %}
-        <div class="empty">暂无借用记录。</div>
+        <div class="empty">{% translate "暂无借用记录。" %}</div>
     {% endif %}
 </div>
 {% endblock %}

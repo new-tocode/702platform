@@ -1,6 +1,7 @@
 """Register the reviewer operation entry."""
 
 from django.apps import AppConfig
+from django.utils.translation import gettext_lazy as _
 
 
 class ReviewsConfig(AppConfig):
@@ -15,8 +16,8 @@ class ReviewsConfig(AppConfig):
 
         register_entry(
             key="reviews.queue",
-            label="评审",
-            description="初审并审阅分配给你的项目书，给出初审或评审意见；管理员在此处理项目组创建申请",
+            label=_("评审"),
+            description=_("初审并审阅分配给你的项目书，给出初审或评审意见；管理员在此处理项目组创建申请"),
             url_name="reviews:queue",
             visible_when=can_open_queue,
             sort_order=80,

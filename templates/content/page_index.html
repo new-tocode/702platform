@@ -1,6 +1,7 @@
 {% extends "base.html" %}
+{% load i18n %}
 
-{% block title %}更多页面 - 竞赛社团管理平台{% endblock %}
+{% block title %}{% translate "更多页面" %} - {% translate "竞赛社团管理平台" %}{% endblock %}
 
 {% block content %}
 <div class="wrap">
@@ -8,12 +9,12 @@
         <div class="path">
             <a href="{% url 'accounts:home' %}">/</a>
             <span>/</span>
-            <span>更多页面</span>
+            <span>{% translate "更多页面" %}</span>
         </div>
         <div class="head-row">
             <div>
-                <h1>更多页面</h1>
-                {% if pages %}<div class="sub">共 {{ pages|length }} 个页面</div>{% endif %}
+                <h1>{% translate "更多页面" %}</h1>
+                {% if pages %}<div class="sub">{% blocktranslate count counter=pages|length %}共 1 个页面{% plural %}共 {{ counter }} 个页面{% endblocktranslate %}</div>{% endif %}
             </div>
         </div>
     </div>
@@ -32,7 +33,7 @@
             </div>
         </div>
     {% else %}
-        <div class="empty">暂时没有更多公开页面。</div>
+        <div class="empty">{% translate "暂时没有更多公开页面。" %}</div>
     {% endif %}
 </div>
 {% endblock %}
