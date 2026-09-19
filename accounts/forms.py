@@ -7,6 +7,7 @@ from django.contrib.auth.forms import (
     UserCreationForm,
     UserChangeForm,
 )
+from django.utils.translation import gettext_lazy as _
 
 from .models import Profile, User
 
@@ -106,17 +107,17 @@ class MemberPasswordChangeForm(forms.Form):
     """Password form for subsequent changes, including the current password."""
 
     old_password = forms.CharField(
-        label="当前密码",
+        label=_("当前密码"),
         strip=False,
         widget=forms.PasswordInput(attrs={"autocomplete": "current-password"}),
     )
     new_password1 = forms.CharField(
-        label="新密码",
+        label=_("新密码"),
         strip=False,
         widget=forms.PasswordInput(attrs={"autocomplete": "new-password"}),
     )
     new_password2 = forms.CharField(
-        label="确认新密码",
+        label=_("确认新密码"),
         strip=False,
         widget=forms.PasswordInput(attrs={"autocomplete": "new-password"}),
     )
@@ -128,7 +129,7 @@ class MemberPasswordChangeForm(forms.Form):
     def clean_old_password(self):
         old_password = self.cleaned_data["old_password"]
         if not self.user.check_password(old_password):
-            raise forms.ValidationError("当前密码不正确。")
+            raise forms.ValidationError(_("当前密码不正确。"))
         return old_password
 
     def clean(self):
@@ -136,7 +137,7 @@ class MemberPasswordChangeForm(forms.Form):
         password1 = cleaned_data.get("new_password1")
         password2 = cleaned_data.get("new_password2")
         if password1 and password2 and password1 != password2:
-            self.add_error("new_password2", "两次输入的新密码不一致。")
+            self.add_error("new_password2", _("两次输入的新密码不一致。"))
         if password1:
             from django.contrib.auth.password_validation import validate_password
 

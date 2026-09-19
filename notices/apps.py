@@ -1,6 +1,7 @@
 """Register the notification member operation entry."""
 
 from django.apps import AppConfig
+from django.utils.translation import gettext_lazy as _
 
 
 class NoticesConfig(AppConfig):
@@ -13,8 +14,8 @@ class NoticesConfig(AppConfig):
 
         register_entry(
             key="notices.internal",
-            label="内部通知",
-            description="查看与你所属用户组相关的通知",
+            label=_("内部通知"),
+            description=_("查看与你所属用户组相关的通知"),
             url_name="member_notices:internal_list",
             sort_order=30,
         )

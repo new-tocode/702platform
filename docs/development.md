@@ -156,6 +156,50 @@ source env.local.sh          # 必须：不加载会因缺少库名/账号/密�
 
 **媒体上传限制**：图片 `jpg/jpeg/png/webp/gif` ≤10MB（Pillow 解码校验）；视频 `mp4`（查 `ftyp`）/`webm`（查 EBML 头）≤500MB。项目书与评审人的批注版项目书 `doc/docx/pdf` ≤20MB（扩展名 + 文件头签名，复用同一校验器）。扩展名、大小、MIME、签名任一不符即拒绝。
 
+### 3.4 中英双语与翻译文件
+
+界面支持中文与英文。**中文是源语言**：模板与代码里写的 msgid 本身就是中文，所以中文
+不需要翻译文件（取不到译文时 gettext 原样返回 msgid）；英文译文集中在
+`locale/en/LC_MESSAGES/django.po`。
+
+| 事项 | 约定 |
+|---|---|
+| 语言集合 | `settings.LANGUAGES`：`zh-hans`（默认）与 `en`；`LOCALE_PATHS` 指向 `locale/` |
+| 地址 | 前台用 `i18n_patterns(prefix_default_language=False)`：中文沿用改造前的地址，英文走 `/en/` 前缀。**地址本身就决定语言**，与浏览器语言、cookie 无关 |
+| 切换 | 顶栏右端一个链接（`core/templatetags/language_urls.py` 的 `language_url`），指向当前页面的另一种语言版本 |
+| 中间件 | `LocaleMiddleware`（识别 `/en/` 前缀；必须排在 `SessionMiddleware` 之后、`CommonMiddleware` 之前） |
+| 范围 | 前台页面全部双语；**后台 `/admin/` 不在范围内**（`config/urls.py` 里刻意留在 `i18n_patterns` 之外，固定中文） |
+| 动态内容 | 只翻译界面：通知正文、竞赛说明、项目组简介等由人录入的中文原文原样显示 |
+
+写新文案时：**不要拼接句子**——`f"{label}任务"` 这种拼出来的话没法翻译，一律用
+`_("%(label)s任务") % {...}` 占位；模板里用 `{% translate %}` / `{% blocktranslate %}`
+（短句写成单行，多行块加 `trimmed`）。
+
+带数量的文案要能分单复数，否则英文会出现 `1 proposals`：
+
+* 模板用 `{% blocktranslate count %}`，Python 用 `ngettext()`；
+* 中文单复数同形，所以**单数那一半直接写死 1**（模板里 `共 1 条` / 复数 `共 {{ counter }} 条`，
+  Python 里 `ngettext("1 份项目书待评审", "%(count)s 份项目书待评审", n)`）——中文渲染与
+  改造前逐字相同，英文译文才分得清 `1 proposal` / `2 proposals`；
+* 数量由模板单独渲染（如成员中心的待办卡片）时拼不出单数句，英文改用不带名词的写法
+  （`awaiting your review`）。
+
+改完文案后：
+
+```bash
+.venv/bin/python manage.py makemessages -l en --no-obsolete   # 提取新增/改动的文案
+# 编辑 locale/en/LC_MESSAGES/django.po，填入 msgstr
+.venv/bin/python manage.py compilemessages -l en              # 生成 .mo
+```
+
+`locale/en/LC_MESSAGES/django.mo` **要进版本库**：部署脚本只跑 `migrate` 与
+`collectstatic`，不跑 `compilemessages`；缺 .mo 时英文页面会静默退回中文。
+
+不在双语范围内的部分：后台界面与后台表单（`*/admin.py`、`notices/forms.py` 的
+`NoticeAdminForm`、`media/validators.py` 的提示语）、只用于后台的模型
+`verbose_name`（如「通知公告」「创建项目组申请」），以及 `core/templatetags/files.py`
+的文件类型角标。
+
 ## 4. 常用命令
 
 | 目的 | 命令 |

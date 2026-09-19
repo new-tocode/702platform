@@ -8,6 +8,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.translation import gettext as _, ngettext
 from django.views.decorators.http import require_POST
 
 from projects.permissions import can_view_group
@@ -95,7 +96,7 @@ def _require_group_visibility(request, group, what):
 def _annotated_filename(file_field, round_number):
     """Build a neutral download name that reveals nothing about the reviewer."""
     extension = os.path.splitext(file_field.name)[1].lower()
-    return f"批注版项目书_R{round_number}{extension}"
+    return _("批注版项目书_R%(round)s%(ext)s") % {"round": round_number, "ext": extension}
 
 
 @login_required
@@ -142,8 +143,8 @@ def override_submission(request, pk):
         else:
             messages.success(
                 request,
-                f"超级评审已敲定第 {decided.round} 轮：{decided.get_status_display()}，"
-                "等待中的任务（含初审）已释放。",
+                _("超级评审已敲定第 %(round)s 轮：%(status)s，等待中的任务（含初审）已释放。")
+                % {"round": decided.round, "status": decided.get_status_display()},
             )
     else:
         for field_errors in form.errors.values():
@@ -156,12 +157,14 @@ def _success_message(task, decision):
     """交卷之后的三种回执——逐字沿用合并前的版本。"""
     if task.is_preliminary:
         if decision == ReviewTask.APPROVE:
-            return (
-                "初审已通过，已随机分配 "
-                f"{task.submission.required_reviewers} 名评审人。"
-            )
-        return "初审已打回，项目组修改项目书后可重新提交。"
-    return "评审已提交，感谢你的评审意见。"
+            required = task.submission.required_reviewers
+            return ngettext(
+                "初审已通过，已随机分配 1 名评审人。",
+                "初审已通过，已随机分配 %(count)s 名评审人。",
+                required,
+            ) % {"count": required}
+        return _("初审已打回，项目组修改项目书后可重新提交。")
+    return _("评审已提交，感谢你的评审意见。")
 
 
 @login_required
@@ -230,8 +233,11 @@ def set_leave(request):
         else:
             messages.success(
                 request,
-                f"已登记评审请假：{leave.starts_at:%Y-%m-%d %H:%M} 至 "
-                f"{leave.ends_at:%Y-%m-%d %H:%M}，期间不再接收新的评审请求。",
+                _("已登记评审请假：%(starts)s 至 %(ends)s，期间不再接收新的评审请求。")
+                % {
+                    "starts": leave.starts_at.strftime("%Y-%m-%d %H:%M"),
+                    "ends": leave.ends_at.strftime("%Y-%m-%d %H:%M"),
+                },
             )
     else:
         for field_errors in form.errors.values():
@@ -254,7 +260,7 @@ def cancel_leave(request):
     except ReviewError as exc:
         messages.error(request, str(exc))
     else:
-        messages.success(request, "已取消请假，即刻恢复接收评审请求。")
+        messages.success(request, _("已取消请假，即刻恢复接收评审请求。"))
     return redirect("accounts:member_home")
 
 
@@ -267,7 +273,7 @@ def annotated_file_download(request, pk):
     )
     _require_group_visibility(request, assignment.submission.group, "annotated")
     if not assignment.annotated_file:
-        raise Http404("该评审任务没有批注版项目书。")
+        raise Http404(_("该评审任务没有批注版项目书。"))
     logger.info(
         "reviews.annotated.download assignment_id=%s submission_id=%s user=%s",
         assignment.pk,

@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% load rendering %}
+{% load i18n rendering %}
 
-{% block title %}成员风采 - 竞赛社团管理平台{% endblock %}
+{% block title %}{% translate "成员风采" %} - {% translate "竞赛社团管理平台" %}{% endblock %}
 
 {% block content %}
 <div class="wrap">
@@ -9,12 +9,12 @@
         <div class="path">
             <a href="{% url 'accounts:home' %}">/</a>
             <span>/</span>
-            <span>成员风采</span>
+            <span>{% translate "成员风采" %}</span>
         </div>
         <div class="head-row">
             <div>
-                <h1>成员风采</h1>
-                {% if showcases %}<div class="sub">共 {{ showcases|length }} 位成员</div>{% endif %}
+                <h1>{% translate "成员风采" %}</h1>
+                {% if showcases %}<div class="sub">{% blocktranslate count counter=showcases|length %}共 1 位成员{% plural %}共 {{ counter }} 位成员{% endblocktranslate %}</div>{% endif %}
             </div>
         </div>
     </div>
@@ -29,7 +29,7 @@
                         {% elif showcase.photo.kind == "video" %}
                             <video controls preload="metadata">
                                 <source src="{{ showcase.photo.file.url }}">
-                                您的浏览器不支持视频播放。
+                                {% translate "您的浏览器不支持视频播放。" %}
                             </video>
                         {% endif %}
                     {% endif %}
@@ -41,7 +41,7 @@
             {% endfor %}
         </div>
     {% else %}
-        <div class="empty">暂时没有成员风采内容。</div>
+        <div class="empty">{% translate "暂时没有成员风采内容。" %}</div>
     {% endif %}
 </div>
 {% endblock %}

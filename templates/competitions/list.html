@@ -1,6 +1,7 @@
 {% extends "base.html" %}
+{% load i18n %}
 
-{% block title %}竞赛信息 - 竞赛社团管理平台{% endblock %}
+{% block title %}{% translate "竞赛信息" %} - {% translate "竞赛社团管理平台" %}{% endblock %}
 
 {% block content %}
 <div class="wrap">
@@ -12,8 +13,8 @@
         </div>
         <div class="head-row">
             <div>
-                <h1>竞赛信息</h1>
-                <div class="sub">所有成员均可查看；仅项目组联系人可为自己的项目组报名。</div>
+                <h1>{% translate "竞赛信息" %}</h1>
+                <div class="sub">{% translate "所有成员均可查看；仅项目组联系人可为自己的项目组报名。" %}</div>
             </div>
         </div>
     </div>
@@ -23,18 +24,18 @@
             <div class="panel-head">
                 <h2>{{ row.competition.title }}</h2>
                 {% if row.competition.is_registration_open %}
-                    <span class="chip chip-ok">报名开放中</span>
+                    <span class="chip chip-ok">{% translate "报名开放中" %}</span>
                 {% elif row.competition.is_open %}
-                    <span class="chip chip-warn">报名已截止</span>
+                    <span class="chip chip-warn">{% translate "报名已截止" %}</span>
                 {% else %}
-                    <span class="chip chip-off">报名未开放</span>
+                    <span class="chip chip-off">{% translate "报名未开放" %}</span>
                 {% endif %}
             </div>
             <div class="panel-body">
                 <dl class="dl">
-                    <div><dt>报名截止</dt><dd class="mono">{{ row.competition.deadline|date:"Y-m-d H:i" }}</dd></div>
+                    <div><dt>{% translate "报名截止" %}</dt><dd class="mono">{{ row.competition.deadline|date:"Y-m-d H:i" }}</dd></div>
                     {% if row.competition.team_size %}
-                        <div><dt>人数要求</dt><dd>{{ row.competition.team_size }}</dd></div>
+                        <div><dt>{% translate "人数要求" %}</dt><dd>{{ row.competition.team_size }}</dd></div>
                     {% endif %}
                 </dl>
 
@@ -43,11 +44,11 @@
                 {% endif %}
 
                 {% if row.registrations %}
-                    <h3 class="minor-head">已报名项目组</h3>
+                    <h3 class="minor-head">{% translate "已报名项目组" %}</h3>
                     <div class="table-wrap">
                         <table>
                             <thead>
-                                <tr><th>项目组</th><th>竞赛组长</th><th class="right">操作</th></tr>
+                                <tr><th>{% translate "项目组" %}</th><th>{% translate "竞赛组长" %}</th><th class="right">{% translate "操作" %}</th></tr>
                             </thead>
                             <tbody>
                                 {% for registration in row.registrations %}
@@ -63,14 +64,14 @@
                                         <td class="right">
                                             {% if row.competition.is_registration_open %}
                                                 <div class="btn-row btn-row-end">
-                                                    <a class="btn btn-sm" href="{% url 'competitions:registration_edit' registration.pk %}">修改报名信息</a>
+                                                    <a class="btn btn-sm" href="{% url 'competitions:registration_edit' registration.pk %}">{% translate "修改报名信息" %}</a>
                                                     <form method="post" action="{% url 'competitions:registration_withdraw' registration.pk %}">
                                                         {% csrf_token %}
-                                                        <button class="btn btn-danger btn-sm" type="submit">放弃报名</button>
+                                                        <button class="btn btn-danger btn-sm" type="submit">{% translate "放弃报名" %}</button>
                                                     </form>
                                                 </div>
                                             {% else %}
-                                                <span class="muted">已截止，无法修改</span>
+                                                <span class="muted">{% translate "已截止，无法修改" %}</span>
                                             {% endif %}
                                         </td>
                                     </tr>
@@ -83,20 +84,20 @@
                 <div class="btn-row competition-actions">
                     {% if row.competition.is_registration_open %}
                         {% if can_manage_competitions %}
-                            <a class="btn btn-primary btn-sm" href="{% url 'competitions:register' row.competition.pk %}">为项目组登记报名</a>
+                            <a class="btn btn-primary btn-sm" href="{% url 'competitions:register' row.competition.pk %}">{% translate "为项目组登记报名" %}</a>
                         {% else %}
-                            <span class="muted">报名开放中，仅项目组联系人可报名。</span>
+                            <span class="muted">{% translate "报名开放中，仅项目组联系人可报名。" %}</span>
                         {% endif %}
                     {% elif row.competition.is_open %}
-                        <span class="muted">报名已截止。</span>
+                        <span class="muted">{% translate "报名已截止。" %}</span>
                     {% else %}
-                        <span class="muted">报名未开放。</span>
+                        <span class="muted">{% translate "报名未开放。" %}</span>
                     {% endif %}
                 </div>
             </div>
         </div>
     {% empty %}
-        <div class="empty">暂时没有竞赛信息。</div>
+        <div class="empty">{% translate "暂时没有竞赛信息。" %}</div>
     {% endfor %}
 </div>
 {% endblock %}

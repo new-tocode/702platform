@@ -9,6 +9,7 @@ import logging
 
 from django.db import IntegrityError, transaction
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 
 from core.audit import record_audit
 
@@ -47,9 +48,9 @@ def _advisor_slots(names):
 def apply_to_group(*, group, applicant, message="", request=None):
     """Create (or refresh) a pending application to join a group."""
     if not applicant.is_authenticated:
-        raise JoinRequestError("请先登录。")
+        raise JoinRequestError(_("请先登录。"))
     if group.members.filter(pk=applicant.pk).exists():
-        raise JoinRequestError("你已经是该项目组成员。")
+        raise JoinRequestError(_("你已经是该项目组成员。"))
     try:
         with transaction.atomic():
             join_request, created = GroupJoinRequest.objects.get_or_create(
@@ -62,7 +63,7 @@ def apply_to_group(*, group, applicant, message="", request=None):
                 join_request.message = message
                 join_request.save(update_fields=["message", "updated_at"])
     except IntegrityError as exc:  # concurrent duplicate pending application
-        raise JoinRequestError("你已经提交过申请，请等待联系人审核。") from exc
+        raise JoinRequestError(_("你已经提交过申请，请等待联系人审核。")) from exc
     record_audit(
         action="projects.join.apply",
         user=applicant,
@@ -89,7 +90,7 @@ def approve_join_request(*, join_request, actor, request=None):
             .get(pk=join_request.pk)
         )
         if locked.status != GroupJoinRequest.PENDING:
-            raise JoinRequestError("该申请已被处理。")
+            raise JoinRequestError(_("该申请已被处理。"))
         locked.status = GroupJoinRequest.APPROVED
         locked.decided_by = actor
         locked.decided_at = timezone.now()
@@ -110,7 +111,7 @@ def reject_join_request(*, join_request, actor, request=None):
     with transaction.atomic():
         locked = GroupJoinRequest.objects.select_for_update().get(pk=join_request.pk)
         if locked.status != GroupJoinRequest.PENDING:
-            raise JoinRequestError("该申请已被处理。")
+            raise JoinRequestError(_("该申请已被处理。"))
         locked.status = GroupJoinRequest.REJECTED
         locked.decided_by = actor
         locked.decided_at = timezone.now()
@@ -141,10 +142,12 @@ def apply_to_create_group(
     on ``(applicant) WHERE status='pending'`` allows only one.
     """
     if not applicant.is_authenticated:
-        raise GroupCreateRequestError("请先登录。")
+        raise GroupCreateRequestError(_("请先登录。"))
     names = [name.strip() for name in advisor_names if name.strip()]
     if len(names) > MAX_ADVISORS_PER_GROUP:
-        raise GroupCreateRequestError(f"指导老师最多 {MAX_ADVISORS_PER_GROUP} 位。")
+        raise GroupCreateRequestError(
+            _("指导老师最多 %(max)s 位。") % {"max": MAX_ADVISORS_PER_GROUP}
+        )
     fields = {
         "name": name,
         "description": description,
@@ -164,7 +167,7 @@ def apply_to_create_group(
                 create_request.save(update_fields=[*fields, "updated_at"])
     except IntegrityError as exc:  # 并发提交撞上部分唯一约束
         raise GroupCreateRequestError(
-            "你已经提交过创建项目组的申请，请等待管理员审核。"
+            _("你已经提交过创建项目组的申请，请等待管理员审核。")
         ) from exc
     record_audit(
         action="projects.group.create.apply",
@@ -198,7 +201,7 @@ def approve_create_request(*, create_request, actor, request=None):
             .get(pk=create_request.pk)
         )
         if locked.status != GroupCreateRequest.PENDING:
-            raise GroupCreateRequestError("该申请已被处理。")
+            raise GroupCreateRequestError(_("该申请已被处理。"))
         group = ProjectGroup.objects.create(
             name=locked.name,
             leader=locked.applicant,
@@ -246,7 +249,7 @@ def reject_create_request(*, create_request, actor, request=None):
     with transaction.atomic():
         locked = GroupCreateRequest.objects.select_for_update().get(pk=create_request.pk)
         if locked.status != GroupCreateRequest.PENDING:
-            raise GroupCreateRequestError("该申请已被处理。")
+            raise GroupCreateRequestError(_("该申请已被处理。"))
         locked.status = GroupCreateRequest.REJECTED
         locked.decided_by = actor
         locked.decided_at = timezone.now()
@@ -264,7 +267,7 @@ def reject_create_request(*, create_request, actor, request=None):
 def remove_group_member(*, group, member, actor, request=None):
     """Remove a member; the current contact must be transferred first."""
     if group.leader_id == member.pk:
-        raise GroupManagementError("不能移除项目组联系人，请先转让联系人。")
+        raise GroupManagementError(_("不能移除项目组联系人，请先转让联系人。"))
     with transaction.atomic():
         group.members.remove(member)
     record_audit(
@@ -284,7 +287,7 @@ def transfer_contact(*, group, new_contact, actor, request=None):
     ever adds the contact, never removes one).
     """
     if not group.members.filter(pk=new_contact.pk).exists():
-        raise GroupManagementError("新联系人必须是该项目组成员。")
+        raise GroupManagementError(_("新联系人必须是该项目组成员。"))
     previous_contact_id = group.leader_id
     with transaction.atomic():
         group.leader = new_contact
@@ -312,7 +315,9 @@ def update_group_info(*, group, college, advisor_names, actor, request=None):
     """
     names = [name.strip() for name in advisor_names if name.strip()]
     if len(names) > MAX_ADVISORS_PER_GROUP:
-        raise GroupManagementError(f"指导老师最多 {MAX_ADVISORS_PER_GROUP} 位。")
+        raise GroupManagementError(
+            _("指导老师最多 %(max)s 位。") % {"max": MAX_ADVISORS_PER_GROUP}
+        )
     with transaction.atomic():
         group.college = college
         group.save(update_fields=["college", "updated_at"])

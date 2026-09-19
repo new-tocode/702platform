@@ -1,6 +1,7 @@
 {% extends "base.html" %}
+{% load i18n %}
 
-{% block title %}项目组 - 竞赛社团管理平台{% endblock %}
+{% block title %}{% translate "项目组" %} - {% translate "竞赛社团管理平台" %}{% endblock %}
 
 {% block content %}
 <div class="wrap">
@@ -12,14 +13,17 @@
         </div>
         <div class="head-row">
             <div>
-                <h1>项目组</h1>
-                <div class="sub">共 {{ group_rows|length }} 个项目组。组员只看得到自己的项目组，项目组联系人可管理自己的项目组。</div>
+                <h1>{% translate "项目组" %}</h1>
+                <div class="sub">
+                    {# 两句话合成一条：中文「。」与英文「. 」之间的空格没法靠拼接得到。 #}
+                    {% blocktranslate count counter=group_rows|length %}共 1 个项目组。组员只看得到自己的项目组，项目组联系人可管理自己的项目组。{% plural %}共 {{ counter }} 个项目组。组员只看得到自己的项目组，项目组联系人可管理自己的项目组。{% endblocktranslate %}
+                </div>
             </div>
             <div class="head-actions">
                 {% if my_create_request %}
-                    <a class="btn" href="{% url 'projects:group_create_request' %}">创建申请审核中</a>
+                    <a class="btn" href="{% url 'projects:group_create_request' %}">{% translate "创建申请审核中" %}</a>
                 {% else %}
-                    <a class="btn btn-primary" href="{% url 'projects:group_create_request' %}">申请创建项目组</a>
+                    <a class="btn btn-primary" href="{% url 'projects:group_create_request' %}">{% translate "申请创建项目组" %}</a>
                 {% endif %}
             </div>
         </div>
@@ -35,13 +39,13 @@
             </div>
             <div class="panel-body">
                 <dl class="dl">
-                    <div><dt>项目组联系人</dt><dd>{{ row.group.leader.profile.full_name|default:row.group.leader.username }}</dd></div>
-                    <div><dt>成员</dt><dd>{{ row.group.member_count }} 人</dd></div>
+                    <div><dt>{% translate "项目组联系人" %}</dt><dd>{{ row.group.leader.profile.full_name|default:row.group.leader.username }}</dd></div>
+                    <div><dt>{% translate "成员" %}</dt><dd>{% blocktranslate count counter=row.group.member_count %}1 人{% plural %}{{ counter }} 人{% endblocktranslate %}</dd></div>
                     {% if row.group.college %}
-                        <div><dt>学院</dt><dd>{{ row.group.college }}</dd></div>
+                        <div><dt>{% translate "学院" %}</dt><dd>{{ row.group.college }}</dd></div>
                     {% endif %}
                     {% if row.group.advisor_names %}
-                        <div><dt>指导老师</dt><dd>{{ row.group.advisor_names }}</dd></div>
+                        <div><dt>{% translate "指导老师" %}</dt><dd>{{ row.group.advisor_names }}</dd></div>
                     {% endif %}
                 </dl>
 
@@ -49,33 +53,33 @@
                     <div class="prose group-desc">{{ row.group.description|linebreaks }}</div>
                 {% endif %}
 
-                <h3 class="minor-head">成员名单</h3>
+                <h3 class="minor-head">{% translate "成员名单" %}</h3>
                 <p class="member-line">
                     {% for member in row.group.members.all %}
                         <span class="member">{{ member.profile.full_name|default:member.username }}</span>
                     {% empty %}
-                        <span class="muted">暂无成员</span>
+                        <span class="muted">{% translate "暂无成员" %}</span>
                     {% endfor %}
                 </p>
 
                 <div class="btn-row">
                     {% if row.can_view %}
-                        <a class="btn btn-sm" href="{% url 'projects:group_detail' row.group.pk %}">查看详情</a>
+                        <a class="btn btn-sm" href="{% url 'projects:group_detail' row.group.pk %}">{% translate "查看详情" %}</a>
                     {% endif %}
                     {% if row.can_manage %}
-                        <a class="btn btn-primary btn-sm" href="{% url 'projects:group_manage' row.group.pk %}">管理项目组</a>
+                        <a class="btn btn-primary btn-sm" href="{% url 'projects:group_manage' row.group.pk %}">{% translate "管理项目组" %}</a>
                     {% elif row.is_member %}
-                        <span class="chip chip-off">已加入</span>
+                        <span class="chip chip-off">{% translate "已加入" %}</span>
                     {% elif row.has_pending %}
-                        <span class="chip chip-warn">申请审核中</span>
+                        <span class="chip chip-warn">{% translate "申请审核中" %}</span>
                     {% else %}
-                        <a class="btn btn-primary btn-sm" href="{% url 'projects:group_apply' row.group.pk %}">申请加入</a>
+                        <a class="btn btn-primary btn-sm" href="{% url 'projects:group_apply' row.group.pk %}">{% translate "申请加入" %}</a>
                     {% endif %}
                 </div>
             </div>
         </div>
     {% empty %}
-        <div class="empty">暂时没有项目组。</div>
+        <div class="empty">{% translate "暂时没有项目组。" %}</div>
     {% endfor %}
 </div>
 {% endblock %}

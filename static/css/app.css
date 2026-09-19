@@ -138,6 +138,13 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 22px 0; }
   color: var(--ink-2); cursor: pointer; transition: color 0.15s;
 }
 .linkbtn:hover { color: var(--blue); }
+/* 语言切换：顶栏右端的细框小按钮，免得被当成又一个导航项 */
+.langbtn {
+  display: inline-block; font-family: var(--mono); font-size: 11px;
+  letter-spacing: 0.04em; line-height: 1.5; padding: 1px 7px;
+  border: 1px solid var(--line);
+}
+.langbtn:hover { border-color: var(--blue); }
 
 /* --- 页头 --- */
 .pagehead { padding: 34px 0 24px; }
@@ -570,7 +577,12 @@ td .empty, .panel-body.tight .empty {
   .foot .wrap { flex-direction: column; gap: 6px; }
 }
 @media (max-width: 560px) {
-  .topbar .wrap { gap: 14px; }
+  /* 窄屏：顶栏内容放不下时换行，而不是把整页撑出横向滚动条。
+     放得下时高度仍由 min-height 撑到 60px，与改造前一致；
+     英文标签比中文长，加上语言开关后更容易顶到边。 */
+  .topbar .wrap { gap: 10px; height: auto; min-height: 60px; flex-wrap: wrap; }
+  .topbar-end { gap: 12px; }
+  .langbtn { padding: 1px 5px; }
   .brand-code { display: none; }
   .head-row { align-items: flex-start; }
   .spec { grid-template-columns: 1fr 1fr; }

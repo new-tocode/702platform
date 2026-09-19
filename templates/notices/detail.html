@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% load rendering %}
+{% load i18n rendering %}
 
-{% block title %}{{ notice.title }} - 竞赛社团管理平台{% endblock %}
+{% block title %}{{ notice.title }} - {% translate "竞赛社团管理平台" %}{% endblock %}
 
 {% block content %}
 <div class="wrap">
@@ -15,9 +15,10 @@
             <div>
                 <h1>{{ notice.title }}</h1>
                 <div class="sub">
-                    {% if notice.is_pinned %}<span class="chip chip-pin">置顶通知</span> {% endif %}
-                    发布时间 {{ notice.published_at|date:"Y-m-d H:i" }} ·
-                    发布人 {{ notice.published_by.profile.full_name|default:notice.published_by.username }}
+                    {% if notice.is_pinned %}<span class="chip chip-pin">{% translate "置顶通知" %}</span> {% endif %}
+                    {% blocktranslate trimmed with published=notice.published_at|date:"Y-m-d H:i" publisher=notice.published_by.profile.full_name|default:notice.published_by.username %}
+                        发布时间 {{ published }} · 发布人 {{ publisher }}
+                    {% endblocktranslate %}
                 </div>
             </div>
         </div>

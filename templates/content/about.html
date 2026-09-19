@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% load rendering %}
+{% load i18n rendering %}
 
-{% block title %}{% if page %}{{ page.title }}{% else %}社团简介{% endif %} - 竞赛社团管理平台{% endblock %}
+{% block title %}{% if page %}{{ page.title }}{% else %}{% translate "社团简介" %}{% endif %} - {% translate "竞赛社团管理平台" %}{% endblock %}
 
 {% block content %}
 <div class="wrap">
@@ -9,12 +9,12 @@
         <div class="path">
             <a href="{% url 'accounts:home' %}">/</a>
             <span>/</span>
-            <span>社团简介</span>
+            <span>{% translate "社团简介" %}</span>
         </div>
         <div class="head-row">
             <div>
-                <h1>{% if page %}{{ page.title }}{% else %}社团简介{% endif %}</h1>
-                {% if page %}<div class="sub">更新于 {{ page.updated_at|date:"Y-m-d" }}</div>{% endif %}
+                <h1>{% if page %}{{ page.title }}{% else %}{% translate "社团简介" %}{% endif %}</h1>
+                {% if page %}<div class="sub">{% blocktranslate with updated=page.updated_at|date:"Y-m-d" %}更新于 {{ updated }}{% endblocktranslate %}</div>{% endif %}
             </div>
         </div>
     </div>
@@ -25,7 +25,7 @@
             {% include "includes/media.html" with media_files=page.attachments.all %}
         </div>
     {% else %}
-        <div class="empty">社团简介尚未发布，请等待管理员在后台添加。</div>
+        <div class="empty">{% translate "社团简介尚未发布，请等待管理员在后台添加。" %}</div>
     {% endif %}
 </div>
 {% endblock %}
