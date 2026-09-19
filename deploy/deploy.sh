@@ -51,9 +51,12 @@ git checkout "$TAG"
 echo "==> 3/5 安装/更新依赖"
 .venv/bin/python -m pip install --quiet -r requirements.txt -r requirements-prod.txt
 
-echo "==> 4/5 数据库迁移 + 静态文件"
+echo "==> 4/5 数据库迁移 + 静态文件 + 界面翻译"
 .venv/bin/python manage.py migrate --noinput
 .venv/bin/python manage.py collectstatic --noinput
+# 界面英文的 .mo 是构建产物（不进版本库）：按这个 tag 里的 .po 现编，线上就永远
+# 与 .po 一致。服务器缺 gettext 会在这里直接失败——比英文页面静默退回中文好。
+.venv/bin/python manage.py compilemessages -l en
 
 echo "==> 5/5 重启服务 + 健康检查"
 systemctl restart "$SERVICE_NAME"
