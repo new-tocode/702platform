@@ -16,12 +16,13 @@ from core.audit import record_audit
 
 from .forms import (
     ContactTransferForm,
+    GroupCreateRequestForm,
     GroupDescriptionForm,
     GroupInfoForm,
     GroupJoinRequestForm,
     GroupProposalForm,
 )
-from .models import GroupJoinRequest, ProjectGroup
+from .models import GroupCreateRequest, GroupJoinRequest, ProjectGroup
 from .permissions import (
     can_manage_group,
     can_view_group,
@@ -30,10 +31,14 @@ from .permissions import (
     member_group_ids,
 )
 from .services import (
+    GroupCreateRequestError,
     GroupManagementError,
     JoinRequestError,
+    apply_to_create_group,
     apply_to_group,
+    approve_create_request,
     approve_join_request,
+    reject_create_request,
     reject_join_request,
     remove_group_member,
     transfer_contact,
@@ -100,13 +105,34 @@ def group_list(request):
                 "status_tone": latest.status_tone if latest else "",
             }
         )
+    # 申请人自己看得到那条待审申请的状态；管理员看到的是所有人的待审申请。
+    my_create_request = GroupCreateRequest.objects.filter(
+        applicant=request.user,
+        status=GroupCreateRequest.PENDING,
+    ).first()
+    create_requests = ()
+    if request.user.is_staff:
+        create_requests = list(
+            GroupCreateRequest.objects.filter(status=GroupCreateRequest.PENDING)
+            .select_related("applicant__profile")
+            .order_by("created_at", "id")
+        )
     logger.info(
-        "project_group.list.view count=%s user=%s",
+        "project_group.list.view count=%s create_requests=%s user=%s",
         len(group_rows),
+        len(create_requests),
         request.user.get_username(),
         extra={"request_id": getattr(request, "request_id", "-")},
     )
-    return render(request, "projects/group_list.html", {"group_rows": group_rows})
+    return render(
+        request,
+        "projects/group_list.html",
+        {
+            "group_rows": group_rows,
+            "create_requests": create_requests,
+            "my_create_request": my_create_request,
+        },
+    )
 
 
 @login_required
@@ -255,6 +281,79 @@ def group_apply(request, pk):
         "projects/group_apply.html",
         {"group": group, "form": form},
     )
+
+
+@login_required
+def group_create_request(request):
+    """Any logged-in member — whatever their role — may apply to found a group."""
+    pending_request = GroupCreateRequest.objects.filter(
+        applicant=request.user,
+        status=GroupCreateRequest.PENDING,
+    ).first()
+    # 已有一条待审申请时用它的内容作初值：再进来是改，不是从头再填一遍。
+    form = GroupCreateRequestForm(request.POST or None, instance=pending_request)
+    if request.method == "POST" and form.is_valid():
+        try:
+            apply_to_create_group(
+                applicant=request.user,
+                name=form.cleaned_data["name"],
+                description=form.cleaned_data["description"],
+                college=form.cleaned_data["college"],
+                advisor_names=form.advisor_names(),
+                request=request,
+            )
+        except GroupCreateRequestError as exc:
+            messages.error(request, str(exc))
+        else:
+            messages.success(
+                request,
+                "已提交创建项目组的申请，等待管理员审核；"
+                "任一管理员同意后项目组即刻建立，你成为项目组联系人。",
+            )
+        return redirect("projects:group_list")
+    return render(
+        request,
+        "projects/group_create_request.html",
+        {"form": form, "pending_request": pending_request},
+    )
+
+
+@login_required
+@require_POST
+def group_create_decide(request, req_pk, action):
+    """Settle a creation request; the first administrator to act decides it."""
+    if not request.user.is_staff:
+        logger.warning(
+            "project_group.create.decide.denied username=%s create_request_id=%s",
+            request.user.get_username(),
+            req_pk,
+            extra={"request_id": getattr(request, "request_id", "-")},
+        )
+        raise PermissionDenied
+    create_request = get_object_or_404(GroupCreateRequest, pk=req_pk)
+    try:
+        if action == "approve":
+            approved = approve_create_request(
+                create_request=create_request,
+                actor=request.user,
+                request=request,
+            )
+            messages.success(
+                request,
+                f"已通过创建申请，项目组「{approved.name}」已建立并出现在项目组列表中。",
+            )
+        elif action == "reject":
+            rejected = reject_create_request(
+                create_request=create_request,
+                actor=request.user,
+                request=request,
+            )
+            messages.success(request, f"已拒绝创建「{rejected.name}」的申请。")
+        else:
+            raise Http404("未知操作")
+    except GroupCreateRequestError as exc:
+        messages.error(request, str(exc))
+    return redirect("projects:group_list")
 
 
 @login_required
