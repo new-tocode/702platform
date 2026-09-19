@@ -97,6 +97,7 @@ need_cmd systemctl      "systemd 未启用，本部署依赖 systemd"
 need_cmd nginx          "如 Ubuntu: sudo apt install nginx"
 need_cmd psql           "PostgreSQL 客户端，如 Ubuntu: sudo apt install postgresql-client"
 need_cmd pg_isready     "PostgreSQL 客户端工具，如 Ubuntu: sudo apt install postgresql-client"
+need_cmd msgfmt         "界面英文翻译的编译工具（gettext 包），如 Ubuntu: sudo apt install gettext"
 need_cmd sudo           "本脚本需要 sudo 权限"
 
 # PostgreSQL 服务本身
@@ -232,10 +233,15 @@ case "$SUPER_OUTPUT" in
       ;;
 esac
 
-# ---------- 7. collectstatic ----------
+# ---------- 7. staticfiles 与界面翻译 ----------
 info "收集静态文件"
 run_as_app .venv/bin/python manage.py collectstatic --noinput >/dev/null
 ok "静态文件已收集到 staticfiles/"
+
+# 界面英文的 .mo 由 .po 现编（不进版本库），缺 msgfmt 在依赖检测那一步就中止了
+info "编译界面翻译（英文）"
+run_as_app .venv/bin/python manage.py compilemessages -l en
+ok "界面翻译已编译"
 
 # 备份目录（club702-backup.service 的 ReadWritePaths 依赖它存在，缺失会导致服务 226/NAMESPACE 启动失败）
 info "确保备份目录存在"

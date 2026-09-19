@@ -45,7 +45,7 @@ export DJANGO_ALLOWED_HOSTS='服务器IP'
 
 ```bash
 sudo apt update
-sudo apt install nginx postgresql python3 python3-venv python3-pip git
+sudo apt install nginx postgresql python3 python3-venv python3-pip git gettext
 sudo useradd -m -s /bin/bash club      # 运行应用与备份的系统用户，脚本要求它真实存在
 ```
 
@@ -90,7 +90,7 @@ cd /opt/702platform
 sudo ./deploy/install.sh
 ```
 
-脚本会：校验无残留占位符 → 检测依赖（python/venv/各 Python 包/systemd/Nginx/PostgreSQL/备份日历表达式/部署用户，缺项则打印补法并中止）→ 幂等建角色与库 → `migrate` + `collectstatic` → 幂等建超管 → 注册并启动 `club702.service` 与 `club702-backup.{service,timer}` → 生成 Nginx 站点并 `nginx -t` + reload → 健康检查。
+脚本会：校验无残留占位符 → 检测依赖（python/venv/各 Python 包/systemd/Nginx/PostgreSQL/gettext/备份日历表达式/部署用户，缺项则打印补法并中止）→ 幂等建角色与库 → `migrate` + `collectstatic` + `compilemessages` → 幂等建超管 → 注册并启动 `club702.service` 与 `club702-backup.{service,timer}` → 生成 Nginx 站点并 `nginx -t` + reload → 健康检查。
 
 > 常见疑问：脚本不会自己下载安装；占位符没替换会逐个列出并中止；重复运行安全（建库/建超管幂等）；备份 timer 依赖本机 `pg_dump` 与媒体目录，单机形态下就在本机。
 
@@ -129,7 +129,7 @@ cd /opt/702platform
 sudo -u club bash -c './deploy/deploy.sh v1.0.1'   # club = DEPLOY_SYSTEM_USER
 ```
 
-`deploy.sh` 自动：备份库与媒体（保留 RETAIN 份）→ checkout tag → 升级依赖 → `migrate` + `collectstatic` → 重启 → 健康检查。任何一步失败即中止。版本号命名 `v主.次.修订`（修订=修复，次=新功能，主=不兼容）。
+`deploy.sh` 自动：备份库与媒体（保留 RETAIN 份）→ checkout tag → 升级依赖 → `migrate` + `collectstatic` + `compilemessages` → 重启 → 健康检查。任何一步失败即中止。版本号命名 `v主.次.修订`（修订=修复，次=新功能，主=不兼容）。
 
 ### 回滚
 
@@ -196,6 +196,7 @@ tar -xzf backups/media-XXXX.tar.gz -C /opt/702platform
 | `DEBUG=0` 时页面无样式 | 忘记 `collectstatic`，或 Nginx 未映射 `/static/` |
 | `DEBUG=0` 报 `Missing staticfiles manifest entry` | 生产启用了静态指纹，`collectstatic` 是硬要求；补跑 `collectstatic` 后重启 |
 | `DEBUG=0` 时 `/media/` 404 | Nginx 未映射 `/media/` |
+| 英文页面显示中文 | 界面英文的 `.mo` 未编译：服务器缺 `gettext`（`sudo apt install gettext`），或部署时跳过了 `compilemessages` |
 | 上传视频 413 | Nginx `client_max_body_size` 太小（模板已设 520m） |
 | `no such table` | 未 `migrate`，或数据库连接参数（`DJANGO_DB_NAME`/账号）有误 |
 | 看不到内部通知 | 成员未完成首次改密，或不属于通知绑定的用户组 |
