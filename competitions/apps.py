@@ -1,6 +1,7 @@
 """Register the competition manager operation entry."""
 
 from django.apps import AppConfig
+from django.utils.translation import gettext_lazy as _
 
 
 class CompetitionsConfig(AppConfig):
@@ -13,8 +14,8 @@ class CompetitionsConfig(AppConfig):
 
         register_entry(
             key="competitions.registration",
-            label="竞赛信息",
-            description="查看竞赛信息；项目组联系人可为项目组报名",
+            label=_("竞赛信息"),
+            description=_("查看竞赛信息；项目组联系人可为项目组报名"),
             url_name="competitions:list",
             sort_order=50,
         )

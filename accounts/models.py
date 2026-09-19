@@ -2,6 +2,7 @@
 
 from django.contrib.auth.models import AbstractUser, UserManager as DjangoUserManager
 from django.db import models
+from django.utils.translation import gettext_lazy as _
 
 
 class UserManager(DjangoUserManager):
@@ -65,24 +66,24 @@ class Profile(models.Model):
         related_name="profile",
         verbose_name="用户",
     )
-    full_name = models.CharField("姓名", max_length=128, blank=True)
+    full_name = models.CharField(_("姓名"), max_length=128, blank=True)
     student_id = models.CharField(
-        "学号",
+        _("学号"),
         max_length=64,
         unique=True,
         blank=True,
         null=True,
     )
-    college = models.CharField("学院", max_length=128, blank=True)
-    major = models.CharField("专业", max_length=128, blank=True)
+    college = models.CharField(_("学院"), max_length=128, blank=True)
+    major = models.CharField(_("专业"), max_length=128, blank=True)
     specialty = models.CharField(
-        "特长",
+        _("特长"),
         max_length=255,
         blank=True,
-        help_text="可填写多项，用顿号或逗号分隔。",
+        help_text=_("可填写多项，用顿号或逗号分隔。"),
     )
-    phone = models.CharField("手机号", max_length=32, blank=True)
-    contact = models.CharField("其他联系方式", max_length=255, blank=True)
+    phone = models.CharField(_("手机号"), max_length=32, blank=True)
+    contact = models.CharField(_("其他联系方式"), max_length=255, blank=True)
     created_at = models.DateTimeField("创建时间", auto_now_add=True)
     updated_at = models.DateTimeField("更新时间", auto_now=True)
 

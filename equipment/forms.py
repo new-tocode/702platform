@@ -2,13 +2,14 @@
 
 from django import forms
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 
 from .models import Equipment, EquipmentBorrow
 
 
 class EquipmentBorrowForm(forms.Form):
     planned_return_date = forms.DateField(
-        label="计划归还日期",
+        label=_("计划归还日期"),
         input_formats=["%Y-%m-%d"],
         widget=forms.DateInput(
             format="%Y-%m-%d",
@@ -16,7 +17,7 @@ class EquipmentBorrowForm(forms.Form):
         ),
     )
     remark = forms.CharField(
-        label="备注",
+        label=_("备注"),
         required=False,
         widget=forms.Textarea(attrs={"rows": 4}),
     )
@@ -28,7 +29,7 @@ class EquipmentBorrowForm(forms.Form):
     def clean_planned_return_date(self):
         planned_return_date = self.cleaned_data["planned_return_date"]
         if planned_return_date < timezone.localdate():
-            raise forms.ValidationError("计划归还日期不能早于今天。")
+            raise forms.ValidationError(_("计划归还日期不能早于今天。"))
         return planned_return_date
 
 

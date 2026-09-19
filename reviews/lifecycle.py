@@ -14,6 +14,7 @@
 from typing import NamedTuple
 
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 
 
 # --- 轮次状态 ---------------------------------------------------------------
@@ -24,10 +25,10 @@ APPROVED = "approved"
 NEEDS_REVISION = "needs_revision"
 
 STATUS_CHOICES = (
-    (PRELIMINARY_PENDING, "初审中"),
-    (PENDING, "评审中"),
-    (APPROVED, "已通过"),
-    (NEEDS_REVISION, "需修改"),
+    (PRELIMINARY_PENDING, _("初审中")),
+    (PENDING, _("评审中")),
+    (APPROVED, _("已通过")),
+    (NEEDS_REVISION, _("需修改")),
 )
 
 #: 尚未出结论的两个状态。「本轮还在进行吗」一律问它，不要比单一取值。
@@ -48,7 +49,7 @@ STATUS_TONES = {
 
 STAGE_PRELIMINARY = "preliminary"
 STAGE_REVIEW = "review"
-STAGE_CHOICES = ((STAGE_PRELIMINARY, "初审"), (STAGE_REVIEW, "评审"))
+STAGE_CHOICES = ((STAGE_PRELIMINARY, _("初审")), (STAGE_REVIEW, _("评审")))
 
 TASK_PENDING = "pending"
 TASK_COMPLETED = "completed"
@@ -58,23 +59,23 @@ TASK_RELEASED = "released"
 #: 每一道关自己的叫法（待初审／待评审……）由 ReviewTask.status_label 按
 #: ``(stage, status)`` 取。
 TASK_STATUS_CHOICES = (
-    (TASK_PENDING, "待处理"),
-    (TASK_COMPLETED, "已完成"),
-    (TASK_RELEASED, "已释放"),
+    (TASK_PENDING, _("待处理")),
+    (TASK_COMPLETED, _("已完成")),
+    (TASK_RELEASED, _("已释放")),
 )
 
 TASK_STATUS_LABELS = {
-    (STAGE_PRELIMINARY, TASK_PENDING): "待初审",
-    (STAGE_PRELIMINARY, TASK_COMPLETED): "已初审",
-    (STAGE_PRELIMINARY, TASK_RELEASED): "已释放",
-    (STAGE_REVIEW, TASK_PENDING): "待评审",
-    (STAGE_REVIEW, TASK_COMPLETED): "已完成",
-    (STAGE_REVIEW, TASK_RELEASED): "已释放",
+    (STAGE_PRELIMINARY, TASK_PENDING): _("待初审"),
+    (STAGE_PRELIMINARY, TASK_COMPLETED): _("已初审"),
+    (STAGE_PRELIMINARY, TASK_RELEASED): _("已释放"),
+    (STAGE_REVIEW, TASK_PENDING): _("待评审"),
+    (STAGE_REVIEW, TASK_COMPLETED): _("已完成"),
+    (STAGE_REVIEW, TASK_RELEASED): _("已释放"),
 }
 
 DECISION_APPROVE = "approve"
 DECISION_REVISE = "revise"
-DECISION_CHOICES = ((DECISION_APPROVE, "通过"), (DECISION_REVISE, "需修改"))
+DECISION_CHOICES = ((DECISION_APPROVE, _("通过")), (DECISION_REVISE, _("需修改")))
 
 
 class StageRules(NamedTuple):
@@ -98,28 +99,28 @@ class StageRules(NamedTuple):
 
 STAGES = {
     STAGE_PRELIMINARY: StageRules(
-        label="初审",
-        holder_label="初审人",
+        label=_("初审"),
+        holder_label=_("初审人"),
         qualification="is_preliminary_reviewer",
         open_status=PRELIMINARY_PENDING,
         submit_action="reviews.preliminary.complete",
         reassign_action="reviews.preliminary.reassign",
-        closed_refusal="该轮送审已不在初审环节。",
-        swap_not_pending="只有待初审的任务可以更换初审人。",
-        swap_phase="该轮送审已不在初审环节，不能再更换初审人。",
-        swap_holds="该初审人已在本轮任务中。",
+        closed_refusal=_("该轮送审已不在初审环节。"),
+        swap_not_pending=_("只有待初审的任务可以更换初审人。"),
+        swap_phase=_("该轮送审已不在初审环节，不能再更换初审人。"),
+        swap_holds=_("该初审人已在本轮任务中。"),
     ),
     STAGE_REVIEW: StageRules(
-        label="评审",
-        holder_label="评审人",
+        label=_("评审"),
+        holder_label=_("评审人"),
         qualification="is_reviewer",
         open_status=PENDING,
         submit_action="reviews.assignment.complete",
         reassign_action="reviews.assignment.reassign",
-        closed_refusal="该轮送审已不在评审环节。",
-        swap_not_pending="只有待评审的任务可以更换评审人。",
-        swap_phase="该轮送审已给出结论，不能再更换评审人。",
-        swap_holds="该评审人已在本轮评审任务中。",
+        closed_refusal=_("该轮送审已不在评审环节。"),
+        swap_not_pending=_("只有待评审的任务可以更换评审人。"),
+        swap_phase=_("该轮送审已给出结论，不能再更换评审人。"),
+        swap_holds=_("该评审人已在本轮评审任务中。"),
     ),
 }
 
@@ -162,36 +163,36 @@ TRANSITIONS = {
     PRELIMINARY_APPROVED: Transition(
         PENDING,
         (PRELIMINARY_PENDING,),
-        "该轮送审已不在初审环节。",
+        _("该轮送审已不在初审环节。"),
     ),
     PRELIMINARY_REVISED: Transition(
         NEEDS_REVISION,
         (PRELIMINARY_PENDING,),
-        "该轮送审已不在初审环节。",
+        _("该轮送审已不在初审环节。"),
         stamps_decided_at=True,
     ),
     REVIEWS_APPROVED: Transition(
         APPROVED,
         (PENDING,),
-        "该轮送审已不在评审环节。",
+        _("该轮送审已不在评审环节。"),
         stamps_decided_at=True,
     ),
     REVIEWS_REVISED: Transition(
         NEEDS_REVISION,
         (PENDING,),
-        "该轮送审已不在评审环节。",
+        _("该轮送审已不在评审环节。"),
         stamps_decided_at=True,
     ),
     OVERRIDE_APPROVED: Transition(
         APPROVED,
         OPEN_STATUSES,
-        "本轮已经出过结论",
+        _("本轮已经出过结论"),
         stamps_decided_at=True,
     ),
     OVERRIDE_REVISED: Transition(
         NEEDS_REVISION,
         OPEN_STATUSES,
-        "本轮已经出过结论",
+        _("本轮已经出过结论"),
         stamps_decided_at=True,
     ),
 }

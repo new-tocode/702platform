@@ -1,6 +1,7 @@
 {% extends "base.html" %}
+{% load i18n %}
 
-{% block title %}设备借用 - 竞赛社团管理平台{% endblock %}
+{% block title %}{% translate "设备借用" %} - {% translate "竞赛社团管理平台" %}{% endblock %}
 
 {% block content %}
 <div class="wrap">
@@ -12,8 +13,8 @@
         </div>
         <div class="head-row">
             <div>
-                <h1>设备借用</h1>
-                <div class="sub">项目组成员可登记借用；库存以登记时的可用数量为准。</div>
+                <h1>{% translate "设备借用" %}</h1>
+                <div class="sub">{% translate "项目组成员可登记借用；库存以登记时的可用数量为准。" %}</div>
             </div>
         </div>
     </div>
@@ -23,10 +24,10 @@
             <table>
                 <thead>
                     <tr>
-                        <th>设备</th>
-                        <th>分类</th>
-                        <th class="num right">可借 / 总数</th>
-                        <th class="right">操作</th>
+                        <th>{% translate "设备" %}</th>
+                        <th>{% translate "分类" %}</th>
+                        <th class="num right">{% translate "可借 / 总数" %}</th>
+                        <th class="right">{% translate "操作" %}</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -40,9 +41,9 @@
                             <td class="num right">{{ item.available_count }} / {{ item.total_count }}</td>
                             <td class="right">
                                 {% if item.available_count > 0 %}
-                                    <a class="btn btn-primary btn-sm" href="{% url 'equipment:borrow' item.pk %}">登记借用</a>
+                                    <a class="btn btn-primary btn-sm" href="{% url 'equipment:borrow' item.pk %}">{% translate "登记借用" %}</a>
                                 {% else %}
-                                    <span class="muted">当前没有可借数量</span>
+                                    <span class="muted">{% translate "当前没有可借数量" %}</span>
                                 {% endif %}
                             </td>
                         </tr>
@@ -51,7 +52,7 @@
             </table>
         </div>
     {% else %}
-        <div class="empty">暂时没有可用设备。</div>
+        <div class="empty">{% translate "暂时没有可用设备。" %}</div>
     {% endif %}
 </div>
 {% endblock %}

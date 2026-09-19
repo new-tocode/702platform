@@ -21,6 +21,7 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import Count
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _, ngettext
 
 from core.audit import record_audit
 from projects.models import ProjectGroup
@@ -127,9 +128,15 @@ def _ensure_pool(*, candidates, count, label, qualification, hint):
         pk__in=ReviewerLeave.objects.active().values_list("reviewer_id", flat=True),
         **qualification,
     ).count()
-    leave_note = f"（另有 {on_leave} 人请假）" if on_leave else ""
-    shortfall = f"没有可用的{label}" if count == 1 else f"可用的{label}不足 {count} 人"
-    raise ReviewError(f"当前{shortfall}{leave_note}，{hint}")
+    leave_note = _("（另有 %(count)s 人请假）") % {"count": on_leave} if on_leave else ""
+    if count == 1:
+        shortfall = _("没有可用的%(role)s") % {"role": label}
+    else:
+        shortfall = _("可用的%(role)s不足 %(count)s 人") % {"role": label, "count": count}
+    raise ReviewError(
+        _("当前%(shortfall)s%(leave)s，%(hint)s")
+        % {"shortfall": shortfall, "leave": leave_note, "hint": hint}
+    )
 
 
 def _draw(*, candidates, count, label, qualification, hint):
@@ -146,7 +153,9 @@ def _draw(*, candidates, count, label, qualification, hint):
     )
 
 
-def _draw_tasks(*, stage, group, submitter, count, submission=None, hint="无法提交审核。"):
+def _draw_tasks(
+    *, stage, group, submitter, count, submission=None, hint=_("无法提交审核。")
+):
     """从这一道关的候选里随机抽 ``count`` 个人。"""
     return _draw(
         candidates=eligible_holders(
@@ -174,9 +183,9 @@ def submit_for_review(*, group, submitter, review_type, message="", request=None
     reviewer's override as the only way out.
     """
     if review_type not in REVIEWER_QUOTA:
-        raise ReviewError("请选择评审类型。")
+        raise ReviewError(_("请选择评审类型。"))
     if not group.proposal:
-        raise ReviewError("请先上传项目书，再提交审核。")
+        raise ReviewError(_("请先上传项目书，再提交审核。"))
 
     with transaction.atomic():
         # Lock the group: without it, two submissions for the same group could
@@ -190,8 +199,8 @@ def submit_for_review(*, group, submitter, review_type, message="", request=None
         )
         if open_round is not None:
             raise ReviewError(
-                f"第 {open_round.round} 轮评审尚未结束，"
-                "请等本轮出结论后再提交下一轮。"
+                _("第 %(round)s 轮评审尚未结束，请等本轮出结论后再提交下一轮。")
+                % {"round": open_round.round}
             )
 
         preliminary_reviewer = _draw_tasks(
@@ -210,7 +219,7 @@ def submit_for_review(*, group, submitter, review_type, message="", request=None
             count=REVIEWER_QUOTA[review_type],
             label=lifecycle.STAGES[lifecycle.STAGE_REVIEW].holder_label,
             qualification=_qualification(lifecycle.STAGE_REVIEW),
-            hint="无法提交审核。",
+            hint=_("无法提交审核。"),
         )
         last = group.submissions.order_by("-round").first()
         round_number = (last.round + 1) if last else 1
@@ -339,9 +348,9 @@ def submit_verdict(
     stage = task.stage
     rules = lifecycle.STAGES[stage]
     if task.reviewer_id != reviewer.pk:
-        raise ReviewError(f"这不是分配给你的{rules.label}任务。")
+        raise ReviewError(_("这不是分配给你的%(stage)s任务。") % {"stage": rules.label})
     if decision not in dict(ReviewTask.DECISION_CHOICES):
-        raise ReviewError(f"请选择{rules.label}决定。")
+        raise ReviewError(_("请选择%(stage)s决定。") % {"stage": rules.label})
 
     with transaction.atomic():
         # Lock the parent row first. The aggregation in _settle_submission reads
@@ -362,7 +371,9 @@ def submit_verdict(
         # Without this guard a released task could be revived into the record
         # after the round was decided.
         if locked.status != ReviewTask.PENDING:
-            raise ReviewError(f"该{rules.label}任务已经处理过了，无法再次提交。")
+            raise ReviewError(
+                _("该%(stage)s任务已经处理过了，无法再次提交。") % {"stage": rules.label}
+            )
         # 轮次必须还停在这道关上，否则这一票会写进一条已经走过的轮次。
         reason = lifecycle.open_stage_refusal(submission, stage)
         if reason:
@@ -431,7 +442,7 @@ def _open_review_stage(submission):
         submitter=submission.submitted_by,
         count=submission.required_reviewers,
         submission=submission,
-        hint="无法通过初审，请稍后重试或联系管理员补充评审人。",
+        hint=_("无法通过初审，请稍后重试或联系管理员补充评审人。"),
     )
     for reviewer_user in reviewers:
         ReviewTask.objects.create(
@@ -456,21 +467,21 @@ def override_blocker(*, submission, user):
     that is how a round whose 初审人 went quiet is settled without waiting.
     """
     if not is_super_reviewer(user):
-        return "没有超级评审资格"
+        return _("没有超级评审资格")
     if submission is None or not submission.is_open:
-        return "本轮已经出过结论"
+        return _("本轮已经出过结论")
     if user.pk == submission.submitted_by_id:
-        return "你是本轮的提交人"
+        return _("你是本轮的提交人")
     if submission.group.members.filter(pk=user.pk).exists():
-        return "你是本项目组成员"
+        return _("你是本项目组成员")
     preliminary = preliminary_task_of(submission)
     if preliminary is not None and preliminary.reviewer_id == user.pk:
         if preliminary.status == ReviewTask.PENDING:
             label = lifecycle.STAGES[lifecycle.STAGE_PRELIMINARY].label
-            return f"你在本轮已有{label}任务，请直接提交那一条"
-        return "你是本轮的初审人，已经就该轮给出初审意见"
+            return _("你在本轮已有%(stage)s任务，请直接提交那一条") % {"stage": label}
+        return _("你是本轮的初审人，已经就该轮给出初审意见")
     if submission.tasks.filter(reviewer=user).exists():
-        return "你在本轮已有评审任务，请直接提交那一条"
+        return _("你在本轮已有评审任务，请直接提交那一条")
     return None
 
 
@@ -497,13 +508,13 @@ def override_review(
     the reviewers still waiting are released.
     """
     if decision not in dict(ReviewTask.DECISION_CHOICES):
-        raise ReviewError("请选择评审决定。")
+        raise ReviewError(_("请选择评审决定。"))
 
     with transaction.atomic():
         locked = ProjectSubmission.objects.select_for_update().get(pk=submission.pk)
         blocker = override_blocker(submission=locked, user=super_reviewer)
         if blocker:
-            raise ReviewError(f"无法行使超级评审权：{blocker}。")
+            raise ReviewError(_("无法行使超级评审权：%(reason)s。") % {"reason": blocker})
 
         now = timezone.now()
         ReviewTask.objects.create(
@@ -587,13 +598,13 @@ def reassign_task(*, task, new_reviewer, actor, request=None):
         if not lifecycle.stage_is_open(submission, locked.stage):
             raise ReviewError(rules.swap_phase)
         if locked.reviewer_id == new_reviewer.pk:
-            raise ReviewError(f"{rules.holder_label}没有变化。")
+            raise ReviewError(_("%(role)s没有变化。") % {"role": rules.holder_label})
         # The admin form limits the choices already; these checks are what make
         # the rule hold for any other caller too.
         if new_reviewer.pk == submission.submitted_by_id:
-            raise ReviewError(f"提交人不能{rules.label}自己的项目书。")
+            raise ReviewError(_("提交人不能%(stage)s自己的项目书。") % {"stage": rules.label})
         if submission.group.members.filter(pk=new_reviewer.pk).exists():
-            raise ReviewError(f"该项目组成员不能{rules.label}本组的项目书。")
+            raise ReviewError(_("该项目组成员不能%(stage)s本组的项目书。") % {"stage": rules.label})
         # 一人一轮一席：他要是已经持有本轮的（任何一条）任务，换过去就破了这条
         # 不变式——同一条检查对两道关都成立，文案取自 StageRules。
         if (
@@ -609,8 +620,8 @@ def reassign_task(*, task, new_reviewer, actor, request=None):
             submission=submission,
         ).filter(pk=new_reviewer.pk).exists():
             raise ReviewError(
-                f"该账号当前不能接手本轮的{rules.label}"
-                "（可能没有资格、正在请假，或已在本轮持有任务）。"
+                _("该账号当前不能接手本轮的%(stage)s（可能没有资格、正在请假，或已在本轮持有任务）。")
+                % {"stage": rules.label}
             )
 
         previous_reviewer_id = locked.reviewer_id
@@ -661,23 +672,34 @@ class PendingTasks(NamedTuple):
     def parts(self):
         """登录提醒用：``["2 份项目书待初审", "1 份项目书待评审"]``。"""
         parts = []
+        # 中文单复数同形，所以单数那一半直接写死 1（数量在句首，中文读起来一样）；
+        # 英文才分得清 1 proposal / 2 proposals。
         if self.preliminary:
-            parts.append(f"{self.preliminary} 份项目书待初审")
+            parts.append(
+                ngettext("1 份项目书待初审", "%(count)s 份项目书待初审", self.preliminary)
+                % {"count": self.preliminary}
+            )
         if self.review:
-            parts.append(f"{self.review} 份项目书待评审")
+            parts.append(
+                ngettext("1 份项目书待评审", "%(count)s 份项目书待评审", self.review)
+                % {"count": self.review}
+            )
         return parts
 
     @property
     def headline(self):
         """成员中心卡片用；数字由模板单独渲染，这里只给后面那半句。"""
         if self.preliminary and self.review:
-            return (
-                f"份项目书待你处理（初审 {self.preliminary} · 评审 {self.review}）"
-            )
+            return _("份项目书待你处理（初审 %(preliminary)s · 评审 %(review)s）") % {
+                "preliminary": self.preliminary,
+                "review": self.review,
+            }
         if self.preliminary:
-            return "份项目书待你初审"
+            # 数字由模板单独渲染（<span class="n">），句子这边不带数量，英文因此
+            # 没法按单复数变形——译文才用不带名词的写法，中文一字未动。
+            return _("份项目书待你初审")
         if self.review:
-            return "份项目书待你评审"
+            return _("份项目书待你评审")
         return ""
 
 
@@ -718,11 +740,11 @@ def set_reviewer_leave(*, reviewer, starts_at, ends_at, reason="", actor, reques
     administrator moves the recovery time earlier or later.
     """
     if not may_receive_tasks(reviewer):
-        raise ReviewError("该账号没有评审或初审资格，无需请假。")
+        raise ReviewError(_("该账号没有评审或初审资格，无需请假。"))
     if ends_at <= starts_at:
-        raise ReviewError("请假结束时间必须晚于开始时间。")
+        raise ReviewError(_("请假结束时间必须晚于开始时间。"))
     if ends_at <= timezone.now():
-        raise ReviewError("请假结束时间必须晚于当前时间。")
+        raise ReviewError(_("请假结束时间必须晚于当前时间。"))
 
     with transaction.atomic():
         leave = (
@@ -779,7 +801,7 @@ def clear_reviewer_leave(*, reviewer, actor, request=None):
             open_leaves.delete()
 
     if not removed:
-        raise ReviewError("当前没有可取消的请假。")
+        raise ReviewError(_("当前没有可取消的请假。"))
 
     record_audit(
         action="reviews.leave.clear",

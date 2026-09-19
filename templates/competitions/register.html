@@ -1,6 +1,7 @@
 {% extends "base.html" %}
+{% load i18n %}
 
-{% block title %}{{ competition.title }}{% if is_edit %}修改报名{% else %}报名{% endif %} - 竞赛社团管理平台{% endblock %}
+{% block title %}{{ competition.title }}{% if is_edit %}{% translate "修改报名" %}{% else %}{% translate "报名" %}{% endif %} - {% translate "竞赛社团管理平台" %}{% endblock %}
 
 {% block content %}
 <div class="wrap">
@@ -14,8 +15,8 @@
             <div>
                 <h1>{{ competition.title }}</h1>
                 <div class="sub">
-                    报名截止 {{ competition.deadline|date:"Y-m-d H:i" }}
-                    {% if competition.team_size %} · 人数要求 {{ competition.team_size }}{% endif %}
+                    {% blocktranslate with deadline=competition.deadline|date:"Y-m-d H:i" %}报名截止 {{ deadline }}{% endblocktranslate %}
+                    {% if competition.team_size %} · {% blocktranslate with size=competition.team_size %}人数要求 {{ size }}{% endblocktranslate %}{% endif %}
                 </div>
             </div>
         </div>
@@ -27,7 +28,7 @@
                 <div class="prose">{{ competition.description|linebreaks }}</div>
             {% endif %}
 
-            <h2 class="form-heading">{% if is_edit %}修改报名{% else %}登记报名{% endif %}</h2>
+            <h2 class="form-heading">{% if is_edit %}{% translate "修改报名" %}{% else %}{% translate "登记报名" %}{% endif %}</h2>
             <form method="post">
                 {% csrf_token %}
                 {{ form.non_field_errors }}
@@ -59,21 +60,21 @@
                 </div>
 
                 <div class="form-actions">
-                    <button class="btn btn-primary" type="submit">{% if is_edit %}保存修改{% else %}提交报名登记{% endif %}</button>
-                    <a class="btn" href="{% url 'competitions:list' %}">返回竞赛列表</a>
+                    <button class="btn btn-primary" type="submit">{% if is_edit %}{% translate "保存修改" %}{% else %}{% translate "提交报名登记" %}{% endif %}</button>
+                    <a class="btn" href="{% url 'competitions:list' %}">{% translate "返回竞赛列表" %}</a>
                 </div>
             </form>
         </div>
 
         <div class="panel reveal">
-            <div class="panel-head"><h2>填报说明</h2></div>
+            <div class="panel-head"><h2>{% translate "填报说明" %}</h2></div>
             <div class="panel-body">
                 <dl class="dl">
-                    <div><dt>可选参赛成员</dt><dd>所选项目组的成员</dd></div>
-                    <div><dt>竞赛组长</dt><dd>须在参赛成员内</dd></div>
-                    <div><dt>报名范围</dt><dd>仅限自己的项目组</dd></div>
+                    <div><dt>{% translate "可选参赛成员" %}</dt><dd>{% translate "所选项目组的成员" %}</dd></div>
+                    <div><dt>{% translate "竞赛组长" %}</dt><dd>{% translate "须在参赛成员内" %}</dd></div>
+                    <div><dt>{% translate "报名范围" %}</dt><dd>{% translate "仅限自己的项目组" %}</dd></div>
                 </dl>
-                <p class="help">切换项目组后，参赛成员与竞赛组长候选会自动过滤为该组成员。</p>
+                <p class="help">{% translate "切换项目组后，参赛成员与竞赛组长候选会自动过滤为该组成员。" %}</p>
             </div>
         </div>
     </div>

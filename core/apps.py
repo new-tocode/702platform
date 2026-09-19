@@ -1,4 +1,5 @@
 from django.apps import AppConfig
+from django.utils.translation import gettext_lazy as _
 
 
 class CoreConfig(AppConfig):
@@ -11,8 +12,8 @@ class CoreConfig(AppConfig):
 
         register_entry(
             key="core.audit",
-            label="审计日志",
-            description="查看平台关键操作记录",
+            label=_("审计日志"),
+            description=_("查看平台关键操作记录"),
             url_name="admin:core_auditlog_changelist",
             required_permission="core.view_auditlog",
             staff_only=True,

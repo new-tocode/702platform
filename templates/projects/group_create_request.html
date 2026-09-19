@@ -1,6 +1,7 @@
 {% extends "base.html" %}
+{% load i18n %}
 
-{% block title %}申请创建项目组 - 竞赛社团管理平台{% endblock %}
+{% block title %}{% translate "申请创建项目组" %} - {% translate "竞赛社团管理平台" %}{% endblock %}
 
 {% block content %}
 <div class="wrap">
@@ -12,8 +13,8 @@
         </div>
         <div class="head-row">
             <div>
-                <h1>申请创建项目组</h1>
-                <div class="sub">名称与描述必填，学院与指导老师可稍后补充；申请人为项目组联系人，任一管理员同意后项目组即刻建立。</div>
+                <h1>{% translate "申请创建项目组" %}</h1>
+                <div class="sub">{% translate "名称与描述必填，学院与指导老师可稍后补充；申请人为项目组联系人，任一管理员同意后项目组即刻建立。" %}</div>
             </div>
         </div>
     </div>
@@ -23,8 +24,10 @@
             <div class="panel reveal">
                 <div class="panel-body">
                     <p class="help">
-                        你在 {{ pending_request.created_at|date:"Y-m-d H:i" }} 提交的「{{ pending_request.name }}」创建申请仍在等待管理员审核。
-                        再次提交将更新这条申请的内容，不会产生第二条申请。
+                        {% blocktranslate trimmed with submitted=pending_request.created_at|date:"Y-m-d H:i" name=pending_request.name %}
+                            你在 {{ submitted }} 提交的「{{ name }}」创建申请仍在等待管理员审核。
+                            再次提交将更新这条申请的内容，不会产生第二条申请。
+                        {% endblocktranslate %}
                     </p>
                 </div>
             </div>
@@ -42,7 +45,7 @@
                 <div class="field">
                     <label for="{{ form.description.id_for_label }}">{{ form.description.label }}</label>
                     {{ form.description }}
-                    <p class="help">介绍项目组的研究方向、目标或现有成员，供管理员审核时参考。</p>
+                    <p class="help">{% translate "介绍项目组的研究方向、目标或现有成员，供管理员审核时参考。" %}</p>
                     {{ form.description.errors }}
                 </div>
                 <div class="field">
@@ -65,10 +68,10 @@
                     {{ form.advisor_3 }}
                     {{ form.advisor_3.errors }}
                 </div>
-                <p class="help">指导老师最多 3 位，留空表示没有这一位；审核通过后也可以在项目组管理页补充。</p>
+                <p class="help">{% translate "指导老师最多 3 位，留空表示没有这一位；审核通过后也可以在项目组管理页补充。" %}</p>
                 <div class="form-actions">
-                    <button class="btn btn-primary" type="submit">提交申请</button>
-                    <a class="btn" href="{% url 'projects:group_list' %}">返回项目组列表</a>
+                    <button class="btn btn-primary" type="submit">{% translate "提交申请" %}</button>
+                    <a class="btn" href="{% url 'projects:group_list' %}">{% translate "返回项目组列表" %}</a>
                 </div>
             </form>
         </div>

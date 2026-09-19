@@ -9,6 +9,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db import IntegrityError, transaction
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.translation import gettext as _
 from django.views.decorators.http import require_POST
 
 from projects.models import ProjectGroup
@@ -138,7 +139,7 @@ def competition_register(request, pk):
             request.user.get_username(),
             extra={"request_id": getattr(request, "request_id", "-")},
         )
-        messages.error(request, "该竞赛已关闭报名或已超过报名截止时间。")
+        messages.error(request, _("该竞赛已关闭报名或已超过报名截止时间。"))
         return redirect("competitions:list")
 
     form = CompetitionRegistrationForm(
@@ -162,7 +163,7 @@ def competition_register(request, pk):
                     request=request,
                 )
             except IntegrityError:
-                form.add_error("group", "该项目组已经登记过这场竞赛，不能重复报名。")
+                form.add_error("group", _("该项目组已经登记过这场竞赛，不能重复报名。"))
                 logger.warning(
                     "competition.registration.failure competition_id=%s username=%s reason=duplicate",
                     competition.pk,
@@ -189,7 +190,7 @@ def competition_register(request, pk):
                     request.user.get_username(),
                     extra={"request_id": getattr(request, "request_id", "-")},
                 )
-                messages.success(request, "竞赛报名登记成功。")
+                messages.success(request, _("竞赛报名登记成功。"))
                 return redirect("competitions:list")
         else:
             logger.warning(
@@ -220,7 +221,7 @@ def competition_registration_edit(request, pk):
 
     competition = registration.competition
     if not competition.is_registration_open:
-        messages.error(request, "该竞赛已关闭报名或已超过报名截止时间，无法修改。")
+        messages.error(request, _("该竞赛已关闭报名或已超过报名截止时间，无法修改。"))
         return redirect("competitions:list")
 
     form = CompetitionRegistrationForm(
@@ -247,7 +248,7 @@ def competition_registration_edit(request, pk):
                     instance=registration,
                 )
             except IntegrityError:
-                form.add_error("group", "该项目组已经登记过这场竞赛，不能重复报名。")
+                form.add_error("group", _("该项目组已经登记过这场竞赛，不能重复报名。"))
             else:
                 record_audit(
                     action="competitions.registration.update",
@@ -259,7 +260,7 @@ def competition_registration_edit(request, pk):
                     },
                     request=request,
                 )
-                messages.success(request, "报名信息已更新。")
+                messages.success(request, _("报名信息已更新。"))
                 return redirect("competitions:list")
 
     return render(request, "competitions/register.html", context)
@@ -292,5 +293,5 @@ def competition_registration_withdraw(request, pk):
         detail=detail,
         request=request,
     )
-    messages.success(request, "已放弃该竞赛报名。")
+    messages.success(request, _("已放弃该竞赛报名。"))
     return redirect("competitions:list")

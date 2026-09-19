@@ -1,6 +1,7 @@
 {% extends "base.html" %}
+{% load i18n %}
 
-{% block title %}成员中心 - 竞赛社团管理平台{% endblock %}
+{% block title %}{% translate "成员中心" %} - {% translate "竞赛社团管理平台" %}{% endblock %}
 
 {% block content %}
 <div class="wrap">
@@ -8,41 +9,41 @@
         <div class="path"><span>/member</span><span>{{ user.username }}</span></div>
         <div class="head-row">
             <div>
-                <h1>成员中心</h1>
-                <div class="sub">你好，{{ user.profile.full_name|default:user.username }}。</div>
+                <h1>{% translate "成员中心" %}</h1>
+                <div class="sub">{% blocktranslate with name=user.profile.full_name|default:user.username %}你好，{{ name }}。{% endblocktranslate %}</div>
             </div>
         </div>
     </div>
 
     <div class="spec reveal">
         <div>
-            <div class="k">当前身份</div>
+            <div class="k">{% translate "当前身份" %}</div>
             <div class="v text">{{ member_role }}</div>
         </div>
         <div>
-            <div class="k">当前账号</div>
+            <div class="k">{% translate "当前账号" %}</div>
             <div class="v mono">{{ user.username }}</div>
         </div>
         <div>
-            <div class="k">评审资格</div>
-            <div class="v mono">{% if user.is_reviewer %}有{% else %}无{% endif %}</div>
+            <div class="k">{% translate "评审资格" %}</div>
+            <div class="v mono">{% if user.is_reviewer %}{% translate "有" %}{% else %}{% translate "无" %}{% endif %}</div>
         </div>
         <div>
-            <div class="k">初审资格</div>
-            <div class="v mono">{% if user.is_preliminary_reviewer %}有{% else %}无{% endif %}</div>
+            <div class="k">{% translate "初审资格" %}</div>
+            <div class="v mono">{% if user.is_preliminary_reviewer %}{% translate "有" %}{% else %}{% translate "无" %}{% endif %}</div>
         </div>
         {% if reviewer_leave.is_active %}
             {# 请假窗口对两种资格都生效，所以它自己占一格，标题也不只写"评审"。 #}
             <div>
-                <div class="k">初审／评审请假</div>
-                <div class="v mono">请假中</div>
-                <div class="help">{{ reviewer_leave.ends_at|date:"m-d H:i" }} 恢复</div>
+                <div class="k">{% translate "初审／评审请假" %}</div>
+                <div class="v mono">{% translate "请假中" %}</div>
+                <div class="help">{% blocktranslate with ends=reviewer_leave.ends_at|date:"m-d H:i" %}{{ ends }} 恢复{% endblocktranslate %}</div>
             </div>
         {% endif %}
         {% if user.is_super_reviewer %}
             <div>
-                <div class="k">超级评审</div>
-                <div class="v mono">有</div>
+                <div class="k">{% translate "超级评审" %}</div>
+                <div class="v mono">{% translate "有" %}</div>
             </div>
         {% endif %}
     </div>
@@ -51,7 +52,7 @@
         <div class="todo reveal">
             <a href="{% url 'reviews:queue' %}">
                 <span class="n">{{ pending.total }}</span>
-                <span class="t">{{ pending.headline }} · 点击前往处理</span>
+                <span class="t">{{ pending.headline }} · {% translate "点击前往处理" %}</span>
             </a>
         </div>
     {% endif %}
@@ -59,26 +60,28 @@
     {% if overview %}
         <div class="panel reveal">
             <div class="panel-head">
-                <h2>社团概览</h2>
-                <span class="count">仅管理员与联系人可见</span>
+                <h2>{% translate "社团概览" %}</h2>
+                <span class="count">{% translate "仅管理员与联系人可见" %}</span>
             </div>
             <div class="panel-body tight">
                 <div class="spec plain">
+                    {# 计数块的写法：中文单复数同形，所以单数那半边直接写死 1， #}
+                    {# 复数那半边用 {{ counter }}；英文译文才分得清单复数。 #}
                     <div>
-                        <div class="k">在册成员</div>
-                        <div class="v">{{ overview.member_count }}<small>人</small></div>
+                        <div class="k">{% translate "在册成员" %}</div>
+                        <div class="v">{% blocktranslate count counter=overview.member_count %}1<small>人</small>{% plural %}{{ counter }}<small>人</small>{% endblocktranslate %}</div>
                     </div>
                     <div>
-                        <div class="k">项目组</div>
-                        <div class="v">{{ overview.group_count }}<small>个</small></div>
+                        <div class="k">{% translate "项目组" %}</div>
+                        <div class="v">{% blocktranslate count counter=overview.group_count %}1<small>个</small>{% plural %}{{ counter }}<small>个</small>{% endblocktranslate %}</div>
                     </div>
                     <div>
-                        <div class="k">开放报名竞赛</div>
-                        <div class="v">{{ overview.open_competition_count }}<small>项</small></div>
+                        <div class="k">{% translate "开放报名竞赛" %}</div>
+                        <div class="v">{% blocktranslate count counter=overview.open_competition_count %}1<small>项</small>{% plural %}{{ counter }}<small>项</small>{% endblocktranslate %}</div>
                     </div>
                     <div>
-                        <div class="k">在借设备</div>
-                        <div class="v">{{ overview.borrowed_count }}<small>台</small></div>
+                        <div class="k">{% translate "在借设备" %}</div>
+                        <div class="v">{% blocktranslate count counter=overview.borrowed_count %}1<small>台</small>{% plural %}{{ counter }}<small>台</small>{% endblocktranslate %}</div>
                     </div>
                 </div>
             </div>
@@ -87,7 +90,7 @@
 
     <div class="panel reveal">
         <div class="panel-head">
-            <h2>可用入口</h2>
+            <h2>{% translate "可用入口" %}</h2>
             <span class="count">{{ operation_entries|length }} entries</span>
         </div>
         <div class="panel-body">
@@ -98,7 +101,7 @@
                         <span class="desc">{{ entry.description }}</span>
                     </a>
                 {% empty %}
-                    <div class="empty">当前没有可用的业务入口。</div>
+                    <div class="empty">{% translate "当前没有可用的业务入口。" %}</div>
                 {% endfor %}
             </div>
         </div>
@@ -107,22 +110,24 @@
     {% if user.is_reviewer or user.is_preliminary_reviewer %}
         <div class="panel reveal">
             <div class="panel-head">
-                <h2>初审／评审请假</h2>
+                <h2>{% translate "初审／评审请假" %}</h2>
                 {% if reviewer_leave.is_active %}
-                    <span class="chip chip-warn">请假中</span>
+                    <span class="chip chip-warn">{% translate "请假中" %}</span>
                 {% elif reviewer_leave %}
-                    <span class="chip chip-off">已安排</span>
+                    <span class="chip chip-off">{% translate "已安排" %}</span>
                 {% endif %}
             </div>
             <div class="panel-body">
                 <div class="col-narrow">
                     {% if reviewer_leave %}
+                        {# 事由可有可无，所以它留在 blocktranslate 外面——那里面只认变量。 #}
                         <p class="help">
-                            当前请假：{{ reviewer_leave.starts_at|date:"Y-m-d H:i" }} 至 {{ reviewer_leave.ends_at|date:"Y-m-d H:i" }}{% if reviewer_leave.reason %} · {{ reviewer_leave.reason }}{% endif %}。
-                            修改下面任一时间即可调整恢复评审的时间。
+                            {% blocktranslate trimmed with starts=reviewer_leave.starts_at|date:"Y-m-d H:i" ends=reviewer_leave.ends_at|date:"Y-m-d H:i" %}当前请假：{{ starts }} 至 {{ ends }}。{% endblocktranslate %}
+                            {% if reviewer_leave.reason %} · {{ reviewer_leave.reason }}{% endif %}
+                            {% translate "修改下面任一时间即可调整恢复评审的时间。" %}
                         </p>
                     {% else %}
-                        <p class="help">请假期间不会被分配新的初审或评审请求，到点自动恢复；已经分配给你的任务不受影响。</p>
+                        <p class="help">{% translate "请假期间不会被分配新的初审或评审请求，到点自动恢复；已经分配给你的任务不受影响。" %}</p>
                     {% endif %}
                     <form method="post" action="{% url 'reviews:set_leave' %}">
                         {% csrf_token %}
@@ -143,14 +148,14 @@
                             {{ leave_form.reason.errors }}
                         </div>
                         <div class="form-actions">
-                            <button class="btn btn-primary" type="submit">保存请假</button>
+                            <button class="btn btn-primary" type="submit">{% translate "保存请假" %}</button>
                         </div>
                     </form>
                     {% if reviewer_leave %}
                         <form method="post" action="{% url 'reviews:cancel_leave' %}">
                             {% csrf_token %}
                             <div class="btn-row">
-                                <button class="btn btn-danger btn-sm" type="submit">取消请假</button>
+                                <button class="btn btn-danger btn-sm" type="submit">{% translate "取消请假" %}</button>
                             </div>
                         </form>
                     {% endif %}

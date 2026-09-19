@@ -10,6 +10,7 @@ from django.core.exceptions import PermissionDenied
 from django.db.models import Count, Prefetch
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.translation import gettext as _, ngettext
 from django.views.decorators.http import require_POST
 
 from core.audit import record_audit
@@ -62,6 +63,22 @@ def _require_group_manager(request, group):
             extra={"request_id": getattr(request, "request_id", "-")},
         )
         raise PermissionDenied
+
+
+def _submit_message(submission):
+    """送审成功的回执。名额可能只有 1 名（大创立项），所以按单复数取句子。"""
+    required = submission.required_reviewers
+    return ngettext(
+        "已提交第 %(round)s 轮评审（%(type)s），"
+        "等待初审人初审；初审通过后将随机分配 1 名评审人。",
+        "已提交第 %(round)s 轮评审（%(type)s），"
+        "等待初审人初审；初审通过后将随机分配 %(count)s 名评审人。",
+        required,
+    ) % {
+        "round": submission.round,
+        "type": submission.get_review_type_display(),
+        "count": required,
+    }
 
 
 @login_required
@@ -180,7 +197,7 @@ def group_proposal_update(request, pk):
             detail={},
             request=request,
         )
-        messages.success(request, "项目书已上传/更新。")
+        messages.success(request, _("项目书已上传/更新。"))
     else:
         for error in form.errors.get("proposal", []):
             messages.error(request, error)
@@ -216,10 +233,7 @@ def group_submit_review(request, pk):
     else:
         messages.success(
             request,
-            f"已提交第 {submission.round} 轮评审"
-            f"（{submission.get_review_type_display()}），"
-            "等待初审人初审；初审通过后将随机分配 "
-            f"{submission.required_reviewers} 名评审人。",
+            _submit_message(submission),
         )
     return redirect("projects:group_detail", pk=group.pk)
 
@@ -230,7 +244,7 @@ def group_proposal_download(request, pk):
     if not can_view_group(request.user, group):
         raise PermissionDenied
     if not group.proposal:
-        raise Http404("该项目组尚未上传项目书。")
+        raise Http404(_("该项目组尚未上传项目书。"))
     return FileResponse(
         group.proposal.open("rb"),
         as_attachment=True,
@@ -245,7 +259,7 @@ def group_apply(request, pk):
         pk=pk,
     )
     if group.members.filter(pk=request.user.pk).exists():
-        messages.info(request, "你已经是该项目组成员。")
+        messages.info(request, _("你已经是该项目组成员。"))
         return redirect("projects:group_list")
 
     form = GroupJoinRequestForm(request.POST or None)
@@ -262,7 +276,7 @@ def group_apply(request, pk):
         else:
             messages.success(
                 request,
-                f"已提交加入「{group.name}」的申请，请等待联系人审核。",
+                _("已提交加入「%(name)s」的申请，请等待联系人审核。") % {"name": group.name},
             )
         return redirect("projects:group_list")
 
@@ -297,8 +311,7 @@ def group_create_request(request):
         else:
             messages.success(
                 request,
-                "已提交创建项目组的申请，等待管理员审核；"
-                "任一管理员同意后项目组即刻建立，你成为项目组联系人。",
+                _("已提交创建项目组的申请，等待管理员审核；任一管理员同意后项目组即刻建立，你成为项目组联系人。"),
             )
         return redirect("projects:group_list")
     return render(
@@ -330,7 +343,8 @@ def group_create_decide(request, req_pk, action):
             )
             messages.success(
                 request,
-                f"已通过创建申请，项目组「{approved.name}」已建立并出现在项目组列表中。",
+                _("已通过创建申请，项目组「%(name)s」已建立并出现在项目组列表中。")
+                % {"name": approved.name},
             )
         elif action == "reject":
             rejected = reject_create_request(
@@ -338,9 +352,9 @@ def group_create_decide(request, req_pk, action):
                 actor=request.user,
                 request=request,
             )
-            messages.success(request, f"已拒绝创建「{rejected.name}」的申请。")
+            messages.success(request, _("已拒绝创建「%(name)s」的申请。") % {"name": rejected.name})
         else:
-            raise Http404("未知操作")
+            raise Http404(_("未知操作"))
     except GroupCreateRequestError as exc:
         messages.error(request, str(exc))
     # 处理入口在「评审」页，处理完回到那里继续看待办。
@@ -373,7 +387,7 @@ def group_manage(request, pk):
                     actor=request.user,
                     request=request,
                 )
-                messages.success(request, "学院与指导老师已更新。")
+                messages.success(request, _("学院与指导老师已更新。"))
                 return redirect("projects:group_manage", pk=group.pk)
         elif action == "description":
             description_form = GroupDescriptionForm(request.POST, instance=group)
@@ -384,7 +398,7 @@ def group_manage(request, pk):
                     actor=request.user,
                     request=request,
                 )
-                messages.success(request, "项目组介绍已更新。")
+                messages.success(request, _("项目组介绍已更新。"))
                 return redirect("projects:group_manage", pk=group.pk)
         elif action == "transfer":
             transfer_form = ContactTransferForm(group, request.POST)
@@ -395,7 +409,7 @@ def group_manage(request, pk):
                     actor=request.user,
                     request=request,
                 )
-                messages.success(request, "已转让项目组联系人。")
+                messages.success(request, _("已转让项目组联系人。"))
                 return redirect("projects:group_manage", pk=group.pk)
 
     join_requests = (
@@ -438,16 +452,16 @@ def group_request_decide(request, pk, req_pk, action):
                 actor=request.user,
                 request=request,
             )
-            messages.success(request, "已通过该入组申请。")
+            messages.success(request, _("已通过该入组申请。"))
         elif action == "reject":
             reject_join_request(
                 join_request=join_request,
                 actor=request.user,
                 request=request,
             )
-            messages.success(request, "已拒绝该入组申请。")
+            messages.success(request, _("已拒绝该入组申请。"))
         else:
-            raise Http404("未知操作")
+            raise Http404(_("未知操作"))
     except JoinRequestError as exc:
         messages.error(request, str(exc))
     return redirect("projects:group_manage", pk=group.pk)
@@ -467,7 +481,7 @@ def group_member_remove(request, pk, user_pk):
             actor=request.user,
             request=request,
         )
-        messages.success(request, f"已将 {member.get_username()} 移出项目组。")
+        messages.success(request, _("已将 %(name)s 移出项目组。") % {"name": member.get_username()})
     except GroupManagementError as exc:
         messages.error(request, str(exc))
     return redirect("projects:group_manage", pk=group.pk)

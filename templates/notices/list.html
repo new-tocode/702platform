@@ -1,6 +1,7 @@
 {% extends "base.html" %}
+{% load i18n %}
 
-{% block title %}{{ page_title }} - 竞赛社团管理平台{% endblock %}
+{% block title %}{{ page_title }} - {% translate "竞赛社团管理平台" %}{% endblock %}
 
 {% block content %}
 <div class="wrap">
@@ -13,7 +14,7 @@
         <div class="head-row">
             <div>
                 <h1>{{ page_title }}</h1>
-                {% if notices %}<div class="sub">共 {{ notices|length }} 条</div>{% endif %}
+                {% if notices %}<div class="sub">{% blocktranslate count counter=notices|length %}共 1 条{% plural %}共 {{ counter }} 条{% endblocktranslate %}</div>{% endif %}
             </div>
         </div>
     </div>
@@ -22,9 +23,9 @@
         <table>
             <thead>
                 <tr>
-                    <th class="num">发布日期</th>
-                    <th>标题</th>
-                    <th class="num right">范围</th>
+                    <th class="num">{% translate "发布日期" %}</th>
+                    <th>{% translate "标题" %}</th>
+                    <th class="num right">{% translate "范围" %}</th>
                 </tr>
             </thead>
             <tbody>
@@ -32,7 +33,7 @@
                     <tr>
                         <td class="num">{{ notice.published_at|date:"Y-m-d H:i" }}</td>
                         <td>
-                            <a class="t" href="{% url detail_namespace|add:':'|add:detail_name notice.pk %}">{% if notice.is_pinned %}<span class="chip chip-pin">置顶</span> {% endif %}{{ notice.title }}</a>
+                            <a class="t" href="{% url detail_namespace|add:':'|add:detail_name notice.pk %}">{% if notice.is_pinned %}<span class="chip chip-pin">{% translate "置顶" %}</span> {% endif %}{{ notice.title }}</a>
                         </td>
                         <td class="num right">{{ notice.scope }}</td>
                     </tr>
