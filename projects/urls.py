@@ -7,6 +7,12 @@ app_name = "projects"
 
 urlpatterns = [
     path("", views.group_list, name="group_list"),
+    path("create/", views.group_create_request, name="group_create_request"),
+    path(
+        "create/requests/<int:req_pk>/<str:action>/",
+        views.group_create_decide,
+        name="group_create_decide",
+    ),
     path("<int:pk>/", views.group_detail, name="group_detail"),
     path("<int:pk>/apply/", views.group_apply, name="group_apply"),
     path("<int:pk>/proposal/", views.group_proposal_download, name="group_proposal_download"),
