@@ -24,6 +24,7 @@ from .forms import (
 )
 from .models import GroupCreateRequest, GroupJoinRequest, ProjectGroup
 from .permissions import (
+    can_decide_group_create_requests,
     can_manage_group,
     can_view_group,
     groups_visible_to,
@@ -105,33 +106,22 @@ def group_list(request):
                 "status_tone": latest.status_tone if latest else "",
             }
         )
-    # 申请人自己看得到那条待审申请的状态；管理员看到的是所有人的待审申请。
+    # 申请人自己看得到那条待审申请的状态；审核入口在管理员的「评审」页，
+    # 不在这一页（见 reviews.panels.pending_create_requests）。
     my_create_request = GroupCreateRequest.objects.filter(
         applicant=request.user,
         status=GroupCreateRequest.PENDING,
     ).first()
-    create_requests = ()
-    if request.user.is_staff:
-        create_requests = list(
-            GroupCreateRequest.objects.filter(status=GroupCreateRequest.PENDING)
-            .select_related("applicant__profile")
-            .order_by("created_at", "id")
-        )
     logger.info(
-        "project_group.list.view count=%s create_requests=%s user=%s",
+        "project_group.list.view count=%s user=%s",
         len(group_rows),
-        len(create_requests),
         request.user.get_username(),
         extra={"request_id": getattr(request, "request_id", "-")},
     )
     return render(
         request,
         "projects/group_list.html",
-        {
-            "group_rows": group_rows,
-            "create_requests": create_requests,
-            "my_create_request": my_create_request,
-        },
+        {"group_rows": group_rows, "my_create_request": my_create_request},
     )
 
 
@@ -322,7 +312,7 @@ def group_create_request(request):
 @require_POST
 def group_create_decide(request, req_pk, action):
     """Settle a creation request; the first administrator to act decides it."""
-    if not request.user.is_staff:
+    if not can_decide_group_create_requests(request.user):
         logger.warning(
             "project_group.create.decide.denied username=%s create_request_id=%s",
             request.user.get_username(),
@@ -353,7 +343,8 @@ def group_create_decide(request, req_pk, action):
             raise Http404("未知操作")
     except GroupCreateRequestError as exc:
         messages.error(request, str(exc))
-    return redirect("projects:group_list")
+    # 处理入口在「评审」页，处理完回到那里继续看待办。
+    return redirect("reviews:queue")
 
 
 @login_required

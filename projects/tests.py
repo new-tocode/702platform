@@ -524,17 +524,16 @@ class GroupCreateRequestAcceptanceTests(TestCase):
         self.assertContains(response, "创建申请审核中")
         self.assertNotContains(response, "申请创建项目组")
 
-    def test_administrator_sees_pending_requests_on_the_project_page(self):
+    def test_creation_requests_are_decided_on_the_review_queue_not_here(self):
+        """审核入口在管理员的「评审」页；这一页只有申请按钮，没有待审列表。"""
         self._apply(self.member, college="计算机学院", advisor_1="张三")
 
         self.client.force_login(self.admin)
         response = self.client.get(reverse("projects:group_list"))
 
-        self.assertContains(response, "创建项目组申请")
-        self.assertContains(response, "嵌入式组")
-        self.assertContains(response, "计算机学院")
-        self.assertContains(response, "张三")
-        self.assertContains(response, "同意")
+        self.assertContains(response, "申请创建项目组")
+        self.assertNotContains(response, "创建项目组申请")
+        self.assertNotContains(response, "嵌入式组")
 
     def test_anonymous_cannot_open_the_application_form(self):
         response = self.client.get(reverse("projects:group_create_request"))

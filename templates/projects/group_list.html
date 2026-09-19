@@ -25,49 +25,6 @@
         </div>
     </div>
 
-    {% if create_requests %}
-        <div class="panel reveal">
-            <div class="panel-head">
-                <h2>创建项目组申请</h2>
-                <span class="count">{{ create_requests|length }} pending</span>
-            </div>
-            <div class="panel-body">
-                <p class="help">任一管理员同意即视为审核通过，其余管理员无需再审；通过后该项目组即刻出现在下方列表中，申请人成为项目组联系人。</p>
-                <div class="queue">
-                    {% for item in create_requests %}
-                        <div class="qitem">
-                            <span class="idx">{% if forloop.counter < 10 %}0{% endif %}{{ forloop.counter }}</span>
-                            <div class="grow">
-                                <div>
-                                    <span class="who">{{ item.applicant.profile.full_name|default:item.applicant.username }}</span>
-                                    <span class="when">{{ item.created_at|date:"Y-m-d H:i" }}</span>
-                                </div>
-                                <div class="msg">
-                                    <div>
-                                        <strong>{{ item.name }}</strong>
-                                        {% if item.college %} · {{ item.college }}{% endif %}
-                                        {% if item.filled_advisor_names %} · 指导老师 {{ item.filled_advisor_names|join:"、" }}{% endif %}
-                                    </div>
-                                    <div>{{ item.description|linebreaksbr }}</div>
-                                </div>
-                                <div class="btn-row">
-                                    <form method="post" action="{% url 'projects:group_create_decide' item.pk 'approve' %}">
-                                        {% csrf_token %}
-                                        <button class="btn btn-primary btn-sm" type="submit">同意</button>
-                                    </form>
-                                    <form method="post" action="{% url 'projects:group_create_decide' item.pk 'reject' %}">
-                                        {% csrf_token %}
-                                        <button class="btn btn-sm" type="submit">拒绝</button>
-                                    </form>
-                                </div>
-                            </div>
-                        </div>
-                    {% endfor %}
-                </div>
-            </div>
-        </div>
-    {% endif %}
-
     {% for row in group_rows %}
         <div class="panel reveal">
             <div class="panel-head">
