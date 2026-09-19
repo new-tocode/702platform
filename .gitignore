@@ -23,6 +23,9 @@ logs/*.log*
 # Claude Code 本地配置与 skill（run-local 里写着本地演示账号的密码，不进版本库）
 .claude/
 
+# 界面翻译的编译产物（.po 是源，部署与本地各自 compilemessages 生成）
+*.mo
+
 # Archive supplied separately
 社团评审系统_发布版.zip
 
