@@ -8,6 +8,8 @@
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 
+from projects.services import apply_to_create_group
+
 from ..models import (
     ReviewTask,
     ProjectSubmission,
@@ -19,6 +21,7 @@ from .base import (
     ReviewTestCase,
 )
 from .factories import (
+    make_admin,
     make_group,
     make_preliminary_reviewer,
     make_reviewer,
@@ -253,3 +256,77 @@ class ReviewPagesTests(ReviewTestCase):
         self.assertNotEqual(self.group.proposal.name, "plan.txt")
 
 
+
+
+class CreateRequestQueueTests(ReviewTestCase):
+    """项目组创建申请送到管理员的「评审」页，任一人同意即通过。
+
+    这里的管理员一个评审字段都没开——只要 `is_staff`，队列页与「评审」入口
+    就该对他开放（`permissions.can_open_queue`）。
+    """
+
+    def setUp(self):
+        self.admin = make_admin("queue-admin")
+        self.other_admin = make_admin("queue-admin-2")
+        self.member = make_user("queue-member")
+        self.reviewer = make_reviewer("queue-reviewer")
+
+    def _apply(self, name="嵌入式组"):
+        return apply_to_create_group(
+            applicant=self.member,
+            name=name,
+            description="做嵌入式方向的竞赛。",
+            college="计算机学院",
+            advisor_names=["张三"],
+        )
+
+    def test_administrator_without_review_qualification_opens_the_queue(self):
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse("reviews:queue"))
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_member_home_shows_the_queue_entry_to_administrators(self):
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse("accounts:member_home"))
+
+        self.assertContains(response, reverse("reviews:queue"))
+
+    def test_administrator_sees_the_pending_request_and_decides_it_here(self):
+        self._apply()
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse("reviews:queue"))
+
+        self.assertContains(response, "创建项目组申请")
+        self.assertContains(response, "嵌入式组")
+        self.assertContains(response, "计算机学院")
+        self.assertContains(response, "张三")
+        self.assertContains(response, "同意")
+
+    def test_reviewer_without_admin_role_gets_no_create_requests(self):
+        self._apply()
+        self.client.force_login(self.reviewer)
+
+        response = self.client.get(reverse("reviews:queue"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "嵌入式组")
+
+    def test_first_approval_clears_it_from_the_other_administrators(self):
+        create_request = self._apply()
+        self.client.force_login(self.admin)
+        self.client.post(
+            reverse(
+                "projects:group_create_decide",
+                args=(create_request.pk, "approve"),
+            )
+        )
+
+        self.client.force_login(self.other_admin)
+        response = self.client.get(reverse("reviews:queue"))
+
+        # 待办面板整块消失；上一位管理员那条 flash 消息可能还在会话里，不去管它。
+        self.assertNotContains(response, "创建项目组申请")

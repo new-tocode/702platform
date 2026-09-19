@@ -10,6 +10,9 @@
 
 from django.utils import timezone
 
+from projects.models import GroupCreateRequest
+from projects.permissions import can_decide_group_create_requests
+
 from . import permissions
 from .forms import PreliminaryReviewForm, ReviewForm, ReviewerLeaveForm
 from .models import (
@@ -63,7 +66,21 @@ def queue_context(*, user):
         context["released"] = bucket(ReviewTask.REVIEW, ReviewTask.RELEASED)
     if permissions.is_super_reviewer(user):
         context["open_rounds"] = open_rounds_for(user)
+    if can_decide_group_create_requests(user):
+        context["create_requests"] = pending_create_requests()
     return context
+
+
+def pending_create_requests():
+    """全体管理员的共同待办：还没有人处理的创建项目组申请。
+
+    任一位管理员处理后这条就不再是 pending，其他人的队列里随之消失。
+    """
+    return list(
+        GroupCreateRequest.objects.filter(status=GroupCreateRequest.PENDING)
+        .select_related("applicant__profile")
+        .order_by("created_at", "id")
+    )
 
 
 def open_rounds_for(user):

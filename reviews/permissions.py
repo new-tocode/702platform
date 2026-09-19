@@ -59,6 +59,24 @@ def has_review_qualification(user):
     ) or is_super_reviewer(user)
 
 
+def can_open_queue(user):
+    """「评审」页与入口的准入：三种评审资格中的任意一种，**或管理员**。
+
+    管理员哪怕一份评审资格都没有也进得来——项目组创建申请就送到这页，
+    由管理员同意或拒绝（处理在 :func:`projects.services.approve_create_request`），
+    任一管理员处理后申请即从其他人的队列里消失。
+    """
+    if not (user and user.is_authenticated):
+        return False
+    if has_review_qualification(user):
+        return True
+    # 局部 import：让 reviews 不在模块加载期就依赖 projects.permissions；
+    # 「谁算管理员」的口径留在那一处，这里不另写一份 is_staff 判断。
+    from projects.permissions import can_decide_group_create_requests
+
+    return can_decide_group_create_requests(user)
+
+
 def may_receive_tasks(user):
     """会收到任务的那两种资格——请假面板与请假服务的门槛。
 

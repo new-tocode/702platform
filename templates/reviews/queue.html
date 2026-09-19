@@ -15,44 +15,90 @@
                 <h1>我的评审</h1>
                 <div class="sub">
                     初审或审阅分配给你的项目书并给出意见；初审人、评审人与超级评审对项目组一律匿名。
+                    {% if create_requests %}项目组创建申请由全体管理员在这里共同处理，任一人同意即通过。{% endif %}
                     {% if open_rounds %}作为超级评审，你还可以看到全部进行中的评审，并对其直接通过或打回。{% endif %}
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="spec reveal">
-        {% if show_preliminary %}
-            <div>
-                <div class="k">待初审</div>
-                <div class="v {% if preliminary_pending %}warn{% endif %}">{{ preliminary_pending|length }}<small>份</small></div>
+    {% if create_requests %}
+        <div class="panel reveal">
+            <div class="panel-head">
+                <h2>创建项目组申请</h2>
+                <span class="count">{{ create_requests|length }} pending</span>
             </div>
-        {% endif %}
-        {% if show_review %}
-            <div>
-                <div class="k">待评审</div>
-                <div class="v {% if pending %}warn{% endif %}">{{ pending|length }}<small>份</small></div>
+            <div class="panel-body">
+                <p class="help">任何成员都可以申请创建项目组，申请人为项目组联系人。任一位管理员同意即视为审核通过并即刻建组，其他管理员的这条待办随之消失；拒绝后申请人可修改重交。</p>
+                <div class="queue">
+                    {% for item in create_requests %}
+                        <div class="qitem">
+                            <span class="idx">{% if forloop.counter < 10 %}0{% endif %}{{ forloop.counter }}</span>
+                            <div class="grow">
+                                <div>
+                                    <span class="who">{{ item.applicant.profile.full_name|default:item.applicant.username }}</span>
+                                    <span class="when">{{ item.created_at|date:"Y-m-d H:i" }}</span>
+                                </div>
+                                <div class="msg">
+                                    <div>
+                                        <strong>{{ item.name }}</strong>
+                                        {% if item.college %} · {{ item.college }}{% endif %}
+                                        {% if item.filled_advisor_names %} · 指导老师 {{ item.filled_advisor_names|join:"、" }}{% endif %}
+                                    </div>
+                                    <div>{{ item.description|linebreaksbr }}</div>
+                                </div>
+                                <div class="btn-row">
+                                    <form method="post" action="{% url 'projects:group_create_decide' item.pk 'approve' %}">
+                                        {% csrf_token %}
+                                        <button class="btn btn-primary btn-sm" type="submit">同意</button>
+                                    </form>
+                                    <form method="post" action="{% url 'projects:group_create_decide' item.pk 'reject' %}">
+                                        {% csrf_token %}
+                                        <button class="btn btn-sm" type="submit">拒绝</button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
             </div>
-        {% endif %}
-        {% if show_preliminary %}
-            <div>
-                <div class="k">已完成初审</div>
-                <div class="v">{{ preliminary_completed|length }}<small>份</small></div>
-            </div>
-        {% endif %}
-        {% if show_review %}
-            <div>
-                <div class="k">已完成评审</div>
-                <div class="v">{{ completed|length }}<small>份</small></div>
-            </div>
-            {% if released %}
+        </div>
+    {% endif %}
+
+    {% if show_preliminary or show_review %}
+        <div class="spec reveal">
+            {% if show_preliminary %}
                 <div>
-                    <div class="k">已释放</div>
-                    <div class="v dim">{{ released|length }}<small>份</small></div>
+                    <div class="k">待初审</div>
+                    <div class="v {% if preliminary_pending %}warn{% endif %}">{{ preliminary_pending|length }}<small>份</small></div>
                 </div>
             {% endif %}
-        {% endif %}
-    </div>
+            {% if show_review %}
+                <div>
+                    <div class="k">待评审</div>
+                    <div class="v {% if pending %}warn{% endif %}">{{ pending|length }}<small>份</small></div>
+                </div>
+            {% endif %}
+            {% if show_preliminary %}
+                <div>
+                    <div class="k">已完成初审</div>
+                    <div class="v">{{ preliminary_completed|length }}<small>份</small></div>
+                </div>
+            {% endif %}
+            {% if show_review %}
+                <div>
+                    <div class="k">已完成评审</div>
+                    <div class="v">{{ completed|length }}<small>份</small></div>
+                </div>
+                {% if released %}
+                    <div>
+                        <div class="k">已释放</div>
+                        <div class="v dim">{{ released|length }}<small>份</small></div>
+                    </div>
+                {% endif %}
+            {% endif %}
+        </div>
+    {% endif %}
 
     {% if open_rounds %}
         <div class="panel reveal">

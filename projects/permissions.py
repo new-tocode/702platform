@@ -44,6 +44,15 @@ def can_manage_group(user, group):
     )
 
 
+def can_decide_group_create_requests(user):
+    """创建项目组申请的审核人：全体管理员（``is_staff``）。
+
+    申请送到管理员的「评审」页（评审侧据此决定给不给看那份待办），任一位管理员
+    同意即通过，其余人无需再审。判定只此一处，视图门槛与页面装配都走它。
+    """
+    return bool(user and user.is_authenticated and user.is_staff)
+
+
 def can_view_group(user, group):
     """Group detail is visible to staff, its members, and whoever reviews it.
 
