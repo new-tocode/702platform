@@ -4,6 +4,7 @@ import logging
 
 from django.contrib import admin
 
+from core.admin import ReadOnlyAdminMixin
 from core.audit import record_audit
 
 from .models import (
@@ -104,7 +105,7 @@ class ProjectGroupAdmin(admin.ModelAdmin):
 
 
 @admin.register(ProjectContact)
-class ProjectContactAdmin(admin.ModelAdmin):
+class ProjectContactAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
     """Read-only list of every project-group contact at a glance."""
 
     list_display = (
@@ -137,15 +138,9 @@ class ProjectContactAdmin(admin.ModelAdmin):
         names = [group.name for group in obj.led_project_groups.all()]
         return "、".join(names) or "—"
 
-    def has_add_permission(self, request):
-        return False
-
-    def has_change_permission(self, request, obj=None):
-        return False
-
 
 @admin.register(GroupCreateRequest)
-class GroupCreateRequestAdmin(admin.ModelAdmin):
+class GroupCreateRequestAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
     """Oversight list for project-group creation applications.
 
     Requests are decided from the member-facing project-group page (any one
@@ -187,15 +182,9 @@ class GroupCreateRequestAdmin(admin.ModelAdmin):
     )
     date_hierarchy = "created_at"
 
-    def has_add_permission(self, request):
-        return False
-
-    def has_change_permission(self, request, obj=None):
-        return False
-
 
 @admin.register(GroupJoinRequest)
-class GroupJoinRequestAdmin(admin.ModelAdmin):
+class GroupJoinRequestAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
     """Oversight list for membership applications reviewed by contacts."""
 
     list_display = ("group", "applicant", "status", "created_at", "decided_by", "decided_at")
@@ -213,9 +202,3 @@ class GroupJoinRequestAdmin(admin.ModelAdmin):
         "updated_at",
     )
     date_hierarchy = "created_at"
-
-    def has_add_permission(self, request):
-        return False
-
-    def has_change_permission(self, request, obj=None):
-        return False

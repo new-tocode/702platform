@@ -15,6 +15,7 @@ records —
 
 from django.contrib import admin, messages
 
+from core.admin import ReadOnlyAdminMixin
 from core.audit import record_audit
 
 from . import lifecycle
@@ -30,7 +31,7 @@ from .services import ReviewError, reassign_task
 
 
 @admin.register(ProjectSubmission)
-class ProjectSubmissionAdmin(admin.ModelAdmin):
+class ProjectSubmissionAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
     list_display = (
         "group",
         "round",
@@ -54,12 +55,6 @@ class ProjectSubmissionAdmin(admin.ModelAdmin):
         "decided_at",
     )
     date_hierarchy = "submitted_at"
-
-    def has_add_permission(self, request):
-        return False
-
-    def has_change_permission(self, request, obj=None):
-        return False
 
     def get_deleted_objects(self, objs, request):
         """Let a round be deleted together with its review tasks.
@@ -234,7 +229,7 @@ class ReviewTaskAdmin(admin.ModelAdmin):
 
 
 @admin.register(ArchivedProposal)
-class ArchivedProposalAdmin(admin.ModelAdmin):
+class ArchivedProposalAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
     list_display = (
         "group",
         "submission",
@@ -252,12 +247,6 @@ class ArchivedProposalAdmin(admin.ModelAdmin):
         "archived_at",
     )
     date_hierarchy = "archived_at"
-
-    def has_add_permission(self, request):
-        return False
-
-    def has_change_permission(self, request, obj=None):
-        return False
 
 
 @admin.register(ReviewerLeave)
