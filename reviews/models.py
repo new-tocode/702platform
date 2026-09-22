@@ -488,11 +488,6 @@ class ReviewerLeave(models.Model):
     def __str__(self):
         return f"{self.reviewer} 请假 {self.starts_at:%Y-%m-%d %H:%M} 至 {self.ends_at:%Y-%m-%d %H:%M}"
 
-    def covers(self, moment=None):
-        """Whether this window covers ``moment`` (defaults to now)."""
-        moment = moment or timezone.now()
-        return self.starts_at <= moment < self.ends_at
-
     @property
     def state(self):
         """Which of the three states this window is in right now."""
