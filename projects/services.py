@@ -37,6 +37,20 @@ class GroupCreateRequestError(Exception):
     """创建项目组的申请不能被提交或处理。"""
 
 
+def _advisor_names_or_raise(names, error_cls):
+    """归一化指导老师姓名，超过上限时抛 ``error_cls``。
+
+    申请建组与维护组信息两处的归一化和上限文案逐字相同，只有异常类不同
+    （各自服务自己的入口），所以由调用方指定该抛哪一种。
+    """
+    cleaned = [name.strip() for name in names if name.strip()]
+    if len(cleaned) > MAX_ADVISORS_PER_GROUP:
+        raise error_cls(
+            _("指导老师最多 %(max)s 位。") % {"max": MAX_ADVISORS_PER_GROUP}
+        )
+    return cleaned
+
+
 def _advisor_slots(names):
     """把已填写的指导老师姓名摊回三个固定槽位，空槽位写空串。"""
     return {
@@ -143,11 +157,7 @@ def apply_to_create_group(
     """
     if not applicant.is_authenticated:
         raise GroupCreateRequestError(_("请先登录。"))
-    names = [name.strip() for name in advisor_names if name.strip()]
-    if len(names) > MAX_ADVISORS_PER_GROUP:
-        raise GroupCreateRequestError(
-            _("指导老师最多 %(max)s 位。") % {"max": MAX_ADVISORS_PER_GROUP}
-        )
+    names = _advisor_names_or_raise(advisor_names, GroupCreateRequestError)
     fields = {
         "name": name,
         "description": description,
@@ -313,11 +323,7 @@ def update_group_info(*, group, college, advisor_names, actor, request=None):
     it held, and the remaining names close up to slots 0..n-1 — which is what
     keeps the ``(group, sort_order)`` uniqueness constraint satisfiable.
     """
-    names = [name.strip() for name in advisor_names if name.strip()]
-    if len(names) > MAX_ADVISORS_PER_GROUP:
-        raise GroupManagementError(
-            _("指导老师最多 %(max)s 位。") % {"max": MAX_ADVISORS_PER_GROUP}
-        )
+    names = _advisor_names_or_raise(advisor_names, GroupManagementError)
     with transaction.atomic():
         group.college = college
         group.save(update_fields=["college", "updated_at"])

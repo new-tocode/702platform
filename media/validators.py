@@ -1,9 +1,9 @@
 """Validation rules for uploaded images and videos."""
 
-from pathlib import Path
-
 from django.core.exceptions import ValidationError
 from PIL import Image, UnidentifiedImageError
+
+from core.uploads import file_extension, reset_file_position
 
 
 IMAGE = "image"
@@ -14,32 +14,21 @@ IMAGE_MAX_BYTES = 10 * 1024 * 1024
 VIDEO_MAX_BYTES = 500 * 1024 * 1024
 
 
-def _extension(name):
-    return Path(name or "").suffix.lower().lstrip(".")
-
-
-def _reset_file_position(uploaded_file):
-    try:
-        uploaded_file.seek(0)
-    except (AttributeError, OSError):
-        return
-
-
 def _validate_image_signature(uploaded_file):
-    _reset_file_position(uploaded_file)
+    reset_file_position(uploaded_file)
     try:
         with Image.open(uploaded_file) as image:
             image.verify()
     except (UnidentifiedImageError, OSError, SyntaxError) as exc:
         raise ValidationError("上传文件不是有效的图片。") from exc
     finally:
-        _reset_file_position(uploaded_file)
+        reset_file_position(uploaded_file)
 
 
 def _validate_video_signature(uploaded_file, extension):
-    _reset_file_position(uploaded_file)
+    reset_file_position(uploaded_file)
     header = uploaded_file.read(64)
-    _reset_file_position(uploaded_file)
+    reset_file_position(uploaded_file)
     if extension == "mp4" and b"ftyp" not in header:
         raise ValidationError("上传文件不是有效的 MP4 视频。")
     if extension == "webm" and not header.startswith(b"\x1a\x45\xdf\xa3"):
@@ -51,7 +40,7 @@ def validate_media_file(uploaded_file, kind):
     if not uploaded_file:
         raise ValidationError("请选择要上传的文件。")
 
-    extension = _extension(uploaded_file.name)
+    extension = file_extension(uploaded_file.name)
     if kind == IMAGE:
         allowed_extensions = IMAGE_EXTENSIONS
         max_bytes = IMAGE_MAX_BYTES

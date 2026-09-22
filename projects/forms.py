@@ -15,6 +15,22 @@ from .models import (
 User = get_user_model()
 
 
+class AdvisorSlotsMixin:
+    """三行固定槽位的指导老师输入。
+
+    申请建组与维护组信息这两张表单，槽位数、字段名与读取口径完全一样，
+    只有字段是模型自带的还是显式声明的这点区别，所以读取方法收在这里。
+    """
+
+    def advisor_names(self):
+        """按槽位顺序返回已填写的姓名；空槽位不占位，不留空洞。"""
+        return [
+            self.cleaned_data[f"advisor_{slot}"].strip()
+            for slot in range(1, MAX_ADVISORS_PER_GROUP + 1)
+            if self.cleaned_data.get(f"advisor_{slot}", "").strip()
+        ]
+
+
 class GroupJoinRequestForm(forms.ModelForm):
     class Meta:
         model = GroupJoinRequest
@@ -23,7 +39,7 @@ class GroupJoinRequestForm(forms.ModelForm):
         widgets = {"message": forms.Textarea(attrs={"rows": 4})}
 
 
-class GroupCreateRequestForm(forms.ModelForm):
+class GroupCreateRequestForm(AdvisorSlotsMixin, forms.ModelForm):
     """申请创建项目组：名称与描述必填，其余（学院、指导老师）可先不填。"""
 
     class Meta:
@@ -46,14 +62,6 @@ class GroupCreateRequestForm(forms.ModelForm):
         }
         widgets = {"description": forms.Textarea(attrs={"rows": 5})}
 
-    def advisor_names(self):
-        """按槽位顺序返回已填写的指导老师姓名；空槽位不占位，不留空洞。"""
-        return [
-            self.cleaned_data[f"advisor_{slot}"].strip()
-            for slot in range(1, MAX_ADVISORS_PER_GROUP + 1)
-            if self.cleaned_data.get(f"advisor_{slot}", "").strip()
-        ]
-
 
 class GroupDescriptionForm(forms.ModelForm):
     class Meta:
@@ -63,7 +71,7 @@ class GroupDescriptionForm(forms.ModelForm):
         widgets = {"description": forms.Textarea(attrs={"rows": 4})}
 
 
-class GroupInfoForm(forms.ModelForm):
+class GroupInfoForm(AdvisorSlotsMixin, forms.ModelForm):
     """学院的填写，外加指导老师的三个槽位。
 
     指导老师存成独立的 ``ProjectAdvisor`` 行，但界面上是固定的三行输入框——
@@ -86,14 +94,6 @@ class GroupInfoForm(forms.ModelForm):
         advisors = list(self.instance.advisors.all()[:MAX_ADVISORS_PER_GROUP])
         for index, advisor in enumerate(advisors, start=1):
             self.fields[f"advisor_{index}"].initial = advisor.name
-
-    def advisor_names(self):
-        """按槽位顺序返回已填写的姓名；空槽位不占位，不留空洞。"""
-        return [
-            self.cleaned_data[f"advisor_{index}"].strip()
-            for index in range(1, MAX_ADVISORS_PER_GROUP + 1)
-            if self.cleaned_data.get(f"advisor_{index}", "").strip()
-        ]
 
 
 class GroupProposalForm(forms.ModelForm):

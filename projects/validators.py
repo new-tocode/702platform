@@ -1,9 +1,9 @@
 """Validation rules for uploaded project proposals (项目书)."""
 
-from pathlib import Path
-
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
+
+from core.uploads import file_extension, reset_file_position
 
 
 PROPOSAL_EXTENSIONS = {"pdf", "doc", "docx"}
@@ -17,23 +17,12 @@ _SIGNATURES = {
 }
 
 
-def _extension(name):
-    return Path(name or "").suffix.lower().lstrip(".")
-
-
-def _reset_file_position(uploaded_file):
-    try:
-        uploaded_file.seek(0)
-    except (AttributeError, OSError):
-        return
-
-
 def validate_proposal_file(uploaded_file):
     """Validate the extension, size and basic binary signature of a proposal."""
     if not uploaded_file:
         raise ValidationError(_("请选择项目书文件。"))
 
-    extension = _extension(uploaded_file.name)
+    extension = file_extension(uploaded_file.name)
     if extension not in PROPOSAL_EXTENSIONS:
         raise ValidationError(_("项目书仅支持 doc、docx、pdf 格式。"))
     if uploaded_file.size and uploaded_file.size > PROPOSAL_MAX_BYTES:
@@ -41,8 +30,8 @@ def validate_proposal_file(uploaded_file):
         raise ValidationError(_("项目书不能超过 %(limit)s MB。") % {"limit": limit_mb})
 
     prefix, message = _SIGNATURES[extension]
-    _reset_file_position(uploaded_file)
+    reset_file_position(uploaded_file)
     header = uploaded_file.read(len(prefix))
-    _reset_file_position(uploaded_file)
+    reset_file_position(uploaded_file)
     if not header.startswith(prefix):
         raise ValidationError(message)
