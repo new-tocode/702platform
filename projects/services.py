@@ -274,6 +274,32 @@ def reject_create_request(*, create_request, actor, request=None):
     return locked
 
 
+def sync_group_membership(*, group, created, actor, request=None):
+    """后台保存项目组之后的收尾：补齐不变量，再留一条成员关系审计。
+
+    后台的成员字段是个穿梭框，保存时把 ``members`` 整份覆盖；而
+    ``ProjectGroup.save()`` 里那条「联系人恒为成员」的补偿跑在覆盖**之前**，
+    所以管理员把联系人从成员框里去掉后，不变量就断了。这里必须再补一次。
+    前台不经过这条路（成员变更走审批与移除的服务函数），所以只有后台调用。
+    """
+    if group.leader_id:
+        group.members.add(group.leader_id)
+    record_audit(
+        action=(
+            "projects.group.membership.create"
+            if created
+            else "projects.group.membership.update"
+        ),
+        user=actor,
+        target=group,
+        detail={
+            "leader_id": group.leader_id,
+            "member_ids": list(group.members.values_list("pk", flat=True)),
+        },
+        request=request,
+    )
+
+
 def remove_group_member(*, group, member, actor, request=None):
     """Remove a member; the current contact must be transferred first."""
     if group.leader_id == member.pk:

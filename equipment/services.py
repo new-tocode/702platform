@@ -2,7 +2,6 @@
 
 import logging
 
-from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.utils import timezone
 
@@ -20,6 +19,16 @@ class EquipmentUnavailable(Exception):
 
 class BorrowAlreadyReturned(Exception):
     """Raised when a second return is attempted."""
+
+
+class ReturnNotAllowed(Exception):
+    """归还人既不是借用人、也不是管理员。
+
+    两条调用路径都先做了归属过滤（视图用 get_object_or_404 限定 borrower，
+    后台只让管理员用），所以正常流程走不到这里——它是兜底的断言，
+    真被触发说明有新的调用方绕过了权限检查。领域层不该抛 HTTP 异常，
+    所以这里不用 PermissionDenied。
+    """
 
 
 @transaction.atomic
@@ -72,7 +81,7 @@ def return_borrow(*, borrow_id, actor):
             actor.get_username(),
             borrow.borrower_id,
         )
-        raise PermissionDenied
+        raise ReturnNotAllowed
     if borrow.status == EquipmentBorrow.RETURNED:
         logger.warning(
             "equipment.return.failure borrow_id=%s actor=%s reason=already_returned",

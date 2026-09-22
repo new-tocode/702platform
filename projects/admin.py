@@ -15,6 +15,7 @@ from .models import (
     ProjectContact,
     ProjectGroup,
 )
+from .services import sync_group_membership
 
 
 logger = logging.getLogger(__name__)
@@ -67,20 +68,10 @@ class ProjectGroupAdmin(admin.ModelAdmin):
 
     def save_related(self, request, form, formsets, change):
         super().save_related(request, form, formsets, change)
-        if form.instance.leader_id:
-            form.instance.members.add(form.instance.leader_id)
-        record_audit(
-            action=(
-                "projects.group.membership.create"
-                if not change
-                else "projects.group.membership.update"
-            ),
-            user=request.user,
-            target=form.instance,
-            detail={
-                "leader_id": form.instance.leader_id,
-                "member_ids": list(form.instance.members.values_list("pk", flat=True)),
-            },
+        sync_group_membership(
+            group=form.instance,
+            created=not change,
+            actor=request.user,
             request=request,
         )
 
