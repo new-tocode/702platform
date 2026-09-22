@@ -10,8 +10,8 @@
 
 from django.utils import timezone
 
+from core.permissions import is_admin
 from projects.models import GroupCreateRequest
-from projects.permissions import can_decide_group_create_requests
 
 from . import permissions
 from .forms import PreliminaryReviewForm, ReviewForm, ReviewerLeaveForm
@@ -65,7 +65,7 @@ def queue_context(*, user):
         context["released"] = bucket(ReviewTask.REVIEW, ReviewTask.RELEASED)
     if permissions.is_super_reviewer(user):
         context["open_rounds"] = open_rounds_for(user)
-    if can_decide_group_create_requests(user):
+    if is_admin(user):
         context["create_requests"] = pending_create_requests()
     return context
 

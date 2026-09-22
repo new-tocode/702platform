@@ -5,6 +5,7 @@ import logging
 from django.contrib import admin, messages
 
 from core.audit import record_audit
+from core.permissions import is_admin
 
 from .forms import EquipmentAdminForm
 from .models import Equipment, EquipmentBorrow
@@ -94,7 +95,7 @@ class EquipmentBorrowAdmin(admin.ModelAdmin):
 
     def has_change_permission(self, request, obj=None):
         # Returns must go through the dedicated transactional operation.
-        return request.user.is_staff
+        return is_admin(request.user)
 
     def has_delete_permission(self, request, obj=None):
         # Deleting an active record without returning stock would corrupt inventory.

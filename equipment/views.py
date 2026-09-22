@@ -4,12 +4,12 @@ import logging
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext as _
 from django.views.decorators.http import require_http_methods, require_POST
 
 from core.audit import record_audit
+from core.permissions import is_admin, require
 from projects.permissions import can_use_equipment
 
 from .forms import EquipmentBorrowForm
@@ -27,14 +27,11 @@ logger = logging.getLogger(__name__)
 
 def _require_equipment_access(request):
     """Borrowing is limited to project-group members (and administrators)."""
-    if not can_use_equipment(request.user):
-        logger.warning(
-            "equipment.permission.denied username=%s path=%s",
-            request.user.get_username(),
-            request.path,
-            extra={"request_id": getattr(request, "request_id", "-")},
-        )
-        raise PermissionDenied
+    require(
+        request,
+        can_use_equipment(request.user),
+        "equipment.permission.denied",
+    )
 
 
 @login_required
@@ -106,7 +103,7 @@ def equipment_borrow(request, pk):
 @login_required
 @require_http_methods(["GET"])
 def borrow_list(request):
-    if request.user.is_staff:
+    if is_admin(request.user):
         borrows = EquipmentBorrow.objects.select_related(
             "equipment", "borrower"
         ).all()
@@ -132,7 +129,7 @@ def borrow_return(request, pk):
     borrow = get_object_or_404(
         EquipmentBorrow,
         pk=pk,
-        **({} if request.user.is_staff else {"borrower": request.user}),
+        **({} if is_admin(request.user) else {"borrower": request.user}),
     )
     try:
         return_borrow(borrow_id=borrow.pk, actor=request.user)

@@ -16,6 +16,7 @@ from projects.models import ProjectGroup
 from projects.permissions import can_manage_group, manageable_group_ids
 
 from core.audit import record_audit
+from core.permissions import require
 
 from .forms import CompetitionRegistrationForm
 from .models import Competition, CompetitionRegistration
@@ -27,14 +28,11 @@ User = get_user_model()
 
 
 def _require_competition_manager(request):
-    if not is_competition_manager(request.user):
-        logger.warning(
-            "competition.permission.denied username=%s path=%s",
-            request.user.get_username(),
-            request.path,
-            extra={"request_id": getattr(request, "request_id", "-")},
-        )
-        raise PermissionDenied
+    require(
+        request,
+        is_competition_manager(request.user),
+        "competition.permission.denied",
+    )
 
 
 def _member_group_map(form):

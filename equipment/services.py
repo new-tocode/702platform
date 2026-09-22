@@ -6,6 +6,8 @@ from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.utils import timezone
 
+from core.permissions import is_admin
+
 from .models import Equipment, EquipmentBorrow
 
 
@@ -63,7 +65,7 @@ def return_borrow(*, borrow_id, actor):
     borrow = EquipmentBorrow.objects.select_for_update().select_related("equipment").get(
         pk=borrow_id,
     )
-    if not actor.is_staff and borrow.borrower_id != actor.pk:
+    if not is_admin(actor) and borrow.borrower_id != actor.pk:
         logger.warning(
             "equipment.return.denied borrow_id=%s actor=%s borrower_id=%s reason=not_owner",
             borrow.pk,
