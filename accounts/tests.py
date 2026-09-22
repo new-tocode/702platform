@@ -10,6 +10,7 @@ from projects.models import ProjectGroup
 
 from .forms import AdminUserChangeForm, AdminUserCreationForm, ProfileForm
 from .roles import describe_member
+from .services import set_qualification
 
 
 User = get_user_model()
@@ -402,3 +403,159 @@ class AdminProvisioningAcceptanceTests(TestCase):
         self.assertContains(list_response, "测试用户组")
         self.assertEqual(change_response.status_code, 200)
         self.assertContains(change_response, "组内成员")
+
+
+class RoleRosterAcceptanceTests(TestCase):
+    """身份名册与批量授予——后台唯一能直接发放身份的地方。
+
+    名册本身只读。全局身份的授予与撤销走用户列表页的批量动作；对象身份
+    （项目组联系人、成员）连批量动作都没有，只能由业务动作产生。
+    """
+
+    def setUp(self):
+        self.admin = User.objects.create_superuser(
+            username="admin-roles",
+            password="Admin-Password-123!",
+        )
+        self.client.force_login(self.admin)
+
+    def _member(self, username, full_name):
+        user = User.objects.create_user(
+            username=username,
+            password="Initial-Password-123!",
+        )
+        user.profile.full_name = full_name
+        user.profile.save(update_fields=["full_name"])
+        return user
+
+    def test_roster_lists_exactly_the_holders(self):
+        holder = self._member("roster-holder", "有名册的人")
+        holder.is_reviewer = True
+        holder.save(update_fields=["is_reviewer"])
+        self._member("roster-outsider", "不在名册的人")
+
+        response = self.client.get(reverse("admin:accounts_reviewerrole_changelist"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "有名册的人")
+        self.assertNotContains(response, "不在名册的人")
+
+    def test_roster_shows_every_identity_a_person_holds(self):
+        holder = self._member("roster-multi", "多重身份")
+        holder.is_reviewer = True
+        holder.is_super_reviewer = True
+        holder.save(update_fields=["is_reviewer", "is_super_reviewer"])
+
+        response = self.client.get(reverse("admin:accounts_reviewerrole_changelist"))
+
+        self.assertContains(response, "评审人、超级评审")
+
+    def test_all_six_rosters_load(self):
+        for name in (
+            "admin:accounts_adminrole_changelist",
+            "admin:accounts_reviewerrole_changelist",
+            "admin:accounts_preliminaryreviewerrole_changelist",
+            "admin:accounts_superreviewerrole_changelist",
+            "admin:projects_projectcontact_changelist",
+            "admin:projects_projectmember_changelist",
+        ):
+            with self.subTest(roster=name):
+                self.assertEqual(self.client.get(reverse(name)).status_code, 200)
+
+    def test_rosters_offer_no_way_to_hand_out_an_identity(self):
+        """名册能看不能发——发资格在用户列表页，对象身份则只能由业务动作产生。"""
+        for name in (
+            "admin:accounts_reviewerrole_add",
+            "admin:projects_projectcontact_add",
+            "admin:projects_projectmember_add",
+        ):
+            with self.subTest(add_page=name):
+                self.assertEqual(self.client.get(reverse(name)).status_code, 403)
+
+    def test_bulk_action_grants_then_revokes_reviewer_qualification(self):
+        first = self._member("bulk-one", "甲")
+        second = self._member("bulk-two", "乙")
+        selected = [str(first.pk), str(second.pk)]
+        listing = reverse("admin:accounts_user_changelist")
+
+        self.client.post(
+            listing,
+            {"action": "grant_is_reviewer", "_selected_action": selected, "index": "0"},
+            follow=True,
+        )
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertTrue(first.is_reviewer)
+        self.assertTrue(second.is_reviewer)
+        self.assertTrue(
+            AuditLog.objects.filter(action="accounts.qualification.grant").exists()
+        )
+
+        self.client.post(
+            listing,
+            {"action": "revoke_is_reviewer", "_selected_action": selected, "index": "0"},
+            follow=True,
+        )
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertFalse(first.is_reviewer)
+        self.assertFalse(second.is_reviewer)
+
+    def test_granting_someone_who_already_has_it_leaves_no_audit_row(self):
+        member = self._member("bulk-idempotent", "丙")
+        member.is_reviewer = True
+        member.save(update_fields=["is_reviewer"])
+
+        self.client.post(
+            reverse("admin:accounts_user_changelist"),
+            {
+                "action": "grant_is_reviewer",
+                "_selected_action": [str(member.pk)],
+                "index": "0",
+            },
+            follow=True,
+        )
+
+        member.refresh_from_db()
+        self.assertTrue(member.is_reviewer)
+        # 取值没变就不算一次授予，也就没有新的审计行。
+        self.assertFalse(
+            AuditLog.objects.filter(action="accounts.qualification.grant").exists()
+        )
+
+    def test_no_bulk_action_hands_out_admin_access(self):
+        """把一批人放进后台该是逐个确认的事，不该由一次批量动作完成。"""
+        response = self.client.get(reverse("admin:accounts_user_changelist"))
+
+        self.assertNotContains(response, "授予管理员资格")
+        self.assertNotContains(response, "撤销管理员资格")
+
+    def test_service_refuses_flags_outside_the_allowlist(self):
+        with self.assertRaises(ValueError):
+            set_qualification(
+                users=[self.admin],
+                flag="is_superuser",
+                value=True,
+                actor=self.admin,
+            )
+
+    def test_new_account_can_be_given_qualifications_right_away(self):
+        response = self.client.post(
+            reverse("admin:accounts_user_add"),
+            {
+                "username": "member-with-roles",
+                "email": "roles@example.com",
+                "full_name": "带资格的新人",
+                "password1": "Initial-Password-234!",
+                "password2": "Initial-Password-234!",
+                "is_reviewer": "on",
+                "is_preliminary_reviewer": "on",
+                "_save": "保存",
+            },
+        )
+
+        self.assertIn(response.status_code, {200, 302})
+        member = User.objects.get(username="member-with-roles")
+        self.assertTrue(member.is_reviewer)
+        self.assertTrue(member.is_preliminary_reviewer)
+        self.assertFalse(member.is_super_reviewer)

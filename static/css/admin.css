@@ -122,3 +122,9 @@ button {
 .inline-group h2 {
   font-weight: 600;
 }
+
+/* 身份名册页顶部那句「这个身份从哪来」 */
+.roster-summary {
+  margin: 0 0 12px;
+  color: var(--body-quiet-color);
+}
