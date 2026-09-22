@@ -90,7 +90,7 @@
 └── env.local.sh                       # 本地开发配置（.gitignore 忽略）
 ```
 
-本机生成内容（`.venv/`、`__pycache__/`、`logs/`、`mediafiles/`、`staticfiles/`、`env*.sh`）不提交版本库，规则见 `.gitignore`。根目录 `社团评审系统_发布版.zip` 是历史压缩包，不参与运行。
+本机生成内容（`.venv/`、`__pycache__/`、`logs/`、`mediafiles/`、`staticfiles/`、`env*.sh`）不提交版本库，规则见 `.gitignore`。`logs/` 只留运行时日志（`django.log` + 轮转），阶段验收留下的一次性日志已在重构时清掉。
 
 ### 1.1 样式与模板约定
 
