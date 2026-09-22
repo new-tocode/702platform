@@ -69,12 +69,6 @@ def register_entry(
     return entry
 
 
-def clear_entries():
-    """Clear the registry for isolated tests."""
-    with _LOCK:
-        _ENTRIES.clear()
-
-
 def unregister_entry(key):
     """Remove one registered entry, primarily for isolated tests."""
     with _LOCK:

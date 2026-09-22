@@ -1,7 +1,6 @@
 """Unified image and video media library."""
 
 from django.conf import settings
-from django.core.exceptions import ValidationError
 from django.db import models
 
 from .validators import IMAGE, VIDEO, validate_media_file

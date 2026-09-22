@@ -18,7 +18,6 @@ from .forms import PreliminaryReviewForm, ReviewForm, ReviewerLeaveForm
 from .models import (
     ReviewTask,
     ProjectSubmission,
-    preliminary_task_of,
 )
 from .services import (
     can_override_review,

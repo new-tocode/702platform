@@ -3,9 +3,6 @@
 import logging
 
 from django.contrib import admin, messages
-from django.core.exceptions import PermissionDenied
-from django.http import HttpResponseRedirect
-from django.urls import path, reverse
 
 from core.audit import record_audit
 
@@ -133,34 +130,3 @@ class EquipmentBorrowAdmin(admin.ModelAdmin):
                 f"其中 {already_returned_count} 条记录已经归还。",
                 messages.WARNING,
             )
-
-    def get_urls(self):
-        urls = super().get_urls()
-        custom_urls = [
-            path(
-                "<path:object_id>/return/",
-                self.admin_site.admin_view(self.return_view),
-                name="equipment_equipmentborrow_return",
-            ),
-        ]
-        return custom_urls + urls
-
-    def return_view(self, request, object_id):
-        if request.method != "POST":
-            raise PermissionDenied
-        try:
-            returned_borrow = return_borrow(borrow_id=object_id, actor=request.user)
-        except BorrowAlreadyReturned:
-            self.message_user(request, "该记录已经归还。", messages.WARNING)
-        else:
-            record_audit(
-                action="equipment.return.admin",
-                user=request.user,
-                target=returned_borrow,
-                detail={"equipment_id": returned_borrow.equipment_id},
-                request=request,
-            )
-            self.message_user(request, "设备已归还。", messages.SUCCESS)
-        return HttpResponseRedirect(
-            reverse("admin:equipment_equipmentborrow_changelist"),
-        )
