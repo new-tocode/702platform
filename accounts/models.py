@@ -84,6 +84,12 @@ class Profile(models.Model):
     )
     phone = models.CharField(_("手机号"), max_length=32, blank=True)
     contact = models.CharField(_("其他联系方式"), max_length=255, blank=True)
+    bio = models.TextField(
+        _("个人简介"),
+        max_length=1000,
+        blank=True,
+        help_text=_("最多 1000 字。"),
+    )
     created_at = models.DateTimeField("创建时间", auto_now_add=True)
     updated_at = models.DateTimeField("更新时间", auto_now=True)
 

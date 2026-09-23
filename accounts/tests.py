@@ -1,5 +1,8 @@
 """Stage 1 acceptance tests for accounts and forced password changes."""
 
+import re
+
+from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser, Group
 from django.test import TestCase
@@ -209,6 +212,100 @@ class MemberAuthenticationAcceptanceTests(TestCase):
         combined_logs = "\n".join(captured.output)
         self.assertIn("auth.login.failure", combined_logs)
         self.assertNotIn("never-log-this-password", combined_logs)
+
+
+class ProfilePageAcceptanceTests(TestCase):
+    """个人信息页的排布：一行两项、手机号收窄并前移、个人简介压轴。"""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="profile-member",
+            password="Member-Password-123!",
+        )
+        self.user.must_change_password = False
+        self.user.save(update_fields=["must_change_password"])
+        self.client.force_login(self.user)
+
+    def cells(self):
+        """表单给出的排布：按行摊平成一格一格。"""
+        return [cell for row in ProfileForm().rows() for cell in row]
+
+    def test_name_pairs_with_student_id_and_college_with_major(self):
+        rows = [
+            [cell["field"].name for cell in row] for row in ProfileForm().rows()
+        ]
+
+        self.assertEqual(rows[0], ["full_name", "student_id"])
+        self.assertEqual(rows[1], ["college", "major"])
+
+    def test_phone_is_the_only_narrow_field_and_comes_before_specialty(self):
+        names = [cell["field"].name for cell in self.cells()]
+
+        self.assertEqual(
+            [cell["field"].name for cell in self.cells() if cell["narrow"]],
+            ["phone"],
+        )
+        self.assertLess(names.index("phone"), names.index("specialty"))
+
+    def test_specialty_stays_a_single_line_input(self):
+        widget = ProfileForm().fields["specialty"].widget
+
+        self.assertIsInstance(widget, forms.TextInput)
+
+    def test_bio_is_last_and_renders_as_a_tall_textarea(self):
+        cells = self.cells()
+
+        self.assertEqual(cells[-1]["field"].name, "bio")
+        response = self.client.get(reverse("accounts:profile"))
+        self.assertContains(response, '<textarea name="bio"')
+        self.assertContains(response, 'rows="8"')
+
+    def test_profile_page_pairs_name_with_student_id_in_one_row(self):
+        response = self.client.get(reverse("accounts:profile"))
+
+        html = response.content.decode()
+        first_row = re.search(r'<div class="field-row">(.*?)</div>\s*</div>', html, re.S)
+        self.assertIn('name="full_name"', first_row.group(1))
+        self.assertIn('name="student_id"', first_row.group(1))
+
+    def test_profile_page_marks_single_field_rows_as_full_width(self):
+        response = self.client.get(reverse("accounts:profile"))
+
+        html = response.content.decode()
+        # 两行两项，手机号、特长、其他联系方式、个人简介各占一行。
+        self.assertEqual(html.count('class="field-row"'), 6)
+        # 独占一行的字段横跨两列：特长仍是整幅的单行输入，个人简介的框也只受这一处约束。
+        self.assertEqual(html.count('class="field field-full"'), 3)
+        self.assertIn('class="field field-full field-short"', html)
+
+    def test_member_can_save_a_bio(self):
+        response = self.client.post(
+            reverse("accounts:profile"),
+            {
+                "full_name": "成员一",
+                "student_id": "20260001",
+                "college": "计算机学院",
+                "major": "软件工程",
+                "phone": "13800000000",
+                "specialty": "算法设计",
+                "contact": "",
+                "bio": "喜欢做机器人，也写一点前端。",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.user.profile.refresh_from_db()
+        self.assertEqual(self.user.profile.bio, "喜欢做机器人，也写一点前端。")
+
+    def test_bio_longer_than_the_limit_is_rejected(self):
+        response = self.client.post(
+            reverse("accounts:profile"),
+            {"bio": "字" * 1001},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.user.profile.refresh_from_db()
+        self.assertEqual(self.user.profile.bio, "")
 
 
 class MemberRoleDisplayAcceptanceTests(TestCase):

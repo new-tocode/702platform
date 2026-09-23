@@ -24,12 +24,18 @@
             <form method="post">
                 {% csrf_token %}
                 {{ form.non_field_errors }}
-                {% for field in form %}
-                    <div class="field">
-                        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
-                        {{ field }}
-                        {% if field.help_text %}<p class="help">{{ field.help_text }}</p>{% endif %}
-                        {{ field.errors }}
+                {# 分行与宽窄由 ProfileForm.rows 给出：姓名｜学号、学院｜专业并排，
+                   手机号收窄，特长与个人简介各自独占一行。 #}
+                {% for row in form.rows %}
+                    <div class="field-row">
+                        {% for cell in row %}
+                            <div class="field{% if cell.full %} field-full{% endif %}{% if cell.narrow %} field-short{% endif %}">
+                                <label for="{{ cell.field.id_for_label }}">{{ cell.field.label }}</label>
+                                {{ cell.field }}
+                                {% if cell.field.help_text %}<p class="help">{{ cell.field.help_text }}</p>{% endif %}
+                                {{ cell.field.errors }}
+                            </div>
+                        {% endfor %}
                     </div>
                 {% endfor %}
                 <div class="form-actions">
