@@ -39,7 +39,7 @@
                             {% else %}
                                 <span class="avatar avatar-blank discussion-avatar" aria-hidden="true">{% if member.profile.full_name %}{{ member.profile.full_name|first|upper }}{% else %}{{ member.username|first|upper }}{% endif %}</span>
                             {% endif %}
-                            <span class="discussion-member-name">{% if member.profile.full_name %}{{ member.profile.full_name }}{% else %}{{ member.username }}{% endif %}</span>
+                            <a class="discussion-member-name" href="{% url 'accounts:member_profile' member.pk %}">{% if member.profile.full_name %}{{ member.profile.full_name }}{% else %}{{ member.username }}{% endif %}</a>
                         </div>
                     {% empty %}
                         <div class="empty">{% translate "没有找到匹配的成员。" %}</div>

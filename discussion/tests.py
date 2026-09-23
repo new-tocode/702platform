@@ -433,6 +433,34 @@ class DiscussionViewTests(TestCase):
         self.assertNotContains(board_response, reverse("discussion:board_create"))
         self.assertNotContains(board_response, "删除空板块")
 
+    def test_member_directory_searches_names_and_links_to_read_only_profiles(self):
+        self.member.profile.full_name = "Alex Chen"
+        self.member.profile.save(update_fields=["full_name"])
+        self.other_member.profile.full_name = "Sam Lee"
+        self.other_member.profile.save(update_fields=["full_name"])
+        self.client.force_login(self.member)
+
+        response = self.client.get(reverse("discussion:space"), {"q": "alex"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            reverse("accounts:member_profile", args=(self.member.pk,)),
+        )
+        self.assertContains(response, "Alex Chen")
+        self.assertNotContains(response, "Sam Lee")
+        self.assertNotContains(response, self.other_member.username)
+
+        username_search = self.client.get(
+            reverse("discussion:space"),
+            {"q": self.other_member.username},
+        )
+        self.assertContains(username_search, "没有找到匹配的成员。")
+        self.assertNotContains(
+            username_search,
+            reverse("accounts:member_profile", args=(self.other_member.pk,)),
+        )
+
     def test_post_create_uses_logged_in_author_and_post_edit_is_owner_only(self):
         self.client.force_login(self.member)
         response = self.client.post(
