@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{{ display_name }} - {% translate "个人信息" %}{% endblock %}
+
+{% block content %}
+<div class="wrap">
+    <div class="pagehead">
+        <div class="path">
+            <a href="{% url 'discussion:space' %}">{% translate "社团空间" %}</a>
+            <span>/</span>
+            <span>{% translate "成员资料" %}</span>
+        </div>
+        <div class="head-row">
+            <div>
+                <h1>{{ display_name }}</h1>
+                {% if display_name != member.username %}<div class="sub">{{ member.username }}</div>{% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="member-profile-layout">
+        <aside class="panel member-profile-card">
+            <div class="panel-head"><h2>{% translate "成员" %}</h2></div>
+            <div class="panel-body">
+                <div class="avatar-block">
+                    {% if profile and profile.avatar %}
+                        <img class="avatar" src="{{ profile.avatar.url }}" alt="{{ display_name }}">
+                    {% else %}
+                        <span class="avatar avatar-blank" aria-hidden="true">{{ avatar_initial }}</span>
+                    {% endif %}
+                </div>
+                <div class="member-profile-name">{{ display_name }}</div>
+                <div class="muted">{{ member.username }}</div>
+            </div>
+        </aside>
+
+        <div class="stack">
+            <section class="panel">
+                <div class="panel-head"><h2>{% translate "个人资料" %}</h2></div>
+                <div class="panel-body">
+                    {% if profile %}
+                        <dl class="dl member-profile-fields">
+                            {% if profile.college %}<div><dt>{% translate "学院" %}</dt><dd>{{ profile.college }}</dd></div>{% endif %}
+                            {% if profile.major %}<div><dt>{% translate "专业" %}</dt><dd>{{ profile.major }}</dd></div>{% endif %}
+                            {% if profile.specialty %}<div><dt>{% translate "特长" %}</dt><dd>{{ profile.specialty }}</dd></div>{% endif %}
+                            {% if profile.bio %}<div><dt>{% translate "个人简介" %}</dt><dd class="member-profile-bio">{{ profile.bio|linebreaksbr }}</dd></div>{% endif %}
+                            {% if profile.phone %}<div><dt>{% translate "手机号" %}</dt><dd>{{ profile.phone }}</dd></div>{% endif %}
+                            {% if profile.contact %}<div><dt>{% translate "其他联系方式" %}</dt><dd>{{ profile.contact }}</dd></div>{% endif %}
+                        </dl>
+                        {% if not profile.college and not profile.major and not profile.specialty and not profile.bio and not profile.phone and not profile.contact %}
+                            <p class="muted">{% translate "这位成员还没有填写个人资料。" %}</p>
+                        {% endif %}
+                    {% else %}
+                        <p class="muted">{% translate "这位成员还没有填写个人资料。" %}</p>
+                    {% endif %}
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="panel-head"><h2>{% translate "当前身份" %}</h2></div>
+                <div class="panel-body">
+                    {% if identities %}
+                        <ul class="roles">
+                            {% for identity in identities %}
+                                <li>
+                                    <span class="chip chip-on">{{ identity.label }}</span>
+                                    {% for group_name in identity.groups %}<span class="member">{{ group_name }}</span>{% endfor %}
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="muted">{% translate "暂无其他身份。" %}</p>
+                    {% endif %}
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <section class="panel member-profile-gallery">
+        <div class="panel-head"><h2>{% translate "个人图册" %}</h2></div>
+        <div class="panel-body">
+            {% if gallery_images %}
+                <div class="gallery">
+                    {% for image in gallery_images %}
+                        <figure class="gitem gitem-{{ image.layout }}">
+                            <img src="{{ image.image.url }}" alt="">
+                        </figure>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p class="muted">{% translate "个人图册暂无照片。" %}</p>
+            {% endif %}
+        </div>
+    </section>
+
+    <div class="form-actions">
+        <a class="btn" href="{% url 'discussion:space' %}">{% translate "返回社团空间" %}</a>
+    </div>
+</div>
+{% endblock %}

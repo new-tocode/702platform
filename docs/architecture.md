@@ -10,7 +10,7 @@
 面向竞赛社团的轻量管理平台，部署于单台服务器。以成员视角为核心：
 
 - **公开门户**：访客无需登录即可浏览社团简介、历年获奖、成员风采、公开公告。
-- **成员系统**：登录后进入成员界面，查看内部通知、个人信息、项目组、竞赛报名、设备借用等操作入口。
+- **成员系统**：登录后进入成员界面，查看内部通知、个人信息、项目组、竞赛报名、设备借用及社团空间等功能。
 - **管理后台**：管理员发布公开/内部通知、发布竞赛信息、管理账号与设备、查看各类登记汇总。
 
 **核心原则**：单体应用、模块化拆分、权限收敛到统一的一层、操作入口可插拔。
@@ -28,7 +28,7 @@
 | 首次登录 | **强制修改初始密码**（改密通过前，除改密页外其他成员功能不可用） |
 | 媒体内容 | 支持上传**大量富文本、图片、视频**，用于公开页、通知、成员风采等场景 |
 | 公开页面 | 需要「社团简介、历年获奖、成员风采」等展示栏目 |
-| 界面语言 | 前台**中英双语**：中文为源语言（不带前缀），英文走 `/en/` 前缀，地址即语言；只翻译界面，人录入的内容（通知正文、竞赛说明等）不翻译，后台 `/admin/` 不在双语范围内 |
+| 界面语言 | 前台**中英双语**：中文为源语言（不带前缀），英文走 `/en/` 前缀，地址即语言；只翻译界面，人录入的内容（通知正文、板块中英文名称、帖子与评论等）不自动翻译，后台 `/admin/` 不在双语范围内 |
 | 部署方式 | 由用户在服务器自行安装，架构设计不依赖部署细节 |
 
 ---
@@ -64,9 +64,9 @@
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐     │
 │  │ accounts │  │ notices  │  │ projects │  │competition│    │
 │  └──────────┘  └──────────┘  └──────────┘  └──────────┘     │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐                    │
-│  │equipment │  │ content  │  │   core   │                    │
-│  └──────────┘  └──────────┘  └──────────┘                    │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐     │
+│  │equipment │  │ content  │  │discussion│  │   core   │     │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘     │
 │                                                              │
 │  模板层（渲染） / 权限中间件 / 操作入口注册表 / 身份目录           │
 └───────────────┬─────────────────────────────────────────────┘
@@ -89,6 +89,7 @@
 |---|---|
 | `accounts` | 用户、角色分组、个人资料（学号/专业/联系方式/头像/个人简介/个人图册）、密码管理 |
 | `notices` | 公告/新闻，按 `scope` 区分公开与内部可见范围 |
+| `discussion` | 社团空间：板块、帖子、评论、成员目录；作者/管理员/超级管理员权限分层 |
 | `content` | 公开展示页：社团简介、历年获奖、成员风采 |
 | `projects` | 项目组（项目组联系人、成员） |
 | `competitions` | 竞赛信息发布 + 项目组联系人报名登记 |
@@ -452,6 +453,41 @@ MediaFile（统一媒体库，供各内容模型通过 M2M/FK 引用）
   - created_at
 ```
 
+### 6.10 discussion（社团空间）
+
+```
+Board（社团空间板块）
+  - name_zh       中文名称（1–80 字符，必须包含中文）
+  - name          英文名称（1–80 个 ASCII 英文字符，大小写不敏感唯一）
+  - created_by    FK(User)
+  - created_at
+
+Post（帖子）
+  - board         FK(Board, PROTECT；必须先清空帖子才可删板块)
+  - author        FK(User)
+  - title / content
+  - is_pinned     是否置顶
+  - created_at / updated_at
+  - 默认排序：置顶优先，再按发布时间倒序
+
+PostImage（帖子图片）
+  - post          FK(Post, CASCADE)
+  - image         图片（JPG/JPEG/PNG/WebP/GIF，单张 ≤3 MiB，每帖最多 3 张）
+  - file_size / created_at
+
+Comment（评论）
+  - post          FK(Post, CASCADE；删帖同时删除评论)
+  - author        FK(User)
+  - content
+  - created_at
+```
+
+- 空间和成员目录只对活跃、已完成首次改密的登录账号开放。板块选择器在内容区顶部横向滚动；帖子列表分页，评论按时间展示。
+- 帖子作者可编辑/删除自己的帖子并增删图片；管理员由 `core.permissions.is_admin()` 判定，可删除任意帖子、置顶/取消置顶；仅 Django 超级管理员可创建/删除板块。权限与图片上限在 `discussion.permissions`、服务层与视图分别校验。
+- 创建帖子与删除板块均锁定板块行，避免并发操作绕过“删除前必须清空”的规则；编辑帖子锁定帖子行并核对图片数量，避免并发超出上限。关键写操作通过 `core.audit.record_audit()` 留痕。
+- 成员目录显示头像、姓名（为空时回退账号名），按姓名搜索。只读他人资料页不复用本人可编辑的 Profile 表单，仅展示头像、姓名/账号名、学院、专业、特长、简介、身份、图册与公开的手机号/其他联系方式；学号与邮箱不展示。
+- 只有界面字符串进入英文 `.po`；板块名、帖子、评论与个人资料均为用户内容，不翻译。
+
 - **格式白名单**：图片 jpg/jpeg/png/webp/gif；视频 mp4（要求包含 `ftyp` 标识）/ webm（要求 EBML 文件头）。仅允许白名单扩展名，拒绝可执行/脚本类文件；图片还通过 Pillow 解码校验。
 - **大小上限（默认建议值，可按服务器带宽/磁盘调整）**：图片 ≤10MB、视频 ≤500MB；Django 端校验，生产需同步配置 Nginx `client_max_body_size`。
 - **图片那一套校验只有一份实现**：`core/uploads.validate_image_upload`（扩展名、大小、MIME 家族、真实图片签名）。媒体库的图片分支与个人信息页的头像（≤2 MB）、图册单张（≤5 MB）都调它，差别只是上限与文案；视频是媒体库独有的口径，仍留在 `media/validators.py`。图册另有合计上限，见 §6.1。
@@ -479,6 +515,7 @@ MediaFile（统一媒体库，供各内容模型通过 M2M/FK 引用）
 - **评审资格的判定归评审应用**：`reviews/permissions.py`（`is_reviewer` / `is_preliminary_reviewer` / `is_super_reviewer` / `qualifies_for_stage` / `has_review_qualification` / `may_receive_tasks` / `has_review_claim`）。projects 与 accounts 只在函数体内局部 import 这一个模块——依赖方向因此是单向的，projects 不会再为了问一句「他是不是评审人」而去读评审的模型。
 - 「组成员关系」通过 `ProjectGroup.members` 表达；「内部通知的用户组」仍是 Django `auth.Group`（`Notice.visible_groups`），两套"组"语义不同，不可混淆。
 - **「谁算管理员」只有一处写法**：`core/permissions.py` 的 `is_admin(user)`（`is_staff` 或 `is_superuser`）。此前 `is_staff` 与 `is_staff or is_superuser` 两种写法并存，同一个问题两个答案；现在各应用一律问它。`projects.permissions.can_decide_group_create_requests` 保留为业务语义名（「谁能审建组申请」），函数体委托 `is_admin`。
+- 社团空间的帖子管理沿用 `is_admin()`（staff 或 superuser）；板块管理单独要求 Django `is_superuser`，不能用评审资格代替。空间成员范围是 `is_active=True` 且已完成首次改密的账号。
 - **依赖方向**：跨应用引用只经 `permissions`／`services`／`selectors` 的公开函数，且不在模块加载期互相牵连（需要时用函数内局部 import）。`projects` 与 `reviews` 之间原本有一处双向 import，随着 `reviews` 改问 `core.permissions.is_admin` 而消失。
 
 #### 7.1.1 身份的管理：两种作用域，两套办法
@@ -502,6 +539,10 @@ MediaFile（统一媒体库，供各内容模型通过 M2M/FK 引用）
 |---|:---:|:---:|:---:|:---:|:---:|
 | 浏览公开通知/展示页 | ✔ | ✔ | ✔ | ✔ | ✔ |
 | 登录 / 修改本人资料与密码 | — | ✔ | ✔ | ✔ | ✔ |
+| 查看社团空间、成员目录与只读资料 | — | ✔ | ✔ | ✔ | ✔ |
+| 发帖、评论、维护自己的帖子 | — | ✔ | ✔ | ✔ | ✔ |
+| 删除他人帖子、置顶/取消置顶 | — | — | — | — | ✔ |
+| 创建/删除空板块 | — | — | — | — | 仅超级管理员 |
 | 浏览内部通知（按 auth 用户组） | — | ✔ | ✔ | ✔ | ✔ |
 | 查看"仅联系人可见"通知 | — | — | — | ✔ | ✔ |
 | 查看项目组页 | — | ✔（全部，可申请加入） | ✔（仅自己的组） | ✔（全部 + 管理自己的组） | ✔ |
@@ -536,6 +577,7 @@ Django 原生支持「组级」权限，**对象级**需自定义；本项目把
 - `can_view_borrow(borrow, user)`：借用记录本人可见，管理员可见全部。
 - **项目组报名权限**：`competitions.permissions.can_register_group` 委托 `can_manage_group`；报名成员与竞赛组长都必须属于所选项目组，且竞赛组长必须是参赛成员之一。
 - **通知可见性**：`notices/visibility.py` 的 `member_visible_notices(user)` 单点判定 —— `internal` 走 `visible_groups`，`contacts` 走 `is_project_contact(user)`；列表与详情共用，未命中返回 404。
+- **社团空间权限**：`discussion/permissions.py` 集中成员、作者、管理员和超级管理员判定；写操作在服务层再次校验。只有帖子作者可修改自己的帖子，管理员可删任意帖子并置顶，超级管理员才可在前端创建/删除空板块。
 
 建议封装为通用 helper（本项目已用 `projects/permissions.py` + `projects/services.py` 落地；`competitions/permissions.py` 为薄封装）。
 
@@ -570,7 +612,7 @@ core / registry.py
 
 - 各业务 app 在 `AppConfig.ready()` 向注册表登记自己的入口，例如「个人信息」「内部通知」「项目组」「竞赛信息」「设备借用」「借用记录」「审计日志」。
 - 重复 key 注册是幂等的（覆盖旧定义），开发自动重载不会产生重复条目。
-- 成员中心遍历 `operation_entries` 渲染入口，面板代码不感知具体模块；顶部导航不再放业务入口，仅保留公开栏目、成员中心、管理后台（staff）与退出。
+- 成员中心遍历 `operation_entries` 渲染业务入口，面板代码不感知具体模块；顶部导航以公开栏目为主，并按需求固定提供一个仅登录成员可见的「社团空间」入口，另有成员中心、管理后台（staff）与退出。
 - 可见性同时支持：未登录拦截、`must_change_password` 拦截、`required_permission` Django 权限、`staff_only` 管理员限制、以及 `visible_when` 自定义业务条件（如「设备借用」的 `can_use_equipment`）。
 - 模板隐藏入口只影响展示；后端接口权限校验仍然独立存在，不能依赖前端隐藏。
 - 新增业务模块只需在 app 注册入口，主面板模板无需改动。
@@ -603,6 +645,13 @@ core / registry.py
 | `/member/` | 成员首页：身份／评审与初审资格 + 社团概览（仅管理员与联系人可见）+ 操作面板（注册表渲染） | 登录 |
 | `/member/notices/` | 内部通知 + 仅联系人可见通知列表/详情 | 登录（按受众过滤） |
 | `/member/profile/` | 个人信息：左栏资料表单 + 右栏头像与「当前身份」（只读）+ 下方个人图册 | 本人 |
+| `/member/profile/<id>/` | 其他成员的只读资料：头像、姓名、院系、身份、图册及明确公开的联系方式（不显示学号/邮箱） | 登录成员 |
+| `/member/space/`、`/member/space/boards/<id>/` | 社团空间与板块帖子流（置顶优先、其余按时间倒序） | 登录成员 |
+| `/member/space/boards/<id>/posts/new/`、`/member/space/posts/<id>/edit/` | 发帖、编辑本人帖子 | 登录成员 / 作者 |
+| `/member/space/posts/<id>/comments/`、`/member/space/posts/<id>/delete/` | 评论、删除帖子；删帖级联删除评论 | 登录成员；删自己的帖或管理员删任意帖 |
+| `/member/space/images/<id>/` | 帖子图片本身（随机文件名落盘，经此路由按成员身份校验后才发出） | 登录成员 |
+| `/member/space/posts/<id>/pin/` | 置顶/取消置顶 | 管理员 |
+| `/member/space/boards/create/`、`/member/space/boards/<id>/delete/` | 前端创建板块或删除空板块 | Django 超级管理员 |
 | `/member/profile/avatar/` | 上传／更换头像（POST，一张图盖掉旧的，旧文件随之删除） | 本人 |
 | `/member/profile/avatar/delete/` | 删除头像，连同磁盘上的文件（POST） | 本人 |
 | `/member/profile/gallery/` | 往个人图册加一张图（POST；单张 ≤5 MB、合计 ≤100 MB） | 本人 |
