@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+{% load i18n rendering %}
+
+{% block title %}{% translate "社团空间" %} - {% translate "竞赛社团管理平台" %}{% endblock %}
+
+{% block content %}
+<div class="wrap">
+    <div class="pagehead">
+        <div class="path">
+            <a href="{% url 'accounts:member_home' %}">{% translate "成员中心" %}</a>
+            <span>/</span>
+            <span>{% translate "社团空间" %}</span>
+        </div>
+        <div class="head-row">
+            <div>
+                <h1>{% translate "社团空间" %}</h1>
+                <div class="sub">{% translate "在板块中分享进展、提出问题，也看看大家最近在聊什么。" %}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="discussion-layout">
+        <aside class="panel discussion-members" aria-labelledby="discussion-members-title">
+            <div class="panel-head">
+                <h2 id="discussion-members-title">{% translate "成员" %}</h2>
+                <span class="count">{{ members|length }}</span>
+            </div>
+            <div class="panel-body">
+                <form method="get" action="{% if active_board %}{% url 'discussion:board' active_board.pk %}{% else %}{% url 'discussion:space' %}{% endif %}" class="member-search">
+                    <label class="visually-hidden" for="member-name-search">{% translate "搜索成员姓名" %}</label>
+                    <input id="member-name-search" type="search" name="q" value="{{ member_query }}" placeholder="{% translate '搜索姓名' %}">
+                    <button class="btn btn-sm" type="submit">{% translate "搜索" %}</button>
+                </form>
+                <div class="discussion-member-list">
+                    {% for member in members %}
+                        <div class="discussion-member">
+                            {% if member.profile.avatar %}
+                                <img class="avatar discussion-avatar" src="{{ member.profile.avatar.url }}" alt="">
+                            {% else %}
+                                <span class="avatar avatar-blank discussion-avatar" aria-hidden="true">{% if member.profile.full_name %}{{ member.profile.full_name|first|upper }}{% else %}{{ member.username|first|upper }}{% endif %}</span>
+                            {% endif %}
+                            <span class="discussion-member-name">{% if member.profile.full_name %}{{ member.profile.full_name }}{% else %}{{ member.username }}{% endif %}</span>
+                        </div>
+                    {% empty %}
+                        <div class="empty">{% translate "没有找到匹配的成员。" %}</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </aside>
+
+        <section class="discussion-main" aria-label="{% translate '社团空间内容' %}">
+            <nav class="discussion-board-rail" aria-label="{% translate '选择板块' %}">
+                {% for board_item in boards %}
+                    <a class="discussion-board-tab{% if active_board.pk == board_item.pk %} is-active{% endif %}" href="{% url 'discussion:board' board_item.pk %}"{% if active_board.pk == board_item.pk %} aria-current="page"{% endif %}>{{ board_item.name }}</a>
+                {% empty %}
+                    <span class="muted">{% translate "还没有板块。" %}</span>
+                {% endfor %}
+            </nav>
+
+            {% if active_board %}
+                <div class="discussion-board-heading">
+                    <div>
+                        <h2>{{ active_board.name }}</h2>
+                        {% if posts_page %}
+                            <span class="muted">{% blocktranslate count counter=posts_page.paginator.count %}共 1 条帖子{% plural %}共 {{ counter }} 条帖子{% endblocktranslate %}</span>
+                        {% endif %}
+                    </div>
+                    <div class="btn-row">
+                        <a class="btn btn-primary" href="{% url 'discussion:post_new' active_board.pk %}">{% translate "发布帖子" %}</a>
+                        {% if can_manage_boards %}
+                            <form method="post" action="{% url 'discussion:board_delete' active_board.pk %}">
+                                {% csrf_token %}
+                                <button class="btn btn-danger" type="submit">{% translate "删除空板块" %}</button>
+                            </form>
+                        {% endif %}
+                    </div>
+                </div>
+
+                {% if can_manage_boards %}
+                    <form method="post" action="{% url 'discussion:board_create' %}" class="discussion-board-create">
+                        {% csrf_token %}
+                        <label for="{{ board_form.name.id_for_label }}">{% translate "创建板块" %}</label>
+                        {{ board_form.name }}
+                        <button class="btn btn-sm" type="submit">{% translate "添加板块" %}</button>
+                    </form>
+                {% endif %}
+
+                <div class="discussion-feed">
+                    {% for post in posts_page %}
+                        <article class="panel discussion-post">
+                            <div class="panel-head">
+                                <div class="discussion-post-heading">
+                                    {% if post.is_pinned %}<span class="chip chip-pin">{% translate "置顶" %}</span>{% endif %}
+                                    <h3>{{ post.title }}</h3>
+                                </div>
+                                <span class="muted">{{ post.created_at|date:"Y-m-d H:i" }}</span>
+                            </div>
+                            <div class="panel-body">
+                                <div class="discussion-author">
+                                    <span>{% if post.author.profile.full_name %}{{ post.author.profile.full_name }}{% else %}{{ post.author.username }}{% endif %}</span>
+                                    <span class="muted">{% translate "发布于" %} {{ post.created_at|date:"Y-m-d H:i" }}</span>
+                                </div>
+                                <div class="prose discussion-post-content">{{ post.content|render_markdown }}</div>
+                                <div class="btn-row discussion-post-actions">
+                                    {% if post.author_id == user.pk %}
+                                        <a class="btn btn-sm" href="{% url 'discussion:post_edit' post.pk %}">{% translate "编辑" %}</a>
+                                    {% endif %}
+                                    {% if post.author_id == user.pk or is_admin %}
+                                        <form method="post" action="{% url 'discussion:post_delete' post.pk %}">
+                                            {% csrf_token %}
+                                            <button class="btn btn-sm btn-danger" type="submit">{% translate "删除帖子" %}</button>
+                                        </form>
+                                    {% endif %}
+                                    {% if is_admin %}
+                                        <form method="post" action="{% url 'discussion:post_pin' post.pk %}">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="is_pinned" value="{% if post.is_pinned %}false{% else %}true{% endif %}">
+                                            <button class="btn btn-sm" type="submit">{% if post.is_pinned %}{% translate "取消置顶" %}{% else %}{% translate "置顶" %}{% endif %}</button>
+                                        </form>
+                                    {% endif %}
+                                </div>
+
+                                <section class="discussion-comments" aria-label="{% translate '评论' %}">
+                                    <h4>{% translate "评论" %} <span class="count">{{ post.comments.all|length }}</span></h4>
+                                    {% for comment in post.comments.all %}
+                                        <div class="discussion-comment">
+                                            <strong>{% if comment.author.profile.full_name %}{{ comment.author.profile.full_name }}{% else %}{{ comment.author.username }}{% endif %}</strong>
+                                            <span class="muted">{{ comment.created_at|date:"Y-m-d H:i" }}</span>
+                                            <p>{{ comment.content|linebreaksbr }}</p>
+                                        </div>
+                                    {% empty %}
+                                        <p class="muted">{% translate "还没有评论。" %}</p>
+                                    {% endfor %}
+                                    <form method="post" action="{% url 'discussion:comment_create' post.pk %}" class="discussion-comment-form">
+                                        {% csrf_token %}
+                                        <label class="visually-hidden" for="comment-{{ post.pk }}">{% translate "写下评论" %}</label>
+                                        <textarea id="comment-{{ post.pk }}" name="content" rows="2" maxlength="4000" placeholder="{% translate '写下评论…' %}" required></textarea>
+                                        <button class="btn btn-sm" type="submit">{% translate "发表评论" %}</button>
+                                    </form>
+                                </section>
+                            </div>
+                        </article>
+                    {% empty %}
+                        <div class="empty">{% translate "这个板块还没有帖子，发布第一篇吧。" %}</div>
+                    {% endfor %}
+                </div>
+
+                {% if posts_page and posts_page.has_other_pages %}
+                    <nav class="discussion-pagination" aria-label="{% translate '帖子分页' %}">
+                        {% if posts_page.has_previous %}
+                            <a class="btn btn-sm" href="?page={{ posts_page.previous_page_number }}{% if member_query %}&amp;q={{ member_query|urlencode }}{% endif %}">{% translate "上一页" %}</a>
+                        {% endif %}
+                        <span class="muted">{% blocktranslate with current=posts_page.number total=posts_page.paginator.num_pages %}第 {{ current }} / {{ total }} 页{% endblocktranslate %}</span>
+                        {% if posts_page.has_next %}
+                            <a class="btn btn-sm" href="?page={{ posts_page.next_page_number }}{% if member_query %}&amp;q={{ member_query|urlencode }}{% endif %}">{% translate "下一页" %}</a>
+                        {% endif %}
+                    </nav>
+                {% endif %}
+            {% else %}
+                <div class="empty">{% translate "社团空间还没有板块。" %}</div>
+                {% if can_manage_boards %}
+                    <form method="post" action="{% url 'discussion:board_create' %}" class="discussion-board-create">
+                        {% csrf_token %}
+                        <label for="{{ board_form.name.id_for_label }}">{% translate "创建第一个板块" %}</label>
+                        {{ board_form.name }}
+                        <button class="btn btn-primary" type="submit">{% translate "创建板块" %}</button>
+                    </form>
+                {% endif %}
+            {% endif %}
+        </section>
+    </div>
+</div>
+{% endblock %}

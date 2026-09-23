@@ -30,6 +30,7 @@ urlpatterns += i18n_patterns(
         include(("competitions.urls", "competitions"), namespace="competitions"),
     ),
     path("member/equipment/", include(("equipment.urls", "equipment"), namespace="equipment")),
+    path("member/space/", include(("discussion.urls", "discussion"), namespace="discussion")),
     path(
         "member/borrows/",
         include(("equipment.borrow_urls", "equipment_borrows"), namespace="equipment_borrows"),

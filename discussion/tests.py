@@ -7,6 +7,7 @@ from django.db import IntegrityError, connection, transaction
 from django.db.models.deletion import ProtectedError
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
+from django.urls import reverse
 from django.utils import timezone
 
 from .forms import BoardForm, CommentForm, PostForm
@@ -367,3 +368,237 @@ class DiscussionSelectorTests(TestCase):
             list(selected.comments.all())
             selected.author.profile.full_name
             selected.comments.all()[0].author.profile.full_name
+
+
+class DiscussionViewTests(TestCase):
+    def setUp(self):
+        self.member = self._make_user("discussion-view-member")
+        self.other_member = self._make_user("discussion-view-other")
+        self.staff = self._make_user("discussion-view-staff", is_staff=True)
+        self.superuser = User.objects.create_superuser(
+            username="discussion-view-superuser",
+            password="Super-Password-123!",
+        )
+        self.board = Board.objects.create(
+            name="View Tests",
+            created_by=self.superuser,
+        )
+
+    def _make_user(self, username, **fields):
+        user = User.objects.create_user(
+            username=username,
+            password="Member-Password-123!",
+            **fields,
+        )
+        user.must_change_password = False
+        user.save(update_fields=["must_change_password"])
+        return user
+
+    def _post(self, *, author=None, title="A view test post"):
+        return Post.objects.create(
+            board=self.board,
+            author=author or self.member,
+            title=title,
+            content="The post body.",
+        )
+
+    def test_anonymous_and_forced_password_change_users_cannot_view_space(self):
+        response = self.client.get(reverse("discussion:space"))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("accounts:login"), response["Location"])
+        board_response = self.client.get(
+            reverse("discussion:board", args=(self.board.pk,))
+        )
+        self.assertEqual(board_response.status_code, 302)
+        self.assertIn(reverse("accounts:login"), board_response["Location"])
+
+        self.member.must_change_password = True
+        self.member.save(update_fields=["must_change_password"])
+        self.client.force_login(self.member)
+        response = self.client.get(reverse("discussion:space"))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("accounts:password_change"), response["Location"])
+
+    def test_member_can_view_space_and_board_but_not_board_management_controls(self):
+        self.client.force_login(self.member)
+
+        space_response = self.client.get(reverse("discussion:space"))
+        board_response = self.client.get(
+            reverse("discussion:board", args=(self.board.pk,))
+        )
+
+        self.assertEqual(space_response.status_code, 200)
+        self.assertContains(space_response, "View Tests")
+        self.assertEqual(board_response.status_code, 200)
+        self.assertNotContains(board_response, reverse("discussion:board_create"))
+        self.assertNotContains(board_response, "删除空板块")
+
+    def test_post_create_uses_logged_in_author_and_post_edit_is_owner_only(self):
+        self.client.force_login(self.member)
+        response = self.client.post(
+            reverse("discussion:post_new", args=(self.board.pk,)),
+            {
+                "title": "New from form",
+                "content": "Created by the logged-in author.",
+                "author": self.other_member.pk,
+            },
+        )
+
+        post = Post.objects.get(title="New from form")
+        self.assertEqual(post.author, self.member)
+        self.assertRedirects(
+            response,
+            reverse("discussion:board", args=(self.board.pk,)),
+        )
+
+        edit_response = self.client.post(
+            reverse("discussion:post_edit", args=(post.pk,)),
+            {"title": "Edited by author", "content": "Updated body."},
+        )
+        self.assertRedirects(
+            edit_response,
+            reverse("discussion:board", args=(self.board.pk,)),
+        )
+        post.refresh_from_db()
+        self.assertEqual(post.title, "Edited by author")
+
+        self.assertEqual(
+            self.client.put(
+                reverse("discussion:post_edit", args=(post.pk,)),
+                {"title": "Not allowed", "content": "Wrong method."},
+            ).status_code,
+            405,
+        )
+        other_post = self._post(author=self.other_member)
+        denied = self.client.get(
+            reverse("discussion:post_edit", args=(other_post.pk,))
+        )
+        self.assertEqual(denied.status_code, 403)
+
+    def test_post_delete_is_post_only_and_admin_can_delete_any_post(self):
+        post = self._post(author=self.member)
+        self.client.force_login(self.member)
+
+        get_response = self.client.get(
+            reverse("discussion:post_delete", args=(post.pk,))
+        )
+        self.assertEqual(get_response.status_code, 405)
+        delete_response = self.client.post(
+            reverse("discussion:post_delete", args=(post.pk,))
+        )
+        self.assertRedirects(
+            delete_response,
+            reverse("discussion:board", args=(self.board.pk,)),
+        )
+        self.assertFalse(Post.objects.filter(pk=post.pk).exists())
+
+        another_post = self._post(author=self.other_member)
+        self.client.force_login(self.staff)
+        delete_response = self.client.post(
+            reverse("discussion:post_delete", args=(another_post.pk,))
+        )
+        self.assertRedirects(
+            delete_response,
+            reverse("discussion:board", args=(self.board.pk,)),
+        )
+        self.assertFalse(Post.objects.filter(pk=another_post.pk).exists())
+
+    def test_member_can_comment_and_only_admin_can_pin(self):
+        post = self._post(author=self.other_member)
+        self.client.force_login(self.member)
+
+        comment_response = self.client.post(
+            reverse("discussion:comment_create", args=(post.pk,)),
+            {"content": "A member reply."},
+        )
+        self.assertRedirects(
+            comment_response,
+            reverse("discussion:board", args=(self.board.pk,)),
+        )
+        self.assertEqual(post.comments.get().author, self.member)
+
+        pin_url = reverse("discussion:post_pin", args=(post.pk,))
+        self.assertEqual(self.client.get(pin_url).status_code, 405)
+        self.assertEqual(
+            self.client.post(pin_url, {"is_pinned": "true"}).status_code,
+            403,
+        )
+
+        self.client.force_login(self.staff)
+        pin_response = self.client.post(pin_url, {"is_pinned": "true"})
+        self.assertRedirects(
+            pin_response,
+            reverse("discussion:board", args=(self.board.pk,)),
+        )
+        post.refresh_from_db()
+        self.assertTrue(post.is_pinned)
+
+        unpin_response = self.client.post(pin_url, {"is_pinned": "false"})
+        self.assertEqual(unpin_response.status_code, 302)
+        post.refresh_from_db()
+        self.assertFalse(post.is_pinned)
+
+    def test_only_superuser_can_create_or_delete_boards_from_the_frontend(self):
+        create_url = reverse("discussion:board_create")
+        self.client.force_login(self.member)
+        self.assertEqual(
+            self.client.post(create_url, {"name": "Member Board"}).status_code,
+            403,
+        )
+        self.client.force_login(self.staff)
+        self.assertEqual(
+            self.client.post(create_url, {"name": "Staff Board"}).status_code,
+            403,
+        )
+
+        self.client.force_login(self.superuser)
+        create_response = self.client.post(create_url, {"name": "New Board"})
+        new_board = Board.objects.get(name="New Board")
+        self.assertRedirects(
+            create_response,
+            reverse("discussion:board", args=(new_board.pk,)),
+        )
+
+        delete_url = reverse("discussion:board_delete", args=(new_board.pk,))
+        self.assertEqual(self.client.get(delete_url).status_code, 405)
+        delete_response = self.client.post(delete_url)
+        self.assertRedirects(delete_response, reverse("discussion:space"))
+        self.assertFalse(Board.objects.filter(pk=new_board.pk).exists())
+
+    def test_nonempty_board_cannot_be_deleted_and_unknown_objects_are_404(self):
+        post = self._post()
+        self.client.force_login(self.superuser)
+
+        response = self.client.post(
+            reverse("discussion:board_delete", args=(self.board.pk,))
+        )
+        self.assertRedirects(
+            response,
+            reverse("discussion:board", args=(self.board.pk,)),
+        )
+        self.assertTrue(Board.objects.filter(pk=self.board.pk).exists())
+        self.assertTrue(Post.objects.filter(pk=post.pk).exists())
+
+        self.assertEqual(
+            self.client.get(reverse("discussion:board", args=(99999,))).status_code,
+            404,
+        )
+        self.assertEqual(
+            self.client.post(
+                reverse("discussion:post_delete", args=(99999,))
+            ).status_code,
+            404,
+        )
+
+    def test_invalid_pin_state_is_rejected(self):
+        post = self._post()
+        self.client.force_login(self.staff)
+
+        response = self.client.post(
+            reverse("discussion:post_pin", args=(post.pk,)),
+            {"is_pinned": "yes"},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        post.refresh_from_db()
+        self.assertFalse(post.is_pinned)

@@ -172,6 +172,8 @@ def delete_post(*, post_id, actor, request=None):
         )
         post.delete()
 
+    return detail["board_id"]
+
 
 def set_post_pinned(*, post_id, is_pinned, actor, request=None):
     if not can_pin_post(actor):
