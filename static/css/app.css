@@ -708,8 +708,9 @@ td .empty, .panel-body.tight .empty {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
   gap: 10px;
 }
-.post-image-remove {
-  display: grid !important; gap: 6px; margin: 0 !important;
+/* 图片本身是 label 的点击目标，用 .field 限定以盖过 .field label 的排布。 */
+.field .post-image-remove {
+  display: grid; gap: 6px; margin: 0;
   padding: 7px; border: 1px solid var(--line); background: var(--surface-2);
 }
 .post-image-remove img { width: 100%; height: 100px; object-fit: cover; }
@@ -788,7 +789,8 @@ td .empty, .panel-body.tight .empty {
   .topbar .wrap { gap: 10px; height: auto; min-height: 60px; flex-wrap: wrap; }
   .topbar-end { gap: 9px; flex-wrap: wrap; }
   .discussion-board-create { grid-template-columns: 1fr; }
-  .discussion-board-selector { gap: 8px; }
+  /* 窄屏把「板块」标注移到滑轨上方，整行宽度都留给滑动区 */
+  .discussion-board-selector { flex-direction: column; align-items: stretch; gap: 6px; }
   .discussion-board-label { font-size: 13px; }
   .discussion-board-tab { min-width: 138px; padding: 9px 11px; }
   .discussion-comments { margin-left: 10px; padding-left: 10px; }

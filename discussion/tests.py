@@ -164,6 +164,13 @@ class DiscussionImageTests(TestCase):
         stored_names = [image.image.name for image in images]
         storage = images[0].image.storage
         self.assertTrue(all(storage.exists(name) for name in stored_names))
+        # upload_to 是函数时 Django 原样采用返回值：日期目录得自己算，别落下 %Y。
+        for stored_name in stored_names:
+            with self.subTest(stored_name=stored_name):
+                self.assertNotIn("%", stored_name)
+                self.assertRegex(
+                    stored_name, r"^discussion/\d{4}/\d{2}/[0-9a-f]{32}\.png$"
+                )
 
         delete_post(post_id=post.pk, actor=self.member)
 

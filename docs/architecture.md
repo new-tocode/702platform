@@ -649,6 +649,7 @@ core / registry.py
 | `/member/space/`、`/member/space/boards/<id>/` | 社团空间与板块帖子流（置顶优先、其余按时间倒序） | 登录成员 |
 | `/member/space/boards/<id>/posts/new/`、`/member/space/posts/<id>/edit/` | 发帖、编辑本人帖子 | 登录成员 / 作者 |
 | `/member/space/posts/<id>/comments/`、`/member/space/posts/<id>/delete/` | 评论、删除帖子；删帖级联删除评论 | 登录成员；删自己的帖或管理员删任意帖 |
+| `/member/space/images/<id>/` | 帖子图片本身（随机文件名落盘，经此路由按成员身份校验后才发出） | 登录成员 |
 | `/member/space/posts/<id>/pin/` | 置顶/取消置顶 | 管理员 |
 | `/member/space/boards/create/`、`/member/space/boards/<id>/delete/` | 前端创建板块或删除空板块 | Django 超级管理员 |
 | `/member/profile/avatar/` | 上传／更换头像（POST，一张图盖掉旧的，旧文件随之删除） | 本人 |
