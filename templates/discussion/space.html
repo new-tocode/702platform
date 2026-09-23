@@ -1,7 +1,12 @@
 {% extends "base.html" %}
-{% load i18n rendering %}
+{% load i18n rendering static %}
 
 {% block title %}{% translate "社团空间" %} - {% translate "竞赛社团管理平台" %}{% endblock %}
+
+{% block extra_head %}
+    {{ block.super }}
+    <script defer src="{% static 'js/discussion.js' %}"></script>
+{% endblock %}
 
 {% block content %}
 <div class="wrap">
@@ -68,10 +73,14 @@
                     <div class="btn-row">
                         <a class="btn btn-primary" href="{% url 'discussion:post_new' active_board.pk %}">{% translate "发布帖子" %}</a>
                         {% if can_manage_boards %}
-                            <form method="post" action="{% url 'discussion:board_delete' active_board.pk %}">
-                                {% csrf_token %}
-                                <button class="btn btn-danger" type="submit">{% translate "删除空板块" %}</button>
-                            </form>
+                            {% if posts_page.paginator.count %}
+                                <span class="muted">{% translate "请先删除板块中的所有帖子，再删除板块。" %}</span>
+                            {% else %}
+                                <form method="post" action="{% url 'discussion:board_delete' active_board.pk %}" data-confirm="{% translate '确定删除这个空板块吗？' %}">
+                                    {% csrf_token %}
+                                    <button class="btn btn-danger" type="submit">{% translate "删除空板块" %}</button>
+                                </form>
+                            {% endif %}
                         {% endif %}
                     </div>
                 </div>
@@ -106,7 +115,7 @@
                                         <a class="btn btn-sm" href="{% url 'discussion:post_edit' post.pk %}">{% translate "编辑" %}</a>
                                     {% endif %}
                                     {% if post.author_id == user.pk or is_admin %}
-                                        <form method="post" action="{% url 'discussion:post_delete' post.pk %}">
+                                        <form method="post" action="{% url 'discussion:post_delete' post.pk %}" data-confirm="{% translate '确定删除这篇帖子及其评论吗？' %}">
                                             {% csrf_token %}
                                             <button class="btn btn-sm btn-danger" type="submit">{% translate "删除帖子" %}</button>
                                         </form>
@@ -148,11 +157,11 @@
                 {% if posts_page and posts_page.has_other_pages %}
                     <nav class="discussion-pagination" aria-label="{% translate '帖子分页' %}">
                         {% if posts_page.has_previous %}
-                            <a class="btn btn-sm" href="?page={{ posts_page.previous_page_number }}{% if member_query %}&amp;q={{ member_query|urlencode }}{% endif %}">{% translate "上一页" %}</a>
+                            <a class="btn btn-sm" href="?page={{ posts_page.previous_page_number }}{% if member_query %}&q={{ member_query|urlencode }}{% endif %}">{% translate "上一页" %}</a>
                         {% endif %}
                         <span class="muted">{% blocktranslate with current=posts_page.number total=posts_page.paginator.num_pages %}第 {{ current }} / {{ total }} 页{% endblocktranslate %}</span>
                         {% if posts_page.has_next %}
-                            <a class="btn btn-sm" href="?page={{ posts_page.next_page_number }}{% if member_query %}&amp;q={{ member_query|urlencode }}{% endif %}">{% translate "下一页" %}</a>
+                            <a class="btn btn-sm" href="?page={{ posts_page.next_page_number }}{% if member_query %}&q={{ member_query|urlencode }}{% endif %}">{% translate "下一页" %}</a>
                         {% endif %}
                     </nav>
                 {% endif %}

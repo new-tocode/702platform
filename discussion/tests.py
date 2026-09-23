@@ -419,6 +419,33 @@ class DiscussionViewTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertIn(reverse("accounts:password_change"), response["Location"])
 
+    def test_navigation_entry_is_member_only_and_highlights_discussion_pages(self):
+        space_url = reverse("discussion:space")
+        public_home = self.client.get(reverse("accounts:home"))
+        self.assertNotContains(public_home, space_url)
+
+        self.client.force_login(self.member)
+        member_home = self.client.get(reverse("accounts:home"))
+        self.assertContains(member_home, space_url)
+        self.assertLess(
+            member_home.content.index("公开通知".encode()),
+            member_home.content.index("社团空间".encode()),
+        )
+
+        space_response = self.client.get(space_url)
+        self.assertEqual(space_response.context["nav_section"], "space")
+        profile_response = self.client.get(
+            reverse("accounts:member_profile", args=(self.other_member.pk,))
+        )
+        self.assertEqual(profile_response.context["nav_section"], "space")
+
+        locked = self._make_user("discussion-view-locked")
+        locked.must_change_password = True
+        locked.save(update_fields=["must_change_password"])
+        self.client.force_login(locked)
+        password_page = self.client.get(reverse("accounts:password_change"))
+        self.assertNotContains(password_page, space_url)
+
     def test_member_can_view_space_and_board_but_not_board_management_controls(self):
         self.client.force_login(self.member)
 
