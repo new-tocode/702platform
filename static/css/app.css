@@ -267,6 +267,15 @@ td form { margin: 0; }
 .field .field-label label { margin-bottom: 0; }
 .field-required::after { content: " *"; color: var(--red); }
 
+/* 一行两项；哪些字段并排、谁独占一行，由 accounts.ProfileForm 声明。
+   独占一行的短字段（手机号）只画半行，右边缘与上一行的左列对齐
+   —— 减掉的 9px 正是两列间距的一半。 */
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; }
+.field-row > .field-full { grid-column: 1 / -1; }
+/* 用 max-width 而不是 width：下面 input[type=...] 的元素选择器同样写 width，
+   同权重下后写者胜，换个位置就会被盖掉；max-width 只封上限，不吃顺序。 */
+.field-short input { max-width: calc(50% - 9px); }
+
 select,
 textarea,
 input[type="text"], input[type="password"], input[type="email"],
@@ -321,6 +330,55 @@ input[type="file"] { font: inherit; font-size: 13px; color: var(--ink-2); }
 /* 单选组（评审结论） */
 .radiogroup > div { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .radiogroup label { margin: 0; font-size: 13px; font-weight: 400; color: var(--ink); }
+
+/* --- 头像 --- */
+/* 圆形是显示层的裁切：不正方形也居中填满、不变形，原图保持原样。
+   没有头像时同一个圆圈里放姓名首字，免得版面空一个洞。 */
+.avatar-block { display: flex; justify-content: center; margin-bottom: 18px; }
+.avatar {
+  display: block; width: 148px; height: 148px;
+  border-radius: 50%; object-fit: cover;
+  border: 1px solid var(--line-2); background: var(--surface-2);
+}
+.avatar-blank {
+  display: grid; place-items: center; border-style: dashed;
+  font-size: 52px; font-weight: 600; line-height: 1; color: var(--ink-3);
+}
+
+/* --- 身份清单（个人信息页右栏，只读） --- */
+.roles { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.roles li { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+
+/* --- 个人图册 --- */
+/* 上传一行：文件框与按钮并排，标签只给读屏软件（版面上一眼就知道这行做什么）。 */
+.upload-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+/* 文件框可以长，但不吃掉整行：按钮跟在它后面，不飘到版面的另一头 */
+.upload-row input[type="file"] { flex: 1 1 240px; max-width: 420px; min-width: 0; }
+
+/* 每张图占几格由 layout 决定：普通一格、大图两格、整行铺满。
+   栅格用 auto-fill，窄屏自己掉到两列。 */
+.gallery {
+  display: grid; gap: 14px; margin-top: 18px;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+}
+.gitem {
+  display: flex; flex-direction: column; margin: 0;
+  border: 1px solid var(--line); background: var(--surface);
+}
+.gitem-wide { grid-column: span 2; }
+.gitem-full { grid-column: 1 / -1; }
+.gitem img {
+  display: block; width: 100%; height: 168px; object-fit: cover;
+  background: var(--surface-2); border-bottom: 1px solid var(--line);
+}
+.gitem-wide img { height: 200px; }
+.gitem-full img { height: 300px; }
+.gitem figcaption { display: grid; gap: 8px; padding: 10px 12px; }
+.gitem-meta {
+  display: flex; justify-content: space-between; gap: 10px;
+  font-family: var(--mono); font-size: 11px; color: var(--ink-3);
+}
+.gitem-ctl { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
 
 /* --- 键值表 --- */
 .dl { margin: 0; display: grid; gap: 11px; }
@@ -586,5 +644,10 @@ td .empty, .panel-body.tight .empty {
   .brand-code { display: none; }
   .head-row { align-items: flex-start; }
   .spec { grid-template-columns: 1fr 1fr; }
+  /* 窄屏放不下并排的两项：回落成一行一项，短字段也跟着占满 */
+  .field-row { grid-template-columns: 1fr; }
+  .field-short input { max-width: none; }
+  /* 两列以下放不下「大图」跨的两格：让它在窄屏铺满一整行 */
+  .gitem-wide { grid-column: 1 / -1; }
   .reel-step { width: 30px; height: 30px; }
 }

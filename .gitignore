@@ -13,6 +13,8 @@ mediafiles/uploads/
 mediafiles/project_proposals/
 mediafiles/review_annotations/
 mediafiles/review_archives/
+mediafiles/avatars/
+mediafiles/gallery/
 # logs/*.log* 覆盖 RotatingFileHandler 的轮转备份（django.log.1、.log.gz 等）
 logs/*.log*
 
