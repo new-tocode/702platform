@@ -3,7 +3,7 @@
 import logging
 
 from django.contrib import messages
-from django.contrib.auth import update_session_auth_hash
+from django.contrib.auth import get_user_model, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView as DjangoLoginView, LogoutView
 from django.db import transaction
@@ -12,7 +12,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext as _
-from django.views.decorators.http import require_http_methods, require_POST
+from django.views.decorators.http import require_GET, require_http_methods, require_POST
 from django.views.generic.edit import FormView
 
 from core.audit import record_audit
@@ -41,6 +41,7 @@ from .validators import GALLERY_IMAGE_MAX_BYTES
 
 
 logger = logging.getLogger(__name__)
+User = get_user_model()
 
 
 class PlatformLoginView(DjangoLoginView):
@@ -201,6 +202,31 @@ def _member_profile(request):
             extra={"request_id": getattr(request, "request_id", "-")},
         )
     return profile_obj
+
+
+@login_required
+@require_GET
+def member_profile_readonly(request, user_id):
+    member = get_object_or_404(
+        User.objects.filter(is_active=True).select_related("profile"),
+        pk=user_id,
+    )
+    profile_obj = getattr(member, "profile", None)
+    gallery_images = (
+        profile_obj.gallery_images.all()
+        if profile_obj is not None
+        else GalleryImage.objects.none()
+    )
+    full_name = profile_obj.full_name.strip() if profile_obj else ""
+    context = {
+        "member": member,
+        "profile": profile_obj,
+        "display_name": full_name or member.get_username(),
+        "avatar_initial": (full_name or member.get_username())[:1].upper(),
+        "identities": member_identities(member),
+        "gallery_images": gallery_images,
+    }
+    return render(request, "accounts/member_profile_readonly.html", context)
 
 
 @login_required

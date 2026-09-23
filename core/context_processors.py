@@ -11,6 +11,16 @@ NAV_BY_VIEW = {
     "content:showcase": "showcase",
     "notices:public_list": "notices",
     "notices:public_detail": "notices",
+    "accounts:member_profile": "space",
+    "discussion:space": "space",
+    "discussion:board": "space",
+    "discussion:post_new": "space",
+    "discussion:post_edit": "space",
+    "discussion:post_delete": "space",
+    "discussion:post_pin": "space",
+    "discussion:comment_create": "space",
+    "discussion:board_create": "space",
+    "discussion:board_delete": "space",
 }
 MEMBER_NAMESPACES = frozenset(
     {
@@ -20,6 +30,7 @@ MEMBER_NAMESPACES = frozenset(
         "equipment",
         "equipment_borrows",
         "member_notices",
+        "discussion",
     }
 )
 MEMBER_VIEWS = frozenset(

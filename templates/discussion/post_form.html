@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{{ page_heading }} - {% translate "社团空间" %}{% endblock %}
+
+{% block content %}
+<div class="wrap col-narrow">
+    <div class="pagehead">
+        <div class="path">
+            <a href="{% url 'discussion:board' active_board.pk %}">{{ active_board.name }}</a>
+            <span>/</span>
+            <span>{{ page_heading }}</span>
+        </div>
+        <div class="head-row">
+            <div><h1>{{ page_heading }}</h1></div>
+        </div>
+    </div>
+
+    <div class="frame">
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            {{ form.non_field_errors }}
+            {% if post_images %}
+                <div class="field">
+                    <span class="field-label">{% translate "已上传图片" %}</span>
+                    <div class="post-image-management">
+                        {% for image in post_images %}
+                            <label class="post-image-remove">
+                                <img src="{% url 'discussion:post_image' image.pk %}" alt="">
+                                <span><input type="checkbox" name="remove_image" value="{{ image.pk }}">{% translate "移除此图片" %}</span>
+                            </label>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endif %}
+            {% for field in form %}
+                <div class="field">
+                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    {{ field }}
+                    {% if field.help_text %}<p class="help">{{ field.help_text }}</p>{% endif %}
+                    {{ field.errors }}
+                </div>
+            {% endfor %}
+            <div class="form-actions">
+                <button class="btn btn-primary" type="submit">{{ submit_label }}</button>
+                <a class="btn" href="{% url 'discussion:board' active_board.pk %}">{% translate "取消" %}</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
