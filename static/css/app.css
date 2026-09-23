@@ -644,20 +644,32 @@ td .empty, .panel-body.tight .empty {
 }
 .discussion-member-name:hover { color: var(--blue); text-decoration: underline; }
 
+.discussion-board-selector {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-width: 0;
+  margin-bottom: 18px;
+}
+.discussion-board-label {
+  flex: none; padding-left: 2px; color: var(--blue-ink); font-size: 15px;
+  font-weight: 600;
+}
 .discussion-board-rail {
-  display: flex; align-items: center; gap: 7px; width: 100%; max-width: 100%;
+  display: flex; flex: 1; align-items: stretch; gap: 9px; width: 100%; max-width: 100%;
   min-width: 0; overflow-x: auto; overscroll-behavior-x: contain;
   -webkit-overflow-scrolling: touch; scroll-snap-type: x proximity;
-  padding: 10px 12px; margin: 0 auto 18px;
+  padding: 12px 14px; margin: 0;
   border: 1px solid var(--line-2); background: var(--surface);
   scrollbar-color: var(--line-2) transparent; scrollbar-width: thin;
 }
 .discussion-board-tab {
-  flex: none; scroll-snap-align: start; padding: 6px 13px;
+  display: grid; flex: none; min-width: 150px; gap: 3px;
+  scroll-snap-align: start; padding: 10px 14px;
   border: 1px solid var(--line); background: var(--surface-2);
-  color: var(--ink-2); font-size: 12px; text-decoration: none; white-space: nowrap;
+  color: var(--ink-2); text-decoration: none; white-space: nowrap;
   transition: color 0.15s, background 0.15s, border-color 0.15s;
 }
+.discussion-board-tab-zh { font-size: 15px; font-weight: 600; line-height: 1.35; }
+.discussion-board-tab-en { color: var(--ink-3); font-size: 11px; line-height: 1.35; }
+.discussion-board-tab.is-active .discussion-board-tab-en { color: rgba(255, 255, 255, 0.78); }
 .discussion-board-tab:hover { color: var(--blue); border-color: var(--blue); }
 .discussion-board-tab.is-active {
   color: #fff; border-color: var(--blue); background: var(--blue);
@@ -667,9 +679,10 @@ td .empty, .panel-body.tight .empty {
   gap: 14px; flex-wrap: wrap; padding: 0 2px 14px;
   border-bottom: 1px solid var(--line); margin-bottom: 14px;
 }
-.discussion-board-heading h2 { margin-bottom: 3px; font-size: 19px; }
+.discussion-board-heading h2 { margin-bottom: 2px; font-size: 19px; }
+.discussion-board-heading-en { color: var(--ink-3); font-size: 11px; }
 .discussion-board-create {
-  display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+  display: grid; grid-template-columns: auto minmax(140px, 1fr) auto minmax(140px, 1fr) auto;
   align-items: center; gap: 9px; padding: 12px 14px; margin-bottom: 16px;
   border: 1px dashed var(--line-2); background: var(--surface-2);
 }
@@ -754,6 +767,9 @@ td .empty, .panel-body.tight .empty {
   .topbar .wrap { gap: 10px; height: auto; min-height: 60px; flex-wrap: wrap; }
   .topbar-end { gap: 9px; flex-wrap: wrap; }
   .discussion-board-create { grid-template-columns: 1fr; }
+  .discussion-board-selector { gap: 8px; }
+  .discussion-board-label { font-size: 13px; }
+  .discussion-board-tab { min-width: 138px; padding: 9px 11px; }
   .discussion-board-heading { align-items: flex-start; }
   .langbtn { padding: 1px 5px; }
   .brand-code { display: none; }

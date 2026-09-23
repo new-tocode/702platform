@@ -1,15 +1,24 @@
 from django import forms
+from django.core.exceptions import ValidationError
 from django.db.models.functions import Lower
 from django.utils.translation import gettext_lazy as _
 
 from .models import Board, Comment, Post
-from .validators import clean_board_name
+from .validators import clean_board_name, clean_chinese_board_name
 
 
 class BoardForm(forms.ModelForm):
+    name_zh = forms.CharField(label=_("中文名称"), max_length=80)
+
     class Meta:
         model = Board
-        fields = ("name",)
+        fields = ("name_zh", "name")
+
+    def clean_name_zh(self):
+        try:
+            return clean_chinese_board_name(self.cleaned_data["name_zh"])
+        except ValidationError as exc:
+            raise forms.ValidationError(exc.messages[0]) from exc
 
     def clean_name(self):
         name = clean_board_name(self.cleaned_data["name"])
@@ -46,6 +55,7 @@ class PostForm(forms.ModelForm):
         if not content:
             raise forms.ValidationError(_("请输入帖子正文。"))
         return content
+
 
 
 class CommentForm(forms.ModelForm):

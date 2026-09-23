@@ -54,18 +54,25 @@
         </aside>
 
         <section class="discussion-main" aria-label="{% translate '社团空间内容' %}">
-            <nav class="discussion-board-rail" aria-label="{% translate '选择板块' %}">
-                {% for board_item in boards %}
-                    <a class="discussion-board-tab{% if active_board.pk == board_item.pk %} is-active{% endif %}" href="{% url 'discussion:board' board_item.pk %}"{% if active_board.pk == board_item.pk %} aria-current="page"{% endif %}>{{ board_item.name }}</a>
-                {% empty %}
-                    <span class="muted">{% translate "还没有板块。" %}</span>
-                {% endfor %}
-            </nav>
+            <div class="discussion-board-selector">
+                <span class="discussion-board-label">{% translate "板块" %}</span>
+                <nav class="discussion-board-rail" aria-label="{% translate '选择板块' %}">
+                    {% for board_item in boards %}
+                        <a class="discussion-board-tab{% if active_board.pk == board_item.pk %} is-active{% endif %}" href="{% url 'discussion:board' board_item.pk %}"{% if active_board.pk == board_item.pk %} aria-current="page"{% endif %}>
+                            <span class="discussion-board-tab-zh">{{ board_item.name_zh }}</span>
+                            <span class="discussion-board-tab-en">{{ board_item.name }}</span>
+                        </a>
+                    {% empty %}
+                        <span class="muted">{% translate "还没有板块。" %}</span>
+                    {% endfor %}
+                </nav>
+            </div>
 
             {% if active_board %}
                 <div class="discussion-board-heading">
                     <div>
-                        <h2>{{ active_board.name }}</h2>
+                        <h2>{{ active_board.name_zh }}</h2>
+                        <span class="discussion-board-heading-en">{{ active_board.name }}</span>
                         {% if posts_page %}
                             <span class="muted">{% blocktranslate count counter=posts_page.paginator.count %}共 1 条帖子{% plural %}共 {{ counter }} 条帖子{% endblocktranslate %}</span>
                         {% endif %}
@@ -88,7 +95,9 @@
                 {% if can_manage_boards %}
                     <form method="post" action="{% url 'discussion:board_create' %}" class="discussion-board-create">
                         {% csrf_token %}
-                        <label for="{{ board_form.name.id_for_label }}">{% translate "创建板块" %}</label>
+                        <label for="{{ board_form.name_zh.id_for_label }}">{{ board_form.name_zh.label }}</label>
+                        {{ board_form.name_zh }}
+                        <label for="{{ board_form.name.id_for_label }}">{{ board_form.name.label }}</label>
                         {{ board_form.name }}
                         <button class="btn btn-sm" type="submit">{% translate "添加板块" %}</button>
                     </form>
@@ -170,7 +179,10 @@
                 {% if can_manage_boards %}
                     <form method="post" action="{% url 'discussion:board_create' %}" class="discussion-board-create">
                         {% csrf_token %}
-                        <label for="{{ board_form.name.id_for_label }}">{% translate "创建第一个板块" %}</label>
+                        <div class="discussion-board-form-title">{% translate "创建第一个板块" %}</div>
+                        <label for="{{ board_form.name_zh.id_for_label }}">{{ board_form.name_zh.label }}</label>
+                        {{ board_form.name_zh }}
+                        <label for="{{ board_form.name.id_for_label }}">{{ board_form.name.label }}</label>
                         {{ board_form.name }}
                         <button class="btn btn-primary" type="submit">{% translate "创建板块" %}</button>
                     </form>

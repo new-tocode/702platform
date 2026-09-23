@@ -8,7 +8,7 @@ User = get_user_model()
 
 
 def board_list():
-    return Board.objects.order_by("name", "pk")
+    return Board.objects.order_by("name_zh", "name", "pk")
 
 
 def posts_for_board(board):

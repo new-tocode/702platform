@@ -15,7 +15,7 @@ from .permissions import (
     can_pin_post,
     is_member,
 )
-from .validators import clean_board_name
+from .validators import clean_board_name, clean_chinese_board_name
 
 
 class DiscussionError(Exception):
@@ -58,16 +58,24 @@ def _post_for_update(post_id):
         raise DiscussionNotFound from exc
 
 
-def create_board(*, name, actor, request=None):
+def create_board(*, name_zh, name, actor, request=None):
     _require_board_creation(actor)
     try:
         name = clean_board_name(name)
     except ValidationError as exc:
         raise DiscussionError(exc.messages[0]) from exc
+    try:
+        name_zh = clean_chinese_board_name(name_zh)
+    except ValidationError as exc:
+        raise DiscussionError(exc.messages[0]) from exc
 
     try:
         with transaction.atomic():
-            board = Board.objects.create(name=name, created_by=actor)
+            board = Board.objects.create(
+                name_zh=name_zh,
+                name=name,
+                created_by=actor,
+            )
     except IntegrityError as exc:
         raise BoardNameTaken(_("已有同名板块。")) from exc
 
@@ -75,7 +83,7 @@ def create_board(*, name, actor, request=None):
         action="discussion.board.create",
         user=actor,
         target=board,
-        detail={"name": name},
+        detail={"name_zh": name_zh, "name": name},
         request=request,
     )
     return board
@@ -93,7 +101,7 @@ def delete_board(*, board_id, actor, request=None):
             action="discussion.board.delete",
             user=actor,
             target=board,
-            detail={"name": board.name},
+            detail={"name_zh": board.name_zh, "name": board.name},
             request=request,
         )
         board.delete()
@@ -115,7 +123,6 @@ def create_post(*, board_id, title, content, actor, request=None):
             title=title,
             content=content,
         )
-
     record_audit(
         action="discussion.post.create",
         user=actor,

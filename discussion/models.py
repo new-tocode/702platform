@@ -5,6 +5,7 @@ from django.utils.translation import gettext_lazy as _
 
 
 class Board(models.Model):
+    name_zh = models.CharField(_("中文名称"), max_length=80)
     name = models.CharField(_("英文名称"), max_length=80)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -17,7 +18,7 @@ class Board(models.Model):
     class Meta:
         verbose_name = _("社团空间板块")
         verbose_name_plural = _("社团空间板块")
-        ordering = ("name", "pk")
+        ordering = ("name_zh", "name", "pk")
         constraints = [
             models.UniqueConstraint(
                 Lower("name"),
@@ -26,7 +27,7 @@ class Board(models.Model):
         ]
 
     def __str__(self):
-        return self.name
+        return f"{self.name_zh} / {self.name}" if self.name_zh else self.name
 
 
 class Post(models.Model):

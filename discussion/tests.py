@@ -36,7 +36,7 @@ class DiscussionModelTests(TestCase):
             password="Member-Password-123!",
         )
         self.board = Board.objects.create(
-            name="Open Lab",
+            name_zh="开放实验室", name="Open Lab",
             created_by=self.member,
         )
 
@@ -44,7 +44,7 @@ class DiscussionModelTests(TestCase):
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
                 Board.objects.create(
-                    name="open lab",
+                    name_zh="开放实验室", name="open lab",
                     created_by=self.member,
                 )
 
@@ -122,7 +122,7 @@ class DiscussionServiceTests(TestCase):
             password="Super-Password-123!",
         )
         self.board = Board.objects.create(
-            name="Research Room",
+            name_zh="研究室", name="Research Room",
             created_by=self.superuser,
         )
 
@@ -186,7 +186,7 @@ class DiscussionServiceTests(TestCase):
         )
 
         empty_board = Board.objects.create(
-            name="Empty Board",
+            name_zh="空白板块", name="Empty Board",
             created_by=self.superuser,
         )
         with CaptureQueriesContext(connection) as captured:
@@ -254,13 +254,13 @@ class DiscussionServiceTests(TestCase):
 
     def test_only_superuser_can_create_and_delete_boards(self):
         with self.assertRaises(PermissionDenied):
-            create_board(name="Members Lounge", actor=self.staff)
+            create_board(name_zh="成员休息室", name="Members Lounge", actor=self.staff)
         with self.assertRaises(PermissionDenied):
             delete_board(board_id=self.board.pk, actor=self.staff)
         with self.assertRaises(PermissionDenied):
-            create_board(name="Members Lounge", actor=self.member)
+            create_board(name_zh="成员休息室", name="Members Lounge", actor=self.member)
 
-        board = create_board(name="Members Lounge", actor=self.superuser)
+        board = create_board(name_zh="成员休息室", name="Members Lounge", actor=self.superuser)
         delete_board(board_id=board.pk, actor=self.superuser)
         self.assertFalse(Board.objects.filter(pk=board.pk).exists())
 
@@ -274,7 +274,7 @@ class DiscussionServiceTests(TestCase):
 
     def test_duplicate_board_name_is_reported_as_domain_error(self):
         with self.assertRaises(BoardNameTaken):
-            create_board(name="research room", actor=self.superuser)
+            create_board(name_zh="研究室", name="research room", actor=self.superuser)
 
     def test_locked_inactive_and_anonymous_accounts_cannot_use_services(self):
         self.member.must_change_password = True
@@ -306,11 +306,17 @@ class DiscussionServiceTests(TestCase):
 
 
 class DiscussionFormTests(TestCase):
-    def test_board_form_accepts_english_names_and_rejects_other_scripts(self):
-        self.assertTrue(BoardForm(data={"name": "Open Lab 702"}).is_valid())
-        form = BoardForm(data={"name": "社团讨论"})
-        self.assertFalse(form.is_valid())
-        self.assertIn("name", form.errors)
+    def test_board_form_requires_chinese_name_and_english_name(self):
+        valid = BoardForm(data={"name_zh": "开放实验室", "name": "Open Lab 702"})
+        self.assertTrue(valid.is_valid())
+
+        invalid_english = BoardForm(data={"name_zh": "社团讨论", "name": "Club Talk 中文"})
+        self.assertFalse(invalid_english.is_valid())
+        self.assertIn("name", invalid_english.errors)
+
+        missing_chinese = BoardForm(data={"name_zh": "", "name": "Open Lab"})
+        self.assertFalse(missing_chinese.is_valid())
+        self.assertIn("name_zh", missing_chinese.errors)
 
     def test_post_and_comment_forms_require_nonblank_content(self):
         post_form = PostForm(data={"title": "A title", "content": "  "})
@@ -353,7 +359,7 @@ class DiscussionSelectorTests(TestCase):
         self.assertNotIn(self.inactive.pk, [member.pk for member in member_directory()])
 
     def test_post_selector_prefetches_comments_and_related_profiles(self):
-        board = Board.objects.create(name="Directory Board", created_by=self.member)
+        board = Board.objects.create(name_zh="目录板块", name="Directory Board", created_by=self.member)
         post = Post.objects.create(
             board=board,
             author=self.member,
@@ -380,7 +386,7 @@ class DiscussionViewTests(TestCase):
             password="Super-Password-123!",
         )
         self.board = Board.objects.create(
-            name="View Tests",
+            name_zh="视图测试", name="View Tests",
             created_by=self.superuser,
         )
 
@@ -455,7 +461,9 @@ class DiscussionViewTests(TestCase):
         )
 
         self.assertEqual(space_response.status_code, 200)
+        self.assertContains(space_response, "视图测试")
         self.assertContains(space_response, "View Tests")
+        self.assertContains(space_response, "板块")
         self.assertEqual(board_response.status_code, 200)
         self.assertNotContains(board_response, reverse("discussion:board_create"))
         self.assertNotContains(board_response, "删除空板块")
@@ -597,18 +605,19 @@ class DiscussionViewTests(TestCase):
         create_url = reverse("discussion:board_create")
         self.client.force_login(self.member)
         self.assertEqual(
-            self.client.post(create_url, {"name": "Member Board"}).status_code,
+            self.client.post(create_url, {"name_zh": "成员板块", "name": "Member Board"}).status_code,
             403,
         )
         self.client.force_login(self.staff)
         self.assertEqual(
-            self.client.post(create_url, {"name": "Staff Board"}).status_code,
+            self.client.post(create_url, {"name_zh": "管理员板块", "name": "Staff Board"}).status_code,
             403,
         )
 
         self.client.force_login(self.superuser)
-        create_response = self.client.post(create_url, {"name": "New Board"})
+        create_response = self.client.post(create_url, {"name_zh": "新板块", "name": "New Board"})
         new_board = Board.objects.get(name="New Board")
+        self.assertEqual(new_board.name_zh, "新板块")
         self.assertRedirects(
             create_response,
             reverse("discussion:board", args=(new_board.pk,)),

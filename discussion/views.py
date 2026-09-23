@@ -270,17 +270,19 @@ def board_create(request):
     )
     form = BoardForm(request.POST)
     if not form.is_valid():
-        for error in form.errors.get("name", []):
-            messages.error(request, error)
+        for errors in form.errors.values():
+            for error in errors:
+                messages.error(request, error)
         return redirect("discussion:space")
 
     try:
         board = create_board(
+            name_zh=form.cleaned_data["name_zh"],
             name=form.cleaned_data["name"],
             actor=request.user,
             request=request,
         )
-    except (BoardNameTaken, DiscussionError) as exc:
+    except DiscussionError as exc:
         messages.error(request, str(exc))
         return redirect("discussion:space")
     messages.success(request, _("板块已创建。"))
