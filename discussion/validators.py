@@ -24,3 +24,17 @@ def clean_chinese_board_name(value):
     if not name or len(name) > 80 or not _CHINESE_BOARD_NAME.fullmatch(name):
         raise ValidationError(_("请输入 1 至 80 个字符且包含中文的板块名。"))
     return name
+
+
+POST_IMAGE_MAX_BYTES = 3 * 1024 * 1024
+POST_IMAGE_LIMIT = 3
+
+
+def validate_post_image(uploaded_file):
+    from core.uploads import validate_image_upload
+
+    validate_image_upload(
+        uploaded_file,
+        label=_("帖子图片"),
+        max_bytes=POST_IMAGE_MAX_BYTES,
+    )

@@ -1,17 +1,24 @@
 from datetime import timedelta
+from io import BytesIO
+import shutil
+from pathlib import Path
+import tempfile
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import PermissionDenied
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, connection, transaction
 from django.db.models.deletion import ProtectedError
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
+from django.utils.datastructures import MultiValueDict
 from django.urls import reverse
 from django.utils import timezone
+from PIL import Image
 
 from .forms import BoardForm, CommentForm, PostForm
-from .models import Board, Comment, Post
+from .models import Board, Comment, Post, PostImage
 from .selectors import member_directory, posts_for_board
 from .services import (
     BoardNameTaken,
@@ -21,12 +28,14 @@ from .services import (
     create_post,
     delete_board,
     delete_post,
+    DiscussionError,
     set_post_pinned,
     update_post,
 )
 
 
 User = get_user_model()
+TEST_MEDIA_ROOT = Path(tempfile.mkdtemp(prefix="discussion-tests-"))
 
 
 class DiscussionModelTests(TestCase):
@@ -110,6 +119,144 @@ class DiscussionModelTests(TestCase):
         post.delete()
 
         self.assertFalse(Comment.objects.filter(pk=comment.pk).exists())
+
+
+def png_upload(name="post.png", size=(10, 10)):
+    stream = BytesIO()
+    Image.new("RGB", size, color="#12508f").save(stream, format="PNG")
+    return SimpleUploadedFile(name, stream.getvalue(), content_type="image/png")
+
+
+@override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
+class DiscussionImageTests(TestCase):
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        shutil.rmtree(TEST_MEDIA_ROOT, ignore_errors=True)
+
+    def setUp(self):
+        self.member = User.objects.create_user(
+            username="discussion-image-member",
+            password="Member-Password-123!",
+        )
+        self.member.must_change_password = False
+        self.member.save(update_fields=["must_change_password"])
+        self.board = Board.objects.create(
+            name_zh="图片测试",
+            name="Image Tests",
+            created_by=self.member,
+        )
+
+    def test_post_accepts_three_valid_images_and_cleans_files_on_delete(self):
+        uploads = [png_upload(f"image-{number}.png") for number in range(3)]
+
+        post = create_post(
+            board_id=self.board.pk,
+            title="Image post",
+            content="Three images.",
+            actor=self.member,
+            images=uploads,
+        )
+
+        images = list(post.images.all())
+        self.assertEqual(len(images), 3)
+        self.assertTrue(all(image.file_size > 0 for image in images))
+        stored_names = [image.image.name for image in images]
+        storage = images[0].image.storage
+        self.assertTrue(all(storage.exists(name) for name in stored_names))
+
+        delete_post(post_id=post.pk, actor=self.member)
+
+        self.assertFalse(PostImage.objects.filter(post_id=post.pk).exists())
+        self.assertTrue(all(not storage.exists(name) for name in stored_names))
+
+    def test_fourth_image_and_images_over_three_megabytes_are_rejected(self):
+        with self.assertRaises(DiscussionError):
+            create_post(
+                board_id=self.board.pk,
+                title="Too many images",
+                content="Four images.",
+                actor=self.member,
+                images=[png_upload(f"image-{number}.png") for number in range(4)],
+            )
+
+        oversized = SimpleUploadedFile(
+            "large.png",
+            b"x" * (3 * 1024 * 1024 + 1),
+            content_type="image/png",
+        )
+        with self.assertRaises(DiscussionError):
+            create_post(
+                board_id=self.board.pk,
+                title="Too large",
+                content="Image exceeds the limit.",
+                actor=self.member,
+                images=[oversized],
+            )
+
+        corrupt = SimpleUploadedFile(
+            "not-an-image.png",
+            b"not a real image",
+            content_type="image/png",
+        )
+        with self.assertRaises(DiscussionError):
+            create_post(
+                board_id=self.board.pk,
+                title="Corrupt image",
+                content="Image signature must be checked.",
+                actor=self.member,
+                images=[corrupt],
+            )
+
+        self.assertFalse(Post.objects.exists())
+
+    def test_edit_can_remove_and_add_images_but_never_keep_more_than_three(self):
+        post = create_post(
+            board_id=self.board.pk,
+            title="Editable images",
+            content="Initial images.",
+            actor=self.member,
+            images=[png_upload("first.png"), png_upload("second.png")],
+        )
+        original_images = list(post.images.all())
+        original_storage = original_images[0].image.storage
+        removed_name = original_images[0].image.name
+
+        update_post(
+            post_id=post.pk,
+            title=post.title,
+            content=post.content,
+            actor=self.member,
+            remove_image_ids=[original_images[0].pk],
+            images=[png_upload("replacement.png")],
+        )
+
+        self.assertEqual(post.images.count(), 2)
+        self.assertFalse(original_storage.exists(removed_name))
+        with self.assertRaises(DiscussionError):
+            update_post(
+                post_id=post.pk,
+                title=post.title,
+                content=post.content,
+                actor=self.member,
+                images=[png_upload("fourth.png"), png_upload("fifth.png")],
+            )
+        self.assertEqual(post.images.count(), 2)
+        delete_post(post_id=post.pk, actor=self.member)
+
+    def test_post_form_accepts_multiple_images_and_enforces_the_limit(self):
+        form = PostForm(
+            data={"title": "A title", "content": "A body"},
+            files=MultiValueDict({"images": [png_upload(f"form-{n}.png") for n in range(3)]}),
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+
+        too_many = PostForm(
+            data={"title": "A title", "content": "A body"},
+            files=MultiValueDict({"images": [png_upload(f"form-{n}.png") for n in range(4)]}),
+        )
+        self.assertFalse(too_many.is_valid())
+        self.assertIn("images", too_many.errors)
 
 
 class DiscussionServiceTests(TestCase):
@@ -376,7 +523,13 @@ class DiscussionSelectorTests(TestCase):
             selected.comments.all()[0].author.profile.full_name
 
 
+@override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
 class DiscussionViewTests(TestCase):
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        shutil.rmtree(TEST_MEDIA_ROOT, ignore_errors=True)
+
     def setUp(self):
         self.member = self._make_user("discussion-view-member")
         self.other_member = self._make_user("discussion-view-other")
@@ -537,6 +690,48 @@ class DiscussionViewTests(TestCase):
             reverse("discussion:post_edit", args=(other_post.pk,))
         )
         self.assertEqual(denied.status_code, 403)
+
+    def test_http_post_uploads_images_and_edit_can_remove_one(self):
+        self.client.force_login(self.member)
+        response = self.client.post(
+            reverse("discussion:post_new", args=(self.board.pk,)),
+            {
+                "title": "Post with photos",
+                "content": "Photo body.",
+                "images": [png_upload("first.png"), png_upload("second.png")],
+            },
+        )
+        post = Post.objects.get(title="Post with photos")
+        images = list(post.images.all())
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(len(images), 2)
+        self.assertTrue(
+            self.client.get(reverse("discussion:board", args=(self.board.pk,)))
+            .content.decode()
+            .count("discussion-post-images")
+            >= 1
+        )
+        first_image = images[0]
+        storage = first_image.image.storage
+        file_name = first_image.image.name
+
+        edit_response = self.client.post(
+            reverse("discussion:post_edit", args=(post.pk,)),
+            {
+                "title": post.title,
+                "content": post.content,
+                "remove_image": str(first_image.pk),
+            },
+        )
+
+        self.assertEqual(edit_response.status_code, 302)
+        self.assertEqual(post.images.count(), 1)
+        self.assertFalse(storage.exists(file_name))
+        remaining = post.images.get()
+        storage = remaining.image.storage
+        remaining_name = remaining.image.name
+        self.client.post(reverse("discussion:post_delete", args=(post.pk,)))
+        self.assertFalse(storage.exists(remaining_name))
 
     def test_post_delete_is_post_only_and_admin_can_delete_any_post(self):
         post = self._post(author=self.member)

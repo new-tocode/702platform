@@ -3,8 +3,13 @@ from django.core.exceptions import ValidationError
 from django.db.models.functions import Lower
 from django.utils.translation import gettext_lazy as _
 
-from .models import Board, Comment, Post
-from .validators import clean_board_name, clean_chinese_board_name
+from .models import Board, Comment, Post, PostImage
+from .validators import (
+    POST_IMAGE_LIMIT,
+    clean_board_name,
+    clean_chinese_board_name,
+    validate_post_image,
+)
 
 
 class BoardForm(forms.ModelForm):
@@ -32,7 +37,31 @@ class BoardForm(forms.ModelForm):
         return name
 
 
+class MultipleFileInput(forms.ClearableFileInput):
+    allow_multiple_selected = True
+
+
+class MultipleImageField(forms.FileField):
+    widget = MultipleFileInput
+
+    def clean(self, data, initial=None):
+        if data in self.empty_values:
+            return []
+        uploads = data if isinstance(data, (list, tuple)) else [data]
+        return [
+            super(MultipleImageField, self).clean(upload, initial)
+            for upload in uploads
+        ]
+
+
 class PostForm(forms.ModelForm):
+    images = MultipleImageField(
+        label=_("帖子图片"),
+        required=False,
+        validators=[validate_post_image],
+        help_text=_("最多 3 张，每张不超过 3 MB。"),
+        widget=MultipleFileInput(attrs={"accept": "image/*"}),
+    )
     content = forms.CharField(
         label=_("正文"),
         max_length=20000,
@@ -43,6 +72,10 @@ class PostForm(forms.ModelForm):
         model = Post
         fields = ("title", "content")
         widgets = {"title": forms.TextInput()}
+
+    def __init__(self, *args, remove_image_ids=(), **kwargs):
+        super().__init__(*args, **kwargs)
+        self.remove_image_ids = {str(image_id) for image_id in remove_image_ids}
 
     def clean_title(self):
         title = self.cleaned_data["title"].strip()
@@ -55,6 +88,23 @@ class PostForm(forms.ModelForm):
         if not content:
             raise forms.ValidationError(_("请输入帖子正文。"))
         return content
+
+
+    def clean_images(self):
+        uploads = self.cleaned_data["images"]
+        if len(uploads) > POST_IMAGE_LIMIT:
+            raise forms.ValidationError(_("每篇帖子最多上传 3 张图片。"))
+
+        if self.instance.pk:
+            existing = PostImage.objects.filter(post=self.instance)
+            removed = existing.filter(pk__in=self.remove_image_ids).count()
+            remaining = existing.count() - removed
+        else:
+            remaining = 0
+        if remaining + len(uploads) > POST_IMAGE_LIMIT:
+            raise forms.ValidationError(_("每篇帖子最多保留 3 张图片。"))
+        return uploads
+
 
 
 

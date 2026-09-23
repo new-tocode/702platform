@@ -94,7 +94,10 @@ def board(request, board_id):
 def post_new(request, board_id):
     _require_member(request)
     selected_board = get_object_or_404(board_list(), pk=board_id)
-    form = PostForm(request.POST if request.method == "POST" else None)
+    form = PostForm(
+        request.POST if request.method == "POST" else None,
+        request.FILES if request.method == "POST" else None,
+    )
     if request.method == "POST" and form.is_valid():
         try:
             post = create_post(
@@ -102,6 +105,7 @@ def post_new(request, board_id):
                 title=form.cleaned_data["title"],
                 content=form.cleaned_data["content"],
                 actor=request.user,
+                images=form.cleaned_data["images"],
                 request=request,
             )
         except DiscussionNotFound as exc:
@@ -128,7 +132,10 @@ def post_new(request, board_id):
 @require_http_methods(["GET", "POST"])
 def post_edit(request, post_id):
     _require_member(request)
-    post = get_object_or_404(Post.objects.select_related("board"), pk=post_id)
+    post = get_object_or_404(
+        Post.objects.select_related("board").prefetch_related("images"),
+        pk=post_id,
+    )
     if not can_edit_post(request.user, post):
         logger.warning(
             "discussion.post.edit.denied username=%s post_id=%s",
@@ -140,7 +147,9 @@ def post_edit(request, post_id):
 
     form = PostForm(
         request.POST if request.method == "POST" else None,
+        request.FILES if request.method == "POST" else None,
         instance=post,
+        remove_image_ids=request.POST.getlist("remove_image"),
     )
     if request.method == "POST" and form.is_valid():
         try:
@@ -149,6 +158,8 @@ def post_edit(request, post_id):
                 title=form.cleaned_data["title"],
                 content=form.cleaned_data["content"],
                 actor=request.user,
+                images=form.cleaned_data["images"],
+                remove_image_ids=request.POST.getlist("remove_image"),
                 request=request,
             )
         except DiscussionNotFound as exc:
@@ -168,6 +179,7 @@ def post_edit(request, post_id):
             "page_heading": _("编辑帖子"),
             "submit_label": _("保存修改"),
             "post": post,
+            "post_images": post.images.all(),
         },
     )
 

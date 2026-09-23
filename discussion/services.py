@@ -4,7 +4,7 @@ from django.utils.translation import gettext_lazy as _
 
 from core.audit import record_audit
 
-from .models import Board, Comment, Post
+from .models import Board, Comment, Post, PostImage
 from .permissions import (
     can_comment,
     can_create_board,
@@ -15,7 +15,12 @@ from .permissions import (
     can_pin_post,
     is_member,
 )
-from .validators import clean_board_name, clean_chinese_board_name
+from .validators import (
+    POST_IMAGE_LIMIT,
+    clean_board_name,
+    clean_chinese_board_name,
+    validate_post_image,
+)
 
 
 class DiscussionError(Exception):
@@ -56,6 +61,35 @@ def _post_for_update(post_id):
         return Post.objects.select_for_update().get(pk=post_id)
     except Post.DoesNotExist as exc:
         raise DiscussionNotFound from exc
+
+
+def _validated_images(images):
+    uploads = list(images or ())
+    if len(uploads) > POST_IMAGE_LIMIT:
+        raise DiscussionError(_("每篇帖子最多上传 3 张图片。"))
+    for uploaded_file in uploads:
+        try:
+            validate_post_image(uploaded_file)
+        except ValidationError as exc:
+            raise DiscussionError(exc.messages[0]) from exc
+    return uploads
+
+
+def _store_post_images(*, post, uploads, saved_files):
+    for uploaded_file in uploads:
+        image = PostImage(post=post, image=uploaded_file)
+        try:
+            image.save()
+        except Exception:
+            if image.image and image.image._committed:
+                image.image.storage.delete(image.image.name)
+            raise
+        saved_files.append((image.image.storage, image.image.name))
+
+
+def _delete_stored_files(files):
+    for storage, name in files:
+        storage.delete(name)
 
 
 def create_board(*, name_zh, name, actor, request=None):
@@ -107,52 +141,102 @@ def delete_board(*, board_id, actor, request=None):
         board.delete()
 
 
-def create_post(*, board_id, title, content, actor, request=None):
+def create_post(*, board_id, title, content, actor, images=(), request=None):
     if not can_create_post(actor):
         raise PermissionDenied
     title = title.strip()
     content = content.strip()
     if not title or not content:
         raise DiscussionError(_("帖子标题和正文不能为空。"))
+    uploads = _validated_images(images)
+    saved_files = []
 
-    with transaction.atomic():
-        board = _board_for_update(board_id)
-        post = Post.objects.create(
-            board=board,
-            author=actor,
-            title=title,
-            content=content,
-        )
+    try:
+        with transaction.atomic():
+            board = _board_for_update(board_id)
+            post = Post.objects.create(
+                board=board,
+                author=actor,
+                title=title,
+                content=content,
+            )
+            _store_post_images(post=post, uploads=uploads, saved_files=saved_files)
+    except Exception:
+        _delete_stored_files(saved_files)
+        raise
+
     record_audit(
         action="discussion.post.create",
         user=actor,
         target=post,
-        detail={"board_id": board.pk},
+        detail={"board_id": board.pk, "image_count": len(saved_files)},
         request=request,
     )
     return post
 
 
-def update_post(*, post_id, title, content, actor, request=None):
+def update_post(
+    *,
+    post_id,
+    title,
+    content,
+    actor,
+    images=(),
+    remove_image_ids=(),
+    request=None,
+):
     _require_member(actor)
     title = title.strip()
     content = content.strip()
     if not title or not content:
         raise DiscussionError(_("帖子标题和正文不能为空。"))
+    uploads = _validated_images(images)
+    try:
+        remove_ids = {int(image_id) for image_id in remove_image_ids}
+    except (TypeError, ValueError) as exc:
+        raise DiscussionError(_("所选图片无效。")) from exc
 
-    with transaction.atomic():
-        post = _post_for_update(post_id)
-        if not can_edit_post(actor, post):
-            raise PermissionDenied
-        post.title = title
-        post.content = content
-        post.save(update_fields=["title", "content", "updated_at"])
+    saved_files = []
+    files_to_delete = []
+    try:
+        with transaction.atomic():
+            post = _post_for_update(post_id)
+            if not can_edit_post(actor, post):
+                raise PermissionDenied
+            existing_images = list(
+                PostImage.objects.select_for_update()
+                .filter(post=post)
+                .order_by("pk")
+            )
+            existing_ids = {image.pk for image in existing_images}
+            if not remove_ids.issubset(existing_ids):
+                raise DiscussionError(_("所选图片不属于这篇帖子。"))
+            remaining = len(existing_images) - len(remove_ids)
+            if remaining + len(uploads) > POST_IMAGE_LIMIT:
+                raise DiscussionError(_("每篇帖子最多保留 3 张图片。"))
 
+            post.title = title
+            post.content = content
+            post.save(update_fields=["title", "content", "updated_at"])
+            for image in existing_images:
+                if image.pk in remove_ids:
+                    files_to_delete.append((image.image.storage, image.image.name))
+                    image.delete()
+            _store_post_images(post=post, uploads=uploads, saved_files=saved_files)
+    except Exception:
+        _delete_stored_files(saved_files)
+        raise
+
+    _delete_stored_files(files_to_delete)
     record_audit(
         action="discussion.post.update",
         user=actor,
         target=post,
-        detail={"board_id": post.board_id},
+        detail={
+            "board_id": post.board_id,
+            "image_count": len(saved_files),
+            "removed_image_count": len(files_to_delete),
+        },
         request=request,
     )
     return post
@@ -164,11 +248,13 @@ def delete_post(*, post_id, actor, request=None):
         post = _post_for_update(post_id)
         if not can_delete_post(actor, post):
             raise PermissionDenied
+        post_images = list(post.images.all())
         detail = {
             "post_id": post.pk,
             "board_id": post.board_id,
             "author_id": post.author_id,
             "comment_count": post.comments.count(),
+            "image_count": len(post_images),
         }
         record_audit(
             action="discussion.post.delete",
@@ -179,6 +265,9 @@ def delete_post(*, post_id, actor, request=None):
         )
         post.delete()
 
+    _delete_stored_files(
+        [(image.image.storage, image.image.name) for image in post_images]
+    )
     return detail["board_id"]
 
 

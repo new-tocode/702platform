@@ -3,6 +3,8 @@ from django.db import models
 from django.db.models.functions import Lower
 from django.utils.translation import gettext_lazy as _
 
+from .validators import validate_post_image
+
 
 class Board(models.Model):
     name_zh = models.CharField(_("中文名称"), max_length=80)
@@ -62,6 +64,36 @@ class Post(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class PostImage(models.Model):
+    post = models.ForeignKey(
+        Post,
+        on_delete=models.CASCADE,
+        related_name="images",
+        verbose_name=_("帖子"),
+    )
+    image = models.ImageField(
+        _("帖子图片"),
+        upload_to="discussion/%Y/%m/",
+        validators=[validate_post_image],
+    )
+    file_size = models.PositiveBigIntegerField(_("文件大小"), default=0, editable=False)
+    created_at = models.DateTimeField(_("上传时间"), auto_now_add=True)
+
+    class Meta:
+        verbose_name = _("帖子图片")
+        verbose_name_plural = _("帖子图片")
+        ordering = ("created_at", "pk")
+
+    def __str__(self):
+        return f"{self.post} image #{self.pk}"
+
+    def save(self, *args, **kwargs):
+        if self.image:
+            self.file_size = self.image.size
+        self.full_clean()
+        return super().save(*args, **kwargs)
 
 
 class Comment(models.Model):

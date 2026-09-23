@@ -119,6 +119,15 @@
                                     <span class="muted">{% translate "发布于" %} {{ post.created_at|date:"Y-m-d H:i" }}</span>
                                 </div>
                                 <div class="prose discussion-post-content">{{ post.content|render_markdown }}</div>
+                                {% if post.images.all %}
+                                    <div class="discussion-post-images">
+                                        {% for image in post.images.all %}
+                                            <a href="{{ image.image.url }}" target="_blank" rel="noopener">
+                                                <img src="{{ image.image.url }}" alt="{% translate '帖子图片' %}">
+                                            </a>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
                                 <div class="btn-row discussion-post-actions">
                                     {% if post.author_id == user.pk %}
                                         <a class="btn btn-sm" href="{% url 'discussion:post_edit' post.pk %}">{% translate "编辑" %}</a>

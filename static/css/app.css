@@ -696,8 +696,29 @@ td .empty, .panel-body.tight .empty {
 .discussion-author { display: flex; align-items: baseline; flex-wrap: wrap; gap: 5px 12px; margin-bottom: 12px; }
 .discussion-author > span:first-child { color: var(--blue-ink); font-weight: 600; }
 .discussion-post-content { max-width: none; overflow-wrap: anywhere; }
+.discussion-post-images {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 220px));
+  gap: 10px; margin-top: 16px;
+}
+.discussion-post-images a { display: block; border: 1px solid var(--line); background: var(--surface-2); }
+.discussion-post-images img {
+  display: block; width: 100%; max-height: 220px; object-fit: cover;
+}
+.post-image-management {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
+}
+.post-image-remove {
+  display: grid !important; gap: 6px; margin: 0 !important;
+  padding: 7px; border: 1px solid var(--line); background: var(--surface-2);
+}
+.post-image-remove img { width: 100%; height: 100px; object-fit: cover; }
+.post-image-remove span { display: flex; align-items: center; gap: 5px; }
 .discussion-post-actions { margin-top: 15px; }
-.discussion-comments { border-top: 1px solid var(--line); margin-top: 18px; padding-top: 14px; }
+.discussion-comments {
+  border-left: 3px solid var(--blue-tint); border-top: 1px solid var(--line);
+  margin: 18px 0 0 30px; padding: 14px 0 0 16px;
+}
 .discussion-comments h4 { display: flex; align-items: baseline; gap: 7px; margin-bottom: 10px; }
 .discussion-comment { padding: 9px 0; border-bottom: 1px solid var(--line); }
 .discussion-comment strong { margin-right: 8px; font-size: 12px; }
@@ -770,6 +791,8 @@ td .empty, .panel-body.tight .empty {
   .discussion-board-selector { gap: 8px; }
   .discussion-board-label { font-size: 13px; }
   .discussion-board-tab { min-width: 138px; padding: 9px 11px; }
+  .discussion-comments { margin-left: 10px; padding-left: 10px; }
+  .discussion-post-images { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
   .discussion-board-heading { align-items: flex-start; }
   .langbtn { padding: 1px 5px; }
   .brand-code { display: none; }

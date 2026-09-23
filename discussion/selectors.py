@@ -1,7 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.db.models import Prefetch
 
-from .models import Board, Comment, Post
+from .models import Board, Comment, Post, PostImage
 
 
 User = get_user_model()
@@ -13,10 +13,14 @@ def board_list():
 
 def posts_for_board(board):
     comments = Comment.objects.select_related("author", "author__profile")
+    images = PostImage.objects.order_by("created_at", "pk")
     return (
         Post.objects.filter(board=board)
         .select_related("author", "author__profile")
-        .prefetch_related(Prefetch("comments", queryset=comments))
+        .prefetch_related(
+            Prefetch("comments", queryset=comments),
+            Prefetch("images", queryset=images),
+        )
     )
 
 
