@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 702platform\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-23 16:49+0800\n"
+"POT-Creation-Date: 2026-09-23 17:18+0800\n"
 "PO-Revision-Date: 2026-09-19 18:39\n"
 "Last-Translator: 702platform\n"
 "Language-Team: 702platform\n"
@@ -1087,7 +1087,7 @@ msgstr "Competition Club Platform"
 msgid "你好，%(name)s。"
 msgstr "Hello, %(name)s."
 
-#: templates/accounts/member_home.html:20 templates/accounts/profile.html:90
+#: templates/accounts/member_home.html:20 templates/accounts/profile.html:89
 msgid "当前身份"
 msgstr "Your role"
 
@@ -1255,67 +1255,63 @@ msgstr "Save profile"
 msgid "返回成员中心"
 msgstr "Back to member center"
 
-#: templates/accounts/profile.html:54
-msgid "自动裁成圆形"
-msgstr "Cropped to a circle"
-
-#: templates/accounts/profile.html:59
+#: templates/accounts/profile.html:58
 msgid "当前头像"
 msgstr "Current avatar"
 
-#: templates/accounts/profile.html:73
+#: templates/accounts/profile.html:72
 msgid "更换头像"
 msgstr "Change avatar"
 
-#: templates/accounts/profile.html:73
+#: templates/accounts/profile.html:72
 msgid "上传头像"
 msgstr "Upload avatar"
 
-#: templates/accounts/profile.html:81
+#: templates/accounts/profile.html:80
 msgid "删除头像"
 msgstr "Delete avatar"
 
-#: templates/accounts/profile.html:105
+#: templates/accounts/profile.html:104
 msgid "暂无其他身份。"
 msgstr "No other roles."
 
-#: templates/accounts/profile.html:114
+#: templates/accounts/profile.html:113
 msgid "个人图册"
 msgstr "Personal gallery"
 
-#: templates/accounts/profile.html:116
+#: templates/accounts/profile.html:115
 #, python-format
 msgid "%(counter)s 张 · %(used)s / %(limit)s MB"
 msgid_plural "%(counter)s 张 · %(used)s / %(limit)s MB"
 msgstr[0] "%(counter)s image · %(used)s / %(limit)s MB"
 msgstr[1] "%(counter)s images · %(used)s / %(limit)s MB"
 
-#: templates/accounts/profile.html:124
+#: templates/accounts/profile.html:123
 msgid "加入图册"
 msgstr "Add to gallery"
 
-#: templates/accounts/profile.html:127
+#: templates/accounts/profile.html:126
 #, python-format
 msgid "每张不超过 %(per)s MB，图册合计不超过 %(total)s MB。"
 msgstr "Up to %(per)s MB each, %(total)s MB in total."
 
-#: templates/accounts/profile.html:128
+#: templates/accounts/profile.html:127
 msgid "上传后可逐张调整顺序与排布。"
 msgstr "Once uploaded, you can set each image's order and layout."
 
-#: templates/accounts/profile.html:143
+#: templates/accounts/profile.html:142
 msgid "上移"
 msgstr "Move up"
 
-#: templates/accounts/profile.html:144
+#: templates/accounts/profile.html:143
 msgid "下移"
 msgstr "Move down"
 
-#: templates/accounts/profile.html:154
+#: templates/accounts/profile.html:153
 msgid "删除"
 msgstr "Delete"
 
-#: templates/accounts/profile.html:161
+#: templates/accounts/profile.html:160
 msgid "图册还是空的，从上面选一张图开始。"
 msgstr "Your gallery is empty — start by choosing an image above."
 
