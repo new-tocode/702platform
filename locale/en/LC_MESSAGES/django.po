@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 702platform\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-23 13:55+0800\n"
+"POT-Creation-Date: 2026-09-23 14:03+0800\n"
 "PO-Revision-Date: 2026-09-19 18:39\n"
 "Last-Translator: 702platform\n"
 "Language-Team: 702platform\n"
@@ -33,83 +33,103 @@ msgstr "Change Password"
 msgid "更新登录密码"
 msgstr "Update your login password"
 
-#: accounts/forms.py:157 accounts/models.py:73 accounts/validators.py:26
+#: accounts/forms.py:162 accounts/models.py:78 accounts/validators.py:35
 #: templates/accounts/profile.html:53
 msgid "头像"
 msgstr "Avatar"
 
-#: accounts/forms.py:161 core/uploads.py:46
+#: accounts/forms.py:166 accounts/forms.py:178 core/uploads.py:46
 msgid "请选择要上传的图片。"
 msgstr "Please choose an image to upload."
 
-#: accounts/forms.py:173
+#: accounts/forms.py:174 accounts/models.py:148
+msgid "图像"
+msgstr "Image"
+
+#: accounts/forms.py:190
 msgid "当前密码"
 msgstr "Current password"
 
-#: accounts/forms.py:178
+#: accounts/forms.py:195
 msgid "新密码"
 msgstr "New password"
 
-#: accounts/forms.py:183
+#: accounts/forms.py:200
 msgid "确认新密码"
 msgstr "Confirm new password"
 
-#: accounts/forms.py:195
+#: accounts/forms.py:212
 msgid "当前密码不正确。"
 msgstr "The current password is incorrect."
 
-#: accounts/forms.py:203
+#: accounts/forms.py:220
 msgid "两次输入的新密码不一致。"
 msgstr "The two new passwords do not match."
 
-#: accounts/models.py:71 templates/projects/group_detail.html:78
+#: accounts/models.py:76 templates/projects/group_detail.html:78
 #: templates/projects/group_manage.html:100
 msgid "姓名"
 msgstr "Name"
 
-#: accounts/models.py:80
+#: accounts/models.py:85
 msgid "学号"
 msgstr "Student ID"
 
-#: accounts/models.py:86 projects/forms.py:88
+#: accounts/models.py:91 projects/forms.py:88
 #: templates/projects/group_detail.html:64
 #: templates/projects/group_list.html:45
 msgid "学院"
 msgstr "College"
 
-#: accounts/models.py:87
+#: accounts/models.py:92
 msgid "专业"
 msgstr "Major"
 
-#: accounts/models.py:89
+#: accounts/models.py:94
 msgid "特长"
 msgstr "Specialties"
 
-#: accounts/models.py:92
+#: accounts/models.py:97
 msgid "可填写多项，用顿号或逗号分隔。"
 msgstr "You can list several, separated by commas."
 
-#: accounts/models.py:94
+#: accounts/models.py:99
 msgid "手机号"
 msgstr "Phone"
 
-#: accounts/models.py:95
+#: accounts/models.py:100
 msgid "其他联系方式"
 msgstr "Other contact"
 
-#: accounts/models.py:97
+#: accounts/models.py:102
 msgid "个人简介"
 msgstr "Bio"
 
-#: accounts/models.py:100
+#: accounts/models.py:105
 msgid "最多 1000 字。"
 msgstr "Up to 1000 characters."
 
-#: accounts/roles.py:15 accounts/selectors.py:49
+#: accounts/models.py:136
+msgid "普通"
+msgstr "Normal"
+
+#: accounts/models.py:137
+msgid "大图"
+msgstr "Large"
+
+#: accounts/models.py:138
+msgid "整行"
+msgstr "Full width"
+
+#: accounts/models.py:154
+msgid "排布"
+msgstr "Layout"
+
+#: accounts/roles.py:15 accounts/selectors.py:52
 msgid "管理员"
 msgstr "Administrator"
 
-#: accounts/roles.py:16 accounts/selectors.py:59
+#: accounts/roles.py:16 accounts/selectors.py:62
 #: templates/projects/group_detail.html:35
 #: templates/projects/group_detail.html:86
 #: templates/projects/group_list.html:42
@@ -117,7 +137,7 @@ msgstr "Administrator"
 msgid "项目组联系人"
 msgstr "Group contact"
 
-#: accounts/roles.py:17 accounts/selectors.py:62
+#: accounts/roles.py:17 accounts/selectors.py:65
 #: templates/projects/group_manage.html:40
 msgid "项目组成员"
 msgstr "Group member"
@@ -130,19 +150,24 @@ msgstr "No project group"
 msgid "游客"
 msgstr "Guest"
 
-#: accounts/selectors.py:51 reviews/lifecycle.py:115
+#: accounts/selectors.py:54 reviews/lifecycle.py:115
 msgid "评审人"
 msgstr "Reviewer"
 
-#: accounts/selectors.py:53 reviews/lifecycle.py:103
+#: accounts/selectors.py:56 reviews/lifecycle.py:103
 msgid "初审人"
 msgstr "Preliminary reviewer"
 
-#: accounts/selectors.py:55 templates/accounts/member_home.html:45
+#: accounts/selectors.py:58 templates/accounts/member_home.html:45
 #: templates/projects/group_detail.html:152
 #: templates/projects/group_detail.html:272
 msgid "超级评审"
 msgstr "Super reviewer"
+
+#: accounts/services.py:136
+#, python-format
+msgid "图册合计不能超过 %(limit)s MB，当前已用 %(used)s MB。"
+msgstr "Your gallery cannot exceed %(limit)s MB in total; %(used)s MB is already in use."
 
 #: accounts/signals.py:74
 #, python-format
@@ -153,28 +178,61 @@ msgstr "You have %(tasks)s — open the Review page."
 msgid "、"
 msgstr ", "
 
-#: accounts/validators.py:17
+#: accounts/validators.py:17 accounts/validators.py:26
 #, python-format
 msgid "不超过 %(limit)s MB。"
 msgstr "Up to %(limit)s MB."
 
-#: accounts/views.py:114
+#: accounts/validators.py:44
+msgid "图册图像"
+msgstr "Gallery image"
+
+#: accounts/views.py:125
 msgid "密码修改成功。"
 msgstr "Password updated."
 
-#: accounts/views.py:219
+#: accounts/views.py:230
 msgid "个人信息已保存。"
 msgstr "Profile saved."
 
-#: accounts/views.py:263
+#: accounts/views.py:300
+msgid "图像已加入图册。"
+msgstr "Image added to your gallery."
+
+#: accounts/views.py:311 accounts/views.py:332 projects/views.py:355
+#: projects/views.py:462
+msgid "未知操作"
+msgstr "Unknown action"
+
+#: accounts/views.py:316
+msgid "顺序已调整。"
+msgstr "Order updated."
+
+#: accounts/views.py:320
+msgid "已经是第一张了。"
+msgstr "That is already the first image."
+
+#: accounts/views.py:320
+msgid "已经是最后一张了。"
+msgstr "That is already the last image."
+
+#: accounts/views.py:337
+msgid "排布已更新。"
+msgstr "Layout updated."
+
+#: accounts/views.py:354
+msgid "图像已删除。"
+msgstr "Image removed."
+
+#: accounts/views.py:377
 msgid "头像已更新。"
 msgstr "Avatar updated."
 
-#: accounts/views.py:288
+#: accounts/views.py:402
 msgid "头像已删除。"
 msgstr "Avatar removed."
 
-#: accounts/views.py:290
+#: accounts/views.py:404
 msgid "当前没有头像。"
 msgstr "There is no avatar to delete."
 
@@ -535,10 +593,6 @@ msgstr ""
 #, python-format
 msgid "已拒绝创建「%(name)s」的申请。"
 msgstr "The application to create “%(name)s” was rejected."
-
-#: projects/views.py:355 projects/views.py:462
-msgid "未知操作"
-msgstr "Unknown action"
 
 #: projects/views.py:388
 msgid "学院与指导老师已更新。"
@@ -1229,7 +1283,49 @@ msgstr "No other roles."
 
 #: templates/accounts/profile.html:108
 msgid "身份由管理员授予或由项目组业务产生，此处只读。"
-msgstr "Roles are granted by administrators or produced by project-group activity; this section is read-only."
+msgstr ""
+"Roles are granted by administrators or produced by project-group activity; "
+"this section is read-only."
+
+#: templates/accounts/profile.html:116
+msgid "个人图册"
+msgstr "Personal gallery"
+
+#: templates/accounts/profile.html:118
+#, python-format
+msgid "%(counter)s 张 · %(used)s / %(limit)s MB"
+msgid_plural "%(counter)s images · %(used)s / %(limit)s MB"
+msgstr[0] "%(counter)s image · %(used)s / %(limit)s MB"
+msgstr[1] "%(counter)s images · %(used)s / %(limit)s MB"
+
+#: templates/accounts/profile.html:126
+msgid "加入图册"
+msgstr "Add to gallery"
+
+#: templates/accounts/profile.html:129
+#, python-format
+msgid "每张不超过 %(per)s MB，图册合计不超过 %(total)s MB。"
+msgstr "Up to %(per)s MB each, %(total)s MB in total."
+
+#: templates/accounts/profile.html:130
+msgid "上传后可逐张调整顺序与排布。"
+msgstr "Once uploaded, you can set each image's order and layout."
+
+#: templates/accounts/profile.html:145
+msgid "上移"
+msgstr "Move up"
+
+#: templates/accounts/profile.html:146
+msgid "下移"
+msgstr "Move down"
+
+#: templates/accounts/profile.html:156
+msgid "删除"
+msgstr "Delete"
+
+#: templates/accounts/profile.html:163
+msgid "图册还是空的，从上面选一张图开始。"
+msgstr "Your gallery is empty — start by choosing an image above."
 
 #: templates/base.html:16
 msgid "竞赛社团平台"

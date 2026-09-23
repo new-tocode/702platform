@@ -7,7 +7,8 @@ from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView as DjangoLoginView, LogoutView
 from django.db import transaction
-from django.shortcuts import redirect, render
+from django.http import Http404
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext as _
@@ -20,13 +21,23 @@ from core.stats import can_view_platform_overview, platform_overview
 from .forms import (
     AvatarForm,
     FirstPasswordChangeForm,
+    GalleryImageForm,
     MemberPasswordChangeForm,
     ProfileForm,
 )
-from .models import Profile
+from .models import GalleryImage, Profile
 from .roles import describe_member
-from .selectors import member_identities
-from .services import clear_avatar, set_avatar
+from .selectors import gallery_usage, member_identities
+from .services import (
+    GalleryError,
+    add_gallery_image,
+    clear_avatar,
+    delete_gallery_image,
+    move_gallery_image,
+    set_avatar,
+    set_gallery_layout,
+)
+from .validators import GALLERY_IMAGE_MAX_BYTES
 
 
 logger = logging.getLogger(__name__)
@@ -237,8 +248,111 @@ def profile(request):
             # 没有头像时圆圈里显示姓名（或账号）的首字，免得空着一个洞。
             "avatar_initial": (profile_obj.full_name.strip() or request.user.get_username())[:1].upper(),
             "identities": member_identities(request.user),
+            "gallery_form": GalleryImageForm(),
+            "gallery_images": profile_obj.gallery_images.all(),
+            "gallery": gallery_usage(profile_obj),
+            "gallery_image_max_mb": GALLERY_IMAGE_MAX_BYTES // (1024 * 1024),
         },
     )
+
+
+def _own_gallery_image(request, pk):
+    """取当前用户图册里的一张图；别人的图连存在与否都不告诉他，一律 404。"""
+    return get_object_or_404(GalleryImage, pk=pk, profile=_member_profile(request))
+
+
+@login_required
+@require_POST
+def gallery_upload(request):
+    """往图册里加一张图；能不能放下由服务层按合计用量决定。"""
+    profile_obj = _member_profile(request)
+    form = GalleryImageForm(request.POST, request.FILES)
+    if not form.is_valid():
+        for error in form.errors.get("image", []):
+            messages.error(request, error)
+        return redirect("accounts:profile")
+
+    try:
+        image = add_gallery_image(
+            profile=profile_obj,
+            uploaded_file=form.cleaned_data["image"],
+            actor=request.user,
+            request=request,
+        )
+    except GalleryError as exc:
+        messages.error(request, str(exc))
+        logger.warning(
+            "profile.gallery.rejected username=%s uploaded=%s",
+            request.user.get_username(),
+            form.cleaned_data["image"].size,
+            extra={"request_id": getattr(request, "request_id", "-")},
+        )
+        return redirect("accounts:profile")
+
+    logger.info(
+        "profile.gallery.add username=%s user_id=%s image_id=%s size=%s",
+        request.user.get_username(),
+        request.user.pk,
+        image.pk,
+        image.file_size,
+        extra={"request_id": getattr(request, "request_id", "-")},
+    )
+    messages.success(request, _("图像已加入图册。"))
+    return redirect("accounts:profile")
+
+
+@login_required
+@require_POST
+def gallery_image_move(request, pk):
+    """把一张图上移或下移一位；已经在头／尾时给一句说明。"""
+    image = _own_gallery_image(request, pk)
+    direction = request.POST.get("direction", "")
+    if direction not in ("up", "down"):
+        raise Http404(_("未知操作"))
+
+    if move_gallery_image(
+        image=image, direction=direction, actor=request.user, request=request
+    ):
+        messages.success(request, _("顺序已调整。"))
+    else:
+        messages.warning(
+            request,
+            _("已经是第一张了。") if direction == "up" else _("已经是最后一张了。"),
+        )
+    return redirect("accounts:profile")
+
+
+@login_required
+@require_POST
+def gallery_image_layout(request, pk):
+    """改一张图的排布：普通／大图／整行。"""
+    image = _own_gallery_image(request, pk)
+    layout = request.POST.get("layout", "")
+    if layout not in {choice for choice, _label in GalleryImage.LAYOUT_CHOICES}:
+        raise Http404(_("未知操作"))
+
+    set_gallery_layout(
+        image=image, layout=layout, actor=request.user, request=request
+    )
+    messages.success(request, _("排布已更新。"))
+    return redirect("accounts:profile")
+
+
+@login_required
+@require_POST
+def gallery_image_delete(request, pk):
+    """从图册里删掉一张图，连同磁盘上的文件。"""
+    image = _own_gallery_image(request, pk)
+    delete_gallery_image(image=image, actor=request.user, request=request)
+    logger.info(
+        "profile.gallery.delete username=%s user_id=%s image_id=%s",
+        request.user.get_username(),
+        request.user.pk,
+        pk,
+        extra={"request_id": getattr(request, "request_id", "-")},
+    )
+    messages.success(request, _("图像已删除。"))
+    return redirect("accounts:profile")
 
 
 @login_required

@@ -18,6 +18,15 @@ AVATAR_HELP_TEXT = _("不超过 %(limit)s MB。") % {
     "limit": AVATAR_MAX_BYTES // (1024 * 1024)
 }
 
+#: 图册单张的大小上限。整册的合计上限在 ``accounts.models``：那条要跨行求和的
+#: 约束落在服务层，口径跟着模型走。
+GALLERY_IMAGE_MAX_BYTES = 5 * 1024 * 1024
+
+#: 图册单张的说明文案。
+GALLERY_HELP_TEXT = _("不超过 %(limit)s MB。") % {
+    "limit": GALLERY_IMAGE_MAX_BYTES // (1024 * 1024)
+}
+
 
 def validate_avatar(uploaded_file):
     """校验上传的头像图片。"""
@@ -25,4 +34,13 @@ def validate_avatar(uploaded_file):
         uploaded_file,
         label=_("头像"),
         max_bytes=AVATAR_MAX_BYTES,
+    )
+
+
+def validate_gallery_image(uploaded_file):
+    """校验图册里的一张图。"""
+    validate_image_upload(
+        uploaded_file,
+        label=_("图册图像"),
+        max_bytes=GALLERY_IMAGE_MAX_BYTES,
     )

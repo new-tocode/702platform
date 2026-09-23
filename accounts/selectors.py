@@ -11,9 +11,12 @@
 
 from dataclasses import dataclass
 
+from django.db.models import Count, Sum
 from django.utils.translation import gettext_lazy as _
 
 from core.permissions import is_admin
+
+from .models import GALLERY_TOTAL_MAX_BYTES, GalleryImage
 
 
 @dataclass(frozen=True)
@@ -61,3 +64,36 @@ def member_identities(user):
     if joined:
         identities.append(Identity(_("项目组成员"), joined))
     return tuple(identities)
+
+
+@dataclass(frozen=True)
+class GalleryUsage:
+    """图册用量：几张、占了多少。上限是常量，页面自己带出来。"""
+
+    count: int
+    used_bytes: int
+
+    @property
+    def used_mb(self):
+        """用量的显示值：整数不拖小数点（34 而不是 34.0）。"""
+        return f"{self.used_bytes / (1024 * 1024):.1f}".rstrip("0").rstrip(".")
+
+    @property
+    def limit_mb(self):
+        return GALLERY_TOTAL_MAX_BYTES // (1024 * 1024)
+
+
+def gallery_usage(profile):
+    """该用户图册的张数与占用。
+
+    一条聚合而不是 ``profile.gallery_images.count()`` 加一次求和——页面上这两个
+    数字总是一起出现，分成两趟查询没有任何好处。
+    """
+    summary = profile.gallery_images.aggregate(
+        count=Count("pk"),
+        used_bytes=Sum("file_size"),
+    )
+    return GalleryUsage(
+        count=summary["count"] or 0,
+        used_bytes=summary["used_bytes"] or 0,
+    )

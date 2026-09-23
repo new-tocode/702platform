@@ -345,6 +345,36 @@ input[type="file"] { font: inherit; font-size: 13px; color: var(--ink-2); }
 .roles { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .roles li { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
 
+/* --- 个人图册 --- */
+/* 上传一行：文件框与按钮并排，标签只给读屏软件（版面上一眼就知道这行做什么）。 */
+.upload-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.upload-row input[type="file"] { flex: 1 1 260px; min-width: 0; }
+
+/* 每张图占几格由 layout 决定：普通一格、大图两格、整行铺满。
+   栅格用 auto-fill，窄屏自己掉到两列。 */
+.gallery {
+  display: grid; gap: 14px; margin-top: 18px;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+}
+.gitem {
+  display: flex; flex-direction: column; margin: 0;
+  border: 1px solid var(--line); background: var(--surface);
+}
+.gitem-wide { grid-column: span 2; }
+.gitem-full { grid-column: 1 / -1; }
+.gitem img {
+  display: block; width: 100%; height: 168px; object-fit: cover;
+  background: var(--surface-2); border-bottom: 1px solid var(--line);
+}
+.gitem-wide img { height: 200px; }
+.gitem-full img { height: 300px; }
+.gitem figcaption { display: grid; gap: 8px; padding: 10px 12px; }
+.gitem-meta {
+  display: flex; justify-content: space-between; gap: 10px;
+  font-family: var(--mono); font-size: 11px; color: var(--ink-3);
+}
+.gitem-ctl { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
+
 /* --- 键值表 --- */
 .dl { margin: 0; display: grid; gap: 11px; }
 .dl > div {
@@ -611,5 +641,7 @@ td .empty, .panel-body.tight .empty {
   .spec { grid-template-columns: 1fr 1fr; }
   /* 窄屏放不下并排的两项：回落成一行一项 */
   .field-row { grid-template-columns: 1fr; }
+  /* 两列以下放不下「大图」跨的两格：让它在窄屏铺满一整行 */
+  .gitem-wide { grid-column: 1 / -1; }
   .reel-step { width: 30px; height: 30px; }
 }

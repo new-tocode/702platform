@@ -10,7 +10,12 @@ from django.contrib.auth.forms import (
 from django.utils.translation import gettext_lazy as _
 
 from .models import Profile, User
-from .validators import AVATAR_HELP_TEXT, validate_avatar
+from .validators import (
+    AVATAR_HELP_TEXT,
+    GALLERY_HELP_TEXT,
+    validate_avatar,
+    validate_gallery_image,
+)
 
 
 class AdminUserCreationForm(UserCreationForm):
@@ -158,6 +163,18 @@ class AvatarForm(forms.Form):
         widget=forms.FileInput(),
         validators=[validate_avatar],
         help_text=AVATAR_HELP_TEXT,
+        error_messages={"required": _("请选择要上传的图片。")},
+    )
+
+
+class GalleryImageForm(forms.Form):
+    """往个人图册里加一张图；排布与顺序上传后在页面上再调。"""
+
+    image = forms.ImageField(
+        label=_("图像"),
+        widget=forms.FileInput(),
+        validators=[validate_gallery_image],
+        help_text=GALLERY_HELP_TEXT,
         error_messages={"required": _("请选择要上传的图片。")},
     )
 

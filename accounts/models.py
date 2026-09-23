@@ -4,7 +4,12 @@ from django.contrib.auth.models import AbstractUser, UserManager as DjangoUserMa
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from .validators import AVATAR_HELP_TEXT, validate_avatar
+from .validators import (
+    AVATAR_HELP_TEXT,
+    GALLERY_HELP_TEXT,
+    validate_avatar,
+    validate_gallery_image,
+)
 
 
 class UserManager(DjangoUserManager):
@@ -109,6 +114,70 @@ class Profile(models.Model):
 
     def __str__(self):
         return f"{self.user.get_username()} 的个人资料"
+
+
+#: 一个人的图册合计能占多少空间。单张的上限在 ``accounts.validators``；
+#: 这条要跨行求和，落在 ``accounts.services`` 的上传命令里把关。
+GALLERY_TOTAL_MAX_BYTES = 100 * 1024 * 1024
+
+
+class GalleryImage(models.Model):
+    """个人图册里的一张图。
+
+    图册挂在个人资料上而不是账号上：它和头像、简介一样属于「我是谁」那一块，
+    账号被删时一并消失（``Profile`` 本就随账号级联）。
+    """
+
+    #: 排布：这张图在页面栅格里占几格。
+    LAYOUT_NORMAL = "normal"
+    LAYOUT_WIDE = "wide"
+    LAYOUT_FULL = "full"
+    LAYOUT_CHOICES = (
+        (LAYOUT_NORMAL, _("普通")),
+        (LAYOUT_WIDE, _("大图")),
+        (LAYOUT_FULL, _("整行")),
+    )
+
+    profile = models.ForeignKey(
+        Profile,
+        on_delete=models.CASCADE,
+        related_name="gallery_images",
+        verbose_name="个人资料",
+    )
+    image = models.ImageField(
+        _("图像"),
+        upload_to="gallery/%Y/%m/",
+        validators=[validate_gallery_image],
+        help_text=GALLERY_HELP_TEXT,
+    )
+    layout = models.CharField(
+        _("排布"),
+        max_length=8,
+        choices=LAYOUT_CHOICES,
+        default=LAYOUT_NORMAL,
+    )
+    sort_order = models.PositiveIntegerField("顺序", default=0)
+    file_size = models.PositiveBigIntegerField("文件大小", default=0, editable=False)
+    created_at = models.DateTimeField("上传时间", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "图册图像"
+        verbose_name_plural = "图册图像"
+        # 顺序由用户逐张调；撞上同一个 sort_order 时（历史数据）按 id 兜底。
+        ordering = ("sort_order", "id")
+
+    def __str__(self):
+        return f"{self.profile.user.get_username()} 的图册图像 #{self.pk}"
+
+    def save(self, *args, **kwargs):
+        if self.image:
+            self.file_size = self.image.size
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    @property
+    def size_in_mb(self):
+        return round(self.file_size / (1024 * 1024), 2)
 
 
 # --- 后台「身份管理」的四张全局身份名册 -------------------------------------

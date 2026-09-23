@@ -13,5 +13,21 @@ urlpatterns = [
     path("member/profile/", views.profile, name="profile"),
     path("member/profile/avatar/", views.avatar_update, name="avatar_update"),
     path("member/profile/avatar/delete/", views.avatar_delete, name="avatar_delete"),
+    path("member/profile/gallery/", views.gallery_upload, name="gallery_upload"),
+    path(
+        "member/profile/gallery/<int:pk>/move/",
+        views.gallery_image_move,
+        name="gallery_image_move",
+    ),
+    path(
+        "member/profile/gallery/<int:pk>/layout/",
+        views.gallery_image_layout,
+        name="gallery_image_layout",
+    ),
+    path(
+        "member/profile/gallery/<int:pk>/delete/",
+        views.gallery_image_delete,
+        name="gallery_image_delete",
+    ),
     path("member/password/", views.PasswordChangeView.as_view(), name="password_change"),
 ]

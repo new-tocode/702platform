@@ -110,5 +110,59 @@
             </div>
         </div>
     </div>
+
+    <div class="panel reveal">
+        <div class="panel-head">
+            <h2>{% translate "个人图册" %}</h2>
+            <span class="count">
+                {% blocktranslate count counter=gallery.count with used=gallery.used_mb limit=gallery.limit_mb %}{{ counter }} 张 · {{ used }} / {{ limit }} MB{% plural %}{{ counter }} 张 · {{ used }} / {{ limit }} MB{% endblocktranslate %}
+            </span>
+        </div>
+        <div class="panel-body">
+            <form method="post" action="{% url 'accounts:gallery_upload' %}" enctype="multipart/form-data" class="upload-row">
+                {% csrf_token %}
+                <label class="visually-hidden" for="{{ gallery_form.image.id_for_label }}">{{ gallery_form.image.label }}</label>
+                {{ gallery_form.image }}
+                <button class="btn btn-primary" type="submit">{% translate "加入图册" %}</button>
+            </form>
+            <p class="help">
+                {% blocktranslate with per=gallery_image_max_mb total=gallery.limit_mb %}每张不超过 {{ per }} MB，图册合计不超过 {{ total }} MB。{% endblocktranslate %}
+                {% translate "上传后可逐张调整顺序与排布。" %}
+            </p>
+
+            {% if gallery_images %}
+                <div class="gallery">
+                    {% for image in gallery_images %}
+                        <figure class="gitem gitem-{{ image.layout }}">
+                            <img src="{{ image.image.url }}" alt="">
+                            <figcaption>
+                                <div class="gitem-meta">
+                                    <span>#{{ forloop.counter|stringformat:"02d" }}</span>
+                                    <span>{{ image.size_in_mb }} MB</span>
+                                </div>
+                                <form method="post" action="{% url 'accounts:gallery_image_move' image.pk %}" class="gitem-ctl">
+                                    {% csrf_token %}
+                                    <button class="btn btn-sm" name="direction" value="up" type="submit" title="{% translate '上移' %}">↑</button>
+                                    <button class="btn btn-sm" name="direction" value="down" type="submit" title="{% translate '下移' %}">↓</button>
+                                </form>
+                                <form method="post" action="{% url 'accounts:gallery_image_layout' image.pk %}" class="gitem-ctl">
+                                    {% csrf_token %}
+                                    {% for value, label in image.LAYOUT_CHOICES %}
+                                        <button class="btn btn-sm{% if image.layout == value %} btn-primary{% endif %}" name="layout" value="{{ value }}" type="submit">{{ label }}</button>
+                                    {% endfor %}
+                                </form>
+                                <form method="post" action="{% url 'accounts:gallery_image_delete' image.pk %}" class="gitem-ctl">
+                                    {% csrf_token %}
+                                    <button class="btn btn-sm btn-danger" type="submit">{% translate "删除" %}</button>
+                                </form>
+                            </figcaption>
+                        </figure>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty">{% translate "图册还是空的，从上面选一张图开始。" %}</div>
+            {% endif %}
+        </div>
+    </div>
 </div>
 {% endblock %}
