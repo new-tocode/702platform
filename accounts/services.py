@@ -203,8 +203,10 @@ def set_gallery_layout(*, image, layout, actor, request=None):
     if image.layout == layout:
         return image
 
+    # 只改这一列，走 queryset 而不是 save()：模型的 save 会 full_clean 整行，
+    # 换个排布还要把图片解码验一遍——白读一次盘，图片被运维挪走时更会直接报错。
+    GalleryImage.objects.filter(pk=image.pk).update(layout=layout)
     image.layout = layout
-    image.save(update_fields=["layout"])
     record_audit(
         action="accounts.gallery.layout",
         user=actor,

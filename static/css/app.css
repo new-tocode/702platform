@@ -348,7 +348,8 @@ input[type="file"] { font: inherit; font-size: 13px; color: var(--ink-2); }
 /* --- 个人图册 --- */
 /* 上传一行：文件框与按钮并排，标签只给读屏软件（版面上一眼就知道这行做什么）。 */
 .upload-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.upload-row input[type="file"] { flex: 1 1 260px; min-width: 0; }
+/* 文件框可以长，但不吃掉整行：按钮跟在它后面，不飘到版面的另一头 */
+.upload-row input[type="file"] { flex: 1 1 240px; max-width: 420px; min-width: 0; }
 
 /* 每张图占几格由 layout 决定：普通一格、大图两格、整行铺满。
    栅格用 auto-fill，窄屏自己掉到两列。 */

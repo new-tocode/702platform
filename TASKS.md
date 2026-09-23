@@ -40,6 +40,6 @@
 
 ## 阶段 5 · 文档与收尾
 
-- [ ] `README.md`、`docs/architecture.md`、`docs/development.md` 同步
-- [ ] 全量 `manage.py test` + `check` + `makemigrations --check`
-- [ ] 本地起服务、真实浏览器点一遍（`run-local`）
+- [x] `README.md`、`docs/architecture.md`、`docs/development.md` 同步
+- [x] 全量 `manage.py test` + `check` + `makemigrations --check`
+- [x] 本地起服务、真实浏览器点一遍（`run-local`）

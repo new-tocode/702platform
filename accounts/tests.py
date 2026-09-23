@@ -294,6 +294,12 @@ class ProfilePageAcceptanceTests(TestCase):
         self.assertIn('name="full_name"', first_row.group(1))
         self.assertIn('name="student_id"', first_row.group(1))
 
+    def test_no_template_comment_leaks_onto_the_page(self):
+        # Django 的 {# #} 不跨行：写成两行会把注释当正文渲染出来，页面上直接可见。
+        response = self.client.get(reverse("accounts:profile"))
+
+        self.assertNotIn("{#", response.content.decode())
+
     def test_profile_page_marks_single_field_rows_as_full_width(self):
         response = self.client.get(reverse("accounts:profile"))
 
@@ -572,6 +578,21 @@ class PersonalGalleryAcceptanceTests(TestCase):
         self.assertEqual(image.layout, "wide")
         response = self.client.get(reverse("accounts:profile"))
         self.assertContains(response, 'class="gitem gitem-wide"')
+
+    def test_changing_the_layout_does_not_re_read_the_image(self):
+        """换排布只写那一列：图片文件即使不在磁盘上，也不该挡着改排布。"""
+        self.upload("moved.png")
+        image = self.images()[0]
+        Path(image.image.path).unlink()
+
+        response = self.client.post(
+            reverse("accounts:gallery_image_layout", args=[image.pk]),
+            {"layout": "full"},
+        )
+
+        self.assertRedirects(response, reverse("accounts:profile"))
+        image.refresh_from_db()
+        self.assertEqual(image.layout, "full")
 
     def test_deleting_an_image_removes_the_row_and_the_file(self):
         self.upload("doomed.png")
