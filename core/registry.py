@@ -7,6 +7,8 @@ from typing import Callable
 
 from django.urls import NoReverseMatch, reverse
 
+from .permissions import is_admin
+
 
 logger = logging.getLogger(__name__)
 
@@ -69,12 +71,6 @@ def register_entry(
     return entry
 
 
-def clear_entries():
-    """Clear the registry for isolated tests."""
-    with _LOCK:
-        _ENTRIES.clear()
-
-
 def unregister_entry(key):
     """Remove one registered entry, primarily for isolated tests."""
     with _LOCK:
@@ -94,7 +90,7 @@ def get_registered_entries():
 def _entry_visible_to_user(entry, user):
     if not user or not user.is_authenticated or getattr(user, "must_change_password", False):
         return False
-    if entry.staff_only and not user.is_staff:
+    if entry.staff_only and not is_admin(user):
         return False
     if entry.required_permission and not user.has_perm(entry.required_permission):
         return False

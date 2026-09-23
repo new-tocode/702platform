@@ -197,17 +197,11 @@ class ProjectSubmission(models.Model):
         ).count()
 
     @property
-    def pending_count(self):
-        return self.tasks.filter(
-            stage=ReviewTask.REVIEW, status=ReviewTask.PENDING
-        ).count()
-
-    @property
     def open_task_count(self):
         """本轮还没交的任务数，两道关都算。
 
-        ``pending_count`` 只数评审任务（评审进度要那个口径）；这个数字是超级评审
-        即将放掉的量，所以待初审也算进来。
+        这个数字是超级评审即将放掉的量，所以待初审也算进来；要看某一关自己的
+        进度，用 ``completed_count``。
         """
         return self.tasks.filter(status=ReviewTask.PENDING).count()
 
@@ -330,11 +324,6 @@ class ReviewTask(models.Model):
     @property
     def is_released(self):
         return self.status == self.RELEASED
-
-    @property
-    def stage_label(self):
-        """这一道关自己的叫法（初审／评审）——模板文案与拒绝语都用它。"""
-        return lifecycle.STAGES[self.stage].label
 
     @property
     def status_label(self):
@@ -498,11 +487,6 @@ class ReviewerLeave(models.Model):
 
     def __str__(self):
         return f"{self.reviewer} 请假 {self.starts_at:%Y-%m-%d %H:%M} 至 {self.ends_at:%Y-%m-%d %H:%M}"
-
-    def covers(self, moment=None):
-        """Whether this window covers ``moment`` (defaults to now)."""
-        moment = moment or timezone.now()
-        return self.starts_at <= moment < self.ends_at
 
     @property
     def state(self):

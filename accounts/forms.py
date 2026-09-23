@@ -13,7 +13,11 @@ from .models import Profile, User
 
 
 class AdminUserCreationForm(UserCreationForm):
-    """Admin-only account creation form; no public registration uses this form."""
+    """Admin-only account creation form; no public registration uses this form.
+
+    三种评审资格可以建号时直接勾上，省掉「先建号、再进详情页勾一遍」的两步。
+    管理员身份不在此列——那是后台的进入权限，建号后再单独确认。
+    """
 
     full_name = forms.CharField(label="姓名", max_length=128, required=True)
 
@@ -22,6 +26,9 @@ class AdminUserCreationForm(UserCreationForm):
         fields = (
             "username",
             "email",
+            "is_reviewer",
+            "is_preliminary_reviewer",
+            "is_super_reviewer",
         )
 
     def save_profile(self, user):

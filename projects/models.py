@@ -279,3 +279,17 @@ class ProjectContact(get_user_model()):
         proxy = True
         verbose_name = "项目组联系人"
         verbose_name_plural = "项目组联系人"
+
+
+class ProjectMember(get_user_model()):
+    """Read-only proxy giving administrators a single list of all members.
+
+    Membership is derived from ``ProjectGroup.members``; like ``ProjectContact``
+    this stores nothing. Both are 名册 for viewing only —— 成员关系只能由业务
+    动作产生（入组审批、建组、联系人转让），后台不提供分配入口。
+    """
+
+    class Meta:
+        proxy = True
+        verbose_name = "项目组成员"
+        verbose_name_plural = "项目组成员"

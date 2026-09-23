@@ -94,3 +94,49 @@ class Profile(models.Model):
 
     def __str__(self):
         return f"{self.user.get_username()} 的个人资料"
+
+
+# --- 后台「身份管理」的四张全局身份名册 -------------------------------------
+#
+# 身份本身仍是 User 上的布尔字段（is_staff／is_reviewer／…），这里只是换一层
+# 皮：让后台能按「身份」而不是按「账号」浏览，一眼看到某个身份上都有谁。
+# proxy 不建表、不存数据，也就不存在与布尔字段分叉的第二处真相。
+#
+# 四张名册都在 accounts 下，后台因此归入「账号与成员」；``config.admin`` 再把
+# 它们与项目的两张名册一起提成「身份管理」分组。
+
+
+class AdminRole(User):
+    """身份名册：管理员（``is_staff`` 或 ``is_superuser``）。"""
+
+    class Meta:
+        proxy = True
+        verbose_name = "管理员"
+        verbose_name_plural = "管理员"
+
+
+class ReviewerRole(User):
+    """身份名册：评审人（``is_reviewer``）。"""
+
+    class Meta:
+        proxy = True
+        verbose_name = "评审人"
+        verbose_name_plural = "评审人"
+
+
+class PreliminaryReviewerRole(User):
+    """身份名册：初审人（``is_preliminary_reviewer``）。"""
+
+    class Meta:
+        proxy = True
+        verbose_name = "初审人"
+        verbose_name_plural = "初审人"
+
+
+class SuperReviewerRole(User):
+    """身份名册：超级评审（``is_super_reviewer``）。"""
+
+    class Meta:
+        proxy = True
+        verbose_name = "超级评审"
+        verbose_name_plural = "超级评审"

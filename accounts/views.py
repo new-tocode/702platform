@@ -125,12 +125,11 @@ class PasswordChangeView(FormView):
 @require_http_methods(["GET", "HEAD"])
 def home(request):
     from content.models import HomeSlide
-    from notices.models import Notice
+    from notices.visibility import public_visible_notices
 
-    latest_public_notices = (
-        Notice.objects.filter(scope=Notice.PUBLIC)
-        .select_related("published_by")[:5]
-    )
+    latest_public_notices = public_visible_notices().select_related(
+        "published_by"
+    )[:5]
     home_slides = (
         HomeSlide.objects.filter(is_active=True)
         .select_related("image")

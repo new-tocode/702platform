@@ -5,6 +5,7 @@ the competition-specific verb on top of it so call sites do not query
 ``ProjectGroup`` directly.
 """
 
+from core.permissions import is_admin
 from projects.permissions import can_manage_group, is_project_contact
 
 
@@ -13,7 +14,7 @@ def is_competition_manager(user):
     return bool(
         user
         and user.is_authenticated
-        and (user.is_staff or is_project_contact(user))
+        and (is_admin(user) or is_project_contact(user))
     )
 
 
