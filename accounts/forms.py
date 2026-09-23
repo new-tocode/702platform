@@ -10,6 +10,7 @@ from django.contrib.auth.forms import (
 from django.utils.translation import gettext_lazy as _
 
 from .models import Profile, User
+from .validators import AVATAR_HELP_TEXT, validate_avatar
 
 
 class AdminUserCreationForm(UserCreationForm):
@@ -142,6 +143,23 @@ class ProfileForm(forms.ModelForm):
             ]
             for row in rows
         ]
+
+
+class AvatarForm(forms.Form):
+    """上传或更换头像。
+
+    刻意不是 ModelForm：后者在校验通过的那一刻就把上传文件写进了实例，
+    服务层再想读「原来的头像叫什么」已经读不到了（换头像要顺手删掉旧文件）。
+    这里只收一张图，写库由 ``accounts.services.set_avatar`` 一处完成。
+    """
+
+    avatar = forms.ImageField(
+        label=_("头像"),
+        widget=forms.FileInput(),
+        validators=[validate_avatar],
+        help_text=AVATAR_HELP_TEXT,
+        error_messages={"required": _("请选择要上传的图片。")},
+    )
 
 
 class FirstPasswordChangeForm(SetPasswordForm):

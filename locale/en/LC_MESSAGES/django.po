@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 702platform\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-23 13:41+0800\n"
+"POT-Creation-Date: 2026-09-23 13:50+0800\n"
 "PO-Revision-Date: 2026-09-19 18:39\n"
 "Last-Translator: 702platform\n"
 "Language-Team: 702platform\n"
@@ -33,66 +33,75 @@ msgstr "Change Password"
 msgid "更新登录密码"
 msgstr "Update your login password"
 
-#: accounts/forms.py:155
+#: accounts/forms.py:157 accounts/models.py:73 accounts/validators.py:26
+#: templates/accounts/profile.html:53
+msgid "头像"
+msgstr "Avatar"
+
+#: accounts/forms.py:161 core/uploads.py:46
+msgid "请选择要上传的图片。"
+msgstr "Please choose an image to upload."
+
+#: accounts/forms.py:173
 msgid "当前密码"
 msgstr "Current password"
 
-#: accounts/forms.py:160
+#: accounts/forms.py:178
 msgid "新密码"
 msgstr "New password"
 
-#: accounts/forms.py:165
+#: accounts/forms.py:183
 msgid "确认新密码"
 msgstr "Confirm new password"
 
-#: accounts/forms.py:177
+#: accounts/forms.py:195
 msgid "当前密码不正确。"
 msgstr "The current password is incorrect."
 
-#: accounts/forms.py:185
+#: accounts/forms.py:203
 msgid "两次输入的新密码不一致。"
 msgstr "The two new passwords do not match."
 
-#: accounts/models.py:69 templates/projects/group_detail.html:78
+#: accounts/models.py:71 templates/projects/group_detail.html:78
 #: templates/projects/group_manage.html:100
 msgid "姓名"
 msgstr "Name"
 
-#: accounts/models.py:71
+#: accounts/models.py:80
 msgid "学号"
 msgstr "Student ID"
 
-#: accounts/models.py:77 projects/forms.py:88
+#: accounts/models.py:86 projects/forms.py:88
 #: templates/projects/group_detail.html:64
 #: templates/projects/group_list.html:45
 msgid "学院"
 msgstr "College"
 
-#: accounts/models.py:78
+#: accounts/models.py:87
 msgid "专业"
 msgstr "Major"
 
-#: accounts/models.py:80
+#: accounts/models.py:89
 msgid "特长"
 msgstr "Specialties"
 
-#: accounts/models.py:83
+#: accounts/models.py:92
 msgid "可填写多项，用顿号或逗号分隔。"
 msgstr "You can list several, separated by commas."
 
-#: accounts/models.py:85
+#: accounts/models.py:94
 msgid "手机号"
 msgstr "Phone"
 
-#: accounts/models.py:86
+#: accounts/models.py:95
 msgid "其他联系方式"
 msgstr "Other contact"
 
-#: accounts/models.py:88
+#: accounts/models.py:97
 msgid "个人简介"
 msgstr "Bio"
 
-#: accounts/models.py:91
+#: accounts/models.py:100
 msgid "最多 1000 字。"
 msgstr "Up to 1000 characters."
 
@@ -128,13 +137,30 @@ msgstr "You have %(tasks)s — open the Review page."
 msgid "、"
 msgstr ", "
 
-#: accounts/views.py:111
+#: accounts/validators.py:17
+#, python-format
+msgid "不超过 %(limit)s MB。"
+msgstr "Up to %(limit)s MB."
+
+#: accounts/views.py:113
 msgid "密码修改成功。"
 msgstr "Password updated."
 
-#: accounts/views.py:207
+#: accounts/views.py:218
 msgid "个人信息已保存。"
 msgstr "Profile saved."
+
+#: accounts/views.py:261
+msgid "头像已更新。"
+msgstr "Avatar updated."
+
+#: accounts/views.py:286
+msgid "头像已删除。"
+msgstr "Avatar removed."
+
+#: accounts/views.py:288
+msgid "当前没有头像。"
+msgstr "There is no avatar to delete."
 
 #: competitions/apps.py:17 templates/competitions/list.html:4
 #: templates/competitions/list.html:16
@@ -225,6 +251,24 @@ msgstr "Audit log"
 #: core/apps.py:16
 msgid "查看平台关键操作记录"
 msgstr "Review the platform's key operations"
+
+#: core/uploads.py:52
+#, python-format
+msgid "%(label)s仅支持 %(allowed)s 格式。"
+msgstr "%(label)s supports only these formats: %(allowed)s."
+
+#: core/uploads.py:57
+#, python-format
+msgid "%(label)s不能超过 %(limit)s MB。"
+msgstr "%(label)s cannot exceed %(limit)s MB."
+
+#: core/uploads.py:67
+msgid "文件类型与图片不符，请确认选的是图片。"
+msgstr "That file is not an image."
+
+#: core/uploads.py:75
+msgid "上传文件不是有效的图片。"
+msgstr "The uploaded file is not a valid image."
 
 #: equipment/apps.py:18 templates/equipment/list.html:4
 #: templates/equipment/list.html:16
@@ -1145,13 +1189,33 @@ msgstr "Save new password"
 msgid "维护姓名、学号、院系与联系方式。"
 msgstr "Keep your name, student ID, college and contact details up to date."
 
-#: templates/accounts/profile.html:42
+#: templates/accounts/profile.html:43
 msgid "保存信息"
 msgstr "Save profile"
 
-#: templates/accounts/profile.html:43
+#: templates/accounts/profile.html:44
 msgid "返回成员中心"
 msgstr "Back to member center"
+
+#: templates/accounts/profile.html:54
+msgid "自动裁成圆形"
+msgstr "Cropped to a circle"
+
+#: templates/accounts/profile.html:59
+msgid "当前头像"
+msgstr "Current avatar"
+
+#: templates/accounts/profile.html:73
+msgid "更换头像"
+msgstr "Change avatar"
+
+#: templates/accounts/profile.html:73
+msgid "上传头像"
+msgstr "Upload avatar"
+
+#: templates/accounts/profile.html:81
+msgid "删除头像"
+msgstr "Delete avatar"
 
 #: templates/base.html:16
 msgid "竞赛社团平台"

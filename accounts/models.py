@@ -4,6 +4,8 @@ from django.contrib.auth.models import AbstractUser, UserManager as DjangoUserMa
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
+from .validators import AVATAR_HELP_TEXT, validate_avatar
+
 
 class UserManager(DjangoUserManager):
     """Keep superuser accounts usable while member accounts require first-login reset."""
@@ -67,6 +69,13 @@ class Profile(models.Model):
         verbose_name="用户",
     )
     full_name = models.CharField(_("姓名"), max_length=128, blank=True)
+    avatar = models.ImageField(
+        _("头像"),
+        upload_to="avatars/%Y/%m/",
+        blank=True,
+        validators=[validate_avatar],
+        help_text=AVATAR_HELP_TEXT,
+    )
     student_id = models.CharField(
         _("学号"),
         max_length=64,

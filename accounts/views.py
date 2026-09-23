@@ -11,19 +11,21 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext as _
-from django.views.decorators.http import require_http_methods
+from django.views.decorators.http import require_http_methods, require_POST
 from django.views.generic.edit import FormView
 
 from core.audit import record_audit
 from core.stats import can_view_platform_overview, platform_overview
 
 from .forms import (
+    AvatarForm,
     FirstPasswordChangeForm,
     MemberPasswordChangeForm,
     ProfileForm,
 )
 from .models import Profile
 from .roles import describe_member
+from .services import clear_avatar, set_avatar
 
 
 logger = logging.getLogger(__name__)
@@ -172,9 +174,11 @@ def member_home(request):
     return render(request, "accounts/member_home.html", context)
 
 
-@login_required
-@require_http_methods(["GET", "POST"])
-def profile(request):
+def _member_profile(request):
+    """取当前用户的个人资料；历史账号缺这一行时当场补一份。
+
+    信号已经保证新账号必有一份资料，这里是给建号早于该信号的账号兜底。
+    """
     profile_obj, created = Profile.objects.get_or_create(user=request.user)
     if created:
         logger.info(
@@ -184,6 +188,13 @@ def profile(request):
             profile_obj.pk,
             extra={"request_id": getattr(request, "request_id", "-")},
         )
+    return profile_obj
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def profile(request):
+    profile_obj = _member_profile(request)
 
     if request.method == "POST":
         form = ProfileForm(request.POST, instance=profile_obj)
@@ -215,4 +226,64 @@ def profile(request):
     else:
         form = ProfileForm(instance=profile_obj)
 
-    return render(request, "accounts/profile.html", {"form": form})
+    return render(
+        request,
+        "accounts/profile.html",
+        {
+            "form": form,
+            "profile": profile_obj,
+            "avatar_form": AvatarForm(),
+            # 没有头像时圆圈里显示姓名（或账号）的首字，免得空着一个洞。
+            "avatar_initial": (profile_obj.full_name.strip() or request.user.get_username())[:1].upper(),
+        },
+    )
+
+
+@login_required
+@require_POST
+def avatar_update(request):
+    """上传或更换头像：一张图盖掉旧的，旧文件由服务层删掉。"""
+    profile_obj = _member_profile(request)
+    form = AvatarForm(request.POST, request.FILES)
+    if form.is_valid():
+        set_avatar(
+            profile=profile_obj,
+            uploaded_file=form.cleaned_data["avatar"],
+            actor=request.user,
+            request=request,
+        )
+        logger.info(
+            "profile.avatar.update username=%s user_id=%s",
+            request.user.get_username(),
+            request.user.pk,
+            extra={"request_id": getattr(request, "request_id", "-")},
+        )
+        messages.success(request, _("头像已更新。"))
+    else:
+        for error in form.errors.get("avatar", []):
+            messages.error(request, error)
+        logger.warning(
+            "profile.avatar.update.failure username=%s errors=%s",
+            request.user.get_username(),
+            form.errors.as_json(),
+            extra={"request_id": getattr(request, "request_id", "-")},
+        )
+    return redirect("accounts:profile")
+
+
+@login_required
+@require_POST
+def avatar_delete(request):
+    """删除头像，连同磁盘上的文件。"""
+    profile_obj = _member_profile(request)
+    if clear_avatar(profile=profile_obj, actor=request.user, request=request):
+        logger.info(
+            "profile.avatar.clear username=%s user_id=%s",
+            request.user.get_username(),
+            request.user.pk,
+            extra={"request_id": getattr(request, "request_id", "-")},
+        )
+        messages.success(request, _("头像已删除。"))
+    else:
+        messages.warning(request, _("当前没有头像。"))
+    return redirect("accounts:profile")

@@ -15,12 +15,12 @@
 
 ## 阶段 2 · 头像
 
-- [ ] `Profile.avatar`（`ImageField`）+ 迁移
-- [ ] 图片校验下沉到 `core/uploads.py`，`media` 与原校验复用（头像 ≤2 MB）
-- [ ] `accounts.services.set_avatar` / `clear_avatar`：换头像删旧文件、删头像删文件，均留审计
-- [ ] 上传／更换／删除三个入口（视图 + 路由 + 模板 + 表单）
-- [ ] 圆形展示（CSS 裁切，非正方形图不变形）
-- [ ] 测试 + `.po` 补译
+- [x] `Profile.avatar`（`ImageField`）+ 迁移
+- [x] 图片校验下沉到 `core/uploads.py`，`media` 与原校验复用（头像 ≤2 MB）
+- [x] `accounts.services.set_avatar` / `clear_avatar`：换头像删旧文件、删头像删文件，均留审计
+- [x] 上传／更换／删除三个入口（视图 + 路由 + 模板 + 表单）
+- [x] 圆形展示（CSS 裁切，非正方形图不变形）
+- [x] 测试 + `.po` 补译
 
 ## 阶段 3 · 当前身份（只读）
 

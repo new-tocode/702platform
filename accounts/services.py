@@ -1,7 +1,10 @@
 """账号相关的写操作。
 
-目前只有一件事：授予／撤销评审资格。它是后台批量动作的落点，要事务、要审计，
+两件事：后台批量授予／撤销评审资格，以及个人主页上的头像。前者要事务、要审计，
 所以不写在 admin 里——那里过去改资格连审计都不留。
+
+头像的写入口也收在这里，而不是散进视图：换头像除了写字段，还要把旧文件从
+磁盘上删掉，两件事得挨着做，而且不该让视图去碰存储层。
 """
 
 from django.db import transaction
@@ -53,3 +56,52 @@ def set_qualification(*, users, flag, value, actor, request=None):
         request=request,
     )
     return len(targets)
+
+
+def set_avatar(*, profile, uploaded_file, actor, request=None):
+    """换头像：新图先落盘，再把旧图从磁盘上删掉。
+
+    ``profile`` 要是**数据库里那一份**（视图取出来的实例即可）：本函数先读
+    ``profile.avatar`` 记下旧文件，才把新文件盖上去——实例若已被表单改过，
+    这里读到的就是新图，删旧文件会变成删新文件。
+    """
+    previous_name = profile.avatar.name if profile.avatar else ""
+    previous_storage = profile.avatar.storage if profile.avatar else None
+
+    with transaction.atomic():
+        profile.avatar = uploaded_file
+        profile.save(update_fields=["avatar", "updated_at"])
+        record_audit(
+            action="accounts.avatar.update",
+            user=actor,
+            target=profile,
+            detail={"replaced": bool(previous_name)},
+            request=request,
+        )
+
+    # 文件系统不在事务里，所以删除放在提交之后：万一前面出错，顶多多留一个旧文件，
+    # 不会出现「库里还指着这张图、磁盘上已经没了」。
+    if previous_name:
+        previous_storage.delete(previous_name)
+    return profile
+
+
+def clear_avatar(*, profile, actor, request=None):
+    """删头像：清空字段并删掉文件；本来就没有头像时什么也不做。"""
+    if not profile.avatar:
+        return False
+    name, storage = profile.avatar.name, profile.avatar.storage
+
+    with transaction.atomic():
+        profile.avatar = ""
+        profile.save(update_fields=["avatar", "updated_at"])
+        record_audit(
+            action="accounts.avatar.clear",
+            user=actor,
+            target=profile,
+            detail={},
+            request=request,
+        )
+
+    storage.delete(name)
+    return True

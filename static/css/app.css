@@ -327,6 +327,20 @@ input[type="file"] { font: inherit; font-size: 13px; color: var(--ink-2); }
 .radiogroup > div { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .radiogroup label { margin: 0; font-size: 13px; font-weight: 400; color: var(--ink); }
 
+/* --- 头像 --- */
+/* 圆形是显示层的裁切：不正方形也居中填满、不变形，原图保持原样。
+   没有头像时同一个圆圈里放姓名首字，免得版面空一个洞。 */
+.avatar-block { display: flex; justify-content: center; margin-bottom: 18px; }
+.avatar {
+  display: block; width: 148px; height: 148px;
+  border-radius: 50%; object-fit: cover;
+  border: 1px solid var(--line-2); background: var(--surface-2);
+}
+.avatar-blank {
+  display: grid; place-items: center; border-style: dashed;
+  font-size: 52px; font-weight: 600; line-height: 1; color: var(--ink-3);
+}
+
 /* --- 键值表 --- */
 .dl { margin: 0; display: grid; gap: 11px; }
 .dl > div {
