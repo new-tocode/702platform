@@ -26,7 +26,7 @@
                     <div class="post-image-management">
                         {% for image in post_images %}
                             <label class="post-image-remove">
-                                <img src="{{ image.image.url }}" alt="">
+                                <img src="{% url 'discussion:post_image' image.pk %}" alt="">
                                 <span><input type="checkbox" name="remove_image" value="{{ image.pk }}">{% translate "移除此图片" %}</span>
                             </label>
                         {% endfor %}

@@ -1,4 +1,6 @@
 import re
+from pathlib import Path
+from uuid import uuid4
 
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
@@ -28,6 +30,11 @@ def clean_chinese_board_name(value):
 
 POST_IMAGE_MAX_BYTES = 3 * 1024 * 1024
 POST_IMAGE_LIMIT = 3
+
+
+def post_image_upload_to(instance, filename):
+    """帖子图片落盘用随机名：原文件名可能带个人信息，也免得重名互相覆盖。"""
+    return f"discussion/%Y/%m/{uuid4().hex}{Path(filename).suffix.lower()}"
 
 
 def validate_post_image(uploaded_file):

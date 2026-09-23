@@ -733,6 +733,45 @@ class DiscussionViewTests(TestCase):
         self.client.post(reverse("discussion:post_delete", args=(post.pk,)))
         self.assertFalse(storage.exists(remaining_name))
 
+    def test_post_images_are_served_only_to_members(self):
+        self.client.force_login(self.member)
+        self.client.post(
+            reverse("discussion:post_new", args=(self.board.pk,)),
+            {
+                "title": "Guarded photos",
+                "content": "Photo body.",
+                "images": [png_upload("guarded.png")],
+            },
+        )
+        image = PostImage.objects.get()
+        url = reverse("discussion:post_image", args=(image.pk,))
+
+        member_response = self.client.get(url)
+        self.assertEqual(member_response.status_code, 200)
+        self.assertEqual(
+            member_response.headers["Content-Type"].split(";")[0], "image/png"
+        )
+
+        self.client.logout()
+        guest_response = self.client.get(url)
+        self.assertEqual(guest_response.status_code, 302)
+        self.assertIn(reverse("accounts:login"), guest_response["Location"])
+
+        self.assertEqual(
+            self.client.get(
+                reverse("discussion:post_image", args=(99999,))
+            ).status_code,
+            302,
+        )
+
+        self.client.force_login(self.member)
+        self.assertEqual(
+            self.client.get(
+                reverse("discussion:post_image", args=(99999,))
+            ).status_code,
+            404,
+        )
+
     def test_post_delete_is_post_only_and_admin_can_delete_any_post(self):
         post = self._post(author=self.member)
         self.client.force_login(self.member)

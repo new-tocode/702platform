@@ -3,7 +3,7 @@ from django.db import models
 from django.db.models.functions import Lower
 from django.utils.translation import gettext_lazy as _
 
-from .validators import validate_post_image
+from .validators import post_image_upload_to, validate_post_image
 
 
 class Board(models.Model):
@@ -75,7 +75,7 @@ class PostImage(models.Model):
     )
     image = models.ImageField(
         _("帖子图片"),
-        upload_to="discussion/%Y/%m/",
+        upload_to=post_image_upload_to,
         validators=[validate_post_image],
     )
     file_size = models.PositiveBigIntegerField(_("文件大小"), default=0, editable=False)

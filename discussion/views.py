@@ -1,10 +1,12 @@
 import logging
+import mimetypes
+from pathlib import Path
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
-from django.http import Http404, HttpResponseBadRequest
+from django.http import FileResponse, Http404, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext as _
 from django.views.decorators.http import require_GET, require_POST, require_http_methods
@@ -12,7 +14,7 @@ from django.views.decorators.http import require_GET, require_POST, require_http
 from core.permissions import is_admin, require
 
 from .forms import BoardForm, CommentForm, PostForm
-from .models import Post
+from .models import Post, PostImage
 from .permissions import can_edit_post, can_pin_post, can_view_space
 from .selectors import board_list, member_directory, posts_for_board
 from .services import (
@@ -206,6 +208,27 @@ def post_delete(request, post_id):
         raise
     messages.success(request, _("帖子已删除。"))
     return redirect("discussion:board", board_id=board_id)
+
+
+@login_required
+@require_GET
+def post_image(request, image_id):
+    """帖子图片只发给能进社团空间的账号：MEDIA 是公开目录，不能直接把路径交出去。"""
+    _require_member(request)
+    image = get_object_or_404(PostImage, pk=image_id)
+    try:
+        file_handle = image.image.open("rb")
+    except FileNotFoundError as exc:
+        raise Http404 from exc
+    content_type = (
+        mimetypes.guess_type(image.image.name)[0] or "application/octet-stream"
+    )
+    return FileResponse(
+        file_handle,
+        as_attachment=False,
+        filename=f"post-image{Path(image.image.name).suffix.lower()}",
+        content_type=content_type,
+    )
 
 
 @login_required

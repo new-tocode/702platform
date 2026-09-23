@@ -122,8 +122,8 @@
                                 {% if post.images.all %}
                                     <div class="discussion-post-images">
                                         {% for image in post.images.all %}
-                                            <a href="{{ image.image.url }}" target="_blank" rel="noopener">
-                                                <img src="{{ image.image.url }}" alt="{% translate '帖子图片' %}">
+                                            <a href="{% url 'discussion:post_image' image.pk %}" target="_blank" rel="noopener">
+                                                <img src="{% url 'discussion:post_image' image.pk %}" alt="{% translate '帖子图片' %}">
                                             </a>
                                         {% endfor %}
                                     </div>
