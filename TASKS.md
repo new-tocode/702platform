@@ -24,10 +24,10 @@
 
 ## 阶段 3 · 当前身份（只读）
 
-- [ ] `projects.selectors`：按人取项目组（联系人／成员，带组名）
-- [ ] `accounts.selectors.member_identities`：按身份目录顺序收敛出该用户持有的身份
-- [ ] 头像区下方的只读面板：全局身份成标签、对象身份带组名，没有的不出现
-- [ ] 测试 + `.po` 补译
+- [x] `projects.selectors`：按人取项目组（联系人／成员，带组名）
+- [x] `accounts.selectors.member_identities`：按身份目录顺序收敛出该用户持有的身份
+- [x] 头像区下方的只读面板：全局身份成标签、对象身份带组名，没有的不出现
+- [x] 测试 + `.po` 补译
 
 ## 阶段 4 · 个人图册
 

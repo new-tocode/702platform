@@ -84,6 +84,30 @@
                     {% endif %}
                 </div>
             </div>
+
+            <div class="panel">
+                <div class="panel-head">
+                    <h2>{% translate "当前身份" %}</h2>
+                    <span class="count">{% translate "只读" %}</span>
+                </div>
+                <div class="panel-body">
+                    {% if identities %}
+                        <ul class="roles">
+                            {% for identity in identities %}
+                                <li>
+                                    <span class="chip chip-on">{{ identity.label }}</span>
+                                    {% for group_name in identity.groups %}
+                                        <span class="member">{{ group_name }}</span>
+                                    {% endfor %}
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="muted">{% translate "暂无其他身份。" %}</p>
+                    {% endif %}
+                    <p class="help">{% translate "身份由管理员授予或由项目组业务产生，此处只读。" %}</p>
+                </div>
+            </div>
         </div>
     </div>
 </div>

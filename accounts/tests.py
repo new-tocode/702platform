@@ -454,6 +454,101 @@ class AvatarAcceptanceTests(TestCase):
         self.assertContains(response, "删除头像")
 
 
+class ProfileIdentityPanelAcceptanceTests(TestCase):
+    """个人信息页右栏的「当前身份」：只列实际持有的，对象身份带组名。"""
+
+    def setUp(self):
+        self.member = User.objects.create_user(
+            username="identity-member",
+            password="Member-Password-123!",
+        )
+        self.member.must_change_password = False
+        self.member.save(update_fields=["must_change_password"])
+        self.client.force_login(self.member)
+
+    def identities_on_page(self):
+        """页面上这一栏画出来的身份标签与组名，各按出现顺序。
+
+        整页只有这一处会画身份标签（``.chip-on``）与组名（``.member``），
+        所以不用先切出面板那一段。
+        """
+        html = self.client.get(reverse("accounts:profile")).content.decode()
+        return (
+            re.findall(r'<span class="chip chip-on">(.*?)</span>', html),
+            re.findall(r'<span class="member">(.*?)</span>', html),
+        )
+
+    def test_a_member_without_extra_identities_sees_an_empty_note(self):
+        response = self.client.get(reverse("accounts:profile"))
+        labels, groups = self.identities_on_page()
+
+        self.assertEqual(labels, [])
+        self.assertEqual(groups, [])
+        self.assertContains(response, "暂无其他身份")
+
+    def test_every_held_identity_is_listed_in_catalog_order(self):
+        self.member.is_staff = True
+        self.member.is_reviewer = True
+        self.member.is_super_reviewer = True
+        self.member.save(
+            update_fields=["is_staff", "is_reviewer", "is_super_reviewer"]
+        )
+
+        labels, _groups = self.identities_on_page()
+
+        self.assertEqual(labels, ["管理员", "评审人", "超级评审"])
+
+    def test_qualifications_left_off_are_not_listed(self):
+        self.member.is_preliminary_reviewer = True
+        self.member.save(update_fields=["is_preliminary_reviewer"])
+
+        labels, _groups = self.identities_on_page()
+
+        self.assertEqual(labels, ["初审人"])
+
+    def test_object_identities_carry_their_group_names(self):
+        ProjectGroup.objects.create(name="星火计划组", leader=self.member)
+        joined = ProjectGroup.objects.create(
+            name="星河计划组",
+            leader=User.objects.create_user(
+                username="identity-leader",
+                password="Leader-Password-123!",
+            ),
+        )
+        joined.members.add(self.member)
+
+        labels, groups = self.identities_on_page()
+
+        self.assertEqual(labels, ["项目组联系人", "项目组成员"])
+        self.assertIn("星火计划组", groups)
+        self.assertIn("星河计划组", groups)
+
+    def test_a_group_member_is_listed_without_being_a_contact(self):
+        joined = ProjectGroup.objects.create(
+            name="只有成员组",
+            leader=User.objects.create_user(
+                username="identity-leader",
+                password="Leader-Password-123!",
+            ),
+        )
+        joined.members.add(self.member)
+
+        labels, groups = self.identities_on_page()
+
+        self.assertEqual(labels, ["项目组成员"])
+        self.assertEqual(groups, ["只有成员组"])
+
+    def test_the_panel_is_read_only_and_sits_below_the_avatar(self):
+        self.member.is_reviewer = True
+        self.member.save(update_fields=["is_reviewer"])
+
+        response = self.client.get(reverse("accounts:profile"))
+
+        self.assertContains(response, "只读")
+        html = response.content.decode()
+        self.assertLess(html.index("头像"), html.index("当前身份"))
+
+
 class MemberRoleDisplayAcceptanceTests(TestCase):
     """成员中心显示当前身份；口径见 accounts/roles.py。"""
 

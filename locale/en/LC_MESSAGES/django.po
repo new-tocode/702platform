@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 702platform\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-23 13:50+0800\n"
+"POT-Creation-Date: 2026-09-23 13:55+0800\n"
 "PO-Revision-Date: 2026-09-19 18:39\n"
 "Last-Translator: 702platform\n"
 "Language-Team: 702platform\n"
@@ -105,18 +105,20 @@ msgstr "Bio"
 msgid "最多 1000 字。"
 msgstr "Up to 1000 characters."
 
-#: accounts/roles.py:15
+#: accounts/roles.py:15 accounts/selectors.py:49
 msgid "管理员"
 msgstr "Administrator"
 
-#: accounts/roles.py:16 templates/projects/group_detail.html:35
+#: accounts/roles.py:16 accounts/selectors.py:59
+#: templates/projects/group_detail.html:35
 #: templates/projects/group_detail.html:86
 #: templates/projects/group_list.html:42
 #: templates/projects/group_manage.html:108
 msgid "项目组联系人"
 msgstr "Group contact"
 
-#: accounts/roles.py:17 templates/projects/group_manage.html:40
+#: accounts/roles.py:17 accounts/selectors.py:62
+#: templates/projects/group_manage.html:40
 msgid "项目组成员"
 msgstr "Group member"
 
@@ -127,6 +129,20 @@ msgstr "No project group"
 #: accounts/roles.py:19
 msgid "游客"
 msgstr "Guest"
+
+#: accounts/selectors.py:51 reviews/lifecycle.py:115
+msgid "评审人"
+msgstr "Reviewer"
+
+#: accounts/selectors.py:53 reviews/lifecycle.py:103
+msgid "初审人"
+msgstr "Preliminary reviewer"
+
+#: accounts/selectors.py:55 templates/accounts/member_home.html:45
+#: templates/projects/group_detail.html:152
+#: templates/projects/group_detail.html:272
+msgid "超级评审"
+msgstr "Super reviewer"
 
 #: accounts/signals.py:74
 #, python-format
@@ -142,23 +158,23 @@ msgstr ", "
 msgid "不超过 %(limit)s MB。"
 msgstr "Up to %(limit)s MB."
 
-#: accounts/views.py:113
+#: accounts/views.py:114
 msgid "密码修改成功。"
 msgstr "Password updated."
 
-#: accounts/views.py:218
+#: accounts/views.py:219
 msgid "个人信息已保存。"
 msgstr "Profile saved."
 
-#: accounts/views.py:261
+#: accounts/views.py:263
 msgid "头像已更新。"
 msgstr "Avatar updated."
 
-#: accounts/views.py:286
+#: accounts/views.py:288
 msgid "头像已删除。"
 msgstr "Avatar removed."
 
-#: accounts/views.py:288
+#: accounts/views.py:290
 msgid "当前没有头像。"
 msgstr "There is no avatar to delete."
 
@@ -736,10 +752,6 @@ msgstr "Pending review"
 msgid "通过"
 msgstr "Approved"
 
-#: reviews/lifecycle.py:103
-msgid "初审人"
-msgstr "Preliminary reviewer"
-
 #: reviews/lifecycle.py:108 reviews/lifecycle.py:166 reviews/lifecycle.py:171
 msgid "该轮送审已不在初审环节。"
 msgstr "This submission is no longer in preliminary review."
@@ -757,10 +769,6 @@ msgstr ""
 #: reviews/lifecycle.py:111
 msgid "该初审人已在本轮任务中。"
 msgstr "That preliminary reviewer already holds a task in this round."
-
-#: reviews/lifecycle.py:115
-msgid "评审人"
-msgstr "Reviewer"
 
 #: reviews/lifecycle.py:120 reviews/lifecycle.py:177 reviews/lifecycle.py:183
 msgid "该轮送审已不在评审环节。"
@@ -1023,7 +1031,7 @@ msgstr "Competition Club Platform"
 msgid "你好，%(name)s。"
 msgstr "Hello, %(name)s."
 
-#: templates/accounts/member_home.html:20
+#: templates/accounts/member_home.html:20 templates/accounts/profile.html:90
 msgid "当前身份"
 msgstr "Your role"
 
@@ -1064,12 +1072,6 @@ msgstr "On leave"
 #, python-format
 msgid "%(ends)s 恢复"
 msgstr "Back %(ends)s"
-
-#: templates/accounts/member_home.html:45
-#: templates/projects/group_detail.html:152
-#: templates/projects/group_detail.html:272
-msgid "超级评审"
-msgstr "Super reviewer"
 
 #: templates/accounts/member_home.html:55
 msgid "点击前往处理"
@@ -1216,6 +1218,18 @@ msgstr "Upload avatar"
 #: templates/accounts/profile.html:81
 msgid "删除头像"
 msgstr "Delete avatar"
+
+#: templates/accounts/profile.html:91
+msgid "只读"
+msgstr "Read-only"
+
+#: templates/accounts/profile.html:106
+msgid "暂无其他身份。"
+msgstr "No other roles."
+
+#: templates/accounts/profile.html:108
+msgid "身份由管理员授予或由项目组业务产生，此处只读。"
+msgstr "Roles are granted by administrators or produced by project-group activity; this section is read-only."
 
 #: templates/base.html:16
 msgid "竞赛社团平台"

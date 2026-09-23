@@ -25,6 +25,7 @@ from .forms import (
 )
 from .models import Profile
 from .roles import describe_member
+from .selectors import member_identities
 from .services import clear_avatar, set_avatar
 
 
@@ -235,6 +236,7 @@ def profile(request):
             "avatar_form": AvatarForm(),
             # 没有头像时圆圈里显示姓名（或账号）的首字，免得空着一个洞。
             "avatar_initial": (profile_obj.full_name.strip() or request.user.get_username())[:1].upper(),
+            "identities": member_identities(request.user),
         },
     )
 
