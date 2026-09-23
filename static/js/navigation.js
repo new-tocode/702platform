@@ -8,9 +8,9 @@
     const navBounds = nav.getBoundingClientRect();
     const linkBounds = activeLink.getBoundingClientRect();
     if (linkBounds.right > navBounds.right) {
-      nav.scrollLeft += linkBounds.right - navBounds.right;
+      nav.scrollLeft += Math.ceil(linkBounds.right - navBounds.right);
     } else if (linkBounds.left < navBounds.left) {
-      nav.scrollLeft -= navBounds.left - linkBounds.left;
+      nav.scrollLeft -= Math.ceil(navBounds.left - linkBounds.left);
     }
   };
 
