@@ -767,9 +767,12 @@ class ProfileIdentityPanelAcceptanceTests(TestCase):
 
         response = self.client.get(reverse("accounts:profile"))
 
-        self.assertContains(response, "只读")
         html = response.content.decode()
-        self.assertLess(html.index("头像"), html.index("当前身份"))
+        self.assertLess(html.index("头像"), html.index("当前身份"), "身份面板在头像之下")
+        # 「只读」写在实现里而不是写在页面上：这一段到图册之前没有任何可提交的东西。
+        panel = html[html.index("当前身份"): html.index("个人图册")]
+        self.assertNotIn("<form", panel)
+        self.assertNotIn("<button", panel)
 
 
 class MemberRoleDisplayAcceptanceTests(TestCase):

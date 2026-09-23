@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 702platform\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-23 14:03+0800\n"
+"POT-Creation-Date: 2026-09-23 16:49+0800\n"
 "PO-Revision-Date: 2026-09-19 18:39\n"
 "Last-Translator: 702platform\n"
 "Language-Team: 702platform\n"
@@ -167,7 +167,9 @@ msgstr "Super reviewer"
 #: accounts/services.py:136
 #, python-format
 msgid "图册合计不能超过 %(limit)s MB，当前已用 %(used)s MB。"
-msgstr "Your gallery cannot exceed %(limit)s MB in total; %(used)s MB is already in use."
+msgstr ""
+"Your gallery cannot exceed %(limit)s MB in total; %(used)s MB is already in "
+"use."
 
 #: accounts/signals.py:74
 #, python-format
@@ -1273,57 +1275,47 @@ msgstr "Upload avatar"
 msgid "删除头像"
 msgstr "Delete avatar"
 
-#: templates/accounts/profile.html:91
-msgid "只读"
-msgstr "Read-only"
-
-#: templates/accounts/profile.html:106
+#: templates/accounts/profile.html:105
 msgid "暂无其他身份。"
 msgstr "No other roles."
 
-#: templates/accounts/profile.html:108
-msgid "身份由管理员授予或由项目组业务产生，此处只读。"
-msgstr ""
-"Roles are granted by administrators or produced by project-group activity; "
-"this section is read-only."
-
-#: templates/accounts/profile.html:116
+#: templates/accounts/profile.html:114
 msgid "个人图册"
 msgstr "Personal gallery"
 
-#: templates/accounts/profile.html:118
+#: templates/accounts/profile.html:116
 #, python-format
 msgid "%(counter)s 张 · %(used)s / %(limit)s MB"
-msgid_plural "%(counter)s images · %(used)s / %(limit)s MB"
+msgid_plural "%(counter)s 张 · %(used)s / %(limit)s MB"
 msgstr[0] "%(counter)s image · %(used)s / %(limit)s MB"
 msgstr[1] "%(counter)s images · %(used)s / %(limit)s MB"
 
-#: templates/accounts/profile.html:126
+#: templates/accounts/profile.html:124
 msgid "加入图册"
 msgstr "Add to gallery"
 
-#: templates/accounts/profile.html:129
+#: templates/accounts/profile.html:127
 #, python-format
 msgid "每张不超过 %(per)s MB，图册合计不超过 %(total)s MB。"
 msgstr "Up to %(per)s MB each, %(total)s MB in total."
 
-#: templates/accounts/profile.html:130
+#: templates/accounts/profile.html:128
 msgid "上传后可逐张调整顺序与排布。"
 msgstr "Once uploaded, you can set each image's order and layout."
 
-#: templates/accounts/profile.html:145
+#: templates/accounts/profile.html:143
 msgid "上移"
 msgstr "Move up"
 
-#: templates/accounts/profile.html:146
+#: templates/accounts/profile.html:144
 msgid "下移"
 msgstr "Move down"
 
-#: templates/accounts/profile.html:156
+#: templates/accounts/profile.html:154
 msgid "删除"
 msgstr "Delete"
 
-#: templates/accounts/profile.html:163
+#: templates/accounts/profile.html:161
 msgid "图册还是空的，从上面选一张图开始。"
 msgstr "Your gallery is empty — start by choosing an image above."
 
