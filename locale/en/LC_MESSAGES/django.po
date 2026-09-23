@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 702platform\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-23 17:18+0800\n"
+"POT-Creation-Date: 2026-09-23 20:15+0800\n"
 "PO-Revision-Date: 2026-09-19 18:39\n"
 "Last-Translator: 702platform\n"
 "Language-Team: 702platform\n"
@@ -15,8 +15,8 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: accounts/apps.py:19 templates/accounts/profile.html:4
-#: templates/accounts/profile.html:16
+#: accounts/apps.py:19 templates/accounts/member_profile_readonly.html:4
+#: templates/accounts/profile.html:4 templates/accounts/profile.html:16
 msgid "个人信息"
 msgstr "Profile"
 
@@ -76,16 +76,17 @@ msgid "学号"
 msgstr "Student ID"
 
 #: accounts/models.py:91 projects/forms.py:88
+#: templates/accounts/member_profile_readonly.html:44
 #: templates/projects/group_detail.html:64
 #: templates/projects/group_list.html:45
 msgid "学院"
 msgstr "College"
 
-#: accounts/models.py:92
+#: accounts/models.py:92 templates/accounts/member_profile_readonly.html:45
 msgid "专业"
 msgstr "Major"
 
-#: accounts/models.py:94
+#: accounts/models.py:94 templates/accounts/member_profile_readonly.html:46
 msgid "特长"
 msgstr "Specialties"
 
@@ -93,15 +94,15 @@ msgstr "Specialties"
 msgid "可填写多项，用顿号或逗号分隔。"
 msgstr "You can list several, separated by commas."
 
-#: accounts/models.py:99
+#: accounts/models.py:99 templates/accounts/member_profile_readonly.html:48
 msgid "手机号"
 msgstr "Phone"
 
-#: accounts/models.py:100
+#: accounts/models.py:100 templates/accounts/member_profile_readonly.html:49
 msgid "其他联系方式"
 msgstr "Other contact"
 
-#: accounts/models.py:102
+#: accounts/models.py:102 templates/accounts/member_profile_readonly.html:47
 msgid "个人简介"
 msgstr "Bio"
 
@@ -189,52 +190,52 @@ msgstr "Up to %(limit)s MB."
 msgid "图册图像"
 msgstr "Gallery image"
 
-#: accounts/views.py:125
+#: accounts/views.py:126
 msgid "密码修改成功。"
 msgstr "Password updated."
 
-#: accounts/views.py:230
+#: accounts/views.py:256
 msgid "个人信息已保存。"
 msgstr "Profile saved."
 
-#: accounts/views.py:300
+#: accounts/views.py:326
 msgid "图像已加入图册。"
 msgstr "Image added to your gallery."
 
-#: accounts/views.py:311 accounts/views.py:332 projects/views.py:355
+#: accounts/views.py:337 accounts/views.py:358 projects/views.py:355
 #: projects/views.py:462
 msgid "未知操作"
 msgstr "Unknown action"
 
-#: accounts/views.py:316
+#: accounts/views.py:342
 msgid "顺序已调整。"
 msgstr "Order updated."
 
-#: accounts/views.py:320
+#: accounts/views.py:346
 msgid "已经是第一张了。"
 msgstr "That is already the first image."
 
-#: accounts/views.py:320
+#: accounts/views.py:346
 msgid "已经是最后一张了。"
 msgstr "That is already the last image."
 
-#: accounts/views.py:337
+#: accounts/views.py:363
 msgid "排布已更新。"
 msgstr "Layout updated."
 
-#: accounts/views.py:354
+#: accounts/views.py:380
 msgid "图像已删除。"
 msgstr "Image removed."
 
-#: accounts/views.py:377
+#: accounts/views.py:403
 msgid "头像已更新。"
 msgstr "Avatar updated."
 
-#: accounts/views.py:402
+#: accounts/views.py:428
 msgid "头像已删除。"
 msgstr "Avatar removed."
 
-#: accounts/views.py:404
+#: accounts/views.py:430
 msgid "当前没有头像。"
 msgstr "There is no avatar to delete."
 
@@ -346,6 +347,163 @@ msgstr "That file is not an image."
 msgid "上传文件不是有效的图片。"
 msgstr "The uploaded file is not a valid image."
 
+#: discussion/forms.py:22 discussion/services.py:72
+msgid "已有同名板块。"
+msgstr "A board with that name already exists."
+
+#: discussion/forms.py:28 discussion/models.py:46
+msgid "正文"
+msgstr "Body"
+
+#: discussion/forms.py:41
+msgid "请输入帖子标题。"
+msgstr "Enter a post title."
+
+#: discussion/forms.py:47
+msgid "请输入帖子正文。"
+msgstr "Enter the post body."
+
+#: discussion/forms.py:53 templates/discussion/space.html:132
+#: templates/discussion/space.html:133
+#| msgid "评审"
+msgid "评论"
+msgstr "Comment"
+
+#: discussion/forms.py:65
+msgid "请输入评论内容。"
+msgstr "Enter a comment."
+
+#: discussion/models.py:8
+msgid "英文名称"
+msgstr "English name"
+
+#: discussion/models.py:13
+#| msgid "初审人"
+msgid "创建人"
+msgstr "Created by"
+
+#: discussion/models.py:15
+msgid "创建时间"
+msgstr "Created at"
+
+#: discussion/models.py:18 discussion/models.py:19
+msgid "社团空间板块"
+msgstr "Discussion board"
+
+#: discussion/models.py:37
+msgid "板块"
+msgstr "Board"
+
+#: discussion/models.py:43 discussion/models.py:77
+msgid "作者"
+msgstr "Author"
+
+#: discussion/models.py:45 templates/notices/list.html:27
+msgid "标题"
+msgstr "Title"
+
+#: discussion/models.py:47 templates/discussion/space.html:102
+#: templates/discussion/space.html:127 templates/home.html:54
+#: templates/notices/list.html:36
+msgid "置顶"
+msgstr "Pinned"
+
+#: discussion/models.py:48
+msgid "发布时间"
+msgstr "Posted"
+
+#: discussion/models.py:49
+msgid "更新时间"
+msgstr "Updated"
+
+#: discussion/models.py:52 discussion/models.py:53
+msgid "社团空间帖子"
+msgstr "Discussion post"
+
+#: discussion/models.py:71
+msgid "帖子"
+msgstr "Post"
+
+#: discussion/models.py:79
+msgid "评论内容"
+msgstr "Comment"
+
+#: discussion/models.py:80
+msgid "评论时间"
+msgstr "Commented"
+
+#: discussion/models.py:83 discussion/models.py:84
+msgid "社团空间评论"
+msgstr "Discussion comment"
+
+#: discussion/services.py:91 templates/discussion/space.html:77
+msgid "请先删除板块中的所有帖子，再删除板块。"
+msgstr "Delete all posts in this board before deleting the board."
+
+#: discussion/services.py:108 discussion/services.py:134
+msgid "帖子标题和正文不能为空。"
+msgstr "A post title and body are required."
+
+#: discussion/services.py:202
+msgid "评论内容不能为空。"
+msgstr "A comment cannot be empty."
+
+#: discussion/validators.py:14
+msgid "板块名称需为 1 至 80 个字符的英文名称，可包含数字、空格和常见标点。"
+msgstr "Board names must be 1–80 characters in English; letters, numbers, spaces and common punctuation are allowed."
+
+#: discussion/views.py:112
+msgid "帖子已发布。"
+msgstr "Post published."
+
+#: discussion/views.py:121 discussion/views.py:122
+#: templates/discussion/space.html:74
+msgid "发布帖子"
+msgstr "Publish post"
+
+#: discussion/views.py:159
+#| msgid "排布已更新。"
+msgid "帖子已更新。"
+msgstr "Post updated."
+
+#: discussion/views.py:168
+msgid "编辑帖子"
+msgstr "Edit post"
+
+#: discussion/views.py:169 templates/competitions/register.html:63
+msgid "保存修改"
+msgstr "Save changes"
+
+#: discussion/views.py:195
+#| msgid "图像已删除。"
+msgid "帖子已删除。"
+msgstr "Post deleted."
+
+#: discussion/views.py:218
+msgid "评论已发布。"
+msgstr "Comment posted."
+
+#: discussion/views.py:237
+msgid "置顶状态无效。"
+msgstr "Invalid pin state."
+
+#: discussion/views.py:257
+msgid "帖子已置顶。"
+msgstr "Post pinned."
+
+#: discussion/views.py:257
+msgid "已取消置顶。"
+msgstr "Post unpinned."
+
+#: discussion/views.py:286
+msgid "板块已创建。"
+msgstr "Board created."
+
+#: discussion/views.py:319
+#| msgid "图像已删除。"
+msgid "板块已删除。"
+msgstr "Board deleted."
+
 #: equipment/apps.py:18 templates/equipment/list.html:4
 #: templates/equipment/list.html:16
 msgid "设备借用"
@@ -397,7 +555,7 @@ msgstr "Internal Notices"
 msgid "查看与你所属用户组相关的通知"
 msgstr "See notices addressed to the user groups you belong to"
 
-#: notices/views.py:29 templates/base.html:26 templates/home.html:45
+#: notices/views.py:29 templates/base.html:27 templates/home.html:45
 #: templates/home.html:76
 msgid "公开通知"
 msgstr "Public Notices"
@@ -1061,17 +1219,18 @@ msgid "该评审任务没有批注版项目书。"
 msgstr "This review task has no annotated proposal."
 
 #: templates/accounts/member_home.html:4 templates/accounts/member_home.html:12
-#: templates/base.html:38
+#: templates/base.html:42 templates/discussion/space.html:15
 msgid "成员中心"
 msgstr "Member Center"
 
 #: templates/accounts/member_home.html:4
 #: templates/accounts/password_change.html:4 templates/accounts/profile.html:4
-#: templates/base.html:6 templates/base.html:66
+#: templates/base.html:6 templates/base.html:70
 #: templates/competitions/list.html:4 templates/competitions/register.html:4
 #: templates/content/about.html:4 templates/content/awards.html:4
 #: templates/content/page_detail.html:4 templates/content/page_index.html:4
-#: templates/content/showcase.html:4 templates/equipment/borrow_form.html:4
+#: templates/content/showcase.html:4 templates/discussion/space.html:4
+#: templates/equipment/borrow_form.html:4
 #: templates/equipment/borrow_list.html:4 templates/equipment/list.html:4
 #: templates/home.html:4 templates/home.html:12 templates/notices/detail.html:4
 #: templates/notices/list.html:4 templates/projects/group_apply.html:4
@@ -1087,7 +1246,9 @@ msgstr "Competition Club Platform"
 msgid "你好，%(name)s。"
 msgstr "Hello, %(name)s."
 
-#: templates/accounts/member_home.html:20 templates/accounts/profile.html:89
+#: templates/accounts/member_home.html:20
+#: templates/accounts/member_profile_readonly.html:61
+#: templates/accounts/profile.html:89
 msgid "当前身份"
 msgstr "Your role"
 
@@ -1221,6 +1382,55 @@ msgstr "Save leave"
 msgid "取消请假"
 msgstr "Cancel leave"
 
+#: templates/accounts/member_profile_readonly.html:10 templates/base.html:29
+#: templates/discussion/post_form.html:4 templates/discussion/space.html:4
+#: templates/discussion/space.html:17 templates/discussion/space.html:21
+msgid "社团空间"
+msgstr "Club Space"
+
+#: templates/accounts/member_profile_readonly.html:12
+msgid "成员资料"
+msgstr "Member Profile"
+
+#: templates/accounts/member_profile_readonly.html:24
+#: templates/discussion/space.html:30 templates/projects/group_detail.html:39
+#: templates/projects/group_detail.html:72
+#: templates/projects/group_detail.html:88
+#: templates/projects/group_list.html:43
+#: templates/projects/group_manage.html:94
+#: templates/projects/group_manage.html:110
+msgid "成员"
+msgstr "Members"
+
+#: templates/accounts/member_profile_readonly.html:40
+#| msgid "查看和维护个人资料"
+msgid "个人资料"
+msgstr "Profile"
+
+#: templates/accounts/member_profile_readonly.html:52
+#: templates/accounts/member_profile_readonly.html:55
+msgid "这位成员还没有填写个人资料。"
+msgstr "This member has not added any profile details yet."
+
+#: templates/accounts/member_profile_readonly.html:73
+#: templates/accounts/profile.html:104
+msgid "暂无其他身份。"
+msgstr "No other roles."
+
+#: templates/accounts/member_profile_readonly.html:81
+#: templates/accounts/profile.html:113
+msgid "个人图册"
+msgstr "Personal gallery"
+
+#: templates/accounts/member_profile_readonly.html:92
+#| msgid "个人图册"
+msgid "个人图册暂无照片。"
+msgstr "No photos in this gallery yet."
+
+#: templates/accounts/member_profile_readonly.html:98
+msgid "返回社团空间"
+msgstr "Back to Club Space"
+
 #: templates/accounts/password_change.html:4
 msgid "首次登录改密"
 msgstr "First sign-in password change"
@@ -1271,14 +1481,6 @@ msgstr "Upload avatar"
 msgid "删除头像"
 msgstr "Delete avatar"
 
-#: templates/accounts/profile.html:104
-msgid "暂无其他身份。"
-msgstr "No other roles."
-
-#: templates/accounts/profile.html:113
-msgid "个人图册"
-msgstr "Personal gallery"
-
 #: templates/accounts/profile.html:115
 #, python-format
 msgid "%(counter)s 张 · %(used)s / %(limit)s MB"
@@ -1315,60 +1517,60 @@ msgstr "Delete"
 msgid "图册还是空的，从上面选一张图开始。"
 msgstr "Your gallery is empty — start by choosing an image above."
 
-#: templates/base.html:16
+#: templates/base.html:17
 msgid "竞赛社团平台"
 msgstr "Competition Club"
 
-#: templates/base.html:21 templates/home.html:4
+#: templates/base.html:22 templates/home.html:4
 msgid "首页"
 msgstr "Home"
 
-#: templates/base.html:22 templates/content/about.html:4
+#: templates/base.html:23 templates/content/about.html:4
 #: templates/content/about.html:12 templates/content/about.html:16
 #: templates/home.html:72
 msgid "社团简介"
 msgstr "About the Club"
 
-#: templates/base.html:23 templates/content/awards.html:4
+#: templates/base.html:24 templates/content/awards.html:4
 #: templates/content/awards.html:12 templates/content/awards.html:16
 #: templates/home.html:73
 msgid "历年获奖"
 msgstr "Awards"
 
-#: templates/base.html:24 templates/content/showcase.html:4
+#: templates/base.html:25 templates/content/showcase.html:4
 #: templates/content/showcase.html:12 templates/content/showcase.html:16
 #: templates/home.html:74
 msgid "成员风采"
 msgstr "Members"
 
-#: templates/base.html:25 templates/content/page_index.html:4
+#: templates/base.html:26 templates/content/page_index.html:4
 #: templates/content/page_index.html:12 templates/content/page_index.html:16
 #: templates/home.html:75
 msgid "更多页面"
 msgstr "More Pages"
 
-#: templates/base.html:33
+#: templates/base.html:37
 msgid "切换到中文"
 msgstr "Switch to Chinese"
 
-#: templates/base.html:35
+#: templates/base.html:39
 msgid "切换到英文"
 msgstr "Switch to English"
 
-#: templates/base.html:39
+#: templates/base.html:43
 msgid "管理后台"
 msgstr "Admin"
 
-#: templates/base.html:42
+#: templates/base.html:46
 msgid "退出"
 msgstr "Log out"
 
-#: templates/base.html:45 templates/home.html:88
+#: templates/base.html:49 templates/home.html:88
 #: templates/registration/login.html:4 templates/registration/login.html:18
 msgid "成员登录"
 msgstr "Member Login"
 
-#: templates/base.html:67
+#: templates/base.html:71
 msgid "账号由管理员统一发放，不开放公开注册"
 msgstr "Accounts are issued by administrators; there is no public sign-up"
 
@@ -1460,10 +1662,6 @@ msgstr "Team size %(size)s"
 #: templates/competitions/register.html:31
 msgid "登记报名"
 msgstr "Register"
-
-#: templates/competitions/register.html:63
-msgid "保存修改"
-msgstr "Save changes"
 
 #: templates/competitions/register.html:63
 msgid "提交报名登记"
@@ -1562,6 +1760,136 @@ msgstr "Your browser does not support video playback."
 #: templates/content/showcase.html:44
 msgid "暂时没有成员风采内容。"
 msgstr "No member profiles yet."
+
+#: templates/discussion/post_form.html:32
+#| msgid "取消请假"
+msgid "取消"
+msgstr "Cancel"
+
+#: templates/discussion/space.html:22
+msgid "在板块中分享进展、提出问题，也看看大家最近在聊什么。"
+msgstr "Share progress, ask questions and see what everyone is discussing."
+
+#: templates/discussion/space.html:35
+msgid "搜索成员姓名"
+msgstr "Search member names"
+
+#: templates/discussion/space.html:36
+msgid "搜索姓名"
+msgstr "Search names"
+
+#: templates/discussion/space.html:37
+msgid "搜索"
+msgstr "Search"
+
+#: templates/discussion/space.html:50
+msgid "没有找到匹配的成员。"
+msgstr "No matching members found."
+
+#: templates/discussion/space.html:56
+msgid "社团空间内容"
+msgstr "Club Space content"
+
+#: templates/discussion/space.html:57
+msgid "选择板块"
+msgstr "Choose a board"
+
+#: templates/discussion/space.html:61
+msgid "还没有板块。"
+msgstr "No boards yet."
+
+#: templates/discussion/space.html:70
+#, python-format
+#| msgid "共 1 条"
+#| msgid_plural "共 %(counter)s 条"
+msgid "共 1 条帖子"
+msgid_plural "共 %(counter)s 条帖子"
+msgstr[0] "1 post"
+msgstr[1] "%(counter)s posts"
+
+#: templates/discussion/space.html:79
+msgid "确定删除这个空板块吗？"
+msgstr "Delete this empty board?"
+
+#: templates/discussion/space.html:81
+msgid "删除空板块"
+msgstr "Delete empty board"
+
+#: templates/discussion/space.html:91 templates/discussion/space.html:175
+msgid "创建板块"
+msgstr "Create a board"
+
+#: templates/discussion/space.html:93
+msgid "添加板块"
+msgstr "Add board"
+
+#: templates/discussion/space.html:110
+msgid "发布于"
+msgstr "Posted"
+
+#: templates/discussion/space.html:115
+msgid "编辑"
+msgstr "Edit"
+
+#: templates/discussion/space.html:118
+msgid "确定删除这篇帖子及其评论吗？"
+msgstr "Delete this post and its comments?"
+
+#: templates/discussion/space.html:120
+msgid "删除帖子"
+msgstr "Delete post"
+
+#: templates/discussion/space.html:127
+msgid "取消置顶"
+msgstr "Unpin"
+
+#: templates/discussion/space.html:141
+msgid "还没有评论。"
+msgstr "No comments yet."
+
+#: templates/discussion/space.html:145
+msgid "写下评论"
+msgstr "Write a comment"
+
+#: templates/discussion/space.html:146
+msgid "写下评论…"
+msgstr "Write a comment…"
+
+#: templates/discussion/space.html:147
+msgid "发表评论"
+msgstr "Post comment"
+
+#: templates/discussion/space.html:153
+msgid "这个板块还没有帖子，发布第一篇吧。"
+msgstr "No posts in this board yet. Start the conversation with the first one."
+
+#: templates/discussion/space.html:158
+msgid "帖子分页"
+msgstr "Post pagination"
+
+#: templates/discussion/space.html:160
+#| msgid "上一张"
+msgid "上一页"
+msgstr "Previous page"
+
+#: templates/discussion/space.html:162
+#, python-format
+#| msgid "第 %(round)s 轮 %(status)s"
+msgid "第 %(current)s / %(total)s 页"
+msgstr "Page %(current)s of %(total)s"
+
+#: templates/discussion/space.html:164
+#| msgid "下一张"
+msgid "下一页"
+msgstr "Next page"
+
+#: templates/discussion/space.html:169
+msgid "社团空间还没有板块。"
+msgstr "There are no boards in the club space yet."
+
+#: templates/discussion/space.html:173
+msgid "创建第一个板块"
+msgstr "Create the first board"
 
 #: templates/equipment/borrow_form.html:4
 msgid "登记设备借用"
@@ -1692,10 +2020,6 @@ msgstr "Date"
 msgid "范围"
 msgstr "Scope"
 
-#: templates/home.html:54 templates/notices/list.html:36
-msgid "置顶"
-msgstr "Pinned"
-
 #: templates/home.html:69
 msgid "了解社团"
 msgstr "About the club"
@@ -1733,10 +2057,6 @@ msgstr[1] "%(counter)s notices"
 #: templates/notices/list.html:26
 msgid "发布日期"
 msgstr "Published"
-
-#: templates/notices/list.html:27
-msgid "标题"
-msgstr "Title"
 
 #: templates/projects/group_apply.html:4
 #, python-format
@@ -1813,15 +2133,6 @@ msgstr[1] "Contact %(contact)s · %(counter)s members"
 #: templates/projects/group_list.html:70
 msgid "管理项目组"
 msgstr "Manage group"
-
-#: templates/projects/group_detail.html:39
-#: templates/projects/group_detail.html:72
-#: templates/projects/group_detail.html:88
-#: templates/projects/group_list.html:43
-#: templates/projects/group_manage.html:94
-#: templates/projects/group_manage.html:110
-msgid "成员"
-msgstr "Members"
 
 #: templates/projects/group_detail.html:47
 msgid "最近送审"
