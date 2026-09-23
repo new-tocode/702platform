@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}{% translate "竞赛社团管理平台" %}{% endblock %}</title>
     <link rel="stylesheet" href="{% static 'css/app.css' %}">
+    <script defer src="{% static 'js/navigation.js' %}"></script>
     {% block extra_head %}{% endblock %}
 </head>
 <body>
@@ -24,6 +25,9 @@
                 <a href="{% url 'content:showcase' %}"{% if nav_section == "showcase" %} aria-current="page"{% endif %}>{% translate "成员风采" %}</a>
                 <a href="{% url 'content:page_index' %}"{% if nav_section == "pages" %} aria-current="page"{% endif %}>{% translate "更多页面" %}</a>
                 <a href="{% url 'notices:public_list' %}"{% if nav_section == "notices" %} aria-current="page"{% endif %}>{% translate "公开通知" %}</a>
+                {% if user.is_authenticated and not user.must_change_password %}
+                    <a href="{% url 'discussion:space' %}"{% if nav_section == "space" %} aria-current="page"{% endif %}>{% translate "社团空间" %}</a>
+                {% endif %}
             </nav>
             <div class="topbar-end">
                 {# 语言切换：两种语言各有一个地址（中文不带前缀、英文带 /en/）， #}

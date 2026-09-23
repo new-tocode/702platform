@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     "competitions.apps.CompetitionsConfig",
     "reviews.apps.ReviewsConfig",
     "equipment.apps.EquipmentConfig",
+    "discussion.apps.DiscussionConfig",
     "core.apps.CoreConfig",
 ]
 
