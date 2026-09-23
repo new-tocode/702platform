@@ -15,13 +15,14 @@
 ├── config/                           # 项目配置包
 │   ├── settings.py                   # 全局配置与环境变量读取（数据库固定 PostgreSQL）
 │   ├── urls.py                       # 根路由
-│   ├── admin.py                      # Admin 站点标题定制
+│   ├── admin.py                      # Admin 站点定制：标题 + 「身份管理」分组的聚合
 │   ├── middleware.py                 # 请求日志、强制改密
 │   ├── logging.py / asgi.py / wsgi.py
 ├── accounts/                         # 账号与成员资料
-│   ├── models.py                     # User（含 must_change_password、is_reviewer、is_preliminary_reviewer、is_super_reviewer）、Profile（含特长 specialty）
+│   ├── models.py                     # User（含 must_change_password、三种资格字段）、Profile（含特长 specialty），以及四张全局身份名册的代理模型
 │   ├── roles.py                      # 身份展示口径（管理员／联系人／成员／无组）
-│   ├── forms.py / views.py / urls.py / admin.py
+│   ├── services.py                   # 资格的批量授予／撤销（唯一写入口，带审计）
+│   ├── forms.py / views.py / urls.py / admin.py   # admin 里还有用户列表的六个批量动作与四张名册
 │   ├── signals.py                    # Profile 自动创建、认证日志、登录时的待办提醒（初审/评审分开报数）
 │   └── tests.py
 ├── notices/                          # 通知（public / internal / contacts）
@@ -38,7 +39,7 @@
 │   ├── validators.py                 # 类型、大小、签名校验
 │   └── tests.py
 ├── projects/                         # 项目组与联系人
-│   ├── models.py                     # ProjectGroup、ProjectAdvisor（指导老师，每组至多 3 位）、GroupJoinRequest、GroupCreateRequest（创建项目组申请）、ProjectContact（代理）
+│   ├── models.py                     # ProjectGroup、ProjectAdvisor（指导老师，每组至多 3 位）、GroupJoinRequest、GroupCreateRequest（创建项目组申请）、ProjectContact 与 ProjectMember（两张只读名册的代理）
 │   ├── permissions.py                # 联系人/成员/组可见性/创建申请审核人的唯一判定点
 │   ├── services.py                   # 入组审核、创建项目组的申请与审核、移除成员、转让联系人等事务操作
 │   ├── validators.py                 # 项目书文件校验
@@ -47,6 +48,7 @@
 ├── competitions/                     # 竞赛与报名
 │   ├── models.py                     # Competition、CompetitionRegistration（含 team_leader）
 │   ├── permissions.py                # 报名权限（薄封装 projects.permissions）
+│   ├── services.py                   # 报名的登记/修改/放弃（事务、审计、唯一约束冲突的翻译）
 │   ├── context_processors.py         # 报名入口可见性
 │   ├── forms.py / views.py / urls.py / admin.py
 │   └── tests.py
@@ -55,7 +57,10 @@
 │   ├── lifecycle.py                  # 轮次状态机（迁移表 + 唯一写入点 transition()）与两道关的口径 STAGES
 │   ├── permissions.py                # 评审资格、「凭评审身份能否看这一组」与队列页准入（管理员无资格亦可）的唯一判定
 │   ├── panels.py                     # 队列页／项目组详情页／成员中心三处页面上下文的装配入口（含管理员的创建申请待办）
-│   ├── services.py                   # 送审、抽人（eligible_holders/_draw_tasks）、交卷（submit_verdict）、汇总与归档、超级评审敲定、管理员改派（reassign_task）、请假、待办计数
+│   ├── exceptions.py                 # ReviewError（独立成模块，好让下层的 draw 也能抛）
+│   ├── draw.py                       # 抽签：资格条件、排除冲突、候选池、抽不出来时的措辞（只查库）
+│   ├── selectors.py                  # 只读：待办计数 PendingTasks、请假窗口、超级评审能否行使
+│   ├── services.py                   # 写命令：送审、交卷（submit_verdict）、汇总与归档、超级评审敲定、管理员改派（reassign_task）、请假
 │   ├── forms.py / views.py / urls.py / admin.py
 │   └── tests/                        # 测试按功能分模块（用例多，见 §5）
 │       ├── factories.py              # 造对象：用户/角色、项目组、上传文件
@@ -68,6 +73,10 @@
 │   └── tests.py
 ├── core/                             # 平台核心
 │   ├── registry.py                   # 操作入口注册表
+│   ├── roles.py                      # 身份目录：有哪些身份、各自叫什么、从哪来
+│   ├── permissions.py                # 跨应用权限口径：is_admin（谁算管理员）与视图门槛 require
+│   ├── admin.py                      # 后台共用件：只读 mixin、姓名列、身份名册基类
+│   ├── uploads.py                    # 上传文件的通用处理（扩展名、读指针复位）
 │   ├── models.py / audit.py          # AuditLog 与统一审计函数
 │   ├── context_processors.py         # 注入操作入口与顶栏当前栏目
 │   ├── stats.py                      # 首页概览计数
@@ -81,7 +90,7 @@
 └── env.local.sh                       # 本地开发配置（.gitignore 忽略）
 ```
 
-本机生成内容（`.venv/`、`__pycache__/`、`logs/`、`mediafiles/`、`staticfiles/`、`env*.sh`）不提交版本库，规则见 `.gitignore`。根目录 `社团评审系统_发布版.zip` 是历史压缩包，不参与运行。
+本机生成内容（`.venv/`、`__pycache__/`、`logs/`、`mediafiles/`、`staticfiles/`、`env*.sh`）不提交版本库，规则见 `.gitignore`。`logs/` 只留运行时日志（`django.log` + 轮转），阶段验收留下的一次性日志已在重构时清掉。
 
 ### 1.1 样式与模板约定
 
@@ -94,6 +103,29 @@
 - **动效**：`.reveal` 只在页面载入时编排一次淡入，并遵守 `prefers-reduced-motion`；不要给每个区块加逐条动画。
 - 表单控件由元素选择器统一着色，新增字段无需加 class。`templates/django/forms/widgets/clearable_file_input.html` 覆盖了 Django 的文件控件默认模板，与 `app.css` 的 `.file-current` 一族配套。
 
+### 1.2 分层约定
+
+各应用按需长出额外模块（小的应用只有 Django 默认六件套），但分工是固定的：
+
+| 模块 | 放什么 | 规矩 |
+|---|---|---|
+| `models.py` | 表结构、约束、模型自己的不变量 | 不查别的应用 |
+| `permissions.py` | 「谁能做什么」的判定 | 判定只写在这里；视图、模板、`panels` 都来问它 |
+| `services.py` | 写操作：事务边界、审计、领域异常 | 视图与 admin 都调它，不自己写事务 |
+| `selectors.py` | 只读查询与派生状态（`reviews` 有） | 不写库 |
+| `forms.py` | 输入校验 | |
+| `views.py` | 取对象 → 调服务 → 渲染 | 不写事务、不写审计 |
+| `panels.py` | 页面上下文装配（`reviews` 有） | 判定与取数都委托出去 |
+| `admin.py` | 后台外观与批量动作 | 写操作委托 `services` |
+
+几条具体要求：
+
+- **服务层什么时候该建**：被多处复用，或含多表事务、约束翻译的写操作。只有一个调用点、逻辑就是「保存 + 一条审计」的，留在视图里更清楚——不为统一而绕一层。
+- **跨应用引用**：只经对方的 `permissions`／`services`／`selectors` 公开函数，不直接查对方的模型（模型层的外键除外）。需要打断加载期依赖时用函数内局部 import，并写清理由。
+- **权限门槛**：视图用 `core.permissions.require(request, predicate, event, **fields)`，判据来自各应用的 `permissions`；「谁算管理员」一律问 `core.permissions.is_admin`，不自己写 `user.is_staff`。
+- **文案的层次**：用户可见文案归模板与 `panels`；服务层抛领域异常，由视图翻译成 `messages`。前台文案一律 `gettext`，改完要跑 `.po` 兜底测试（见 §3.4）；后台不在双语范围内，它的文案写中文原样、不进 `.po`。
+- **审计**：写操作经 `core.audit.record_audit` 留痕。action 字符串一旦发布就不再改，历史记录要保持连续。
+
 ## 2. 依赖
 
 `requirements.txt`：
@@ -101,7 +133,7 @@
 | 依赖 | 作用 |
 |---|---|
 | `Django>=5.2,<5.3` | Web 框架、ORM、认证、Session、Admin、迁移、模板、测试 |
-| `djangorestframework>=3.16,<3.17` | 为后续 API 预留，当前不做主要渲染 |
+| `djangorestframework>=3.16,<3.17` | 为后续 API 预留：只装在 `INSTALLED_APPS` 里，当前没有任何 serializer／viewset／APIView |
 | `bleach>=6.2,<7` | 富文本 HTML 白名单过滤 |
 | `markdown>=3.8,<4` | Markdown 渲染 |
 | `Pillow>=11.3,<12` | 校验上传图片真实格式 |
@@ -238,14 +270,14 @@ source env.local.sh
 
 测试按模块分布在各 app 的 `tests.py`，覆盖的验收要点：
 
-**`reviews` 例外**：它的用例最多（169 条），因此按功能拆成 `reviews/tests/` 包，一个模块一个主题——送审规则、结论与归档、评审页面、初审关卡、请假、待办提醒、改派、超级评审、后台删整轮。共用件只有两处：`factories.py`（造对象）与 `base.py`（`ReviewTestCase`：临时 MEDIA_ROOT + `_open_round`/`_pass_preliminary`/`_submit` 三个推进轮次的动作）。夹具（谁是评审人、各有几名）**刻意留在各个类自己的 `setUp`**：送审类型决定名额，而名额是「恰好抽到谁」这类断言的前提，由基类统一发放夹具会让这些断言随候选人数变化而时灵时不灵。跑单个模块用 `manage.py test reviews.tests.test_preliminary`。
+**`reviews` 例外**：它的用例最多（179 条），因此按功能拆成 `reviews/tests/` 包，一个模块一个主题——送审规则、结论与归档、评审页面、初审关卡、请假、待办提醒、改派、超级评审、后台删整轮。共用件只有两处：`factories.py`（造对象）与 `base.py`（`ReviewTestCase`：临时 MEDIA_ROOT + `_open_round`/`_pass_preliminary`/`_submit` 三个推进轮次的动作）。夹具（谁是评审人、各有几名）**刻意留在各个类自己的 `setUp`**：送审类型决定名额，而名额是「恰好抽到谁」这类断言的前提，由基类统一发放夹具会让这些断言随候选人数变化而时灵时不灵。跑单个模块用 `manage.py test reviews.tests.test_preliminary`。
 
 | 模块 | 验收要点 |
 |---|---|
-| `accounts` | 管理员发放账号/重置密码；首次登录强制改密、改密后解锁；资料维护（姓名/学号/学院/专业/特长/联系方式）；无注册、无自助找回；审计与日志不含明文密码；非 staff 不能进后台 |
+| `accounts` | 管理员发放账号/重置密码；首次登录强制改密、改密后解锁；资料维护（姓名/学号/学院/专业/特长/联系方式）；无注册、无自助找回；审计与日志不含明文密码；非 staff 不能进后台；**身份名册与批量授予**——六张名册只列持有人且没有分配入口（新增页 403），建号表单可直接勾选资格，用户列表页的六个批量动作授予/撤销并写审计，重复授予不产生多余审计行，白名单外的字段（`is_superuser` 等）被拒，且没有「批量授予管理员资格」这个动作 |
 | `notices` | `public`/`internal`/`contacts` 三种范围隔离；`internal` 按 auth 用户组、`contacts` 按项目组联系人；置顶排序；公开路由不泄漏内部/联系人通知；未授权详情 404；未改密拦截 |
 | `content` / `media` | 已发布才公开；按 slug 直连的未发布页 404，而顶栏固定入口 `/about/` 未发布时显示空状态；Markdown 经 bleach 白名单；图片/视频扩展名+大小+签名校验 |
-| `projects` | 联系人由 `leader` 计算；无组员看全部可申请、组员只看自己的组、联系人看全部并管理自己的组；申请→审核入组；拒绝后可重申；申请创建项目组（任一管理员在「评审」页同意即建组，其余管理员的待办随之消失）；移除成员；联系人转让后原联系人保留为成员；改组介绍与学院/指导老师（指导老师每组至多 3 位，空槽位不占位并自动补齐；上限在数据库层由槽位唯一约束 + CHECK 兜住，服务层另有一道）；非联系人管理页 403 |
+| `projects` | 联系人由 `leader` 计算；「项目组成员」名册一行看出某人在哪些组、在各组里是联系人还是成员，且没有直接加人的入口；无组员看全部可申请、组员只看自己的组、联系人看全部并管理自己的组；申请→审核入组；拒绝后可重申；申请创建项目组（任一管理员在「评审」页同意即建组，其余管理员的待办随之消失）；移除成员；联系人转让后原联系人保留为成员；改组介绍与学院/指导老师（指导老师每组至多 3 位，空槽位不占位并自动补齐；上限在数据库层由槽位唯一约束 + CHECK 兜住，服务层另有一道）；非联系人管理页 403 |
 | `competitions` | 竞赛列表所有登录成员可见；仅项目组联系人报名（限自己的组）；参赛成员与竞赛组长须属该组且组长在参赛成员内；重复报名/截止校验；报名修改与放弃；跨组越权拒绝 |
 | `equipment` | 借用限项目组成员（入口隐藏 + 视图 403）；库存事务 + 行锁不超借；仅见本人记录；归还回补、重复归还不重复回补；管理员代还；被移出组后仍可归还 |
 | `reviews` | **任务是一张表**（`ReviewTask`，`stage` 区分初审／评审：一人一轮一席、每轮至多一条初审、超级评审那票只属于评审阶段三条约束在数据库层）；状态机与两道关的口径收敛在 `lifecycle.py`（改状态一律经 `transition()`），页面上下文由 `panels.py` 统一装配，评审判定在 `permissions.py`；任一评审资格（`is_reviewer`／`is_preliminary_reviewer`／`is_super_reviewer`）驱动「评审」入口（管理员即使没有资格也进得来——项目组创建申请汇总在这里），队列按各自那一侧渲染三档（初审：待初审／已完成的初审／已释放的初审；评审：待评审／已完成的评审／已释放的评审）；送审先落到 1 名初审人手上（`preliminary_pending`），此时没有任何评审任务；抽初审人只从有初审资格、启用中、未请假、非提交人/本组成员里取（`eligible_holders(stage="preliminary")`），一个都没有即拒绝送审；提交时另做**评审人容量预检**（不足即拒绝开这一轮，预检排除本轮初审人——初审人不能占评审席位），避免开出一轮谁也推进不了的送审；初审「通过」在同一事务内按送审类型抽齐评审人（竞赛类 3 / 大创中期·结题 2 / 大创立项 1）并转 `pending`，「需修改」则本轮直接 `needs_revision`、不分配评审人；通过时若池子已缩水（有人开始请假或资格被撤）则整次回滚（结论不落库、任务仍待初审，可原地重试），提示语指向「稍后重试或请管理员补充评审人」；**本人初审通过的那一轮不再抽到本人**（`_eligible_pool` 统一排除，抽人、容量预检与改派同源）；初审没有批注版，结论与评审共用同一对取值；全部评审人均通过→方案通过，任一需修改→可修改后重提；批注版项目书选填，通过后按上传者归档（未上传不产生记录、重复汇总不重复归档）；批注与归档文件仅 staff/组内/被分配评审人可下载且文件名不含身份；初审人、评审人、超级评审一律匿名（页面只写「初审」「评审人 N」「超级评审」），初审打回的轮次在「方案状态」里指向初审意见而不是不存在的评审意见；具备评审或初审资格者可登记请假窗口，窗口内两种抽取与容量预检都排除他且 `ends_at` 一到自动恢复（无定时任务），管理员可在 Admin 列表直接改时间；手上有未完成初审/评审时登录即提醒（两种分开报数），成员中心顶部常驻待办卡片（计数不含请假、撤销资格者不提醒、发送用 fail_silently 以免影响登录）；同一项目组同时只允许一个未结束的轮次（初审中也算未结束，判据是 `OPEN_STATUSES` 而不是 `status == pending`）；`can_view_group` 的各项授权取**并集**（staff／组员／本轮初审人／被分配任务者／有未结束轮次时的超级评审），多资格账号不会因为走了超级评审那一支而丢掉自己任务带来的可见性；管理员可在 Admin 详情页改派「待处理且该轮未判结论」的评审任务与「待初审且该轮仍在初审中」的初审任务（候选与抽人同源（`eligible_holders(stage=…)`）、已判结论的记录仍只读、**且账号确实持有该模型的修改权限**——只读观察者不能改派、禁止新增与删除单条任务，但整轮可在后台删除（豁免两项级联检查，已归档的轮次被 PROTECT 挡住，删除写审计）、写入经服务层并审计）；超级评审（`User.is_super_reviewer`）可在「评审」看到全部进行中的轮次（含初审中）并一票通过/打回，不经结论汇总（否则普通评审人的「需修改」会顶回该决定），敲定时等待中的评审与初审任务都变为 `released`；`submit_verdict()` 因此是「非 pending 一律拒绝」，否则被释放者仍能提交并改写记录；可否行使由 `override_blocker()` 一处判定（返回具体原因，None 为可行使），表单显隐、拒绝信息与队列页的「不可行使」标注都取自它，提交人/组成员/已在本轮持有任务（含初审任务）者不得行使 |

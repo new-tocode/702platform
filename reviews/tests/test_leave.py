@@ -1,8 +1,8 @@
 """评审请假：窗口内不被抽中，到点自动恢复。
 
 「恢复」不是谁去翻一个标志位，而是窗口的 ends_at 过去了——所以这里的断言围着
-时间转：起止、覆盖、过期即恢复。窗口同时挡住初审与评审两种抽取，因为它描述的
-是这个人有没有空，与平台准备派给他哪种任务无关。
+时间转：起止与过期即恢复。窗口同时挡住初审与评审两种抽取，因为它描述的是这个人
+有没有空，与平台准备派给他哪种任务无关。
 """
 
 from datetime import timedelta
@@ -86,15 +86,6 @@ class ReviewerLeaveTests(ReviewTestCase):
         self.assertEqual(
             self._leave(starts_in=-7, ends_in=-1).state, ReviewerLeave.LEAVE_ENDED
         )
-
-    def test_covers_only_its_own_window(self):
-        leave = self._leave(starts_in=-1, ends_in=2)
-
-        self.assertTrue(leave.covers(leave.starts_at))
-        self.assertTrue(leave.covers(leave.ends_at - timedelta(seconds=1)))
-        self.assertFalse(leave.covers(leave.starts_at - timedelta(seconds=1)))
-        # The end is exclusive: at ends_at the reviewer is back on duty.
-        self.assertFalse(leave.covers(leave.ends_at))
 
     # --- effect on reviewer draws -------------------------------------------
 

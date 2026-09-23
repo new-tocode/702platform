@@ -21,7 +21,6 @@ from ..services import (
     submit_verdict,
     submit_for_review,
 )
-from .factories import DEFAULT_PASSWORD
 
 
 #: 两评审人的轮次类型：历史断言（双通过、抽两人）都建立在它上面。
@@ -39,8 +38,6 @@ class ReviewTestCase(TestCase):
     项目书与批注版总得落在某个目录里，让它们落进仓库的 media 目录、或者落进一个
     由别的类负责清理的共享目录，就是测试开始「按运行顺序随机红」的原因。
     """
-
-    password = DEFAULT_PASSWORD
 
     #: 本类默认开哪一种轮次。送审类型决定这一轮要几名评审人，而名额是每个断言
     #: 的隐含前提（「抽到谁」只在候选人数恰好等于名额时才确定），所以由各类自行

@@ -7,19 +7,22 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
-from django.db import IntegrityError, transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext as _
 from django.views.decorators.http import require_POST
 
+from core.permissions import require
 from projects.models import ProjectGroup
 from projects.permissions import can_manage_group, manageable_group_ids
-
-from core.audit import record_audit
 
 from .forms import CompetitionRegistrationForm
 from .models import Competition, CompetitionRegistration
 from .permissions import is_competition_manager
+from .services import (
+    DuplicateRegistration,
+    save_registration,
+    withdraw_registration,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -27,14 +30,11 @@ User = get_user_model()
 
 
 def _require_competition_manager(request):
-    if not is_competition_manager(request.user):
-        logger.warning(
-            "competition.permission.denied username=%s path=%s",
-            request.user.get_username(),
-            request.path,
-            extra={"request_id": getattr(request, "request_id", "-")},
-        )
-        raise PermissionDenied
+    require(
+        request,
+        is_competition_manager(request.user),
+        "competition.permission.denied",
+    )
 
 
 def _member_group_map(form):
@@ -98,32 +98,6 @@ def competition_list(request):
     )
 
 
-def _save_registration(*, form, competition, request, instance=None):
-    """Create or update a registration from a validated form."""
-    group = form.cleaned_data["group"]
-    members = form.cleaned_data["members"]
-    team_leader = form.cleaned_data["team_leader"]
-    with transaction.atomic():
-        if instance is None:
-            registration = CompetitionRegistration.objects.create(
-                competition=competition,
-                group=group,
-                registered_by=request.user,
-                team_leader=team_leader,
-                remark=form.cleaned_data.get("remark", ""),
-            )
-        else:
-            registration = instance
-            registration.group = group
-            registration.team_leader = team_leader
-            registration.remark = form.cleaned_data.get("remark", "")
-            registration.save(
-                update_fields=["group", "team_leader", "remark", "updated_at"]
-            )
-        registration.members.set(members)
-    return registration
-
-
 @login_required
 def competition_register(request, pk):
     _require_competition_manager(request)
@@ -157,12 +131,16 @@ def competition_register(request, pk):
     if request.method == "POST":
         if form.is_valid():
             try:
-                registration = _save_registration(
-                    form=form,
+                registration = save_registration(
                     competition=competition,
+                    group=form.cleaned_data["group"],
+                    members=form.cleaned_data["members"],
+                    team_leader=form.cleaned_data["team_leader"],
+                    remark=form.cleaned_data.get("remark", ""),
+                    actor=request.user,
                     request=request,
                 )
-            except IntegrityError:
+            except DuplicateRegistration:
                 form.add_error("group", _("该项目组已经登记过这场竞赛，不能重复报名。"))
                 logger.warning(
                     "competition.registration.failure competition_id=%s username=%s reason=duplicate",
@@ -171,17 +149,6 @@ def competition_register(request, pk):
                     extra={"request_id": getattr(request, "request_id", "-")},
                 )
             else:
-                record_audit(
-                    action="competitions.registration",
-                    user=request.user,
-                    target=registration,
-                    detail={
-                        "competition_id": competition.pk,
-                        "group_id": registration.group_id,
-                        "member_count": registration.members.count(),
-                    },
-                    request=request,
-                )
                 logger.info(
                     "competition.registration.success registration_id=%s competition_id=%s group_id=%s username=%s",
                     registration.pk,
@@ -241,25 +208,19 @@ def competition_registration_edit(request, pk):
     if request.method == "POST":
         if form.is_valid():
             try:
-                _save_registration(
-                    form=form,
+                save_registration(
                     competition=competition,
-                    request=request,
+                    group=form.cleaned_data["group"],
+                    members=form.cleaned_data["members"],
+                    team_leader=form.cleaned_data["team_leader"],
+                    remark=form.cleaned_data.get("remark", ""),
+                    actor=request.user,
                     instance=registration,
+                    request=request,
                 )
-            except IntegrityError:
+            except DuplicateRegistration:
                 form.add_error("group", _("该项目组已经登记过这场竞赛，不能重复报名。"))
             else:
-                record_audit(
-                    action="competitions.registration.update",
-                    user=request.user,
-                    target=registration,
-                    detail={
-                        "competition_id": competition.pk,
-                        "group_id": registration.group_id,
-                    },
-                    request=request,
-                )
                 messages.success(request, _("报名信息已更新。"))
                 return redirect("competitions:list")
 
@@ -282,15 +243,9 @@ def competition_registration_withdraw(request, pk):
         )
         raise PermissionDenied
 
-    detail = {
-        "competition_id": registration.competition_id,
-        "group_id": registration.group_id,
-    }
-    registration.delete()
-    record_audit(
-        action="competitions.registration.withdraw",
-        user=request.user,
-        detail=detail,
+    withdraw_registration(
+        registration=registration,
+        actor=request.user,
         request=request,
     )
     messages.success(request, _("已放弃该竞赛报名。"))

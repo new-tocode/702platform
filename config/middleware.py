@@ -5,7 +5,6 @@ import time
 import uuid
 from urllib.parse import urlencode
 
-from django.conf import settings
 from django.shortcuts import redirect
 from django.urls import reverse
 

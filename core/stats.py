@@ -10,6 +10,8 @@
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 
+from .permissions import is_admin
+
 
 def can_view_platform_overview(user):
     """概览数字的可见范围：管理员与项目组联系人。
@@ -19,7 +21,7 @@ def can_view_platform_overview(user):
     """
     if not (user and user.is_authenticated):
         return False
-    if user.is_staff or user.is_superuser:
+    if is_admin(user):
         return True
     # 局部导入：让 core 不在模块加载期就依赖 projects。
     from projects.permissions import is_project_contact

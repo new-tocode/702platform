@@ -60,7 +60,3 @@ class Notice(models.Model):
 
     def __str__(self):
         return self.title
-
-    @property
-    def is_public(self):
-        return self.scope == self.PUBLIC

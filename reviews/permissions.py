@@ -11,6 +11,8 @@
 外键，``projects`` → ``reviews`` 只在函数体内、且只指向本模块。
 """
 
+from core.permissions import is_admin
+
 from . import lifecycle
 from .models import ProjectSubmission, ReviewTask
 
@@ -70,11 +72,9 @@ def can_open_queue(user):
         return False
     if has_review_qualification(user):
         return True
-    # 局部 import：让 reviews 不在模块加载期就依赖 projects.permissions；
-    # 「谁算管理员」的口径留在那一处，这里不另写一份 is_staff 判断。
-    from projects.permissions import can_decide_group_create_requests
-
-    return can_decide_group_create_requests(user)
+    # 「谁算管理员」只问 core.permissions，不反向依赖 projects——
+    # projects 与 reviews 之间那处双向 import 因此消失。
+    return is_admin(user)
 
 
 def may_receive_tasks(user):

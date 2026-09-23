@@ -11,6 +11,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext as _, ngettext
 from django.views.decorators.http import require_POST
 
+from core.permissions import require
 from projects.permissions import can_view_group
 
 from . import panels, permissions
@@ -33,14 +34,11 @@ logger = logging.getLogger(__name__)
 
 
 def _require_reviewer(request):
-    if not permissions.has_review_qualification(request.user):
-        logger.warning(
-            "reviews.permission.denied username=%s path=%s",
-            request.user.get_username(),
-            request.path,
-            extra={"request_id": getattr(request, "request_id", "-")},
-        )
-        raise PermissionDenied
+    require(
+        request,
+        permissions.has_review_qualification(request.user),
+        "reviews.permission.denied",
+    )
 
 
 def _require_queue_access(request):
@@ -48,49 +46,40 @@ def _require_queue_access(request):
 
     项目组创建申请就送到这一页，见 ``permissions.can_open_queue``。
     """
-    if not permissions.can_open_queue(request.user):
-        logger.warning(
-            "reviews.permission.denied username=%s path=%s reason=no_queue_access",
-            request.user.get_username(),
-            request.path,
-            extra={"request_id": getattr(request, "request_id", "-")},
-        )
-        raise PermissionDenied
+    require(
+        request,
+        permissions.can_open_queue(request.user),
+        "reviews.permission.denied",
+        reason="no_queue_access",
+    )
 
 
 def _require_preliminary_reviewer(request):
-    if not permissions.is_preliminary_reviewer(request.user):
-        logger.warning(
-            "reviews.permission.denied username=%s path=%s reason=no_preliminary_qualification",
-            request.user.get_username(),
-            request.path,
-            extra={"request_id": getattr(request, "request_id", "-")},
-        )
-        raise PermissionDenied
+    require(
+        request,
+        permissions.is_preliminary_reviewer(request.user),
+        "reviews.permission.denied",
+        reason="no_preliminary_qualification",
+    )
 
 
 def _require_super_reviewer(request):
-    if not permissions.is_super_reviewer(request.user):
-        logger.warning(
-            "reviews.permission.denied username=%s path=%s reason=not_super_reviewer",
-            request.user.get_username(),
-            request.path,
-            extra={"request_id": getattr(request, "request_id", "-")},
-        )
-        raise PermissionDenied
+    require(
+        request,
+        permissions.is_super_reviewer(request.user),
+        "reviews.permission.denied",
+        reason="not_super_reviewer",
+    )
 
 
 def _require_group_visibility(request, group, what):
-    if not can_view_group(request.user, group):
-        logger.warning(
-            "reviews.download.denied username=%s group_id=%s what=%s path=%s",
-            request.user.get_username(),
-            group.pk,
-            what,
-            request.path,
-            extra={"request_id": getattr(request, "request_id", "-")},
-        )
-        raise PermissionDenied
+    require(
+        request,
+        can_view_group(request.user, group),
+        "reviews.download.denied",
+        group_id=group.pk,
+        what=what,
+    )
 
 
 def _annotated_filename(file_field, round_number):

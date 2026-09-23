@@ -9,6 +9,8 @@ querying ``ProjectGroup`` directly, which keeps the judgment in one place.
 ``reviews/permissions.py``；本模块只在 ``can_view_group`` 里委托一次。
 """
 
+from core.permissions import is_admin
+
 from .models import ProjectGroup
 
 
@@ -40,17 +42,20 @@ def can_manage_group(user, group):
         user
         and user.is_authenticated
         and group
-        and (user.is_staff or group.leader_id == user.pk)
+        and (is_admin(user) or group.leader_id == user.pk)
     )
 
 
 def can_decide_group_create_requests(user):
-    """创建项目组申请的审核人：全体管理员（``is_staff``）。
+    """创建项目组申请的审核人：全体管理员。
 
     申请送到管理员的「评审」页（评审侧据此决定给不给看那份待办），任一位管理员
     同意即通过，其余人无需再审。判定只此一处，视图门槛与页面装配都走它。
+
+    「谁算管理员」委托 :func:`core.permissions.is_admin`；这里保留业务语义名，
+    让调用方问的是「谁能审建组申请」，而不是「他是不是 staff」。
     """
-    return bool(user and user.is_authenticated and user.is_staff)
+    return is_admin(user)
 
 
 def can_view_group(user, group):
@@ -65,7 +70,7 @@ def can_view_group(user, group):
     """
     if not (user and user.is_authenticated and group):
         return False
-    if user.is_staff or group.members.filter(pk=user.pk).exists():
+    if is_admin(user) or group.members.filter(pk=user.pk).exists():
         return True
     # Local import keeps the projects app free of a hard dependency on reviews.
     from reviews.permissions import has_review_claim
@@ -78,7 +83,7 @@ def can_use_equipment(user):
     return bool(
         user
         and user.is_authenticated
-        and (user.is_staff or is_project_member(user))
+        and (is_admin(user) or is_project_member(user))
     )
 
 
@@ -104,7 +109,7 @@ def manageable_group_ids(user):
     """Primary keys of the groups the user may manage (all for staff)."""
     if not (user and user.is_authenticated):
         return []
-    if user.is_staff:
+    if is_admin(user):
         return list(ProjectGroup.objects.values_list("pk", flat=True))
     return contact_group_ids(user)
 
@@ -118,7 +123,7 @@ def groups_visible_to(user):
     """
     if not (user and user.is_authenticated):
         return ProjectGroup.objects.none()
-    if user.is_staff or is_project_contact(user):
+    if is_admin(user) or is_project_contact(user):
         return ProjectGroup.objects.all()
     own = ProjectGroup.objects.filter(members=user)
     if own.exists():

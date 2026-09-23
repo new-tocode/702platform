@@ -7,14 +7,16 @@ records —
 * ``ReviewerLeave``: the two time fields are editable straight from the
   changelist, because shifting a reviewer's recovery time earlier or later is
   the whole administrative action.
-* ``ReviewTask`` and ``ReviewTask``: the holder may be swapped
-  while the task is still pending on a round that has not moved past it, and
-  only then. The write goes through the matching service so the eligibility
-  rules and the audit trail hold.
+* ``ProjectSubmission`` and ``ReviewTask``: a whole round may be deleted
+  together with its tasks, and a task's holder may be swapped while it is still
+  pending on a round that has not moved past it, and only then. The
+  reassignment goes through the matching service so the eligibility rules and
+  the audit trail hold.
 """
 
 from django.contrib import admin, messages
 
+from core.admin import ReadOnlyAdminMixin
 from core.audit import record_audit
 
 from . import lifecycle
@@ -30,7 +32,7 @@ from .services import ReviewError, reassign_task
 
 
 @admin.register(ProjectSubmission)
-class ProjectSubmissionAdmin(admin.ModelAdmin):
+class ProjectSubmissionAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
     list_display = (
         "group",
         "round",
@@ -55,20 +57,13 @@ class ProjectSubmissionAdmin(admin.ModelAdmin):
     )
     date_hierarchy = "submitted_at"
 
-    def has_add_permission(self, request):
-        return False
-
-    def has_change_permission(self, request, obj=None):
-        return False
-
     def get_deleted_objects(self, objs, request):
         """Let a round be deleted together with its review tasks.
 
-        ``ReviewTaskAdmin`` and ``ReviewTaskAdmin`` both refuse to
-        delete a single task on purpose — that would silently change what the
-        round needs. Django's cascade check, however, asks those same admins
-        about the tasks a round deletion would carry away, which used to make the
-        round undeletable. The waiver is deliberate: the unit of deletion is the
+        ``ReviewTaskAdmin`` refuses to delete a single task on purpose — that
+        would silently change what the round needs. Django's cascade check,
+        however, asks that same admin about the tasks a round deletion would
+        carry away, which used to make the round undeletable. The waiver is deliberate: the unit of deletion is the
         whole round, and the per-task guards keep their own lock.
         """
         to_delete, model_count, perms_needed, protected = super().get_deleted_objects(
@@ -234,7 +229,7 @@ class ReviewTaskAdmin(admin.ModelAdmin):
 
 
 @admin.register(ArchivedProposal)
-class ArchivedProposalAdmin(admin.ModelAdmin):
+class ArchivedProposalAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
     list_display = (
         "group",
         "submission",
@@ -252,12 +247,6 @@ class ArchivedProposalAdmin(admin.ModelAdmin):
         "archived_at",
     )
     date_hierarchy = "archived_at"
-
-    def has_add_permission(self, request):
-        return False
-
-    def has_change_permission(self, request, obj=None):
-        return False
 
 
 @admin.register(ReviewerLeave)

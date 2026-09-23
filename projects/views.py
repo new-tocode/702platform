@@ -14,6 +14,7 @@ from django.utils.translation import gettext as _, ngettext
 from django.views.decorators.http import require_POST
 
 from core.audit import record_audit
+from core.permissions import is_admin, require
 
 from .forms import (
     ContactTransferForm,
@@ -54,15 +55,12 @@ User = get_user_model()
 
 
 def _require_group_manager(request, group):
-    if not can_manage_group(request.user, group):
-        logger.warning(
-            "project_group.permission.denied username=%s group_id=%s path=%s",
-            request.user.get_username(),
-            group.pk,
-            request.path,
-            extra={"request_id": getattr(request, "request_id", "-")},
-        )
-        raise PermissionDenied
+    require(
+        request,
+        can_manage_group(request.user, group),
+        "project_group.permission.denied",
+        group_id=group.pk,
+    )
 
 
 def _submit_message(submission):
@@ -117,7 +115,7 @@ def group_list(request):
                 "can_manage": group.pk in manageable_ids,
                 "is_member": group.pk in member_ids,
                 "has_pending": group.pk in pending_ids,
-                "can_view": request.user.is_staff or group.pk in member_ids,
+                "can_view": is_admin(request.user) or group.pk in member_ids,
                 "status_label": latest.get_status_display() if latest else "",
                 # 语气色由模型给（见 reviews.lifecycle.STATUS_TONES），模板不再比状态字符串。
                 "status_tone": latest.status_tone if latest else "",
