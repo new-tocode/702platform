@@ -10,6 +10,12 @@ from django.contrib.auth.forms import (
 from django.utils.translation import gettext_lazy as _
 
 from .models import Profile, User
+from .validators import (
+    AVATAR_HELP_TEXT,
+    GALLERY_HELP_TEXT,
+    validate_avatar,
+    validate_gallery_image,
+)
 
 
 class AdminUserCreationForm(UserCreationForm):
@@ -88,6 +94,18 @@ class AdminPasswordChangeForm(DjangoAdminPasswordChangeForm):
 
 
 class ProfileForm(forms.ModelForm):
+    """成员自己维护的个人资料。
+
+    字段的**排布**（哪两项并成一行、哪个字段要收窄、谁排在最后）一并声明在这里，
+    模板只按 :meth:`rows` 逐格渲染。排布是这张表单自己的事，散进模板就得在那里
+    按字段名做判断，字段一动两边都要改。
+    """
+
+    #: 一行放两项的字段对；不在此列的字段各占一行，顺序仍看 :attr:`Meta.fields`。
+    field_rows = (("full_name", "student_id"), ("college", "major"))
+    #: 值短、输入框跟着收窄的字段。
+    narrow_fields = ("phone",)
+
     class Meta:
         model = Profile
         fields = (
@@ -95,15 +113,70 @@ class ProfileForm(forms.ModelForm):
             "student_id",
             "college",
             "major",
-            "specialty",
+            # 手机号排在特长之前：先联系方式，再自述。
             "phone",
+            "specialty",
             "contact",
+            # 个人简介放最后，且是这张表里唯一的整块文本。
+            "bio",
         )
         widgets = {
             "full_name": forms.TextInput(attrs={"autocomplete": "name"}),
             "student_id": forms.TextInput(attrs={"autocomplete": "off"}),
-            "phone": forms.TelInput(),
+            "phone": forms.TelInput(attrs={"autocomplete": "tel"}),
+            "bio": forms.Textarea(attrs={"rows": 8}),
         }
+
+    def rows(self):
+        """把字段切成页面上的一行行，供模板逐格渲染。
+
+        每格形如 ``{"field": BoundField, "narrow": bool, "full": bool}``：``narrow``
+        是值短、输入框跟着收窄的字段；``full`` 表示这一行只有它一个，横向占满整行
+        （特长与个人简介都在此列）。
+        """
+        paired = {name for row in self.field_rows for name in row}
+        rows = [list(row) for row in self.field_rows]
+        rows += [[name] for name in self.fields if name not in paired]
+        return [
+            [
+                {
+                    "field": self[name],
+                    "narrow": name in self.narrow_fields,
+                    "full": len(row) == 1,
+                }
+                for name in row
+            ]
+            for row in rows
+        ]
+
+
+class AvatarForm(forms.Form):
+    """上传或更换头像。
+
+    刻意不是 ModelForm：后者在校验通过的那一刻就把上传文件写进了实例，
+    服务层再想读「原来的头像叫什么」已经读不到了（换头像要顺手删掉旧文件）。
+    这里只收一张图，写库由 ``accounts.services.set_avatar`` 一处完成。
+    """
+
+    avatar = forms.ImageField(
+        label=_("头像"),
+        widget=forms.FileInput(),
+        validators=[validate_avatar],
+        help_text=AVATAR_HELP_TEXT,
+        error_messages={"required": _("请选择要上传的图片。")},
+    )
+
+
+class GalleryImageForm(forms.Form):
+    """往个人图册里加一张图；排布与顺序上传后在页面上再调。"""
+
+    image = forms.ImageField(
+        label=_("图像"),
+        widget=forms.FileInput(),
+        validators=[validate_gallery_image],
+        help_text=GALLERY_HELP_TEXT,
+        error_messages={"required": _("请选择要上传的图片。")},
+    )
 
 
 class FirstPasswordChangeForm(SetPasswordForm):

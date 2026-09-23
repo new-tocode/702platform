@@ -87,7 +87,7 @@
 
 | App | 职责 |
 |---|---|
-| `accounts` | 用户、角色分组、个人资料（学号/专业/联系方式）、密码管理 |
+| `accounts` | 用户、角色分组、个人资料（学号/专业/联系方式/头像/个人简介/个人图册）、密码管理 |
 | `notices` | 公告/新闻，按 `scope` 区分公开与内部可见范围 |
 | `content` | 公开展示页：社团简介、历年获奖、成员风采 |
 | `projects` | 项目组（项目组联系人、成员） |
@@ -118,18 +118,32 @@ User（继承 AbstractUser，项目自定义，经 AUTH_USER_MODEL 生效）
 Profile（User 一对一扩展）
   - user          OneToOne(User)
   - full_name     姓名（单一字段）
+  - avatar        头像（图片，≤2 MB；圆形只是展示层的裁切，原图不动）
   - student_id    学号（唯一）
   - college       学院
   - major         专业
   - specialty     特长（自由文本，可写多项）
   - phone         手机号
   - contact       其他联系方式（可选）
+  - bio           个人简介（≤1000 字）
+  - created_at / updated_at
+
+GalleryImage（个人图册里的一张图，随 Profile 级联删除）
+  - profile       FK(Profile)
+  - image         图片（≤5 MB；一个人的全部图像合计 ≤100 MB）
+  - layout        normal（普通）| wide（大图，占两格）| full（整行铺满）
+  - sort_order    用户逐张调出来的顺序，页面按 (sort_order, id) 排
+  - file_size     文件大小（字节）
   - created_at
 ```
 
 - 管理员创建账号时设置初始密码（默认建议设为学号/工号，并在文档中提示安全改密）。
-- 成员可修改 Profile 中的单一 `full_name` 姓名字段及其他个人资料与本人密码；管理员可在 Admin 中重置任意用户密码（Django 内置功能）。
+- 成员可修改 Profile 中的单一 `full_name` 姓名字段及其他个人资料、头像、个人图册与本人密码；管理员可在 Admin 中重置任意用户密码（Django 内置功能）。
 - 自定义 User 仍继承 Django `AbstractUser` 的底层 `first_name` / `last_name` 数据列，但它们不再出现在任何用户界面，也不作为业务姓名使用；历史数据会在迁移中合并到 `Profile.full_name`。
+- **个人信息页**（`/member/profile/`）左栏是资料表单、右栏是头像与只读的「当前身份」、下方整幅宽度是个人图册。表单的分行与宽窄由 `ProfileForm.field_rows`／`narrow_fields` 声明、`rows()` 装配，模板只按行逐格渲染——排布是这张表单自己的事，散进模板就得在那边按字段名做判断。
+- **上传件的写入口只有两个**：`accounts.services.set_avatar`／`clear_avatar` 与 `accounts.services.add_gallery_image`／`move_gallery_image`／`set_gallery_layout`／`delete_gallery_image`。换头像、删图都连磁盘上的文件一起处理（文件系统不在事务里，删除一律放在提交之后：出错顶多多留一个旧文件，不会出现「库里还指着、磁盘上没了」）。
+- **图册的 100 MB 是合计上限**，求和前先 `select_for_update` 锁住账号那一行：同一个人开两个标签页同时上传时，不加锁会双双读到还没涨上去的用量。单张 5 MB 与头像的 2 MB 走同一套图片校验（`core.uploads.validate_image_upload`），差别只是上限。
+- **「当前身份」只读**：全局身份问各应用 `permissions` 的判定，项目组联系人／成员带组名，来自 `projects.selectors`——后台那六张名册的排法在这里同样成立，没持有的身份不出现。
 - **强制改密流程**：首次登录后若 `must_change_password=True`，重定向到改密页；改密成功后置 `False`，之后才能访问其他成员功能。
 
 ### 6.2 notices
@@ -440,6 +454,7 @@ MediaFile（统一媒体库，供各内容模型通过 M2M/FK 引用）
 
 - **格式白名单**：图片 jpg/jpeg/png/webp/gif；视频 mp4（要求包含 `ftyp` 标识）/ webm（要求 EBML 文件头）。仅允许白名单扩展名，拒绝可执行/脚本类文件；图片还通过 Pillow 解码校验。
 - **大小上限（默认建议值，可按服务器带宽/磁盘调整）**：图片 ≤10MB、视频 ≤500MB；Django 端校验，生产需同步配置 Nginx `client_max_body_size`。
+- **图片那一套校验只有一份实现**：`core/uploads.validate_image_upload`（扩展名、大小、MIME 家族、真实图片签名）。媒体库的图片分支与个人信息页的头像（≤2 MB）、图册单张（≤5 MB）都调它，差别只是上限与文案；视频是媒体库独有的口径，仍留在 `media/validators.py`。图册另有合计上限，见 §6.1。
 - 统一媒体库的好处：公开页、通知、风采均引用同一文件；后续切换对象存储只需改一处存储配置。
 - 本期**不做视频转码/多码率**：要求上传即 MP4（浏览器直放），由 Nginx 静态直出并支持 Range 拖动播放；视频量大后再引入 ffmpeg 转码或 OSS 处理。
 
@@ -532,7 +547,8 @@ Django 原生支持「组级」权限，**对象级**需自定义；本项目把
 - **CSRF**：Django 内置，所有 POST 表单都带 token（`{% csrf_token %}`）。
 - **XSS**：模板自动转义；Markdown/富文本渲染使用安全的渲染器（如 `bleach` 白名单过滤）。
 - **密码**：Django 默认 PBKDF2 哈希；`AUTH_PASSWORD_VALIDATORS` 开启强度校验。
-- **上传校验**：类型白名单（图片 jpg/png/webp/gif，视频 mp4/webm）+ 大小上限（图片 ≤10MB、视频 ≤500MB）；Django 端校验 + Nginx `client_max_body_size` 双重限制；仅允许白名单扩展名，拒绝可执行/脚本类文件。
+- **上传校验**：类型白名单（图片 jpg/png/webp/gif，视频 mp4/webm）+ 大小上限（媒体库图片 ≤10MB、头像 ≤2MB、图册单张 ≤5MB 且每人合计 ≤100MB、视频 ≤500MB）；Django 端校验 + Nginx `client_max_body_size` 双重限制；仅允许白名单扩展名，拒绝可执行/脚本类文件。
+- **个人图册的对象边界**：所有图册动作都按 `profile=本人` 取对象（`get_object_or_404`），不是先按 id 取出来再判权限——别人的图连存在与否都不告诉他。视图只渲染自己的图册，模板不承担权限判断。
 - **媒体服务**：上传落 MEDIA 目录，生产环境由 Nginx 直接静态服务（含 Range 支持便于视频拖动播放），不经过 Python 进程；视频要求 MP4(H.264)/WebM 保证浏览器直放。
 - **富文本安全**：Markdown 服务端渲染后用 `bleach` 白名单过滤，禁止内联脚本；图片引用仅允许本平台 MEDIA URL（或显式白名单域名）。
 - **配置安全**：`DEBUG=False`、`SECRET_KEY` 走环境变量、安全 Cookie（`SESSION_COOKIE_HTTPONLY`、生产走 HTTPS）。
@@ -586,7 +602,13 @@ core / registry.py
 |---|---|---|
 | `/member/` | 成员首页：身份／评审与初审资格 + 社团概览（仅管理员与联系人可见）+ 操作面板（注册表渲染） | 登录 |
 | `/member/notices/` | 内部通知 + 仅联系人可见通知列表/详情 | 登录（按受众过滤） |
-| `/member/profile/` | 查看/修改个人信息 | 本人 |
+| `/member/profile/` | 个人信息：左栏资料表单 + 右栏头像与「当前身份」（只读）+ 下方个人图册 | 本人 |
+| `/member/profile/avatar/` | 上传／更换头像（POST，一张图盖掉旧的，旧文件随之删除） | 本人 |
+| `/member/profile/avatar/delete/` | 删除头像，连同磁盘上的文件（POST） | 本人 |
+| `/member/profile/gallery/` | 往个人图册加一张图（POST；单张 ≤5 MB、合计 ≤100 MB） | 本人 |
+| `/member/profile/gallery/<id>/move/` | 上移／下移一位（POST，`direction=up|down`） | 本人（他人的图一律 404） |
+| `/member/profile/gallery/<id>/layout/` | 改一张图的排布（POST，`layout=normal|wide|full`） | 同上 |
+| `/member/profile/gallery/<id>/delete/` | 从图册删除一张图，连同文件（POST） | 同上 |
 | `/member/password/` | 修改密码 | 本人 |
 | `/member/projects/` | 项目组列表：无组员看全部可申请，组员看自己的组，联系人看全部；页首有「申请创建项目组」入口 | 登录 |
 | `/member/projects/create/` | 申请创建项目组（名称与描述必填，申请人即项目组联系人） | 登录 |

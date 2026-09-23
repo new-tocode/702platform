@@ -1,19 +1,48 @@
 """Stage 1 acceptance tests for accounts and forced password changes."""
 
+from io import BytesIO
+import os
+from pathlib import Path
+import re
+import shutil
+import tempfile
+
+from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser, Group
-from django.test import TestCase
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase, override_settings
 from django.urls import reverse
+from PIL import Image
 
 from core.models import AuditLog
 from projects.models import ProjectGroup
 
 from .forms import AdminUserChangeForm, AdminUserCreationForm, ProfileForm
+from .models import GalleryImage
 from .roles import describe_member
 from .services import set_qualification
 
 
 User = get_user_model()
+TEST_MEDIA_ROOT = Path(tempfile.mkdtemp(prefix="competition-club-accounts-"))
+
+
+def png_upload(name="avatar.png", size=(8, 8)):
+    stream = BytesIO()
+    Image.new("RGB", size, color="#12508f").save(stream, format="PNG")
+    return SimpleUploadedFile(name, stream.getvalue(), content_type="image/png")
+
+
+def oversized_png_upload(name="huge.png", megabytes=3):
+    """一张真图、真超限：随机噪点压不动，尺寸按需要的 MB 数放大。"""
+    pixels_per_side = int((megabytes * 1024 * 1024 / 3) ** 0.5) + 100
+    stream = BytesIO()
+    raw = os.urandom(pixels_per_side * pixels_per_side * 3)
+    Image.frombytes("RGB", (pixels_per_side, pixels_per_side), raw).save(
+        stream, format="PNG"
+    )
+    return SimpleUploadedFile(name, stream.getvalue(), content_type="image/png")
 
 
 class AccountModelAcceptanceTests(TestCase):
@@ -209,6 +238,541 @@ class MemberAuthenticationAcceptanceTests(TestCase):
         combined_logs = "\n".join(captured.output)
         self.assertIn("auth.login.failure", combined_logs)
         self.assertNotIn("never-log-this-password", combined_logs)
+
+
+class ProfilePageAcceptanceTests(TestCase):
+    """个人信息页的排布：一行两项、手机号收窄并前移、个人简介压轴。"""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="profile-member",
+            password="Member-Password-123!",
+        )
+        self.user.must_change_password = False
+        self.user.save(update_fields=["must_change_password"])
+        self.client.force_login(self.user)
+
+    def cells(self):
+        """表单给出的排布：按行摊平成一格一格。"""
+        return [cell for row in ProfileForm().rows() for cell in row]
+
+    def test_name_pairs_with_student_id_and_college_with_major(self):
+        rows = [
+            [cell["field"].name for cell in row] for row in ProfileForm().rows()
+        ]
+
+        self.assertEqual(rows[0], ["full_name", "student_id"])
+        self.assertEqual(rows[1], ["college", "major"])
+
+    def test_phone_is_the_only_narrow_field_and_comes_before_specialty(self):
+        names = [cell["field"].name for cell in self.cells()]
+
+        self.assertEqual(
+            [cell["field"].name for cell in self.cells() if cell["narrow"]],
+            ["phone"],
+        )
+        self.assertLess(names.index("phone"), names.index("specialty"))
+
+    def test_specialty_stays_a_single_line_input(self):
+        widget = ProfileForm().fields["specialty"].widget
+
+        self.assertIsInstance(widget, forms.TextInput)
+
+    def test_bio_is_last_and_renders_as_a_tall_textarea(self):
+        cells = self.cells()
+
+        self.assertEqual(cells[-1]["field"].name, "bio")
+        response = self.client.get(reverse("accounts:profile"))
+        self.assertContains(response, '<textarea name="bio"')
+        self.assertContains(response, 'rows="8"')
+
+    def test_profile_page_pairs_name_with_student_id_in_one_row(self):
+        response = self.client.get(reverse("accounts:profile"))
+
+        html = response.content.decode()
+        first_row = re.search(r'<div class="field-row">(.*?)</div>\s*</div>', html, re.S)
+        self.assertIn('name="full_name"', first_row.group(1))
+        self.assertIn('name="student_id"', first_row.group(1))
+
+    def test_no_template_comment_leaks_onto_the_page(self):
+        # Django 的 {# #} 不跨行：写成两行会把注释当正文渲染出来，页面上直接可见。
+        response = self.client.get(reverse("accounts:profile"))
+
+        self.assertNotIn("{#", response.content.decode())
+
+    def test_profile_page_marks_single_field_rows_as_full_width(self):
+        response = self.client.get(reverse("accounts:profile"))
+
+        html = response.content.decode()
+        # 两行两项，手机号、特长、其他联系方式、个人简介各占一行。
+        self.assertEqual(html.count('class="field-row"'), 6)
+        # 独占一行的字段横跨两列：特长仍是整幅的单行输入，个人简介的框也只受这一处约束。
+        self.assertEqual(html.count('class="field field-full"'), 3)
+        self.assertIn('class="field field-full field-short"', html)
+
+    def test_member_can_save_a_bio(self):
+        response = self.client.post(
+            reverse("accounts:profile"),
+            {
+                "full_name": "成员一",
+                "student_id": "20260001",
+                "college": "计算机学院",
+                "major": "软件工程",
+                "phone": "13800000000",
+                "specialty": "算法设计",
+                "contact": "",
+                "bio": "喜欢做机器人，也写一点前端。",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.user.profile.refresh_from_db()
+        self.assertEqual(self.user.profile.bio, "喜欢做机器人，也写一点前端。")
+
+    def test_bio_longer_than_the_limit_is_rejected(self):
+        response = self.client.post(
+            reverse("accounts:profile"),
+            {"bio": "字" * 1001},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.user.profile.refresh_from_db()
+        self.assertEqual(self.user.profile.bio, "")
+
+
+@override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
+class AvatarAcceptanceTests(TestCase):
+    """头像：上传、更换、删除，各自连文件一起处理；圆形只是显示层的裁切。"""
+
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        shutil.rmtree(TEST_MEDIA_ROOT, ignore_errors=True)
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="avatar-member",
+            password="Member-Password-123!",
+        )
+        self.user.must_change_password = False
+        self.user.save(update_fields=["must_change_password"])
+        self.client.force_login(self.user)
+
+    def upload(self, uploaded_file):
+        return self.client.post(
+            reverse("accounts:avatar_update"), {"avatar": uploaded_file}
+        )
+
+    def avatar_path(self):
+        self.user.profile.refresh_from_db()
+        return Path(self.user.profile.avatar.path)
+
+    def test_uploading_an_avatar_stores_the_file_and_leaves_an_audit_row(self):
+        response = self.upload(png_upload())
+
+        self.assertRedirects(response, reverse("accounts:profile"))
+        self.assertTrue(self.avatar_path().exists())
+        self.user.profile.refresh_from_db()
+        self.assertTrue(self.user.profile.avatar.name.startswith("avatars/"))
+        self.assertTrue(
+            AuditLog.objects.filter(action="accounts.avatar.update").exists()
+        )
+
+    def test_replacing_an_avatar_deletes_the_previous_file(self):
+        self.upload(png_upload("first.png"))
+        first = self.avatar_path()
+        self.assertTrue(first.exists())
+
+        self.upload(png_upload("second.png"))
+
+        self.assertFalse(first.exists(), "旧头像文件应随更换删掉，不该留在磁盘上")
+        self.assertTrue(self.avatar_path().exists())
+
+    def test_deleting_an_avatar_clears_the_field_and_the_file(self):
+        self.upload(png_upload())
+        path = self.avatar_path()
+
+        response = self.client.post(reverse("accounts:avatar_delete"))
+
+        self.assertRedirects(response, reverse("accounts:profile"))
+        self.user.profile.refresh_from_db()
+        self.assertFalse(self.user.profile.avatar)
+        self.assertFalse(path.exists())
+        self.assertTrue(
+            AuditLog.objects.filter(action="accounts.avatar.clear").exists()
+        )
+
+    def test_deleting_without_an_avatar_changes_nothing(self):
+        response = self.client.post(reverse("accounts:avatar_delete"), follow=True)
+
+        self.assertContains(response, "当前没有头像")
+        self.assertFalse(
+            AuditLog.objects.filter(action="accounts.avatar.clear").exists()
+        )
+
+    def test_avatar_larger_than_two_megabytes_is_rejected(self):
+        # 跟着跳回个人信息页：提示语在那里，跳转不跟着走就被吃掉了。
+        response = self.client.post(
+            reverse("accounts:avatar_update"),
+            {"avatar": oversized_png_upload()},
+            follow=True,
+        )
+
+        self.assertContains(response, "不能超过 2 MB")
+        self.user.profile.refresh_from_db()
+        self.assertFalse(self.user.profile.avatar)
+
+    def test_a_file_that_is_not_an_image_is_rejected(self):
+        not_an_image = SimpleUploadedFile(
+            "notes.png",
+            b"just some text",
+            content_type="image/png",
+        )
+
+        self.upload(not_an_image)
+
+        self.user.profile.refresh_from_db()
+        self.assertFalse(self.user.profile.avatar)
+
+    def test_upload_requires_a_post_and_a_login(self):
+        self.client.logout()
+        self.assertEqual(
+            self.upload(png_upload()).status_code,
+            302,
+        )
+
+        self.client.force_login(self.user)
+        self.assertEqual(
+            self.client.get(reverse("accounts:avatar_update")).status_code,
+            405,
+        )
+
+    def test_profile_page_shows_the_circle_and_the_three_actions(self):
+        response = self.client.get(reverse("accounts:profile"))
+        self.assertContains(response, 'class="avatar avatar-blank"')
+        self.assertContains(response, "上传头像")
+        self.assertNotContains(response, "删除头像")
+
+        self.upload(png_upload("shown.png"))
+
+        response = self.client.get(reverse("accounts:profile"))
+        self.assertContains(response, 'class="avatar"')
+        self.assertContains(response, "更换头像")
+        self.assertContains(response, "删除头像")
+
+
+@override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
+class PersonalGalleryAcceptanceTests(TestCase):
+    """个人图册：上传、排序、排布、删除，以及「单张 5 MB、合计 100 MB」两条上限。"""
+
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        shutil.rmtree(TEST_MEDIA_ROOT, ignore_errors=True)
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="gallery-member",
+            password="Member-Password-123!",
+        )
+        self.user.must_change_password = False
+        self.user.save(update_fields=["must_change_password"])
+        self.client.force_login(self.user)
+
+    def upload(self, name="photo.png", follow=False):
+        return self.client.post(
+            reverse("accounts:gallery_upload"),
+            {"image": png_upload(name)},
+            follow=follow,
+        )
+
+    def images(self):
+        return list(self.user.profile.gallery_images.all())
+
+    def test_uploading_an_image_stores_it_at_the_end_of_the_gallery(self):
+        self.upload("first.png")
+        self.upload("second.png")
+
+        images = self.images()
+        self.assertEqual(len(images), 2)
+        self.assertEqual(images[0].image.name.startswith("gallery/"), True)
+        self.assertLess(images[0].sort_order, images[1].sort_order)
+        self.assertGreater(images[0].file_size, 0)
+        self.assertTrue(AuditLog.objects.filter(action="accounts.gallery.add").exists())
+
+    def test_an_image_larger_than_five_megabytes_is_rejected(self):
+        response = self.client.post(
+            reverse("accounts:gallery_upload"),
+            {"image": oversized_png_upload(name="big.png", megabytes=6)},
+            follow=True,
+        )
+
+        self.assertContains(response, "不能超过 5 MB")
+        self.assertEqual(self.images(), [])
+
+    def test_the_gallery_total_cap_is_enforced_on_upload(self):
+        kept = GalleryImage.objects.create(
+            profile=self.user.profile, image=png_upload("kept.png")
+        )
+        # 直接把已用量抬到 99 MB，不必真造一张那么大的图。
+        GalleryImage.objects.filter(pk=kept.pk).update(
+            file_size=99 * 1024 * 1024
+        )
+        oversized = oversized_png_upload(name="filler.png", megabytes=3)
+
+        response = self.client.post(
+            reverse("accounts:gallery_upload"), {"image": oversized}, follow=True
+        )
+
+        self.assertContains(response, "图册合计不能超过 100 MB")
+        self.assertEqual(len(self.images()), 1)
+        self.assertTrue(
+            Path(kept.image.path).exists(), "被拒的上传不该动到已有图像"
+        )
+
+    def test_moving_an_image_swaps_it_with_its_neighbour(self):
+        self.upload("first.png")
+        self.upload("second.png")
+        first, second = self.images()
+
+        self.client.post(
+            reverse("accounts:gallery_image_move", args=[second.pk]),
+            {"direction": "up"},
+        )
+
+        self.assertEqual([image.pk for image in self.images()], [second.pk, first.pk])
+        self.assertEqual([image.sort_order for image in self.images()], [0, 1])
+        self.assertTrue(
+            AuditLog.objects.filter(action="accounts.gallery.reorder").exists()
+        )
+
+    def test_moving_past_either_end_keeps_the_order_and_says_so(self):
+        self.upload("only.png")
+        only = self.images()[0]
+
+        up = self.client.post(
+            reverse("accounts:gallery_image_move", args=[only.pk]),
+            {"direction": "up"},
+            follow=True,
+        )
+        down = self.client.post(
+            reverse("accounts:gallery_image_move", args=[only.pk]),
+            {"direction": "down"},
+            follow=True,
+        )
+
+        self.assertContains(up, "已经是第一张了")
+        self.assertContains(down, "已经是最后一张了")
+        self.assertEqual([image.pk for image in self.images()], [only.pk])
+
+    def test_layout_can_be_changed_and_is_rendered_on_the_page(self):
+        self.upload("wide.png")
+        image = self.images()[0]
+
+        self.client.post(
+            reverse("accounts:gallery_image_layout", args=[image.pk]),
+            {"layout": "wide"},
+        )
+
+        image.refresh_from_db()
+        self.assertEqual(image.layout, "wide")
+        response = self.client.get(reverse("accounts:profile"))
+        self.assertContains(response, 'class="gitem gitem-wide"')
+
+    def test_changing_the_layout_does_not_re_read_the_image(self):
+        """换排布只写那一列：图片文件即使不在磁盘上，也不该挡着改排布。"""
+        self.upload("moved.png")
+        image = self.images()[0]
+        Path(image.image.path).unlink()
+
+        response = self.client.post(
+            reverse("accounts:gallery_image_layout", args=[image.pk]),
+            {"layout": "full"},
+        )
+
+        self.assertRedirects(response, reverse("accounts:profile"))
+        image.refresh_from_db()
+        self.assertEqual(image.layout, "full")
+
+    def test_deleting_an_image_removes_the_row_and_the_file(self):
+        self.upload("doomed.png")
+        image = self.images()[0]
+        path = Path(image.image.path)
+
+        response = self.client.post(
+            reverse("accounts:gallery_image_delete", args=[image.pk])
+        )
+
+        self.assertRedirects(response, reverse("accounts:profile"))
+        self.assertEqual(self.images(), [])
+        self.assertFalse(path.exists())
+        self.assertTrue(
+            AuditLog.objects.filter(action="accounts.gallery.delete").exists()
+        )
+
+    def test_another_members_image_is_out_of_reach(self):
+        owner = User.objects.create_user(
+            username="gallery-owner",
+            password="Owner-Password-123!",
+        )
+        foreign = GalleryImage.objects.create(
+            profile=owner.profile, image=png_upload("foreign.png")
+        )
+
+        for name, payload in (
+            ("accounts:gallery_image_move", {"direction": "up"}),
+            ("accounts:gallery_image_layout", {"layout": "full"}),
+            ("accounts:gallery_image_delete", {}),
+        ):
+            with self.subTest(view=name):
+                response = self.client.post(reverse(name, args=[foreign.pk]), payload)
+                self.assertEqual(response.status_code, 404)
+
+        foreign.refresh_from_db()
+        self.assertEqual(foreign.layout, "normal")
+        self.assertTrue(Path(foreign.image.path).exists())
+
+    def test_unknown_direction_or_layout_is_a_404(self):
+        self.upload("steady.png")
+        image = self.images()[0]
+
+        moved = self.client.post(
+            reverse("accounts:gallery_image_move", args=[image.pk]),
+            {"direction": "sideways"},
+        )
+        laid_out = self.client.post(
+            reverse("accounts:gallery_image_layout", args=[image.pk]),
+            {"layout": "enormous"},
+        )
+
+        self.assertEqual(moved.status_code, 404)
+        self.assertEqual(laid_out.status_code, 404)
+
+    def test_gallery_actions_require_a_login_and_a_post(self):
+        self.upload("mine.png")
+        image = self.images()[0]
+
+        self.assertEqual(
+            self.client.get(reverse("accounts:gallery_upload")).status_code, 405
+        )
+        self.assertEqual(
+            self.client.get(reverse("accounts:gallery_image_delete", args=[image.pk])).status_code,
+            405,
+        )
+
+        self.client.logout()
+        self.assertEqual(self.upload("anonymous.png").status_code, 302)
+
+    def test_the_page_shows_the_upload_row_usage_and_each_image(self):
+        response = self.client.get(reverse("accounts:profile"))
+        self.assertContains(response, "图册还是空的")
+
+        self.upload("shown.png")
+
+        response = self.client.get(reverse("accounts:profile"))
+        self.assertContains(response, "个人图册")
+        self.assertContains(response, "每张不超过 5 MB，图册合计不超过 100 MB")
+        self.assertContains(response, "1 张 · 0 / 100 MB")
+        self.assertContains(response, 'class="gitem gitem-normal"')
+        self.assertContains(response, "加入图册")
+
+
+class ProfileIdentityPanelAcceptanceTests(TestCase):
+    """个人信息页右栏的「当前身份」：只列实际持有的，对象身份带组名。"""
+
+    def setUp(self):
+        self.member = User.objects.create_user(
+            username="identity-member",
+            password="Member-Password-123!",
+        )
+        self.member.must_change_password = False
+        self.member.save(update_fields=["must_change_password"])
+        self.client.force_login(self.member)
+
+    def identities_on_page(self):
+        """页面上这一栏画出来的身份标签与组名，各按出现顺序。
+
+        整页只有这一处会画身份标签（``.chip-on``）与组名（``.member``），
+        所以不用先切出面板那一段。
+        """
+        html = self.client.get(reverse("accounts:profile")).content.decode()
+        return (
+            re.findall(r'<span class="chip chip-on">(.*?)</span>', html),
+            re.findall(r'<span class="member">(.*?)</span>', html),
+        )
+
+    def test_a_member_without_extra_identities_sees_an_empty_note(self):
+        response = self.client.get(reverse("accounts:profile"))
+        labels, groups = self.identities_on_page()
+
+        self.assertEqual(labels, [])
+        self.assertEqual(groups, [])
+        self.assertContains(response, "暂无其他身份")
+
+    def test_every_held_identity_is_listed_in_catalog_order(self):
+        self.member.is_staff = True
+        self.member.is_reviewer = True
+        self.member.is_super_reviewer = True
+        self.member.save(
+            update_fields=["is_staff", "is_reviewer", "is_super_reviewer"]
+        )
+
+        labels, _groups = self.identities_on_page()
+
+        self.assertEqual(labels, ["管理员", "评审人", "超级评审"])
+
+    def test_qualifications_left_off_are_not_listed(self):
+        self.member.is_preliminary_reviewer = True
+        self.member.save(update_fields=["is_preliminary_reviewer"])
+
+        labels, _groups = self.identities_on_page()
+
+        self.assertEqual(labels, ["初审人"])
+
+    def test_object_identities_carry_their_group_names(self):
+        ProjectGroup.objects.create(name="星火计划组", leader=self.member)
+        joined = ProjectGroup.objects.create(
+            name="星河计划组",
+            leader=User.objects.create_user(
+                username="identity-leader",
+                password="Leader-Password-123!",
+            ),
+        )
+        joined.members.add(self.member)
+
+        labels, groups = self.identities_on_page()
+
+        self.assertEqual(labels, ["项目组联系人", "项目组成员"])
+        self.assertIn("星火计划组", groups)
+        self.assertIn("星河计划组", groups)
+
+    def test_a_group_member_is_listed_without_being_a_contact(self):
+        joined = ProjectGroup.objects.create(
+            name="只有成员组",
+            leader=User.objects.create_user(
+                username="identity-leader",
+                password="Leader-Password-123!",
+            ),
+        )
+        joined.members.add(self.member)
+
+        labels, groups = self.identities_on_page()
+
+        self.assertEqual(labels, ["项目组成员"])
+        self.assertEqual(groups, ["只有成员组"])
+
+    def test_the_panel_is_read_only_and_sits_below_the_avatar(self):
+        self.member.is_reviewer = True
+        self.member.save(update_fields=["is_reviewer"])
+
+        response = self.client.get(reverse("accounts:profile"))
+
+        html = response.content.decode()
+        self.assertLess(html.index("头像"), html.index("当前身份"), "身份面板在头像之下")
+        # 「只读」写在实现里而不是写在页面上：这一段到图册之前没有任何可提交的东西。
+        panel = html[html.index("当前身份"): html.index("个人图册")]
+        self.assertNotIn("<form", panel)
+        self.assertNotIn("<button", panel)
 
 
 class MemberRoleDisplayAcceptanceTests(TestCase):
