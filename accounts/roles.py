@@ -9,6 +9,8 @@
 
 from django.utils.translation import gettext_lazy as _
 
+from core.permissions import is_admin
+
 
 ADMIN = _("管理员")
 CONTACT = _("项目组联系人")
@@ -25,7 +27,7 @@ def describe_member(user):
     """
     if not (user and user.is_authenticated):
         return GUEST
-    if user.is_staff or user.is_superuser:
+    if is_admin(user):
         return ADMIN
     # 局部导入：让 accounts 不在模块加载期就依赖 projects。
     from projects.permissions import contact_group_ids, member_group_ids

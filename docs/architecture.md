@@ -21,8 +21,8 @@
 
 | 决策项 | 结论 |
 |---|---|
-| 技术栈 | Django + Django REST Framework（DRF 为后续 API 预留） |
-| 前端形态 | 服务端渲染 + HTMX（Django 模板），DRF 暂不承担主要渲染 |
+| 技术栈 | Django + Django REST Framework（DRF 为后续 API 预留，当前代码里尚无任何 DRF 用法） |
+| 前端形态 | 服务端渲染（Django 模板）+ 少量原生 JS/CSS；DRF 与 HTMX 都不承担渲染 |
 | 审批流程 | 竞赛报名、设备借用为登记即时生效。**加入项目组**需该项目组联系人审核；**创建项目组**需任一管理员同意；**项目书**需同行评审：先由 1 名初审人初审，通过后才按送审类型随机分配评审人（竞赛类 3 人、大创中期/结题 2 人、大创立项 1 人），全部评审人均通过方为通过，批注版项目书随通过归档 |
 | 账号体系 | **不开放注册**。管理员统一发放默认账号；成员自行修改个人信息与密码；管理员可重置密码 |
 | 首次登录 | **强制修改初始密码**（改密通过前，除改密页外其他成员功能不可用） |
@@ -35,12 +35,12 @@
 
 ## 3. 技术栈
 
-- **后端**：Python 3 + Django + DRF
+- **后端**：Python 3 + Django（+ DRF：已装、预留给后续 API，当前无代码使用）
 - **数据库**：PostgreSQL（Django 5.2 要求 ≥14；本地与生产均使用 PostgreSQL，经 `DJANGO_DB_*` 环境变量配置）
-- **前端**：Django 模板（服务端渲染）+ HTMX（局部交互）+ 少量原生 JS/CSS
+- **前端**：Django 模板（服务端渲染）+ 少量原生 JS/CSS。**没有引入 HTMX**：全站只有一处脚本（竞赛报名页按所选项目组过滤参赛成员的下拉），其余交互一律走整页表单提交
 - **认证**：Django 内置 Session 认证 + 权限系统（Group / Permission）
-- **认证模型**：自定义 User（继承 AbstractUser，新增 `must_change_password`），绿场项目直接以 `AUTH_USER_MODEL` 一步到位
-- **富文本编辑**：Markdown（EasyMDE 编辑器）+ 服务端渲染 + `bleach` 白名单过滤，图片/视频经上传组件引用
+- **认证模型**：自定义 User（继承 AbstractUser，除 `must_change_password` 外还有 `is_reviewer`／`is_preliminary_reviewer`／`is_super_reviewer` 三个资格字段），绿场项目直接以 `AUTH_USER_MODEL` 一步到位
+- **富文本编辑**：Markdown + 服务端渲染 + `bleach` 白名单过滤，图片/视频经上传组件引用。**没有引入编辑器组件**（如 EasyMDE）：正文在后台的 textarea 里手写 Markdown，前台按 Markdown 渲染并过滤
 - **媒体存储**：本地 MEDIA 目录起步（FileField 抽象，后续可经 `django-storages` 平滑切换 OSS/S3）
 - **媒体校验**：Pillow 校验图片真实格式；视频校验 MP4/WebM 文件签名，统一限制扩展名、MIME 和大小
 - **视频**：直传 MP4（H.264）/ WebM，由 Nginx 直接静态服务（含 Range 支持），本期不做服务端转码
@@ -68,7 +68,7 @@
 │  │equipment │  │ content  │  │   core   │                    │
 │  └──────────┘  └──────────┘  └──────────┘                    │
 │                                                              │
-│  模板层（渲染） / HTMX 交互 / 权限中间件 / 操作入口注册表        │
+│  模板层（渲染） / 权限中间件 / 操作入口注册表 / 身份目录           │
 └───────────────┬─────────────────────────────────────────────┘
                 │ ORM
         ┌───────▼────────┐        ┌────────────────────┐
@@ -77,8 +77,8 @@
         └────────────────┘        └────────────────────┘
 ```
 
-- **渲染策略**：服务端渲染为主。公开页、成员界面、管理后台均由 Django 模板渲染；交互（表单提交、列表局部刷新、筛选）用 HTMX 实现无刷新更新。
-- **DRF 的角色**：本期不承担主要渲染，仅作为「面向未来的 API」预留（小程序 / App / 对接校园系统）。
+- **渲染策略**：服务端渲染。公开页、成员界面、管理后台均由 Django 模板渲染；表单提交走整页跳转，唯一的一处脚本在竞赛报名页（按所选项目组过滤参赛成员的下拉）。
+- **DRF 的角色**：本期不承担主要渲染，仅作为「面向未来的 API」预留（小程序 / App / 对接校园系统）。它装在 `INSTALLED_APPS` 里但**当前没有任何 serializer／viewset／APIView**，属于有意保留的空位。
 - **数据来源唯一**：权限判断一律在视图层完成，模板只做展示层的隐藏/显示（双层防护，见 §8）。
 
 ---
@@ -95,7 +95,7 @@
 | `equipment` | 设备台账 + 借用登记（借/还状态） |
 | `reviews` | 项目书同行评审（送审类型与配额、初审关卡与评审同表任务、批注版项目书、结论汇总与归档、超级评审、评审资格与可见性判定） |
 | `media` | 媒体库：图片/视频统一上传、校验、引用 |
-| `core` | 公共工具、操作入口注册表、审计日志 |
+| `core` | 公共工具、跨应用权限口径（`is_admin`／视图门槛 `require`）、操作入口注册表、身份目录、审计日志 |
 
 每个新业务模块 = 新增一个 Django app + 注册操作入口，主面板代码无需改动（见 §9）。
 
@@ -463,6 +463,23 @@ MediaFile（统一媒体库，供各内容模型通过 M2M/FK 引用）
 - 「项目组联系人」**不新建用户组存储**：身份由 `ProjectGroup.leader` 计算，判定收敛在 `projects/permissions.py`（`is_project_contact` / `is_project_member` / `can_manage_group` / `can_use_equipment` / `groups_visible_to`），其他模块复用这些函数，避免出现会漂移的副本。
 - **评审资格的判定归评审应用**：`reviews/permissions.py`（`is_reviewer` / `is_preliminary_reviewer` / `is_super_reviewer` / `qualifies_for_stage` / `has_review_qualification` / `may_receive_tasks` / `has_review_claim`）。projects 与 accounts 只在函数体内局部 import 这一个模块——依赖方向因此是单向的，projects 不会再为了问一句「他是不是评审人」而去读评审的模型。
 - 「组成员关系」通过 `ProjectGroup.members` 表达；「内部通知的用户组」仍是 Django `auth.Group`（`Notice.visible_groups`），两套"组"语义不同，不可混淆。
+- **「谁算管理员」只有一处写法**：`core/permissions.py` 的 `is_admin(user)`（`is_staff` 或 `is_superuser`）。此前 `is_staff` 与 `is_staff or is_superuser` 两种写法并存，同一个问题两个答案；现在各应用一律问它。`projects.permissions.can_decide_group_create_requests` 保留为业务语义名（「谁能审建组申请」），函数体委托 `is_admin`。
+- **依赖方向**：跨应用引用只经 `permissions`／`services`／`selectors` 的公开函数，且不在模块加载期互相牵连（需要时用函数内局部 import）。`projects` 与 `reviews` 之间原本有一处双向 import，随着 `reviews` 改问 `core.permissions.is_admin` 而消失。
+
+#### 7.1.1 身份的管理：两种作用域，两套办法
+
+平台上的身份按**来源**分成两类，管理方式因此不同。这张表也是后台「身份管理」分组的依据：
+
+| 作用域 | 身份 | 从哪来 | 后台能做什么 |
+|---|---|---|---|
+| `GLOBAL` | 管理员、评审人、初审人、超级评审 | 管理员**授予**，与任何对象无关 | 用户列表页勾选多人 → 批量授予／撤销（六个动作，写审计）。名册只读 |
+| `OBJECT` | 项目组联系人、项目组成员 | 业务动作**产生**：入组申请通过、建组申请通过、联系人转让 | **只能看**——名册不给任何分配入口 |
+
+对象的两种身份为什么不做分配入口：联系人必须依附某个项目组，成员要经入组审批；让管理员随手指定，既绕过了「成员不能被移出」这类业务校验，也让身份与项目组脱节。想改归属，去项目组页（后台的成员穿梭框，或前台的项目组管理页）。
+
+- 身份的**目录**在 `core/roles.py`：登记「有哪些身份、各自叫什么、从哪来」，沿用 `core/registry.py` 的操作入口注册表形状（frozen dataclass + 幂等注册 + `RLock`），各应用在 `AppConfig.ready()` 里登记自己那几种。**判定仍归各应用的 `permissions`**（谁有什么身份），**授予仍归各应用的 `services`**（怎么给出去），目录不重复这两件事。
+- 身份的**存储没有变**：全局身份是 `User` 上的布尔字段，对象身份是 `ProjectGroup.leader` 与 `ProjectGroup.members`。后台的六张名册是 `User` 的 proxy model——不建表，也就不存在与布尔字段分叉的第二处真相。统一的是**管理面**，不是存储面。
+- 资格的写入只有一处：`accounts.services.set_qualification`（带事务与 `accounts.qualification.grant/revoke` 审计）。可批量改的字段有白名单，**不含 `is_superuser` 与 `is_active`**；也没有「批量授予管理员资格」——把一批人放进后台应当逐个确认。
 
 ### 7.2 权限矩阵
 
@@ -512,7 +529,7 @@ Django 原生支持「组级」权限，**对象级**需自定义；本项目把
 ## 8. 安全设计
 
 - **双层权限控制**：模板层按权限隐藏入口（仅影响展示）+ 视图层二次校验（真正的权限边界）。只隐藏不设防是常见漏洞。
-- **CSRF**：Django 内置，HTMX 请求携带 CSRF token。
+- **CSRF**：Django 内置，所有 POST 表单都带 token（`{% csrf_token %}`）。
 - **XSS**：模板自动转义；Markdown/富文本渲染使用安全的渲染器（如 `bleach` 白名单过滤）。
 - **密码**：Django 默认 PBKDF2 哈希；`AUTH_PASSWORD_VALIDATORS` 开启强度校验。
 - **上传校验**：类型白名单（图片 jpg/png/webp/gif，视频 mp4/webm）+ 大小上限（图片 ≤10MB、视频 ≤500MB）；Django 端校验 + Nginx `client_max_body_size` 双重限制；仅允许白名单扩展名，拒绝可执行/脚本类文件。
@@ -559,7 +576,7 @@ core / registry.py
 | `/pages/<slug>/` | 通用公开内容页（仅已发布的 ContentPage 可访问，未发布 404） |
 | `/awards/` | 历年获奖列表 |
 | `/showcase/` | 成员风采 |
-| `/notices/` | 公开公告列表（分页） |
+| `/notices/` | 公开公告列表（一次列全，不分页——社团规模够用；页面上标了总条数） |
 | `/notices/<id>/` | 公告详情 |
 | `/login/` `/logout/` | 登录 / 登出 |
 
@@ -602,8 +619,17 @@ core / registry.py
 ### 10.3 管理后台
 
 - 起步直接复用 Django Admin：`/admin/` 管理账号、通知、竞赛、设备、项目组、展示内容。
+- **「身份管理」分组**（`config/admin.py` 把六张名册从各自的 app 分组里提出来置顶）：
+
+  | 名册 | 行里看得到 |
+  |---|---|
+  | 管理员 / 评审人 / 初审人 / 超级评审 | 该人的**全部身份**，以及手上有几件待办（评审人、初审人两列） |
+  | 项目组联系人 | 他负责的项目组 |
+  | 项目组成员 | 他所在的每个项目组，以及在各组里是联系人还是成员 |
+
+  六张名册都是只读的（`core.admin.RoleRosterAdmin`），顶上有一句「这个身份从哪来」。
+- 账号后台的「权限」区仍然可以逐个发放三种资格：`is_reviewer`（评审）、`is_preliminary_reviewer`（初审）、`is_super_reviewer`（超级评审）；三者在列表页可直接筛选。**批量**发放走用户列表页的六个动作（授予／撤销 × 三种资格），写入经 `accounts.services.set_qualification` 并留审计；新建账号的表单上也能直接勾选，省掉「先建号、再进详情页勾一遍」。
 - 评审相关记录以**只读留痕**为主，四处例外：评审人请假的两个时间可在列表上直接改（`list_editable`）；待评审且该轮未判结论的评审任务可在详情页改派评审人；待初审且该轮仍在初审中的初审任务同理；**整轮送审可删除**（连同它的初审与评审任务，已归档的轮次除外）。写操作都经服务层或审计日志留痕。
-- 账号后台的「权限」区发放三种资格：`is_reviewer`（评审）、`is_preliminary_reviewer`（初审）、`is_super_reviewer`（超级评审）；三者在列表页可直接筛选。
 - 按需定制更友好的发布表单（本期以 Admin 为主）。
 
 ---

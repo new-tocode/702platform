@@ -4,6 +4,7 @@ import logging
 
 from django.contrib import admin
 
+from core.admin import ProfileNameMixin, ReadOnlyAdminMixin, RoleRosterAdmin
 from core.audit import record_audit
 
 from .models import (
@@ -13,7 +14,9 @@ from .models import (
     ProjectAdvisor,
     ProjectContact,
     ProjectGroup,
+    ProjectMember,
 )
+from .services import sync_group_membership
 
 
 logger = logging.getLogger(__name__)
@@ -66,20 +69,10 @@ class ProjectGroupAdmin(admin.ModelAdmin):
 
     def save_related(self, request, form, formsets, change):
         super().save_related(request, form, formsets, change)
-        if form.instance.leader_id:
-            form.instance.members.add(form.instance.leader_id)
-        record_audit(
-            action=(
-                "projects.group.membership.create"
-                if not change
-                else "projects.group.membership.update"
-            ),
-            user=request.user,
-            target=form.instance,
-            detail={
-                "leader_id": form.instance.leader_id,
-                "member_ids": list(form.instance.members.values_list("pk", flat=True)),
-            },
+        sync_group_membership(
+            group=form.instance,
+            created=not change,
+            actor=request.user,
             request=request,
         )
 
@@ -104,16 +97,15 @@ class ProjectGroupAdmin(admin.ModelAdmin):
 
 
 @admin.register(ProjectContact)
-class ProjectContactAdmin(admin.ModelAdmin):
-    """Read-only list of every project-group contact at a glance."""
+class ProjectContactAdmin(ProfileNameMixin, RoleRosterAdmin):
+    """身份名册：项目组联系人，行里列出他负责的组。
 
-    list_display = (
-        "username",
-        "profile_name",
-        "contact_groups",
-        "is_active",
-        "is_staff",
-    )
+    身份来自 ``ProjectGroup.leader``，所以名册只读——想换人，去那个组的页面
+    走转让（前台管理页）或直接改组的联系人字段。
+    """
+
+    role_key = "project_contact"
+    list_display = ("username", "profile_name", "contact_groups", "is_active")
     search_fields = ("username", "profile__full_name", "led_project_groups__name")
     ordering = ("username",)
     list_select_related = ("profile",)
@@ -128,24 +120,47 @@ class ProjectContactAdmin(admin.ModelAdmin):
             .prefetch_related("led_project_groups")
         )
 
-    @admin.display(description="姓名", ordering="profile__full_name")
-    def profile_name(self, obj):
-        return obj.profile.full_name
-
     @admin.display(description="负责的项目组")
     def contact_groups(self, obj):
         names = [group.name for group in obj.led_project_groups.all()]
         return "、".join(names) or "—"
 
-    def has_add_permission(self, request):
-        return False
 
-    def has_change_permission(self, request, obj=None):
-        return False
+@admin.register(ProjectMember)
+class ProjectMemberAdmin(ProfileNameMixin, RoleRosterAdmin):
+    """身份名册：项目组成员，行里标出在各组中的身份。
+
+    成员身份来自 ``ProjectGroup.members``，同样只读——变更走入组审批或
+    项目组页面的成员字段。
+    """
+
+    role_key = "project_member"
+    list_display = ("username", "profile_name", "memberships", "is_active")
+    search_fields = ("username", "profile__full_name", "project_groups__name")
+    ordering = ("username",)
+    list_select_related = ("profile",)
+
+    def get_queryset(self, request):
+        return (
+            super()
+            .get_queryset(request)
+            .filter(project_groups__isnull=False)
+            .distinct()
+            .select_related("profile")
+            .prefetch_related("project_groups")
+        )
+
+    @admin.display(description="所在项目组（组内身份）")
+    def memberships(self, obj):
+        rows = [
+            f"{group.name}（{'联系人' if group.leader_id == obj.pk else '成员'}）"
+            for group in obj.project_groups.all()
+        ]
+        return "、".join(rows) or "—"
 
 
 @admin.register(GroupCreateRequest)
-class GroupCreateRequestAdmin(admin.ModelAdmin):
+class GroupCreateRequestAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
     """Oversight list for project-group creation applications.
 
     Requests are decided from the member-facing project-group page (any one
@@ -187,15 +202,9 @@ class GroupCreateRequestAdmin(admin.ModelAdmin):
     )
     date_hierarchy = "created_at"
 
-    def has_add_permission(self, request):
-        return False
-
-    def has_change_permission(self, request, obj=None):
-        return False
-
 
 @admin.register(GroupJoinRequest)
-class GroupJoinRequestAdmin(admin.ModelAdmin):
+class GroupJoinRequestAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
     """Oversight list for membership applications reviewed by contacts."""
 
     list_display = ("group", "applicant", "status", "created_at", "decided_by", "decided_at")
@@ -213,9 +222,3 @@ class GroupJoinRequestAdmin(admin.ModelAdmin):
         "updated_at",
     )
     date_hierarchy = "created_at"
-
-    def has_add_permission(self, request):
-        return False
-
-    def has_change_permission(self, request, obj=None):
-        return False
