@@ -19,24 +19,146 @@
         </div>
     </div>
 
-    <div class="col-narrow">
-        <div class="frame reveal">
-            <form method="post">
-                {% csrf_token %}
-                {{ form.non_field_errors }}
-                {% for field in form %}
-                    <div class="field">
-                        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
-                        {{ field }}
-                        {% if field.help_text %}<p class="help">{{ field.help_text }}</p>{% endif %}
-                        {{ field.errors }}
+    <div class="split">
+        <div class="stack reveal">
+            <div class="frame">
+                <form method="post">
+                    {% csrf_token %}
+                    {{ form.non_field_errors }}
+                    {# 分行与宽窄由 ProfileForm.rows 给出：姓名｜学号、学院｜专业两列并排， #}
+                    {# 手机号收窄，特长与个人简介各自整行。#}
+                    {% for row in form.rows %}
+                        <div class="field-row">
+                            {% for cell in row %}
+                                <div class="field{% if cell.full %} field-full{% endif %}{% if cell.narrow %} field-short{% endif %}">
+                                    <label for="{{ cell.field.id_for_label }}">{{ cell.field.label }}</label>
+                                    {{ cell.field }}
+                                    {% if cell.field.help_text %}<p class="help">{{ cell.field.help_text }}</p>{% endif %}
+                                    {{ cell.field.errors }}
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endfor %}
+                    <div class="form-actions">
+                        <button class="btn btn-primary" type="submit">{% translate "保存信息" %}</button>
+                        <a class="btn" href="{% url 'accounts:member_home' %}">{% translate "返回成员中心" %}</a>
                     </div>
-                {% endfor %}
-                <div class="form-actions">
-                    <button class="btn btn-primary" type="submit">{% translate "保存信息" %}</button>
-                    <a class="btn" href="{% url 'accounts:member_home' %}">{% translate "返回成员中心" %}</a>
+                </form>
+            </div>
+        </div>
+
+        <div class="stack reveal">
+            <div class="panel">
+                <div class="panel-head">
+                    <h2>{% translate "头像" %}</h2>
                 </div>
+                <div class="panel-body">
+                    <div class="avatar-block">
+                        {% if profile.avatar %}
+                            <img class="avatar" src="{{ profile.avatar.url }}" alt="{% translate '当前头像' %}">
+                        {% else %}
+                            <span class="avatar avatar-blank" aria-hidden="true">{{ avatar_initial }}</span>
+                        {% endif %}
+                    </div>
+                    <form method="post" action="{% url 'accounts:avatar_update' %}" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        <div class="field">
+                            <label for="{{ avatar_form.avatar.id_for_label }}">{{ avatar_form.avatar.label }}</label>
+                            {{ avatar_form.avatar }}
+                            {% if avatar_form.avatar.help_text %}<p class="help">{{ avatar_form.avatar.help_text }}</p>{% endif %}
+                        </div>
+                        <div class="form-actions">
+                            <button class="btn btn-primary btn-block" type="submit">
+                                {% if profile.avatar %}{% translate "更换头像" %}{% else %}{% translate "上传头像" %}{% endif %}
+                            </button>
+                        </div>
+                    </form>
+                    {% if profile.avatar %}
+                        <form method="post" action="{% url 'accounts:avatar_delete' %}">
+                            {% csrf_token %}
+                            <div class="form-actions">
+                                <button class="btn btn-danger btn-block" type="submit">{% translate "删除头像" %}</button>
+                            </div>
+                        </form>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-head">
+                    <h2>{% translate "当前身份" %}</h2>
+                </div>
+                <div class="panel-body">
+                    {% if identities %}
+                        <ul class="roles">
+                            {% for identity in identities %}
+                                <li>
+                                    <span class="chip chip-on">{{ identity.label }}</span>
+                                    {% for group_name in identity.groups %}
+                                        <span class="member">{{ group_name }}</span>
+                                    {% endfor %}
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="muted">{% translate "暂无其他身份。" %}</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="panel reveal">
+        <div class="panel-head">
+            <h2>{% translate "个人图册" %}</h2>
+            <span class="count">
+                {% blocktranslate count counter=gallery.count with used=gallery.used_mb limit=gallery.limit_mb %}{{ counter }} 张 · {{ used }} / {{ limit }} MB{% plural %}{{ counter }} 张 · {{ used }} / {{ limit }} MB{% endblocktranslate %}
+            </span>
+        </div>
+        <div class="panel-body">
+            <form method="post" action="{% url 'accounts:gallery_upload' %}" enctype="multipart/form-data" class="upload-row">
+                {% csrf_token %}
+                <label class="visually-hidden" for="{{ gallery_form.image.id_for_label }}">{{ gallery_form.image.label }}</label>
+                {{ gallery_form.image }}
+                <button class="btn btn-primary" type="submit">{% translate "加入图册" %}</button>
             </form>
+            <p class="help">
+                {% blocktranslate with per=gallery_image_max_mb total=gallery.limit_mb %}每张不超过 {{ per }} MB，图册合计不超过 {{ total }} MB。{% endblocktranslate %}
+                {% translate "上传后可逐张调整顺序与排布。" %}
+            </p>
+
+            {% if gallery_images %}
+                <div class="gallery">
+                    {% for image in gallery_images %}
+                        <figure class="gitem gitem-{{ image.layout }}">
+                            <img src="{{ image.image.url }}" alt="">
+                            <figcaption>
+                                <div class="gitem-meta">
+                                    <span>#{{ forloop.counter|stringformat:"02d" }}</span>
+                                    <span>{{ image.size_in_mb }} MB</span>
+                                </div>
+                                <form method="post" action="{% url 'accounts:gallery_image_move' image.pk %}" class="gitem-ctl">
+                                    {% csrf_token %}
+                                    <button class="btn btn-sm" name="direction" value="up" type="submit" title="{% translate '上移' %}">↑</button>
+                                    <button class="btn btn-sm" name="direction" value="down" type="submit" title="{% translate '下移' %}">↓</button>
+                                </form>
+                                <form method="post" action="{% url 'accounts:gallery_image_layout' image.pk %}" class="gitem-ctl">
+                                    {% csrf_token %}
+                                    {% for value, label in image.LAYOUT_CHOICES %}
+                                        <button class="btn btn-sm{% if image.layout == value %} btn-primary{% endif %}" name="layout" value="{{ value }}" type="submit">{{ label }}</button>
+                                    {% endfor %}
+                                </form>
+                                <form method="post" action="{% url 'accounts:gallery_image_delete' image.pk %}" class="gitem-ctl">
+                                    {% csrf_token %}
+                                    <button class="btn btn-sm btn-danger" type="submit">{% translate "删除" %}</button>
+                                </form>
+                            </figcaption>
+                        </figure>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty">{% translate "图册还是空的，从上面选一张图开始。" %}</div>
+            {% endif %}
         </div>
     </div>
 </div>

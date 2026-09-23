@@ -5,110 +5,171 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 702platform\n"
 "Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-09-23 17:18+0800\n"
 "PO-Revision-Date: 2026-09-19 18:39\n"
 "Last-Translator: 702platform\n"
 "Language-Team: 702platform\n"
+"Language: en\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Language: en\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: accounts/apps.py:18 templates/accounts/profile.html:4
+#: accounts/apps.py:19 templates/accounts/profile.html:4
 #: templates/accounts/profile.html:16
 msgid "个人信息"
 msgstr "Profile"
 
-#: accounts/apps.py:19
+#: accounts/apps.py:20
 msgid "查看和维护个人资料"
 msgstr "View and update your profile"
 
-#: accounts/apps.py:25 templates/accounts/password_change.html:4
+#: accounts/apps.py:26 templates/accounts/password_change.html:4
 #: templates/accounts/password_change.html:20
 msgid "修改密码"
 msgstr "Change Password"
 
-#: accounts/apps.py:26
+#: accounts/apps.py:27
 msgid "更新登录密码"
 msgstr "Update your login password"
 
-#: accounts/forms.py:110
+#: accounts/forms.py:162 accounts/models.py:78 accounts/validators.py:35
+#: templates/accounts/profile.html:53
+msgid "头像"
+msgstr "Avatar"
+
+#: accounts/forms.py:166 accounts/forms.py:178 core/uploads.py:46
+msgid "请选择要上传的图片。"
+msgstr "Please choose an image to upload."
+
+#: accounts/forms.py:174 accounts/models.py:148
+msgid "图像"
+msgstr "Image"
+
+#: accounts/forms.py:190
 msgid "当前密码"
 msgstr "Current password"
 
-#: accounts/forms.py:115
+#: accounts/forms.py:195
 msgid "新密码"
 msgstr "New password"
 
-#: accounts/forms.py:120
+#: accounts/forms.py:200
 msgid "确认新密码"
 msgstr "Confirm new password"
 
-#: accounts/forms.py:132
+#: accounts/forms.py:212
 msgid "当前密码不正确。"
 msgstr "The current password is incorrect."
 
-#: accounts/forms.py:140
+#: accounts/forms.py:220
 msgid "两次输入的新密码不一致。"
 msgstr "The two new passwords do not match."
 
-#: accounts/models.py:69 templates/projects/group_detail.html:78
+#: accounts/models.py:76 templates/projects/group_detail.html:78
 #: templates/projects/group_manage.html:100
 msgid "姓名"
 msgstr "Name"
 
-#: accounts/models.py:71
+#: accounts/models.py:85
 msgid "学号"
 msgstr "Student ID"
 
-#: accounts/models.py:77 projects/forms.py:80
+#: accounts/models.py:91 projects/forms.py:88
 #: templates/projects/group_detail.html:64
 #: templates/projects/group_list.html:45
 msgid "学院"
 msgstr "College"
 
-#: accounts/models.py:78
+#: accounts/models.py:92
 msgid "专业"
 msgstr "Major"
 
-#: accounts/models.py:80
+#: accounts/models.py:94
 msgid "特长"
 msgstr "Specialties"
 
-#: accounts/models.py:83
+#: accounts/models.py:97
 msgid "可填写多项，用顿号或逗号分隔。"
 msgstr "You can list several, separated by commas."
 
-#: accounts/models.py:85
+#: accounts/models.py:99
 msgid "手机号"
 msgstr "Phone"
 
-#: accounts/models.py:86
+#: accounts/models.py:100
 msgid "其他联系方式"
 msgstr "Other contact"
 
-#: accounts/roles.py:13
+#: accounts/models.py:102
+msgid "个人简介"
+msgstr "Bio"
+
+#: accounts/models.py:105
+msgid "最多 1000 字。"
+msgstr "Up to 1000 characters."
+
+#: accounts/models.py:136
+msgid "普通"
+msgstr "Normal"
+
+#: accounts/models.py:137
+msgid "大图"
+msgstr "Large"
+
+#: accounts/models.py:138
+msgid "整行"
+msgstr "Full width"
+
+#: accounts/models.py:154
+msgid "排布"
+msgstr "Layout"
+
+#: accounts/roles.py:15 accounts/selectors.py:52
 msgid "管理员"
 msgstr "Administrator"
 
-#: accounts/roles.py:14 templates/projects/group_detail.html:35
+#: accounts/roles.py:16 accounts/selectors.py:62
+#: templates/projects/group_detail.html:35
 #: templates/projects/group_detail.html:86
 #: templates/projects/group_list.html:42
 #: templates/projects/group_manage.html:108
 msgid "项目组联系人"
 msgstr "Group contact"
 
-#: accounts/roles.py:15 templates/projects/group_manage.html:40
+#: accounts/roles.py:17 accounts/selectors.py:65
+#: templates/projects/group_manage.html:40
 msgid "项目组成员"
 msgstr "Group member"
 
-#: accounts/roles.py:16
+#: accounts/roles.py:18
 msgid "未加入项目组"
 msgstr "No project group"
 
-#: accounts/roles.py:17
+#: accounts/roles.py:19
 msgid "游客"
 msgstr "Guest"
+
+#: accounts/selectors.py:54 reviews/lifecycle.py:115
+msgid "评审人"
+msgstr "Reviewer"
+
+#: accounts/selectors.py:56 reviews/lifecycle.py:103
+msgid "初审人"
+msgstr "Preliminary reviewer"
+
+#: accounts/selectors.py:58 templates/accounts/member_home.html:45
+#: templates/projects/group_detail.html:152
+#: templates/projects/group_detail.html:272
+msgid "超级评审"
+msgstr "Super reviewer"
+
+#: accounts/services.py:136
+#, python-format
+msgid "图册合计不能超过 %(limit)s MB，当前已用 %(used)s MB。"
+msgstr ""
+"Your gallery cannot exceed %(limit)s MB in total; %(used)s MB is already in "
+"use."
 
 #: accounts/signals.py:74
 #, python-format
@@ -119,13 +180,63 @@ msgstr "You have %(tasks)s — open the Review page."
 msgid "、"
 msgstr ", "
 
-#: accounts/views.py:111
+#: accounts/validators.py:17 accounts/validators.py:26
+#, python-format
+msgid "不超过 %(limit)s MB。"
+msgstr "Up to %(limit)s MB."
+
+#: accounts/validators.py:44
+msgid "图册图像"
+msgstr "Gallery image"
+
+#: accounts/views.py:125
 msgid "密码修改成功。"
 msgstr "Password updated."
 
-#: accounts/views.py:208
+#: accounts/views.py:230
 msgid "个人信息已保存。"
 msgstr "Profile saved."
+
+#: accounts/views.py:300
+msgid "图像已加入图册。"
+msgstr "Image added to your gallery."
+
+#: accounts/views.py:311 accounts/views.py:332 projects/views.py:355
+#: projects/views.py:462
+msgid "未知操作"
+msgstr "Unknown action"
+
+#: accounts/views.py:316
+msgid "顺序已调整。"
+msgstr "Order updated."
+
+#: accounts/views.py:320
+msgid "已经是第一张了。"
+msgstr "That is already the first image."
+
+#: accounts/views.py:320
+msgid "已经是最后一张了。"
+msgstr "That is already the last image."
+
+#: accounts/views.py:337
+msgid "排布已更新。"
+msgstr "Layout updated."
+
+#: accounts/views.py:354
+msgid "图像已删除。"
+msgstr "Image removed."
+
+#: accounts/views.py:377
+msgid "头像已更新。"
+msgstr "Avatar updated."
+
+#: accounts/views.py:402
+msgid "头像已删除。"
+msgstr "Avatar removed."
+
+#: accounts/views.py:404
+msgid "当前没有头像。"
+msgstr "There is no avatar to delete."
 
 #: competitions/apps.py:17 templates/competitions/list.html:4
 #: templates/competitions/list.html:16
@@ -136,7 +247,7 @@ msgstr "Competitions"
 msgid "查看竞赛信息；项目组联系人可为项目组报名"
 msgstr "View competitions; a group's contact can register that group"
 
-#: competitions/forms.py:18 projects/apps.py:17
+#: competitions/forms.py:18 projects/apps.py:18
 #: templates/accounts/member_home.html:75 templates/competitions/list.html:51
 #: templates/projects/group_list.html:4 templates/projects/group_list.html:16
 #: templates/reviews/queue.html:230 templates/reviews/queue.html:267
@@ -159,21 +270,23 @@ msgstr "Team leader"
 
 #: competitions/forms.py:28
 msgid "从所选项目组成员中指定，可以是联系人本人。"
-msgstr "Chosen from the selected group's members; the contact may lead the team."
+msgstr ""
+"Chosen from the selected group's members; the contact may lead the team."
 
 #: competitions/forms.py:31 equipment/forms.py:20
 msgid "备注"
 msgstr "Note"
 
-#: competitions/forms.py:74 competitions/views.py:142
+#: competitions/forms.py:74 competitions/views.py:116
 msgid "该竞赛已关闭报名或已超过报名截止时间。"
-msgstr "This competition is closed for registration or its deadline has passed."
+msgstr ""
+"This competition is closed for registration or its deadline has passed."
 
 #: competitions/forms.py:76
 msgid "你无权为这个项目组登记报名。"
 msgstr "You cannot register this project group."
 
-#: competitions/forms.py:86 competitions/views.py:166 competitions/views.py:251
+#: competitions/forms.py:86 competitions/views.py:144 competitions/views.py:222
 msgid "该项目组已经登记过这场竞赛，不能重复报名。"
 msgstr "This project group is already registered for this competition."
 
@@ -189,21 +302,21 @@ msgstr "The team leader must belong to the selected project group."
 msgid "竞赛组长必须是参赛成员之一。"
 msgstr "The team leader must be one of the team members."
 
-#: competitions/views.py:193
+#: competitions/views.py:160
 msgid "竞赛报名登记成功。"
 msgstr "Registration submitted."
 
-#: competitions/views.py:224
+#: competitions/views.py:191
 msgid "该竞赛已关闭报名或已超过报名截止时间，无法修改。"
 msgstr ""
-"This competition is closed for registration or its deadline has passed; "
-"it can no longer be edited."
+"This competition is closed for registration or its deadline has passed; it "
+"can no longer be edited."
 
-#: competitions/views.py:263
+#: competitions/views.py:224
 msgid "报名信息已更新。"
 msgstr "Registration updated."
 
-#: competitions/views.py:296
+#: competitions/views.py:251
 msgid "已放弃该竞赛报名。"
 msgstr "Registration withdrawn."
 
@@ -214,6 +327,24 @@ msgstr "Audit log"
 #: core/apps.py:16
 msgid "查看平台关键操作记录"
 msgstr "Review the platform's key operations"
+
+#: core/uploads.py:52
+#, python-format
+msgid "%(label)s仅支持 %(allowed)s 格式。"
+msgstr "%(label)s supports only these formats: %(allowed)s."
+
+#: core/uploads.py:57
+#, python-format
+msgid "%(label)s不能超过 %(limit)s MB。"
+msgstr "%(label)s cannot exceed %(limit)s MB."
+
+#: core/uploads.py:67
+msgid "文件类型与图片不符，请确认选的是图片。"
+msgstr "That file is not an image."
+
+#: core/uploads.py:75
+msgid "上传文件不是有效的图片。"
+msgstr "The uploaded file is not a valid image."
 
 #: equipment/apps.py:18 templates/equipment/list.html:4
 #: templates/equipment/list.html:16
@@ -240,20 +371,20 @@ msgstr "Planned return date"
 msgid "计划归还日期不能早于今天。"
 msgstr "The planned return date cannot be earlier than today."
 
-#: equipment/views.py:73
+#: equipment/views.py:70
 msgid "该设备当前没有可借数量。"
 msgstr "No units of this equipment are available right now."
 
-#: equipment/views.py:88
+#: equipment/views.py:85
 #, python-format
 msgid "已登记借用：%(name)s。"
 msgstr "Loan recorded: %(name)s."
 
-#: equipment/views.py:140
+#: equipment/views.py:137
 msgid "该设备借用记录已经归还。"
 msgstr "This borrowing record has already been returned."
 
-#: equipment/views.py:149
+#: equipment/views.py:146
 #, python-format
 msgid "已登记归还：%(name)s。"
 msgstr "Return recorded: %(name)s."
@@ -287,52 +418,52 @@ msgstr "No internal notices yet."
 msgid "返回内部通知"
 msgstr "Back to internal notices"
 
-#: projects/apps.py:18
+#: projects/apps.py:19
 msgid "查看项目组、联系人和成员"
 msgstr "Browse project groups, contacts and members"
 
-#: projects/forms.py:22
+#: projects/forms.py:38
 msgid "申请理由"
 msgstr "Reason for applying"
 
-#: projects/forms.py:40
+#: projects/forms.py:56
 msgid "项目组名称"
 msgstr "Project group name"
 
-#: projects/forms.py:41
+#: projects/forms.py:57
 msgid "项目组描述"
 msgstr "Project group description"
 
-#: projects/forms.py:42
+#: projects/forms.py:58
 msgid "学院（选填）"
 msgstr "College (optional)"
 
-#: projects/forms.py:43
+#: projects/forms.py:59
 msgid "指导老师 1（选填）"
 msgstr "Advisor 1 (optional)"
 
-#: projects/forms.py:44
+#: projects/forms.py:60
 msgid "指导老师 2（选填）"
 msgstr "Advisor 2 (optional)"
 
-#: projects/forms.py:45
+#: projects/forms.py:61
 msgid "指导老师 3（选填）"
 msgstr "Advisor 3 (optional)"
 
-#: projects/forms.py:62 templates/projects/group_detail.html:102
+#: projects/forms.py:70 templates/projects/group_detail.html:102
 #: templates/projects/group_manage.html:133
 msgid "项目组介绍"
 msgstr "Group description"
 
-#: projects/forms.py:73
+#: projects/forms.py:81
 msgid "指导老师 1"
 msgstr "Advisor 1"
 
-#: projects/forms.py:74
+#: projects/forms.py:82
 msgid "指导老师 2"
 msgstr "Advisor 2"
 
-#: projects/forms.py:75
+#: projects/forms.py:83
 msgid "指导老师 3"
 msgstr "Advisor 3"
 
@@ -353,39 +484,39 @@ msgstr "New contact"
 msgid "只能从当前项目组成员中选择。"
 msgstr "Only current members of this group can be chosen."
 
-#: projects/forms.py:128 projects/services.py:290
+#: projects/forms.py:128 projects/services.py:326
 msgid "新联系人必须是该项目组成员。"
 msgstr "The new contact must be a member of this project group."
 
-#: projects/services.py:51 projects/services.py:145
-msgid "请先登录。"
-msgstr "Please sign in first."
-
-#: projects/services.py:53 projects/views.py:262
-msgid "你已经是该项目组成员。"
-msgstr "You are already a member of this project group."
-
-#: projects/services.py:66
-msgid "你已经提交过申请，请等待联系人审核。"
-msgstr "You have already applied; please wait for the contact to review it."
-
-#: projects/services.py:93 projects/services.py:114 projects/services.py:204
-#: projects/services.py:252
-msgid "该申请已被处理。"
-msgstr "This application has already been handled."
-
-#: projects/services.py:149 projects/services.py:319
+#: projects/services.py:49
 #, python-format
 msgid "指导老师最多 %(max)s 位。"
 msgstr "A group can have at most %(max)s advisors."
 
-#: projects/services.py:170
+#: projects/services.py:65 projects/services.py:159
+msgid "请先登录。"
+msgstr "Please sign in first."
+
+#: projects/services.py:67 projects/views.py:260
+msgid "你已经是该项目组成员。"
+msgstr "You are already a member of this project group."
+
+#: projects/services.py:80
+msgid "你已经提交过申请，请等待联系人审核。"
+msgstr "You have already applied; please wait for the contact to review it."
+
+#: projects/services.py:107 projects/services.py:128 projects/services.py:214
+#: projects/services.py:262
+msgid "该申请已被处理。"
+msgstr "This application has already been handled."
+
+#: projects/services.py:180
 msgid "你已经提交过创建项目组的申请，请等待管理员审核。"
 msgstr ""
 "You have already applied to create a project group; please wait for an "
 "administrator to review it."
 
-#: projects/services.py:270
+#: projects/services.py:306
 msgid "不能移除项目组联系人，请先转让联系人。"
 msgstr "The group contact cannot be removed; transfer the contact role first."
 
@@ -401,100 +532,91 @@ msgstr "The file is not a valid docx."
 msgid "文件不是有效的 doc。"
 msgstr "The file is not a valid doc."
 
-#: projects/validators.py:34
+#: projects/validators.py:23
 msgid "请选择项目书文件。"
 msgstr "Please choose a proposal file."
 
-#: projects/validators.py:38
+#: projects/validators.py:27
 msgid "项目书仅支持 doc、docx、pdf 格式。"
 msgstr "A proposal must be a doc, docx or pdf file."
 
-#: projects/validators.py:41
+#: projects/validators.py:30
 #, python-format
 msgid "项目书不能超过 %(limit)s MB。"
 msgstr "The proposal cannot exceed %(limit)s MB."
 
-#: projects/views.py:72
+#: projects/views.py:70
 #, python-format
 msgid ""
-"已提交第 %(round)s "
-"轮评审（%(type)s），等待初审人初审；初审通过后将随"
-"机分配 1 名评审人。"
+"已提交第 %(round)s 轮评审（%(type)s），等待初审人初审；初审通过后将随机分配 "
+"1 名评审人。"
 msgid_plural ""
-"已提交第 %(round)s "
-"轮评审（%(type)s），等待初审人初审；初审通过后将随"
-"机分配 %(count)s 名评审人。"
+"已提交第 %(round)s 轮评审（%(type)s），等待初审人初审；初审通过后将随机分配 "
+"%(count)s 名评审人。"
 msgstr[0] ""
 "Round %(round)s submitted for review (%(type)s). A preliminary reviewer "
 "looks at it first; once it passes, 1 reviewer is drawn at random."
 msgstr[1] ""
 "Round %(round)s submitted for review (%(type)s). A preliminary reviewer "
-"looks at it first; once it passes, %(count)s reviewers are drawn at "
-"random."
+"looks at it first; once it passes, %(count)s reviewers are drawn at random."
 
-#: projects/views.py:200
+#: projects/views.py:198
 msgid "项目书已上传/更新。"
 msgstr "Proposal uploaded/updated."
 
-#: projects/views.py:247
+#: projects/views.py:245
 msgid "该项目组尚未上传项目书。"
 msgstr "This project group has not uploaded a proposal yet."
 
-#: projects/views.py:279
+#: projects/views.py:277
 #, python-format
 msgid "已提交加入「%(name)s」的申请，请等待联系人审核。"
 msgstr ""
-"Application to join “%(name)s” submitted; please wait for the "
-"contact to review it."
+"Application to join “%(name)s” submitted; please wait for the contact to "
+"review it."
 
-#: projects/views.py:314
+#: projects/views.py:312
 msgid ""
-"已提交创建项目组的申请，等待管理员审核；任一管理"
-"员同意后项目组即刻建立，你成为项目组联系人。"
+"已提交创建项目组的申请，等待管理员审核；任一管理员同意后项目组即刻建立，你成"
+"为项目组联系人。"
 msgstr ""
-"Your request to create a project group has been submitted. An "
-"administrator will review it; the group is created as soon as one "
-"approves, and you become its contact."
+"Your request to create a project group has been submitted. An administrator "
+"will review it; the group is created as soon as one approves, and you become "
+"its contact."
 
-#: projects/views.py:346
+#: projects/views.py:344
 #, python-format
-msgid ""
-"已通过创建申请，项目组「%(name)s」已建立并出现在项"
-"目组列表中。"
+msgid "已通过创建申请，项目组「%(name)s」已建立并出现在项目组列表中。"
 msgstr ""
-"Creation approved: project group “%(name)s” has been created and "
-"now appears in the group list."
+"Creation approved: project group “%(name)s” has been created and now appears "
+"in the group list."
 
-#: projects/views.py:355
+#: projects/views.py:353
 #, python-format
 msgid "已拒绝创建「%(name)s」的申请。"
 msgstr "The application to create “%(name)s” was rejected."
 
-#: projects/views.py:357 projects/views.py:464
-msgid "未知操作"
-msgstr "Unknown action"
-
-#: projects/views.py:390
+#: projects/views.py:388
 msgid "学院与指导老师已更新。"
 msgstr "College and advisors updated."
 
-#: projects/views.py:401
+#: projects/views.py:399
 msgid "项目组介绍已更新。"
 msgstr "Group description updated."
 
-#: projects/views.py:412
+#: projects/views.py:410
 msgid "已转让项目组联系人。"
 msgstr "Group contact transferred."
 
-#: projects/views.py:455
+#: projects/views.py:453
 msgid "已通过该入组申请。"
 msgstr "The join application was approved."
 
-#: projects/views.py:462
+#: projects/views.py:460
 msgid "已拒绝该入组申请。"
 msgstr "The join application was rejected."
 
-#: projects/views.py:484
+#: projects/views.py:482
 #, python-format
 msgid "已将 %(name)s 移出项目组。"
 msgstr "%(name)s has been removed from the project group."
@@ -506,11 +628,34 @@ msgstr "Review"
 
 #: reviews/apps.py:20
 msgid ""
-"初审并审阅分配给你的项目书，给出初审或评审意见；"
-"管理员在此处理项目组创建申请"
+"初审并审阅分配给你的项目书，给出初审或评审意见；管理员在此处理项目组创建申请"
 msgstr ""
 "Run preliminary reviews and review the proposals assigned to you; "
 "administrators handle project-group creation requests here"
+
+#: reviews/draw.py:90
+#, python-format
+msgid "（另有 %(count)s 人请假）"
+msgstr " (%(count)s more on leave)"
+
+#: reviews/draw.py:92
+#, python-format
+msgid "没有可用的%(role)s"
+msgstr "%(role)s unavailable"
+
+#: reviews/draw.py:94
+#, python-format
+msgid "可用的%(role)s不足 %(count)s 人"
+msgstr "%(role)s shortage: %(count)s more needed"
+
+#: reviews/draw.py:96
+#, python-format
+msgid "当前%(shortfall)s%(leave)s，%(hint)s"
+msgstr "%(shortfall)s%(leave)s — %(hint)s"
+
+#: reviews/draw.py:115 reviews/services.py:120
+msgid "无法提交审核。"
+msgstr "cannot submit for review."
 
 #: reviews/forms.py:28 templates/projects/group_detail.html:43
 #: templates/projects/group_detail.html:240
@@ -519,12 +664,12 @@ msgstr "Review type"
 
 #: reviews/forms.py:31
 msgid ""
-"决定初审通过后需要几名评审人：竞赛类 3 "
-"人；大创中期、结题 2 人；大创立项 1 人。"
+"决定初审通过后需要几名评审人：竞赛类 3 人；大创中期、结题 2 人；大创立项 1 "
+"人。"
 msgstr ""
-"Sets how many reviewers are needed once preliminary review passes: 3 "
-"for competitions, 2 for innovation-program midterm and final, 1 for "
-"innovation-program start."
+"Sets how many reviewers are needed once preliminary review passes: 3 for "
+"competitions, 2 for innovation-program midterm and final, 1 for innovation-"
+"program start."
 
 #: reviews/forms.py:36
 msgid "提交说明"
@@ -556,20 +701,18 @@ msgstr "Preliminary comment"
 
 #: reviews/forms.py:81
 msgid ""
-"通过后按送审类型随机分配评审人，进入正式评审；需"
-"修改则本轮直接打回项目组，不分配评审人。"
+"通过后按送审类型随机分配评审人，进入正式评审；需修改则本轮直接打回项目组，不"
+"分配评审人。"
 msgstr ""
-"If approved, reviewers are drawn at random according to the submission "
-"type and the round moves to review; if it needs revision, the round "
-"goes straight back to the group with no reviewers assigned."
+"If approved, reviewers are drawn at random according to the submission type "
+"and the round moves to review; if it needs revision, the round goes straight "
+"back to the group with no reviewers assigned."
 
 #: reviews/forms.py:84
-msgid ""
-"请说明通过或需要修改的理由；打回时项目组会据此修"
-"改项目书。"
+msgid "请说明通过或需要修改的理由；打回时项目组会据此修改项目书。"
 msgstr ""
-"Explain why it should be approved or needs revision; if you send it "
-"back, the group will revise the proposal accordingly."
+"Explain why it should be approved or needs revision; if you send it back, "
+"the group will revise the proposal accordingly."
 
 #: reviews/forms.py:97 templates/projects/group_detail.html:209
 #: templates/projects/group_detail.html:219
@@ -578,14 +721,12 @@ msgstr "Annotated proposal"
 
 #: reviews/forms.py:101
 msgid ""
-"选填；支持 "
-"doc、docx、pdf。可在项目书上直接批注后上传，也可只"
-"填文字意见。请勿在文件属性中保留可识别个人身份的"
-"信息。"
+"选填；支持 doc、docx、pdf。可在项目书上直接批注后上传，也可只填文字意见。请勿"
+"在文件属性中保留可识别个人身份的信息。"
 msgstr ""
 "Optional; accepts doc, docx and pdf. Upload a proposal with your "
-"annotations, or just give a written comment. Please do not leave "
-"identifying information in the file's properties."
+"annotations, or just give a written comment. Please do not leave identifying "
+"information in the file's properties."
 
 #: reviews/forms.py:122
 msgid "请假开始"
@@ -597,18 +738,17 @@ msgstr "Leave ends"
 
 #: reviews/forms.py:131
 msgid ""
-"请假期间不会被分配新的初审或评审请求，到点自动恢"
-"复；已有的任务不受影响。"
+"请假期间不会被分配新的初审或评审请求，到点自动恢复；已有的任务不受影响。"
 msgstr ""
-"While you are on leave no new preliminary or review requests are "
-"assigned to you; it resumes automatically at the end, and tasks you "
-"already hold are unaffected."
+"While you are on leave no new preliminary or review requests are assigned to "
+"you; it resumes automatically at the end, and tasks you already hold are "
+"unaffected."
 
 #: reviews/forms.py:141
 msgid "例如：考试周、外出比赛"
 msgstr "e.g. exam week, a competition away"
 
-#: reviews/forms.py:150 reviews/services.py:745
+#: reviews/forms.py:150 reviews/services.py:528
 msgid "请假结束时间必须晚于开始时间。"
 msgstr "Leave must end after it starts."
 
@@ -668,10 +808,6 @@ msgstr "Pending review"
 msgid "通过"
 msgstr "Approved"
 
-#: reviews/lifecycle.py:103
-msgid "初审人"
-msgstr "Preliminary reviewer"
-
 #: reviews/lifecycle.py:108 reviews/lifecycle.py:166 reviews/lifecycle.py:171
 msgid "该轮送审已不在初审环节。"
 msgstr "This submission is no longer in preliminary review."
@@ -683,16 +819,12 @@ msgstr "Only a pending preliminary task can be reassigned."
 #: reviews/lifecycle.py:110
 msgid "该轮送审已不在初审环节，不能再更换初审人。"
 msgstr ""
-"This submission is no longer in preliminary review and its reviewer "
-"cannot be changed."
+"This submission is no longer in preliminary review and its reviewer cannot "
+"be changed."
 
 #: reviews/lifecycle.py:111
 msgid "该初审人已在本轮任务中。"
 msgstr "That preliminary reviewer already holds a task in this round."
-
-#: reviews/lifecycle.py:115
-msgid "评审人"
-msgstr "Reviewer"
 
 #: reviews/lifecycle.py:120 reviews/lifecycle.py:177 reviews/lifecycle.py:183
 msgid "该轮送审已不在评审环节。"
@@ -710,7 +842,7 @@ msgstr "This round already has a decision and its reviewer cannot be changed."
 msgid "该评审人已在本轮评审任务中。"
 msgstr "That reviewer already holds a task in this round."
 
-#: reviews/lifecycle.py:189 reviews/lifecycle.py:195 reviews/services.py:472
+#: reviews/lifecycle.py:189 reviews/lifecycle.py:195 reviews/selectors.py:115
 msgid "本轮已经出过结论"
 msgstr "This round already has a decision"
 
@@ -738,227 +870,193 @@ msgstr "Innovation program — midterm"
 msgid "大创结题"
 msgstr "Innovation program — final"
 
-#: reviews/models.py:469
+#: reviews/models.py:458
 msgid "事由"
 msgstr "Reason"
 
-#: reviews/services.py:131
-#, python-format
-msgid "（另有 %(count)s 人请假）"
-msgstr " (%(count)s more on leave)"
-
-#: reviews/services.py:133
-#, python-format
-msgid "没有可用的%(role)s"
-msgstr "%(role)s unavailable"
-
-#: reviews/services.py:135
-#, python-format
-msgid "可用的%(role)s不足 %(count)s 人"
-msgstr "%(role)s shortage: %(count)s more needed"
-
-#: reviews/services.py:137
-#, python-format
-msgid "当前%(shortfall)s%(leave)s，%(hint)s"
-msgstr "%(shortfall)s%(leave)s — %(hint)s"
-
-#: reviews/services.py:157 reviews/services.py:222
-msgid "无法提交审核。"
-msgstr "cannot submit for review."
-
-#: reviews/services.py:186
-msgid "请选择评审类型。"
-msgstr "Please choose a review type."
-
-#: reviews/services.py:188
-msgid "请先上传项目书，再提交审核。"
-msgstr "Upload the proposal before submitting it for review."
-
-#: reviews/services.py:202
-#, python-format
-msgid ""
-"第 %(round)s "
-"轮评审尚未结束，请等本轮出结论后再提交下一轮。"
-msgstr ""
-"Round %(round)s is still under review; wait for its decision before "
-"submitting another round."
-
-#: reviews/services.py:351
-#, python-format
-msgid "这不是分配给你的%(stage)s任务。"
-msgstr "This %(stage)s task is not assigned to you."
-
-#: reviews/services.py:353
-#, python-format
-msgid "请选择%(stage)s决定。"
-msgstr "Please choose your %(stage)s decision."
-
-#: reviews/services.py:375
-#, python-format
-msgid "该%(stage)s任务已经处理过了，无法再次提交。"
-msgstr ""
-"This %(stage)s task has already been handled and cannot be submitted "
-"again."
-
-#: reviews/services.py:445
-msgid "无法通过初审，请稍后重试或联系管理员补充评审人。"
-msgstr ""
-"cannot pass preliminary review; retry later or ask an administrator to "
-"add reviewers."
-
-#: reviews/services.py:470
-msgid "没有超级评审资格"
-msgstr "Not a super reviewer"
-
-#: reviews/services.py:474
-msgid "你是本轮的提交人"
-msgstr "You submitted this round"
-
-#: reviews/services.py:476
-msgid "你是本项目组成员"
-msgstr "You are a member of this group"
-
-#: reviews/services.py:481
-#, python-format
-msgid "你在本轮已有%(stage)s任务，请直接提交那一条"
-msgstr "You already hold a %(stage)s task this round — submit that one"
-
-#: reviews/services.py:482
-msgid "你是本轮的初审人，已经就该轮给出初审意见"
-msgstr ""
-"You are this round's preliminary reviewer and have already given your "
-"decision"
-
-#: reviews/services.py:484
-msgid "你在本轮已有评审任务，请直接提交那一条"
-msgstr "You already hold a review task this round — submit that one"
-
-#: reviews/services.py:511
-msgid "请选择评审决定。"
-msgstr "Please choose a review decision."
-
-#: reviews/services.py:517
-#, python-format
-msgid "无法行使超级评审权：%(reason)s。"
-msgstr "The super reviewer power cannot be used: %(reason)s."
-
-#: reviews/services.py:601
-#, python-format
-msgid "%(role)s没有变化。"
-msgstr "%(role)s is unchanged."
-
-#: reviews/services.py:605
-#, python-format
-msgid "提交人不能%(stage)s自己的项目书。"
-msgstr "The submitter cannot take the %(stage)s task for their own proposal."
-
-#: reviews/services.py:607
-#, python-format
-msgid "该项目组成员不能%(stage)s本组的项目书。"
-msgstr ""
-"A member of this group cannot take the %(stage)s task for their own "
-"group's proposal."
-
-#: reviews/services.py:623
-#, python-format
-msgid ""
-"该账号当前不能接手本轮的%(stage)s（可能没有资格、正"
-"在请假，或已在本轮持有任务）。"
-msgstr ""
-"This account cannot take the %(stage)s task for this round right now "
-"(they may lack the role, be on leave, or already hold a task this "
-"round)."
-
-#: reviews/services.py:679
+#: reviews/selectors.py:43
 #, python-format
 msgid "1 份项目书待初审"
 msgid_plural "%(count)s 份项目书待初审"
 msgstr[0] "1 proposal awaiting preliminary review"
 msgstr[1] "%(count)s proposals awaiting preliminary review"
 
-#: reviews/services.py:684
+#: reviews/selectors.py:48
 #, python-format
 msgid "1 份项目书待评审"
 msgid_plural "%(count)s 份项目书待评审"
 msgstr[0] "1 proposal awaiting review"
 msgstr[1] "%(count)s proposals awaiting review"
 
-#: reviews/services.py:693
+#: reviews/selectors.py:57
 #, python-format
-msgid ""
-"份项目书待你处理（初审 %(preliminary)s · 评审 "
-"%(review)s）"
+msgid "份项目书待你处理（初审 %(preliminary)s · 评审 %(review)s）"
 msgstr "proposals to handle (preliminary %(preliminary)s · review %(review)s)"
 
-#: reviews/services.py:700
+#: reviews/selectors.py:64
 msgid "份项目书待你初审"
 msgstr "awaiting your preliminary review"
 
-#: reviews/services.py:702
+#: reviews/selectors.py:66
 msgid "份项目书待你评审"
 msgstr "awaiting your review"
 
-#: reviews/services.py:743
+#: reviews/selectors.py:113
+msgid "没有超级评审资格"
+msgstr "Not a super reviewer"
+
+#: reviews/selectors.py:117
+msgid "你是本轮的提交人"
+msgstr "You submitted this round"
+
+#: reviews/selectors.py:119
+msgid "你是本项目组成员"
+msgstr "You are a member of this group"
+
+#: reviews/selectors.py:124
+#, python-format
+msgid "你在本轮已有%(stage)s任务，请直接提交那一条"
+msgstr "You already hold a %(stage)s task this round — submit that one"
+
+#: reviews/selectors.py:125
+msgid "你是本轮的初审人，已经就该轮给出初审意见"
+msgstr ""
+"You are this round's preliminary reviewer and have already given your "
+"decision"
+
+#: reviews/selectors.py:127
+msgid "你在本轮已有评审任务，请直接提交那一条"
+msgstr "You already hold a review task this round — submit that one"
+
+#: reviews/services.py:84
+msgid "请选择评审类型。"
+msgstr "Please choose a review type."
+
+#: reviews/services.py:86
+msgid "请先上传项目书，再提交审核。"
+msgstr "Upload the proposal before submitting it for review."
+
+#: reviews/services.py:100
+#, python-format
+msgid "第 %(round)s 轮评审尚未结束，请等本轮出结论后再提交下一轮。"
+msgstr ""
+"Round %(round)s is still under review; wait for its decision before "
+"submitting another round."
+
+#: reviews/services.py:249
+#, python-format
+msgid "这不是分配给你的%(stage)s任务。"
+msgstr "This %(stage)s task is not assigned to you."
+
+#: reviews/services.py:251
+#, python-format
+msgid "请选择%(stage)s决定。"
+msgstr "Please choose your %(stage)s decision."
+
+#: reviews/services.py:273
+#, python-format
+msgid "该%(stage)s任务已经处理过了，无法再次提交。"
+msgstr ""
+"This %(stage)s task has already been handled and cannot be submitted again."
+
+#: reviews/services.py:343
+msgid "无法通过初审，请稍后重试或联系管理员补充评审人。"
+msgstr ""
+"cannot pass preliminary review; retry later or ask an administrator to add "
+"reviewers."
+
+#: reviews/services.py:372
+msgid "请选择评审决定。"
+msgstr "Please choose a review decision."
+
+#: reviews/services.py:378
+#, python-format
+msgid "无法行使超级评审权：%(reason)s。"
+msgstr "The super reviewer power cannot be used: %(reason)s."
+
+#: reviews/services.py:462
+#, python-format
+msgid "%(role)s没有变化。"
+msgstr "%(role)s is unchanged."
+
+#: reviews/services.py:466
+#, python-format
+msgid "提交人不能%(stage)s自己的项目书。"
+msgstr "The submitter cannot take the %(stage)s task for their own proposal."
+
+#: reviews/services.py:468
+#, python-format
+msgid "该项目组成员不能%(stage)s本组的项目书。"
+msgstr ""
+"A member of this group cannot take the %(stage)s task for their own group's "
+"proposal."
+
+#: reviews/services.py:484
+#, python-format
+msgid ""
+"该账号当前不能接手本轮的%(stage)s（可能没有资格、正在请假，或已在本轮持有任"
+"务）。"
+msgstr ""
+"This account cannot take the %(stage)s task for this round right now (they "
+"may lack the role, be on leave, or already hold a task this round)."
+
+#: reviews/services.py:526
 msgid "该账号没有评审或初审资格，无需请假。"
 msgstr ""
-"This account has no reviewer or preliminary reviewer role, so leave is "
-"not needed."
+"This account has no reviewer or preliminary reviewer role, so leave is not "
+"needed."
 
-#: reviews/services.py:747
+#: reviews/services.py:530
 msgid "请假结束时间必须晚于当前时间。"
 msgstr "Leave must end in the future."
 
-#: reviews/services.py:804
+#: reviews/services.py:587
 msgid "当前没有可取消的请假。"
 msgstr "There is no leave to cancel."
 
-#: reviews/views.py:99
+#: reviews/views.py:88
 #, python-format
 msgid "批注版项目书_R%(round)s%(ext)s"
 msgstr "Annotated proposal_R%(round)s%(ext)s"
 
-#: reviews/views.py:146
+#: reviews/views.py:135
 #, python-format
 msgid ""
-"超级评审已敲定第 %(round)s "
-"轮：%(status)s，等待中的任务（含初审）已释放。"
+"超级评审已敲定第 %(round)s 轮：%(status)s，等待中的任务（含初审）已释放。"
 msgstr ""
 "The super reviewer settled round %(round)s: %(status)s. Waiting tasks "
 "(including preliminary) have been released."
 
-#: reviews/views.py:162
+#: reviews/views.py:151
 #, python-format
 msgid "初审已通过，已随机分配 1 名评审人。"
 msgid_plural "初审已通过，已随机分配 %(count)s 名评审人。"
 msgstr[0] "Preliminary review passed; 1 reviewer has been drawn at random."
 msgstr[1] ""
-"Preliminary review passed; %(count)s reviewers have been drawn at "
-"random."
+"Preliminary review passed; %(count)s reviewers have been drawn at random."
 
-#: reviews/views.py:166
+#: reviews/views.py:155
 msgid "初审已打回，项目组修改项目书后可重新提交。"
 msgstr ""
 "Sent back at preliminary review; the group can revise the proposal and "
 "resubmit."
 
-#: reviews/views.py:167
+#: reviews/views.py:156
 msgid "评审已提交，感谢你的评审意见。"
 msgstr "Review submitted — thank you."
 
-#: reviews/views.py:236
+#: reviews/views.py:225
 #, python-format
-msgid ""
-"已登记评审请假：%(starts)s 至 "
-"%(ends)s，期间不再接收新的评审请求。"
+msgid "已登记评审请假：%(starts)s 至 %(ends)s，期间不再接收新的评审请求。"
 msgstr ""
-"Review leave recorded: %(starts)s to %(ends)s. No new review requests "
-"will be sent during it."
+"Review leave recorded: %(starts)s to %(ends)s. No new review requests will "
+"be sent during it."
 
-#: reviews/views.py:263
+#: reviews/views.py:252
 msgid "已取消请假，即刻恢复接收评审请求。"
 msgstr "Leave cancelled; you will receive review requests again."
 
-#: reviews/views.py:276
+#: reviews/views.py:265
 msgid "该评审任务没有批注版项目书。"
 msgstr "This review task has no annotated proposal."
 
@@ -989,7 +1087,7 @@ msgstr "Competition Club Platform"
 msgid "你好，%(name)s。"
 msgstr "Hello, %(name)s."
 
-#: templates/accounts/member_home.html:20
+#: templates/accounts/member_home.html:20 templates/accounts/profile.html:89
 msgid "当前身份"
 msgstr "Your role"
 
@@ -1030,12 +1128,6 @@ msgstr "On leave"
 #, python-format
 msgid "%(ends)s 恢复"
 msgstr "Back %(ends)s"
-
-#: templates/accounts/member_home.html:45
-#: templates/projects/group_detail.html:152
-#: templates/projects/group_detail.html:272
-msgid "超级评审"
-msgstr "Super reviewer"
 
 #: templates/accounts/member_home.html:55
 msgid "点击前往处理"
@@ -1114,12 +1206,12 @@ msgstr "Change either time below to adjust when you resume reviewing."
 
 #: templates/accounts/member_home.html:130
 msgid ""
-"请假期间不会被分配新的初审或评审请求，到点自动恢"
-"复；已经分配给你的任务不受影响。"
+"请假期间不会被分配新的初审或评审请求，到点自动恢复；已经分配给你的任务不受影"
+"响。"
 msgstr ""
-"While you are on leave no new preliminary or review requests are "
-"assigned to you; it resumes automatically at the end, and tasks already "
-"assigned to you are unaffected."
+"While you are on leave no new preliminary or review requests are assigned to "
+"you; it resumes automatically at the end, and tasks already assigned to you "
+"are unaffected."
 
 #: templates/accounts/member_home.html:151
 msgid "保存请假"
@@ -1138,12 +1230,10 @@ msgid "请先修改初始密码"
 msgstr "Change your initial password first"
 
 #: templates/accounts/password_change.html:18
-msgid ""
-"这是管理员发放或重置的初始密码；修改成功后才能继"
-"续使用成员功能。"
+msgid "这是管理员发放或重置的初始密码；修改成功后才能继续使用成员功能。"
 msgstr ""
-"This is the initial password issued or reset by an administrator. "
-"Change it before using member features."
+"This is the initial password issued or reset by an administrator. Change it "
+"before using member features."
 
 #: templates/accounts/password_change.html:21
 msgid "修改后当前登录状态保留，其他设备需重新登录。"
@@ -1157,13 +1247,73 @@ msgstr "Save new password"
 msgid "维护姓名、学号、院系与联系方式。"
 msgstr "Keep your name, student ID, college and contact details up to date."
 
-#: templates/accounts/profile.html:36
+#: templates/accounts/profile.html:43
 msgid "保存信息"
 msgstr "Save profile"
 
-#: templates/accounts/profile.html:37
+#: templates/accounts/profile.html:44
 msgid "返回成员中心"
 msgstr "Back to member center"
+
+#: templates/accounts/profile.html:58
+msgid "当前头像"
+msgstr "Current avatar"
+
+#: templates/accounts/profile.html:72
+msgid "更换头像"
+msgstr "Change avatar"
+
+#: templates/accounts/profile.html:72
+msgid "上传头像"
+msgstr "Upload avatar"
+
+#: templates/accounts/profile.html:80
+msgid "删除头像"
+msgstr "Delete avatar"
+
+#: templates/accounts/profile.html:104
+msgid "暂无其他身份。"
+msgstr "No other roles."
+
+#: templates/accounts/profile.html:113
+msgid "个人图册"
+msgstr "Personal gallery"
+
+#: templates/accounts/profile.html:115
+#, python-format
+msgid "%(counter)s 张 · %(used)s / %(limit)s MB"
+msgid_plural "%(counter)s 张 · %(used)s / %(limit)s MB"
+msgstr[0] "%(counter)s image · %(used)s / %(limit)s MB"
+msgstr[1] "%(counter)s images · %(used)s / %(limit)s MB"
+
+#: templates/accounts/profile.html:123
+msgid "加入图册"
+msgstr "Add to gallery"
+
+#: templates/accounts/profile.html:126
+#, python-format
+msgid "每张不超过 %(per)s MB，图册合计不超过 %(total)s MB。"
+msgstr "Up to %(per)s MB each, %(total)s MB in total."
+
+#: templates/accounts/profile.html:127
+msgid "上传后可逐张调整顺序与排布。"
+msgstr "Once uploaded, you can set each image's order and layout."
+
+#: templates/accounts/profile.html:142
+msgid "上移"
+msgstr "Move up"
+
+#: templates/accounts/profile.html:143
+msgid "下移"
+msgstr "Move down"
+
+#: templates/accounts/profile.html:153
+msgid "删除"
+msgstr "Delete"
+
+#: templates/accounts/profile.html:160
+msgid "图册还是空的，从上面选一张图开始。"
+msgstr "Your gallery is empty — start by choosing an image above."
 
 #: templates/base.html:16
 msgid "竞赛社团平台"
@@ -1223,12 +1373,9 @@ msgid "账号由管理员统一发放，不开放公开注册"
 msgstr "Accounts are issued by administrators; there is no public sign-up"
 
 #: templates/competitions/list.html:17
-msgid ""
-"所有成员均可查看；仅项目组联系人可为自己的项目组"
-"报名。"
+msgid "所有成员均可查看；仅项目组联系人可为自己的项目组报名。"
 msgstr ""
-"Any member can view these; only a group's contact can register that "
-"group."
+"Any member can view these; only a group's contact can register that group."
 
 #: templates/competitions/list.html:27
 msgid "报名开放中"
@@ -1351,9 +1498,7 @@ msgid "仅限自己的项目组"
 msgstr "Only groups you manage"
 
 #: templates/competitions/register.html:77
-msgid ""
-"切换项目组后，参赛成员与竞赛组长候选会自动过滤为"
-"该组成员。"
+msgid "切换项目组后，参赛成员与竞赛组长候选会自动过滤为该组成员。"
 msgstr ""
 "After switching project groups, the member and team-leader choices are "
 "narrowed to that group."
@@ -1366,8 +1511,8 @@ msgstr "Updated %(updated)s"
 #: templates/content/about.html:28
 msgid "社团简介尚未发布，请等待管理员在后台添加。"
 msgstr ""
-"The club introduction has not been published yet; an administrator will "
-"add it."
+"The club introduction has not been published yet; an administrator will add "
+"it."
 
 #: templates/content/awards.html:17
 #, python-format
@@ -1500,9 +1645,7 @@ msgid "暂无借用记录。"
 msgstr "No borrowing records yet."
 
 #: templates/equipment/list.html:17
-msgid ""
-"项目组成员可登记借用；库存以登记时的可用数量为准"
-"。"
+msgid "项目组成员可登记借用；库存以登记时的可用数量为准。"
 msgstr ""
 "Project group members can borrow; stock is checked when the record is "
 "submitted."
@@ -1524,12 +1667,10 @@ msgid "公开门户"
 msgstr "Public portal"
 
 #: templates/home.html:13
-msgid ""
-"项目组立项与送审、竞赛报名、设备借用与通知发布，"
-"都在这里完成。"
+msgid "项目组立项与送审、竞赛报名、设备借用与通知发布，都在这里完成。"
 msgstr ""
-"Project group creation and review, competition registration, equipment "
-"loans and notices — all in one place."
+"Project group creation and review, competition registration, equipment loans "
+"and notices — all in one place."
 
 #: templates/home.html:19
 msgid "社团影像"
@@ -1564,9 +1705,7 @@ msgid "成员入口"
 msgstr "Member access"
 
 #: templates/home.html:84
-msgid ""
-"账号由管理员统一发放，不开放公开注册；首次登录需"
-"先修改初始密码。"
+msgid "账号由管理员统一发放，不开放公开注册；首次登录需先修改初始密码。"
 msgstr ""
 "Accounts are issued by administrators; there is no public sign-up. The "
 "initial password must be changed at first sign-in."
@@ -1611,9 +1750,7 @@ msgstr "Apply to join “%(name)s”"
 
 #: templates/projects/group_apply.html:17
 #, python-format
-msgid ""
-"项目组联系人 %(contact)s · "
-"审核通过后即成为项目组成员。"
+msgid "项目组联系人 %(contact)s · 审核通过后即成为项目组成员。"
 msgstr "Contact %(contact)s · you become a member once approved."
 
 #: templates/projects/group_apply.html:34
@@ -1634,41 +1771,35 @@ msgstr "Apply to create a project group"
 
 #: templates/projects/group_create_request.html:17
 msgid ""
-"名称与描述必填，学院与指导老师可稍后补充；申请人"
-"为项目组联系人，任一管理员同意后项目组即刻建立。"
+"名称与描述必填，学院与指导老师可稍后补充；申请人为项目组联系人，任一管理员同"
+"意后项目组即刻建立。"
 msgstr ""
-"Name and description are required; college and advisors can be added "
-"later. The applicant becomes the group's contact, and the group is "
-"created as soon as an administrator approves."
+"Name and description are required; college and advisors can be added later. "
+"The applicant becomes the group's contact, and the group is created as soon "
+"as an administrator approves."
 
 #: templates/projects/group_create_request.html:27
 #, python-format
 msgid ""
-"你在 %(submitted)s "
-"提交的「%(name)s」创建申请仍在等待管理员审核。 "
-"再次提交将更新这条申请的内容，不会产生第二条申请"
-"。"
+"你在 %(submitted)s 提交的「%(name)s」创建申请仍在等待管理员审核。 再次提交将"
+"更新这条申请的内容，不会产生第二条申请。"
 msgstr ""
-"Your request to create “%(name)s”, submitted on %(submitted)s, is "
-"still waiting for an administrator. Submitting again updates that "
-"request instead of creating a second one."
+"Your request to create “%(name)s”, submitted on %(submitted)s, is still "
+"waiting for an administrator. Submitting again updates that request instead "
+"of creating a second one."
 
 #: templates/projects/group_create_request.html:48
-msgid ""
-"介绍项目组的研究方向、目标或现有成员，供管理员审"
-"核时参考。"
+msgid "介绍项目组的研究方向、目标或现有成员，供管理员审核时参考。"
 msgstr ""
 "Describe the group's topic, goals or current members to help the "
 "administrator reviewing it."
 
 #: templates/projects/group_create_request.html:71
 msgid ""
-"指导老师最多 3 "
-"位，留空表示没有这一位；审核通过后也可以在项目组"
-"管理页补充。"
+"指导老师最多 3 位，留空表示没有这一位；审核通过后也可以在项目组管理页补充。"
 msgstr ""
-"At most 3 advisors; leave a slot blank to omit it. They can also be "
-"added later on the group's management page."
+"At most 3 advisors; leave a slot blank to omit it. They can also be added "
+"later on the group's management page."
 
 #: templates/projects/group_detail.html:18
 #: templates/projects/group_manage.html:20
@@ -1734,11 +1865,13 @@ msgstr "Review history"
 msgid "需 1 名评审人 · 已审结 %(done)s · 提交人 %(by)s"
 msgid_plural "需 %(counter)s 名评审人 · 已审结 %(done)s · 提交人 %(by)s"
 msgstr[0] "1 reviewer needed · %(done)s decided · submitted by %(by)s"
-msgstr[1] "%(counter)s reviewers needed · %(done)s decided · submitted by %(by)s"
+msgstr[1] ""
+"%(counter)s reviewers needed · %(done)s decided · submitted by %(by)s"
 
 #: templates/projects/group_detail.html:139
 msgid "本轮已由超级评审敲定，该初审任务随之结束"
-msgstr "A super reviewer settled this round, so this preliminary task is closed"
+msgstr ""
+"A super reviewer settled this round, so this preliminary task is closed"
 
 #: templates/projects/group_detail.html:154
 #, python-format
@@ -1786,9 +1919,7 @@ msgid "下载"
 msgstr "Download"
 
 #: templates/projects/group_detail.html:228
-msgid ""
-"评审通过后，评审人上传的批注版项目书会归档到这里"
-"。"
+msgid "评审通过后，评审人上传的批注版项目书会归档到这里。"
 msgstr ""
 "Once a round is approved, annotated proposals uploaded by reviewers are "
 "archived here."
@@ -1825,36 +1956,26 @@ msgid "请根据评审意见修改项目书后重新提交。"
 msgstr "Revise the proposal according to the review comments and resubmit."
 
 #: templates/projects/group_detail.html:255
-msgid ""
-"本轮由初审打回（没有进入评审），请根据初审意见修"
-"改项目书后重新提交。"
+msgid "本轮由初审打回（没有进入评审），请根据初审意见修改项目书后重新提交。"
 msgstr ""
 "This round was sent back at preliminary review (it never reached the "
 "reviewers); revise the proposal accordingly and resubmit."
 
 #: templates/projects/group_detail.html:258
 #, python-format
-msgid ""
-"等待初审人给出意见；初审通过后会随机分配 1 "
-"名评审人。"
-msgid_plural ""
-"等待初审人给出意见；初审通过后会随机分配 "
-"%(counter)s 名评审人。"
+msgid "等待初审人给出意见；初审通过后会随机分配 1 名评审人。"
+msgid_plural "等待初审人给出意见；初审通过后会随机分配 %(counter)s 名评审人。"
 msgstr[0] ""
-"Waiting for the preliminary reviewer's decision; once it passes, 1 "
-"reviewer is drawn at random."
+"Waiting for the preliminary reviewer's decision; once it passes, 1 reviewer "
+"is drawn at random."
 msgstr[1] ""
-"Waiting for the preliminary reviewer's decision; once it passes, "
-"%(counter)s reviewers are drawn at random."
+"Waiting for the preliminary reviewer's decision; once it passes, %(counter)s "
+"reviewers are drawn at random."
 
 #: templates/projects/group_detail.html:260
 #, python-format
-msgid ""
-"等待评审人提交意见；1 "
-"名评审人全部通过后方案即为通过。"
-msgid_plural ""
-"等待评审人提交意见；%(counter)s "
-"名评审人全部通过后方案即为通过。"
+msgid "等待评审人提交意见；1 名评审人全部通过后方案即为通过。"
+msgid_plural "等待评审人提交意见；%(counter)s 名评审人全部通过后方案即为通过。"
 msgstr[0] ""
 "Waiting for the reviewer to respond; the proposal is approved once that "
 "reviewer approves."
@@ -1873,23 +1994,19 @@ msgstr "One vote decides"
 #: templates/projects/group_detail.html:277
 #, python-format
 msgid ""
-"你的决定会立即敲定第 %(round)s 轮，本轮尚未提交的 1 "
-"个任务（初审／评审）会随即被释放。请先下载项目书"
-"阅读，需要时附上批注版。"
+"你的决定会立即敲定第 %(round)s 轮，本轮尚未提交的 1 个任务（初审／评审）会随"
+"即被释放。请先下载项目书阅读，需要时附上批注版。"
 msgid_plural ""
-"你的决定会立即敲定第 %(round)s 轮，本轮尚未提交的 "
-"%(counter)s "
-"个任务（初审／评审）会随即被释放。请先下载项目书"
-"阅读，需要时附上批注版。"
+"你的决定会立即敲定第 %(round)s 轮，本轮尚未提交的 %(counter)s 个任务（初审／"
+"评审）会随即被释放。请先下载项目书阅读，需要时附上批注版。"
 msgstr[0] ""
-"Your decision settles round %(round)s immediately, and the task still "
-"open this round (preliminary or review) is released right away. "
-"Download the proposal first, and attach an annotated copy if you wish."
+"Your decision settles round %(round)s immediately, and the task still open "
+"this round (preliminary or review) is released right away. Download the "
+"proposal first, and attach an annotated copy if you wish."
 msgstr[1] ""
-"Your decision settles round %(round)s immediately, and the %(counter)s "
-"tasks still open this round (preliminary and review) are released right "
-"away. Download the proposal first, and attach an annotated copy if you "
-"wish."
+"Your decision settles round %(round)s immediately, and the %(counter)s tasks "
+"still open this round (preliminary and review) are released right away. "
+"Download the proposal first, and attach an annotated copy if you wish."
 
 #: templates/projects/group_detail.html:306
 msgid "提交超级评审"
@@ -1902,16 +2019,14 @@ msgstr "My preliminary review"
 #: templates/projects/group_detail.html:321
 #, python-format
 msgid ""
-"你是第 %(round)s 轮的初审人：请先下载项目书阅读， "
-"再决定放行还是打回。通过后系统会按送审类型随机分"
-"配 %(required)s 名评审人；打回则本轮直接结束， "
-"项目组修改后可重新提交。"
+"你是第 %(round)s 轮的初审人：请先下载项目书阅读， 再决定放行还是打回。通过后"
+"系统会按送审类型随机分配 %(required)s 名评审人；打回则本轮直接结束， 项目组修"
+"改后可重新提交。"
 msgstr ""
-"You are the preliminary reviewer for round %(round)s: download the "
-"proposal first, then decide whether to pass it or send it back. If you "
-"pass it, %(required)s reviewers are drawn at random according to the "
-"submission type; if you send it back, the round ends and the group can "
-"revise and resubmit."
+"You are the preliminary reviewer for round %(round)s: download the proposal "
+"first, then decide whether to pass it or send it back. If you pass it, "
+"%(required)s reviewers are drawn at random according to the submission type; "
+"if you send it back, the round ends and the group can revise and resubmit."
 
 #: templates/projects/group_detail.html:347
 msgid "提交初审"
@@ -1923,11 +2038,11 @@ msgstr "My reviews"
 
 #: templates/projects/group_detail.html:361
 msgid ""
-"请先下载本轮项目书，阅读后填写评审意见与决定；如"
-"已在项目书上批注，可一并上传批注版。"
+"请先下载本轮项目书，阅读后填写评审意见与决定；如已在项目书上批注，可一并上传"
+"批注版。"
 msgstr ""
-"Download this round's proposal, then record your decision and comments; "
-"if you annotated the file, upload the annotated copy too."
+"Download this round's proposal, then record your decision and comments; if "
+"you annotated the file, upload the annotated copy too."
 
 #: templates/projects/group_detail.html:385
 msgid "完成评审"
@@ -1936,19 +2051,16 @@ msgstr "Submit review"
 #: templates/projects/group_list.html:19
 #, python-format
 msgid ""
-"共 1 "
-"个项目组。组员只看得到自己的项目组，项目组联系人"
-"可管理自己的项目组。"
+"共 1 个项目组。组员只看得到自己的项目组，项目组联系人可管理自己的项目组。"
 msgid_plural ""
-"共 %(counter)s "
-"个项目组。组员只看得到自己的项目组，项目组联系人"
-"可管理自己的项目组。"
+"共 %(counter)s 个项目组。组员只看得到自己的项目组，项目组联系人可管理自己的项"
+"目组。"
 msgstr[0] ""
-"1 project group. Members only see their own groups; a group's contact "
-"can manage it."
+"1 project group. Members only see their own groups; a group's contact can "
+"manage it."
 msgstr[1] ""
-"%(counter)s project groups. Members only see their own groups; a "
-"group's contact can manage it."
+"%(counter)s project groups. Members only see their own groups; a group's "
+"contact can manage it."
 
 #: templates/projects/group_list.html:24
 msgid "创建申请审核中"
@@ -2052,13 +2164,10 @@ msgid "指导老师最多 3 位"
 msgstr "At most 3 advisors"
 
 #: templates/projects/group_manage.html:168
-msgid ""
-"指导老师最多 3 "
-"位，留空表示没有这一位；保存后按填写顺序依次排列"
-"。"
+msgid "指导老师最多 3 位，留空表示没有这一位；保存后按填写顺序依次排列。"
 msgstr ""
-"At most 3 advisors; leave a slot blank to omit it. Saved advisors are "
-"listed in the order you fill them in."
+"At most 3 advisors; leave a slot blank to omit it. Saved advisors are listed "
+"in the order you fill them in."
 
 #: templates/projects/group_manage.html:170
 msgid "保存学院与指导老师"
@@ -2088,22 +2197,21 @@ msgstr "Round in progress"
 #: templates/projects/group_manage.html:224
 #, python-format
 msgid ""
-"第 %(round)s 轮送审正在初审中，等待初审人给出意见； "
-"初审通过后会随机分配 %(required)s 名评审人， "
-"初审打回则本轮直接结束。"
+"第 %(round)s 轮送审正在初审中，等待初审人给出意见； 初审通过后会随机分配 "
+"%(required)s 名评审人， 初审打回则本轮直接结束。"
 msgstr ""
 "Round %(round)s is in preliminary review, waiting for that reviewer's "
-"decision. If it passes, %(required)s reviewers are drawn at random; if "
-"it is sent back, the round ends."
+"decision. If it passes, %(required)s reviewers are drawn at random; if it is "
+"sent back, the round ends."
 
 #: templates/projects/group_manage.html:230
 #, python-format
 msgid ""
-"第 %(round)s 轮评审尚未结束 （已审结 %(done)s / "
-"%(required)s）， 需等本轮出结论后才能提交下一轮。"
+"第 %(round)s 轮评审尚未结束 （已审结 %(done)s / %(required)s）， 需等本轮出结"
+"论后才能提交下一轮。"
 msgstr ""
-"Round %(round)s is still under review (%(done)s / %(required)s "
-"decided); you can submit the next round once this one has a decision."
+"Round %(round)s is still under review (%(done)s / %(required)s decided); you "
+"can submit the next round once this one has a decision."
 
 #: templates/projects/group_manage.html:236
 msgid "同一条送审不会被重复提交。"
@@ -2111,21 +2219,18 @@ msgstr "The same submission is never sent twice."
 
 #: templates/projects/group_manage.html:251
 msgid ""
-"提交后先由 1 "
-"名初审人初审，通过后才按所选类型随机分配评审人；"
-"全部评审人通过后，本项目组方案即通过。"
+"提交后先由 1 名初审人初审，通过后才按所选类型随机分配评审人；全部评审人通过"
+"后，本项目组方案即通过。"
 msgstr ""
 "After submission one preliminary reviewer looks at it; once it passes, "
 "reviewers are drawn at random according to the type you chose, and the "
 "proposal is approved when all of them approve."
 
 #: templates/projects/group_manage.html:252
-msgid ""
-"初审人、评审人身份对项目组匿名，评审人可另附批注"
-"版项目书。"
+msgid "初审人、评审人身份对项目组匿名，评审人可另附批注版项目书。"
 msgstr ""
-"Preliminary reviewers and reviewers stay anonymous to the group; "
-"reviewers may attach an annotated proposal."
+"Preliminary reviewers and reviewers stay anonymous to the group; reviewers "
+"may attach an annotated proposal."
 
 #: templates/projects/group_manage.html:265
 msgid "转让联系人"
@@ -2153,28 +2258,24 @@ msgstr "Log in"
 
 #: templates/reviews/queue.html:18
 msgid ""
-"初审或审阅分配给你的项目书并给出意见；初审人、评"
-"审人与超级评审对项目组一律匿名。"
+"初审或审阅分配给你的项目书并给出意见；初审人、评审人与超级评审对项目组一律匿"
+"名。"
 msgstr ""
-"Run preliminary reviews or review the proposals assigned to you and "
-"give your decision; preliminary reviewers, reviewers and super "
-"reviewers are all anonymous to the group."
+"Run preliminary reviews or review the proposals assigned to you and give "
+"your decision; preliminary reviewers, reviewers and super reviewers are all "
+"anonymous to the group."
 
 #: templates/reviews/queue.html:19
-msgid ""
-"项目组创建申请由全体管理员在这里共同处理，任一人"
-"同意即通过。"
+msgid "项目组创建申请由全体管理员在这里共同处理，任一人同意即通过。"
 msgstr ""
-"Creation requests are handled here by all administrators together; the "
-"first approval settles it."
+"Creation requests are handled here by all administrators together; the first "
+"approval settles it."
 
 #: templates/reviews/queue.html:20
-msgid ""
-"作为超级评审，你还可以看到全部进行中的评审，并对"
-"其直接通过或打回。"
+msgid "作为超级评审，你还可以看到全部进行中的评审，并对其直接通过或打回。"
 msgstr ""
-"As a super reviewer you also see every round in progress and can "
-"approve or send it back directly."
+"As a super reviewer you also see every round in progress and can approve or "
+"send it back directly."
 
 #: templates/reviews/queue.html:29
 msgid "创建项目组申请"
@@ -2182,15 +2283,13 @@ msgstr "Project group creation requests"
 
 #: templates/reviews/queue.html:33
 msgid ""
-"任何成员都可以申请创建项目组，申请人为项目组联系"
-"人。任一位管理员同意即视为审核通过并即刻建组，其"
-"他管理员的这条待办随之消失；拒绝后申请人可修改重"
-"交。"
+"任何成员都可以申请创建项目组，申请人为项目组联系人。任一位管理员同意即视为审"
+"核通过并即刻建组，其他管理员的这条待办随之消失；拒绝后申请人可修改重交。"
 msgstr ""
-"Any member can apply to create a project group, and the applicant "
-"becomes its contact. One administrator's approval creates the group "
-"immediately and clears the item from the other administrators' queues; "
-"after a rejection the applicant can revise and resubmit."
+"Any member can apply to create a project group, and the applicant becomes "
+"its contact. One administrator's approval creates the group immediately and "
+"clears the item from the other administrators' queues; after a rejection the "
+"applicant can revise and resubmit."
 
 #: templates/reviews/queue.html:47
 #, python-format
@@ -2307,4 +2406,3 @@ msgstr "No completed reviews."
 #: templates/reviews/queue.html:339
 msgid "本轮已由超级评审敲定，无需再审"
 msgstr "A super reviewer settled this round; no review needed"
-
