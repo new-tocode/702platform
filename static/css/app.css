@@ -722,8 +722,17 @@ td .empty, .panel-body.tight .empty {
 }
 .discussion-comments h4 { display: flex; align-items: baseline; gap: 7px; margin-bottom: 10px; }
 .discussion-comment { padding: 9px 0; border-bottom: 1px solid var(--line); }
-.discussion-comment strong { margin-right: 8px; font-size: 12px; }
+/* 作者、时间与删除按钮同一行；删除按钮靠 margin-left: auto 推到右端。 */
+.discussion-comment-head { display: flex; align-items: baseline; gap: 8px; }
+.discussion-comment-head strong { font-size: 12px; }
+.discussion-comment-head form { margin: 0 0 0 auto; }
 .discussion-comment p { margin-top: 4px; white-space: pre-wrap; overflow-wrap: anywhere; }
+/* 每条评论下都放一个按钮会盖过评论本身，所以删除平时只是一行小字，指上去才变红。 */
+.link-danger {
+  font: inherit; font-size: 12px; padding: 0; border: 0; background: none;
+  color: var(--ink-3); cursor: pointer;
+}
+.link-danger:hover { color: var(--red); text-decoration: underline; }
 .discussion-comment-form { display: grid; justify-items: start; gap: 8px; margin-top: 12px; }
 .discussion-comment-form textarea { min-height: 58px; }
 .discussion-pagination {
