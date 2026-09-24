@@ -12,7 +12,7 @@ def board_list():
 
 
 def posts_for_board(board):
-    comments = Comment.objects.select_related("author", "author__profile")
+    comments = Comment.objects.alive().select_related("author", "author__profile")
     images = PostImage.objects.order_by("created_at", "pk")
     return (
         Post.objects.filter(board=board)

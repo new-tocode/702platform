@@ -10,6 +10,7 @@ from .permissions import (
     can_create_board,
     can_create_post,
     can_delete_board,
+    can_delete_comment,
     can_delete_post,
     can_edit_post,
     can_pin_post,
@@ -288,6 +289,44 @@ def set_post_pinned(*, post_id, is_pinned, actor, request=None):
         request=request,
     )
     return post
+
+
+def _comment_for_update(comment_id):
+    # 已经删掉的评论仍然锁得到、也仍然能再删一次：重复提交是一句无害的空操作，
+    # 不必让第二个标签页上的按钮报 404。
+    try:
+        return Comment.all_objects.select_for_update().get(pk=comment_id)
+    except Comment.DoesNotExist as exc:
+        raise DiscussionNotFound from exc
+
+
+def delete_comment(*, comment_id, actor, request=None):
+    """把一条评论标记为已删除，返回它所属的板块与帖子。
+
+    作者与管理员都能删（判定见 ``can_delete_comment``）。删除记在行上而不落盘，
+    所以这里不碰任何文件；重复删除是空操作，不会重写原始删除人与删除时间。
+    """
+    _require_member(actor)
+    with transaction.atomic():
+        comment = _comment_for_update(comment_id)
+        if not can_delete_comment(actor, comment):
+            raise PermissionDenied
+        if comment.deleted_at is not None:
+            return comment.post.board_id, comment.post_id
+        comment.soft_delete(actor=actor)
+        record_audit(
+            action="discussion.comment.delete",
+            user=actor,
+            target=comment,
+            detail={
+                "post_id": comment.post_id,
+                "board_id": comment.post.board_id,
+                "author_id": comment.author_id,
+                "is_author": comment.author_id == actor.pk,
+            },
+            request=request,
+        )
+        return comment.post.board_id, comment.post_id
 
 
 def create_comment(*, post_id, content, actor, request=None):

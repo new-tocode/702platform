@@ -151,8 +151,16 @@
                                     <h4>{% translate "评论" %} <span class="count">{{ post.comments.all|length }}</span></h4>
                                     {% for comment in post.comments.all %}
                                         <div class="discussion-comment">
-                                            <strong>{% if comment.author.profile.full_name %}{{ comment.author.profile.full_name }}{% else %}{{ comment.author.username }}{% endif %}</strong>
-                                            <span class="muted">{{ comment.created_at|date:"Y-m-d H:i" }}</span>
+                                            <div class="discussion-comment-head">
+                                                <strong>{% if comment.author.profile.full_name %}{{ comment.author.profile.full_name }}{% else %}{{ comment.author.username }}{% endif %}</strong>
+                                                <span class="muted">{{ comment.created_at|date:"Y-m-d H:i" }}</span>
+                                                {% if comment.author_id == user.pk or is_admin %}
+                                                    <form method="post" action="{% url 'discussion:comment_delete' comment.pk %}" data-confirm="{% translate '确定删除这条评论吗？' %}">
+                                                        {% csrf_token %}
+                                                        <button class="link-danger" type="submit">{% translate "删除" %}</button>
+                                                    </form>
+                                                {% endif %}
+                                            </div>
                                             <p>{{ comment.content|linebreaksbr }}</p>
                                         </div>
                                     {% empty %}
