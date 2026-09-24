@@ -41,5 +41,12 @@ def can_delete_post(user, post):
     )
 
 
+def can_delete_comment(user, comment):
+    """评论作者可删自己的评论，管理员可删任意评论——与帖子的口径对称。"""
+    return is_member(user) and (
+        comment.author_id == user.pk or is_admin(user)
+    )
+
+
 def can_pin_post(user):
     return is_member(user) and is_admin(user)

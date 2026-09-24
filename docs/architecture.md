@@ -480,10 +480,12 @@ Comment（评论）
   - author        FK(User)
   - content
   - created_at
+  - deleted_at / deleted_by    软删除：删除时间与删除人（被删账号置空）
 ```
 
 - 空间和成员目录只对活跃、已完成首次改密的登录账号开放。板块选择器在内容区顶部横向滚动；帖子列表分页，评论按时间展示。
 - 帖子作者可编辑/删除自己的帖子并增删图片；管理员由 `core.permissions.is_admin()` 判定，可删除任意帖子、置顶/取消置顶；仅 Django 超级管理员可创建/删除板块。权限与图片上限在 `discussion.permissions`、服务层与视图分别校验。
+- **评论是软删除**：作者可删自己的评论、管理员可删任意评论（`can_delete_comment`，与删帖口径对称）。删除只写 `deleted_at`/`deleted_by`，行与内容都留着——一条有人回过的评论硬删掉，「删过」这件事就无从追查；删除动作另有 `discussion.comment.delete` 审计。已删除的评论由 `Comment.objects` 这个默认经理统一挡掉（反向关系 `post.comments` 走的也是它），要看全貌走 `Comment.all_objects`；级联删除不受影响，收集待删对象用的是不过滤的 `_base_manager`，删帖时软删过的评论照样跟着走。评论上没有文件，所以不像删帖那样还要清理磁盘上的图片。
 - 创建帖子与删除板块均锁定板块行，避免并发操作绕过“删除前必须清空”的规则；编辑帖子锁定帖子行并核对图片数量，避免并发超出上限。关键写操作通过 `core.audit.record_audit()` 留痕。
 - 成员目录显示头像、姓名（为空时回退账号名），按姓名搜索。只读他人资料页不复用本人可编辑的 Profile 表单，仅展示头像、姓名/账号名、学院、专业、特长、简介、身份、图册与公开的手机号/其他联系方式；学号与邮箱不展示。
 - 只有界面字符串进入英文 `.po`；板块名、帖子、评论与个人资料均为用户内容，不翻译。
@@ -541,7 +543,7 @@ Comment（评论）
 | 登录 / 修改本人资料与密码 | — | ✔ | ✔ | ✔ | ✔ |
 | 查看社团空间、成员目录与只读资料 | — | ✔ | ✔ | ✔ | ✔ |
 | 发帖、评论、维护自己的帖子 | — | ✔ | ✔ | ✔ | ✔ |
-| 删除他人帖子、置顶/取消置顶 | — | — | — | — | ✔ |
+| 删除他人帖子/评论、置顶/取消置顶 | — | — | — | — | ✔ |
 | 创建/删除空板块 | — | — | — | — | 仅超级管理员 |
 | 浏览内部通知（按 auth 用户组） | — | ✔ | ✔ | ✔ | ✔ |
 | 查看"仅联系人可见"通知 | — | — | — | ✔ | ✔ |
@@ -577,7 +579,7 @@ Django 原生支持「组级」权限，**对象级**需自定义；本项目把
 - `can_view_borrow(borrow, user)`：借用记录本人可见，管理员可见全部。
 - **项目组报名权限**：`competitions.permissions.can_register_group` 委托 `can_manage_group`；报名成员与竞赛组长都必须属于所选项目组，且竞赛组长必须是参赛成员之一。
 - **通知可见性**：`notices/visibility.py` 的 `member_visible_notices(user)` 单点判定 —— `internal` 走 `visible_groups`，`contacts` 走 `is_project_contact(user)`；列表与详情共用，未命中返回 404。
-- **社团空间权限**：`discussion/permissions.py` 集中成员、作者、管理员和超级管理员判定；写操作在服务层再次校验。只有帖子作者可修改自己的帖子，管理员可删任意帖子并置顶，超级管理员才可在前端创建/删除空板块。
+- **社团空间权限**：`discussion/permissions.py` 集中成员、作者、管理员和超级管理员判定；写操作在服务层再次校验。只有帖子作者可修改自己的帖子，管理员可删任意帖子并置顶；评论的删除口径与帖子对称（作者删自己的、管理员删任意），帖子作者对别人在自己帖子下的评论**没有**删除权。超级管理员才可在前端创建/删除空板块。
 
 建议封装为通用 helper（本项目已用 `projects/permissions.py` + `projects/services.py` 落地；`competitions/permissions.py` 为薄封装）。
 
@@ -649,6 +651,7 @@ core / registry.py
 | `/member/space/`、`/member/space/boards/<id>/` | 社团空间与板块帖子流（置顶优先、其余按时间倒序） | 登录成员 |
 | `/member/space/boards/<id>/posts/new/`、`/member/space/posts/<id>/edit/` | 发帖、编辑本人帖子 | 登录成员 / 作者 |
 | `/member/space/posts/<id>/comments/`、`/member/space/posts/<id>/delete/` | 评论、删除帖子；删帖级联删除评论 | 登录成员；删自己的帖或管理员删任意帖 |
+| `/member/space/comments/<id>/delete/` | 删除一条评论（软删除，页面不再显示） | 评论作者或管理员 |
 | `/member/space/images/<id>/` | 帖子图片本身（随机文件名落盘，经此路由按成员身份校验后才发出） | 登录成员 |
 | `/member/space/posts/<id>/pin/` | 置顶/取消置顶 | 管理员 |
 | `/member/space/boards/create/`、`/member/space/boards/<id>/delete/` | 前端创建板块或删除空板块 | Django 超级管理员 |
