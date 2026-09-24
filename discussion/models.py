@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.db import models
 from django.db.models.functions import Lower
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from .validators import post_image_upload_to, validate_post_image
@@ -96,6 +97,27 @@ class PostImage(models.Model):
         return super().save(*args, **kwargs)
 
 
+class CommentQuerySet(models.QuerySet):
+    def alive(self):
+        return self.filter(deleted_at__isnull=True)
+
+
+class CommentManager(models.Manager.from_queryset(CommentQuerySet)):
+    """默认只给未删除的评论。
+
+    「已删除的评论不出现在任何地方」应当是评论表自己的性质，而不是每个调用点
+    各自记得加的那个条件——漏一处就会让删掉的评论从别处冒出来（反向关系
+    ``post.comments`` 走的正是这个默认经理）。要看全部，包括谁在什么时候删了
+    哪条，走 ``Comment.all_objects``。
+
+    级联删除不受影响：Django 收集待删对象用的是 ``_base_manager``，那是一个
+    不过滤的普通经理，删帖时软删除过的评论照样跟着走，不会留下孤儿行。
+    """
+
+    def get_queryset(self):
+        return super().get_queryset().alive()
+
+
 class Comment(models.Model):
     post = models.ForeignKey(
         Post,
@@ -111,11 +133,28 @@ class Comment(models.Model):
     )
     content = models.TextField(_("评论内容"))
     created_at = models.DateTimeField(_("评论时间"), auto_now_add=True)
+    # 删除是软删除：行与内容都留着，只在界面上让位给一行说明。硬删会让一条
+    # 有人回过的评论凭空消失、连删过这件事都没有痕迹；删除动作另有审计。
+    deleted_at = models.DateTimeField(_("删除时间"), null=True, blank=True)
+    deleted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="deleted_comments",
+        verbose_name=_("删除人"),
+    )
+
+    all_objects = CommentQuerySet.as_manager()
+    objects = CommentManager()
 
     class Meta:
         verbose_name = _("社团空间评论")
         verbose_name_plural = _("社团空间评论")
         ordering = ("created_at", "pk")
+        # 类体里 ``all_objects`` 写在前面，不指名的话默认经理就是它——
+        # 反向关系 ``post.comments`` 会连已删除的评论一起给出来。
+        default_manager_name = "objects"
         indexes = [
             models.Index(
                 fields=("post", "created_at"),
@@ -125,3 +164,12 @@ class Comment(models.Model):
 
     def __str__(self):
         return f"{self.author} · {self.post}"
+
+    def soft_delete(self, *, actor):
+        """标记删除。幂等：已经删过的不改原删除人与原删除时间。"""
+        if self.deleted_at is not None:
+            return self
+        self.deleted_at = timezone.now()
+        self.deleted_by = actor
+        self.save(update_fields=["deleted_at", "deleted_by"])
+        return self
