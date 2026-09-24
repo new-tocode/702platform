@@ -26,6 +26,7 @@ from .services import (
     create_comment,
     create_post,
     delete_board,
+    delete_comment,
     delete_post,
     set_post_pinned,
     update_post,
@@ -255,6 +256,30 @@ def comment_create(request, post_id):
         for error in form.errors.get("content", []):
             messages.error(request, error)
     return redirect("discussion:board", board_id=post.board_id)
+
+
+@login_required
+@require_POST
+def comment_delete(request, comment_id):
+    _require_member(request)
+    try:
+        board_id, _post_id = delete_comment(
+            comment_id=comment_id,
+            actor=request.user,
+            request=request,
+        )
+    except DiscussionNotFound as exc:
+        raise Http404 from exc
+    except PermissionDenied:
+        logger.warning(
+            "discussion.comment.delete.denied username=%s comment_id=%s",
+            request.user.get_username(),
+            comment_id,
+            extra={"request_id": getattr(request, "request_id", "-")},
+        )
+        raise
+    messages.success(request, _("评论已删除。"))
+    return redirect("discussion:board", board_id=board_id)
 
 
 @login_required
