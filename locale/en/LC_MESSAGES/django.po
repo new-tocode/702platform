@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 702platform\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-24 13:29+0800\n"
+"POT-Creation-Date: 2026-09-25 14:23+0800\n"
 "PO-Revision-Date: 2026-09-19 18:39\n"
 "Last-Translator: 702platform\n"
 "Language-Team: 702platform\n"
@@ -38,7 +38,7 @@ msgstr "Update your login password"
 msgid "头像"
 msgstr "Avatar"
 
-#: accounts/forms.py:166 accounts/forms.py:178 core/uploads.py:46
+#: accounts/forms.py:166 accounts/forms.py:178 core/uploads.py:109
 msgid "请选择要上传的图片。"
 msgstr "Please choose an image to upload."
 
@@ -329,23 +329,30 @@ msgstr "Audit log"
 msgid "查看平台关键操作记录"
 msgstr "Review the platform's key operations"
 
-#: core/uploads.py:52
+#: core/uploads.py:84 core/uploads.py:97
+msgid "上传文件不是有效的图片。"
+msgstr "The uploaded file is not a valid image."
+
+#: core/uploads.py:90
+#, python-format
+msgid "图片过大（%(width)s×%(height)s 像素），请压缩后再上传。"
+msgstr ""
+"The image is too large (%(width)s×%(height)s pixels). Please compress it and "
+"upload again."
+
+#: core/uploads.py:115
 #, python-format
 msgid "%(label)s仅支持 %(allowed)s 格式。"
 msgstr "%(label)s supports only these formats: %(allowed)s."
 
-#: core/uploads.py:57
+#: core/uploads.py:120
 #, python-format
 msgid "%(label)s不能超过 %(limit)s MB。"
 msgstr "%(label)s cannot exceed %(limit)s MB."
 
-#: core/uploads.py:67
+#: core/uploads.py:130
 msgid "文件类型与图片不符，请确认选的是图片。"
 msgstr "That file is not an image."
-
-#: core/uploads.py:75
-msgid "上传文件不是有效的图片。"
-msgstr "The uploaded file is not a valid image."
 
 #: discussion/forms.py:16 discussion/models.py:11
 msgid "中文名称"

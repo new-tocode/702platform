@@ -7,6 +7,8 @@ inspect, while production values can be supplied through environment variables.
 import os
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
+
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -266,3 +268,20 @@ LOGGING = {
         },
     },
 }
+
+
+# ---------------------------------------------------------------------------
+# 生产配置自检
+#
+# 上面每一项都有安全默认值，唯独 SECRET_KEY 只能由部署者给对。漏设的后果是
+# 静默的：站点照常起来，只是会话签名用的是公开在源码里的那把钥匙，任何人都能
+# 伪造出有效的会话 Cookie。manage.py check --deploy 会提示，但那要有人主动去跑。
+#
+# 所以改成拒绝启动：起不来是响的，起得来但是错的才是危险的。
+# 本地开发不受影响——本地本来就该用这把开发密钥。
+if not DEBUG and SECRET_KEY == "django-insecure-development-only-change-me":
+    raise ImproperlyConfigured(
+        "生产环境必须设置 DJANGO_SECRET_KEY（不能沿用源码里的开发默认值）。"
+        "可用 `python -c \"from django.core.management.utils import "
+        "get_random_secret_key; print(get_random_secret_key())\"` 生成。"
+    )

@@ -33,9 +33,18 @@ fi
 # ---------- 1. env.sh 必须存在 ----------
 if [[ ! -f "$ENV_FILE" ]]; then
     cp "$TEMPLATE" "$ENV_FILE"
+    chmod 600 "$ENV_FILE"
     fail "首次运行，已从模板创建 $ENV_FILE"
     fail "请编辑该文件，把所有 <尖括号> 占位符替换为真实值后重新运行本脚本"
     exit 1
+fi
+
+# env.sh 里是数据库口令、SECRET_KEY 与超管口令。cp 出来的文件权限随 umask，
+# 可能是 644——同一台机器上的其它低权账号就能读走全部机密。每次运行都收紧一次，
+# 历史上的宽权限也就跟着修好了。
+if [[ "$(stat -c '%a' "$ENV_FILE")" != "600" ]]; then
+    chmod 600 "$ENV_FILE"
+    ok "已将 $ENV_FILE 权限收紧为 600（内含数据库口令与 SECRET_KEY）"
 fi
 
 # ---------- 2. 配置检测：占位符未替换则全部列出并中止 ----------

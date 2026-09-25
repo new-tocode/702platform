@@ -9,12 +9,24 @@ media 与 projects 两处 validators 各写过一遍、逐字相同，所以收�
 由调用方传进来，这里只管「怎么验」。
 """
 
+import io
 from pathlib import Path
 
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 from PIL import Image, UnidentifiedImageError
 
+
+#: 一张图允许的像素总数。
+#:
+#: Pillow 自带的默认上限约 8948 万像素，且判定放在两处：超过一倍上限抛
+#: ``DecompressionBombError``，超过半倍只是发一条 ``DecompressionBombWarning``。
+#: 后者会让「声明 1 亿像素」的图通过校验、安然落盘，等页面渲染时才真正解码——
+#: 受害的是每一个打开该页的人，而不是上传者自己。
+#:
+#: 6400 万像素（约 8000×8000）够任何头像、图册与配图，同时把上面那条缝堵上：
+#: 阈值写在这里，下面的校验按它自己判，不再依赖 Pillow 的两档行为。
+MAX_IMAGE_PIXELS = 64_000_000
 
 #: 平台接受的图片扩展名：媒体库、头像、个人图册共用这一份。
 IMAGE_EXTENSIONS = frozenset({"jpg", "jpeg", "png", "webp", "gif"})
@@ -34,6 +46,55 @@ def reset_file_position(uploaded_file):
         uploaded_file.seek(0)
     except (AttributeError, OSError):
         return
+
+
+def _validate_image_content(uploaded_file):
+    """按二进制内容验一张图，顺便把「这不是图片」与「这是解压炸弹」都挡下。
+
+    两件事都在这里做，因为它们都必须赶在图片对象被销毁之前：
+
+    * **解压炸弹**。``Image.open()`` 只读文件头，读完尺寸就判定，超限抛
+      ``DecompressionBombError``。这个异常必须在当场接住——它的基类是
+      ``Exception`` 而不是 ``OSError``，漏出去就是一个未捕获异常，一个几十字节
+      的文件即可让视图报 500（见 安全检查.md 的 V1）。
+    * **尺寸上限**。Pillow 只在「超过它自己上限一倍」时才抛异常，介于半倍与
+      一倍之间的图发一条 ``DecompressionBombWarning`` 就放行，落盘后要等到页面
+      渲染时才真正解码——受害的是每一个打开该页的人。这里按
+      :data:`MAX_IMAGE_PIXELS` 统一判，不依赖 Pillow 那两档行为。
+
+    **读的是副本，不是调用方的流。** Pillow 的 ``verify()`` 与 ``close()` 都会把
+    底层文件关掉（``ImageFile._close_fp`` 关的正是我们传进去的那个对象），而上传
+    文件在校验之后还要被存起来、还要被 ``reset_file_position`` 拨回开头。让它关掉
+    一个归它自己的 BytesIO，上传文件就始终可用。
+    """
+    reset_file_position(uploaded_file)
+    try:
+        content = uploaded_file.read()
+    except (AttributeError, OSError, ValueError):
+        content = None
+    reset_file_position(uploaded_file)
+    # 拿不到内容（测试替身一类的对象）就退回原流，按老样子验。
+    source = io.BytesIO(content) if content is not None else uploaded_file
+
+    try:
+        image = Image.open(source)
+    except (UnidentifiedImageError, OSError, SyntaxError, Image.DecompressionBombError) as exc:
+        raise ValidationError(_("上传文件不是有效的图片。")) from exc
+
+    try:
+        width, height = image.size
+        if width * height > MAX_IMAGE_PIXELS:
+            raise ValidationError(
+                _("图片过大（%(width)s×%(height)s 像素），请压缩后再上传。")
+                % {"width": width, "height": height}
+            )
+        image.verify()
+    except ValidationError:
+        raise
+    except (UnidentifiedImageError, OSError, SyntaxError, Image.DecompressionBombError) as exc:
+        raise ValidationError(_("上传文件不是有效的图片。")) from exc
+    finally:
+        image.close()
 
 
 def validate_image_upload(uploaded_file, *, label, max_bytes, extensions=IMAGE_EXTENSIONS):
@@ -66,12 +127,6 @@ def validate_image_upload(uploaded_file, *, label, max_bytes, extensions=IMAGE_E
     if content_type and not content_type.startswith("image/"):
         raise ValidationError(_("文件类型与图片不符，请确认选的是图片。"))
 
-    # 扩展名与 MIME 都是自报的，最后按二进制内容验一次。
-    reset_file_position(uploaded_file)
-    try:
-        with Image.open(uploaded_file) as image:
-            image.verify()
-    except (UnidentifiedImageError, OSError, SyntaxError) as exc:
-        raise ValidationError(_("上传文件不是有效的图片。")) from exc
-    finally:
-        reset_file_position(uploaded_file)
+    # 扩展名与 MIME 都是自报的，最后按二进制内容验一次。读的是副本，所以
+    # 校验完上传文件仍然可用——阶段 4 的统一 uuid 落盘还要再读它一遍。
+    _validate_image_content(uploaded_file)
