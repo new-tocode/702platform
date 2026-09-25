@@ -10,12 +10,11 @@ WorkingDirectory=@@APP_DIR@@
 EnvironmentFile=@@APP_DIR@@/env.sh
 ExecStart=@@APP_DIR@@/deploy/backup.sh
 # 只读两个上传目录（公开的 mediafiles 与受保护的 protected_media），写只给备份目录。
-# 备份目录默认在 APP_DIR 之外（见 backup.sh）：留在应用目录里的话，应用进程自己
-# 就能改掉备份，而备份的意义正是「数据被改了还能回到从前」。
-# 三个路径都必须存在，缺一个 systemd 会以 226/NAMESPACE 启动失败——所以
-# install.sh 会先把它们建出来。
-ReadWritePaths=@@BACKUP_DIR@@
-ReadOnlyPaths=@@APP_DIR@@/mediafiles @@APP_DIR@@/protected_media
+# 用 "-" 前缀是 systemd 的约定：路径不存在就跳过，不报错。不加它的话，缺任何一个
+# 目录都会让服务以 226/NAMESPACE 启动失败——而 protected_media 是后加的，老部署上
+# 没有它，备份会整个停摆。
+ReadWritePaths=-@@BACKUP_DIR@@
+ReadOnlyPaths=-@@APP_DIR@@/mediafiles -@@APP_DIR@@/protected_media
 
 [Install]
 WantedBy=multi-user.target

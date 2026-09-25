@@ -52,7 +52,8 @@ source env.local.sh          # PostgreSQL 连接配置；不加载会连接失�
 
 生产环境至少设置：`DJANGO_SECRET_KEY`、`DJANGO_DEBUG=0`、`DJANGO_ALLOWED_HOSTS`、数据库 `DJANGO_DB_*`。`SECRET_KEY` 沿用源码默认值时应用**拒绝启动**（起不来是响的，起得来但是错的才是危险的）。
 
-Cookie 的 `Secure` 标志默认开启（站点全程 https）；只有纯 http 部署才需要显式关掉，否则浏览器不会带上会话 Cookie。`deploy/deploy.sh` 在上线流程里内置了 `check --deploy` 门禁，`DEBUG` 还开着、Cookie 没带 Secure 这类退化会让发布直接中止。HTTPS、HSTS 与 SSL 跳转的开关与启用顺序见 [`docs/deploy.md`](docs/deploy.md) 的 HTTPS 一节。
+Cookie 的 `Secure` 标志代码默认开启（站点全程 https）；只有纯 http 部署才需要显式关掉。
+**注意**：若 `env.sh` 里已经显式写了 `DJANGO_SESSION_COOKIE_SECURE=0`，它会覆盖代码默认值——升级时要一并改成 `1`。`deploy/deploy.sh` 内置的 `check --deploy` 门禁会在 Cookie 没带 Secure、`DEBUG` 还开着这类退化时中止发布（宁可发布失败，也不让站点安静地不安全）。HTTPS、HSTS 与 SSL 跳转的开关与启用顺序见 [`docs/deploy.md`](docs/deploy.md) 的 HTTPS 一节。
 
 登录失败达 10 次（账号与 IP 各算各的）会锁定 30 分钟，管理员可在 `/admin/axes/accessattempt/` 查看并删除记录以提前解锁。
 

@@ -101,31 +101,65 @@ sudo apt install certbot python3-certbot-nginx
 sudo certbot --nginx -d club.example.com
 ```
 
-#### 现状：证书是借来的
+#### 现状：证书是借来的（2026-09-25 实地核对）
 
-本平台目前没有自己的域名备案与证书，线上 HTTPS 用的是**另一个已备案站点**的证书
-（该站点与本平台无关）。这带来两个必须记住的后果：
+生产实测（实例 `i-m5e67qhgou0ks5c8wuy6`，用户 `dmxbvigl`）：
 
-- **HSTS 绝对不要开。** HSTS 一旦生效，浏览器会在有效期内拒绝一切非 https 访问，
-  用户点「继续访问」也绕不过去。借用证书随时可能被收回，那时域名就被锁死了——
-  只能换域名，或者让每个用户去清 HSTS 缓存。`DJANGO_SECURE_HSTS_SECONDS` 因此
-  默认是 0，也不要手工去改。
-- **不做整站跳 https。** 线上确实有人用 `http://IP` 直接访问；硬跳会把 IP 这条
-  入口打到那个不属于本平台的域名上。`DJANGO_SECURE_SSL_REDIRECT` 默认关。
+| 项 | 实际值 |
+|---|---|
+| 应用目录 | `/home/dmxbvigl/applications/702platform` |
+| Nginx 站点配置 | `/etc/nginx/conf.d/club702.conf`（Alibaba Cloud Linux 3，conf.d 布局） |
+| `server_name` | `702dxzg.top 47.105.110.158` |
+| `ssl_certificate` | `/etc/letsencrypt/live/alenapi.xyz/fullchain.pem` ← **别的站点** |
+| 监听 | 80 与 443 **都在提供完整服务**（80 不是跳转） |
+| 成员访问 | 全走 `https://<IP>`；经确认**没有人用 http** |
 
-Cookie 的 Secure 标志反过来是**默认开**的：站点全程 https（IP 直连也一样），
-所以给会话与 CSRF Cookie 加 Secure 不挡任何人，却能防住「登录后会话被同网段
-明文取走」。`env.template` 里两项默认就是 1。
+三条必须记住的结论：
+
+- **HSTS 绝对不要开。** 证书是 `alenapi.xyz` 的，而站点跑在 `702dxzg.top` 与 IP 上
+  ——域名不匹配，浏览器本来就会警告。HSTS 一旦生效，浏览器会在有效期内**拒绝一切
+  非 https 访问且用户无法绕过**；等这张借来的证书被收回，站点就锁死了，只能换域名
+  或让每个用户去清 HSTS 缓存。`DJANGO_SECURE_HSTS_SECONDS` 保持 0。
+- **不做整站跳 https。** `server_name` 含 IP，硬跳会把 `https://<IP>` 改写成那个
+  不属于本平台的域名。`DJANGO_SECURE_SSL_REDIRECT` 保持 0。
+- **Cookie 的 Secure 要显式打开，且生产 `env.sh` 里现在是关的。**
+
+关于最后一条，有个容易搞错的地方值得写清楚：`SESSION_COOKIE_SECURE` 是**直接决定**
+Cookie 上带不带 `Secure` 属性的（Django 里就是 `secure=settings.SESSION_COOKIE_SECURE`），
+与 `DJANGO_PROXY_SSL_HEADER` **无关**。代理头管的是另一件事——让 Django 知道
+「这个请求其实是 https」，影响 `request.is_secure()`、CSRF 的 Origin 校验、
+以及 `SECURE_SSL_REDIRECT` 会不会误判成死循环。
+
+但生产 `env.sh` 里 `DJANGO_PROXY_SSL_HEADER=0` 是个**实际存在的隐患**：Nginx 明明发了
+`X-Forwarded-Proto`，Django 却看不见，于是把 https 请求当成 http。这在当前没造成故障
+（没开跳转），但一旦哪天开了 `SECURE_SSL_REDIRECT`，就会变成无限重定向。建议一并打开。
+
+#### 升级到本版本时要改的 env.sh
+
+新版本里这几项的代码默认值虽然已经调过，但**生产 `env.sh` 里是显式写死的，会覆盖
+代码默认值**——所以要生效必须改 `env.sh`：
+
+```bash
+# 会话与 CSRF Cookie 只走 https（成员全走 https，不会挡住任何人）
+DJANGO_SESSION_COOKIE_SECURE=1
+DJANGO_CSRF_COOKIE_SECURE=1
+# 让 Django 认得 Nginx 发来的 X-Forwarded-Proto（见上文说明）
+DJANGO_PROXY_SSL_HEADER=1
+
+# 备份位置保持默认（应用目录内）即可。想搬到应用之外更安全，见 5.x 节。
+```
+
+改完 `deploy.sh` 的 `check --deploy` 门禁才能通过——否则它会以
+`security.W012` / `W016` 中止部署（这是有意设计的：宁可发布失败，也不让站点安静地
+不安全）。`DJANGO_SECURE_SSL_REDIRECT` 与 `DJANGO_SECURE_HSTS_SECONDS` **继续留空
+或 0**，理由见上。
 
 #### 拿到自己的证书之后
 
-按这个顺序做，每步确认无误再走下一步：
-
-1. 先只把证书挂上（`SSL_CERT_PATH` / `SSL_KEY_PATH`），确认 HTTPS 正常。
-2. `env.sh` 里打开代理头与受信来源，重启：
+1. 先只把证书换成本平台自己的（`SSL_CERT_PATH` / `SSL_KEY_PATH`），确认 HTTPS 正常。
+2. `env.sh` 里加受信来源：
    ```bash
-   DJANGO_PROXY_SSL_HEADER=1
-   DJANGO_CSRF_TRUSTED_ORIGINS=https://club.example.com
+   DJANGO_CSRF_TRUSTED_ORIGINS=https://<本平台域名>
    ```
 3. 确认全站没有 http 访问需求后，再开整站跳转：
    ```bash
@@ -138,18 +172,9 @@ Cookie 的 Secure 标志反过来是**默认开**的：站点全程 https（IP �
    加长到 31536000（一年）之前，想清楚证书续期是不是自动的——证书一断，长窗口的
    HSTS 会让站点在整个窗口内都进不去。
 
-上面 3、4 两步做的同时，`config/settings.py` 里的 `SILENCED_SYSTEM_CHECKS` 会
+上面 1、3、4 步做的同时，`config/settings.py` 里的 `SILENCED_SYSTEM_CHECKS` 会
 自动放回对应的 `security.W008` / `security.W004` 告警，`check --deploy` 随即重新
 盯住它们——静音是跟着开关走的，不是写死的。
-
-任何一步之后都可以跑：
-
-```bash
-.venv/bin/python manage.py check --deploy --fail-level WARNING
-```
-
-`deploy.sh` 在上线流程里已经内置了这一条：**任何告警都会让这次发布中止**，宁可不发，
-也不让站点安静地退化。
 
 ### 2.6 上线自检
 
@@ -163,17 +188,52 @@ Cookie 的 Secure 标志反过来是**默认开**的：站点全程 https（IP �
 # 开发机打 tag
 git tag -a v1.0.1 -m "发布说明" && git push <remote> main --tags
 
-# 服务器一条命令
-cd /opt/702platform
-sudo -u club bash -c './deploy/deploy.sh v1.0.1'   # club = DEPLOY_SYSTEM_USER
+# 服务器一条命令（<部署用户> = env.sh 里的 DEPLOY_SYSTEM_USER）
+cd ~/applications/702platform
+./deploy/deploy.sh v1.0.1
 ```
+
+> 本平台的生产路径是 `/home/dmxbvigl/applications/702platform`，部署用户是
+> `dmxbvigl`；`docs` 别处出现的 `/opt/702platform`、`club` 是模板默认值。
+
+### 升级到「安全检查」那一版的完整步骤
+
+这一版有几处**必须先改 `env.sh` 才能通过上线门禁**，顺序不能颠倒：
+
+```bash
+cd ~/applications/702platform
+
+# 1) 先改 env.sh 的三项（理由与取值见 2.5 节）
+#    DJANGO_SESSION_COOKIE_SECURE=1
+#    DJANGO_CSRF_COOKIE_SECURE=1
+#    DJANGO_PROXY_SSL_HEADER=1
+#    改完确认权限只有自己能读：chmod 600 env.sh
+vi env.sh && chmod 600 env.sh
+
+# 2) 跑部署（它会：备份 → 切版本 → 装依赖 → check --deploy 门禁 → 迁移 →
+#    静态文件 → 编译翻译 → 重启 → 健康检查；任何一步失败即中止）
+./deploy/deploy.sh v<新版本>
+
+# 3) 起来之后确认三件事
+curl -sI https://127.0.0.1/ -k | grep -i set-cookie     # 登录后应当带 Secure
+systemctl is-active club702 club702-backup.timer
+ls -d protected_media                                   # 迁移建出来的受保护目录
+```
+
+这一版里**不需要停机**：那条会移动文件的数据迁移在生产数据上是空操作（见 3.5 节）。
+
+如果第 1 步忘了改，第 2 步会停在门禁那一步、以 `security.W012`/`W016` 报错退出
+——迁移都还没跑，服务也还是旧版在跑，**不会造成任何破坏**。补上 `env.sh` 再跑一次
+即可。
+
+### 回滚
 
 `deploy.sh` 自动：备份库与媒体（保留 RETAIN 份）→ checkout tag → 升级依赖 → **`check --deploy` 门禁** → `migrate` + `collectstatic` + `compilemessages` → 重启 → 健康检查。任何一步失败即中止，其中门禁那一步会拦下「DEBUG 还开着」「Cookie 没带 Secure」「SECRET_KEY 还是源码默认值」这类不会让站点起不来、只会让它安静地不安全的问题。版本号命名 `v主.次.修订`（修订=修复，次=新功能，主=不兼容）。
 
 ### 回滚
 
 ```bash
-cd /opt/702platform
+cd ~/applications/702platform
 set -a; source env.sh; set +a
 git checkout v1.0.0
 .venv/bin/python manage.py migrate --noinput
@@ -198,23 +258,33 @@ systemctl restart club702
 
 ## 3.5 受保护上传件的目录迁移（一次性）
 
-从「安全检查」那一版起，项目书、批注版、归档版、帖子图、头像、个人图册从
-`mediafiles/` 搬到了 `protected_media/`。原因是前者由 Nginx 的 `/media/` 直出，
-谁拿到路径谁就能取，而这几类文件的可见性由业务规则决定——视图里的权限判定因此
-形同虚设。两个目录分开之后，`/media/` 只映射公开的媒体库配图。
+从本版本起，项目书、批注版、归档版、帖子图、头像、个人图册从 `mediafiles/` 搬到了
+`protected_media/`。原因是前者由 Nginx 的 `/media/` 直出，谁拿到路径谁就能取，而这
+几类文件的可见性由业务规则决定——视图里的权限判定因此形同虚设。两个目录分开之后，
+`/media/` 只映射公开的媒体库配图。
 
-**这次上线要按停机窗口做**，因为数据迁移 `core.0002_rehome_protected_uploads`
-会**真实移动磁盘上的文件**：
+迁移 `core.0002_rehome_protected_uploads` 会真实移动磁盘上的文件，所以理论上要停机。
+**但本平台的实际数据让这条迁移是空操作**（2026-09-25 实地核对）：
+
+```sql
+profiles_with_avatar=0   gallery_images=0   group_proposals=0
+post_images=0            review_tasks_with_file=0   archived=0
+```
+
+六类受保护文件的记录数**全部为 0**，`mediafiles/` 下只有 `uploads/`（2 张公开队刊
+图）。所以没有文件可搬，迁移跑一遍什么都不做，立刻结束。**这次上线不需要停机窗口。**
+
+往后（有成员真正用过这些功能时）再遇到这条迁移，才需要按停机来做：
 
 ```bash
-# 1. 先备份（备份脚本已同时打包两个目录）
-sudo -u club bash -c "cd /opt/702platform && source env.sh && ./deploy/backup.sh"
+# 1. 先备份
+cd ~/applications/702platform && ./deploy/backup.sh
 
 # 2. 停服，避免迁移期间有人正好在读文件
 sudo systemctl stop club702
 
 # 3. 部署（deploy.sh 会自动跑 migrate，其中就含这条搬运）
-sudo -u club bash -c './deploy/deploy.sh v<新版本>'
+./deploy/deploy.sh v<新版本>
 ```
 
 迁移的特点：
@@ -226,11 +296,11 @@ sudo -u club bash -c './deploy/deploy.sh v<新版本>'
 * **可回滚**：反向迁移把文件搬回 `mediafiles/`。回滚代码的同时跑
   `manage.py migrate core 0001` 即可。
 
-迁移跑完后，`protected_media/` 应当出现在应用目录下，且**不在** Nginx 的任何
-`location` 里（配置里只映射 `mediafiles/`）。可以这样确认没有旁路：
+迁移跑完后，`protected_media/` 会出现在应用目录下，且**不在** Nginx 的任何
+`location` 里（配置只映射 `mediafiles/`）。可以这样确认没有旁路：
 
 ```bash
-# 取一个受保护文件的相对路径，拼成 /media/<路径> 请求，应当是 404
+# /media/ 只该指到 mediafiles/；把受保护文件的相对路径拼进去应当取不到
 curl -s -o /dev/null -w '%{http_code}\n' https://<域名>/media/project_proposals/...
 ```
 

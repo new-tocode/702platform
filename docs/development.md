@@ -162,6 +162,16 @@
 .venv/bin/pip-compile --generate-hashes --output-file requirements-prod.txt requirements-prod.in
 ```
 
+> `pip-compile --generate-hashes` 会把**所有平台**的轮子哈希都收进锁文件
+> （实测 `pillow` 106 个、`psycopg-binary` 66 个），所以本地 3.13 生成的锁文件
+> 在生产 3.12 上一样能装。验证方式（不下载，只按目标平台解析）：
+>
+> ```bash
+> pip download --require-hashes -d /tmp/chk \
+>   --python-version 312 --implementation cp --abi cp312 \
+>   --platform manylinux_2_17_x86_64 --only-binary :all: -r requirements.txt
+> ```
+
 安装时带 `--require-hashes`（`deploy.sh` 与 CI 都是这个口径）：每个包按哈希校验，
 依赖被篡改或供应链投毒会当场失败，而不是安静地装上一个被换过的包。
 

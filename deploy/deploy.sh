@@ -52,6 +52,11 @@ echo "==> 4/6 部署配置门禁"
 .venv/bin/python manage.py check --deploy --fail-level WARNING
 
 echo "==> 5/6 数据库迁移 + 静态文件 + 界面翻译"
+# 受保护上传件的目录（项目书、批注版、头像、图册）。它是后加的，老部署上没有；
+# 不先建出来，迁移里的文件搬运无处落脚、应用写入也会失败。install.sh 也会建，
+# 但日常部署走的是本脚本，这里不能省。
+mkdir -p protected_media
+
 .venv/bin/python manage.py migrate --noinput
 .venv/bin/python manage.py collectstatic --noinput
 # 界面英文的 .mo 是构建产物（不进版本库）：按这个 tag 里的 .po 现编，线上就永远

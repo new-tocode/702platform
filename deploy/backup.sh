@@ -33,11 +33,22 @@ if ! command -v pg_dump >/dev/null 2>&1; then
     done
 fi
 
-# 备份目录默认在应用目录**之外**。留在 APP_DIR 里的话，应用进程（systemd 给了
-# 整个 APP_DIR 的写权限）与任何拿到该账号的人都能改掉备份——备份的意义正是
-# 「数据被改了还能回到从前」，它不该和它保护的东西住在一起。
-BACKUP_DIR="${DJANGO_BACKUP_DIR:-/var/backups/club702}"
-mkdir -p "$BACKUP_DIR"
+# 备份目录。默认在应用目录内（$APP_DIR/backups）——这是部署现实决定的：外置目录
+# 通常属 root，而部署脚本没有提权，硬默认到外面会让第一次运行就失败。
+#
+# 想搬到应用之外（更安全：应用被攻陷或主机被勒索时，备份不会与数据一起没）：
+#   sudo mkdir -p /var/backups/club702 && sudo chown <部署用户> /var/backups/club702
+# 然后在 env.sh 里设 DJANGO_BACKUP_DIR=/var/backups/club702。
+BACKUP_DIR="${DJANGO_BACKUP_DIR:-$APP_DIR/backups}"
+if ! mkdir -p "$BACKUP_DIR" 2>/dev/null; then
+    echo "备份目录 $BACKUP_DIR 不存在且无法创建。" >&2
+    echo "请手工建好并确保部署用户可写（或在 env.sh 里改 DJANGO_BACKUP_DIR）。" >&2
+    exit 1
+fi
+if [[ ! -w "$BACKUP_DIR" ]]; then
+    echo "备份目录 $BACKUP_DIR 不可写，请检查属主与权限。" >&2
+    exit 1
+fi
 STAMP="$(date +%F-%H%M)"
 RETAIN="${DJANGO_BACKUP_RETAIN:-14}"
 
