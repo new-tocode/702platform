@@ -4,7 +4,9 @@ from django.db.models.functions import Lower
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from .validators import post_image_upload_to, validate_post_image
+from core.storage import neutral_upload_to, private_storage
+
+from .validators import validate_post_image
 
 
 class Board(models.Model):
@@ -76,7 +78,10 @@ class PostImage(models.Model):
     )
     image = models.ImageField(
         _("帖子图片"),
-        upload_to=post_image_upload_to,
+        # 帖子图只能发给能进社团空间的账号，所以不进公开的 /media/；
+        # discussion.views.post_image 负责判定与送出。
+        upload_to=neutral_upload_to("discussion"),
+        storage=private_storage,
         validators=[validate_post_image],
     )
     file_size = models.PositiveBigIntegerField(_("文件大小"), default=0, editable=False)

@@ -40,7 +40,7 @@
                     {% for member in members %}
                         <div class="discussion-member">
                             {% if member.profile.avatar %}
-                                <img class="avatar discussion-avatar" src="{{ member.profile.avatar.url }}" alt="">
+                                <img class="avatar discussion-avatar" src="{% url 'accounts:avatar_file' member.pk %}" alt="">
                             {% else %}
                                 <span class="avatar avatar-blank discussion-avatar" aria-hidden="true">{% if member.profile.full_name %}{{ member.profile.full_name|first|upper }}{% else %}{{ member.username|first|upper }}{% endif %}</span>
                             {% endif %}

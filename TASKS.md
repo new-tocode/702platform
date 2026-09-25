@@ -19,24 +19,24 @@
 
 ## 阶段
 
-### 阶段 1 · 上传校验与公开面（V1、V4、V10）
-- [ ] `core/uploads.py`：捕获 Pillow `DecompressionBombError`，显式设 `Image.MAX_IMAGE_PIXELS`
-- [ ] 把「先量尺寸再 verify」收进统一校验，避免超大图通过校验后到渲染才炸
-- [ ] 四条上传通道各补回归用例（断言抛 `ValidationError` 而非未捕获异常）
-- [ ] Nginx 拒绝 `.` 开头的路径（`.git/`、`.github/`）
-- [ ] `install.sh` 生成 `env.sh` 后 `chmod 600`；生产配置缺失时拒绝启动
+### 阶段 1 · 上传校验与公开面（V1、V4、V10）✅
+- [x] `core/uploads.py`：捕获 Pillow `DecompressionBombError`，显式设 `Image.MAX_IMAGE_PIXELS`
+- [x] 把「先量尺寸再 verify」收进统一校验，避免超大图通过校验后到渲染才炸
+- [x] 四条上传通道各补回归用例（断言抛 `ValidationError` 而非未捕获异常）
+- [x] Nginx 拒绝 `.` 开头的路径（`.git/`、`.github/`）
+- [x] `install.sh` 生成 `env.sh` 后 `chmod 600`；生产配置缺失时拒绝启动
 
-### 阶段 2 · 传输层与会话（V2）
-- [ ] `Cookie Secure` 默认开；`DJANGO_SECURE_SSL_REDIRECT` / `DJANGO_SECURE_HSTS_SECONDS` 开关（默认关）
-- [ ] 生产环境 `SECRET_KEY` 未改或 `DEBUG` 开着时拒绝启动
-- [ ] `deploy.sh` 上线流程加 `check --deploy` 门禁
-- [ ] Nginx：`limit_req` 限 `/login/`、`/admin/login/`；80 跳 443 段注释待用
-- [ ] 文档：备案完成后的启用清单
+### 阶段 2 · 传输层与会话（V2）✅
+- [x] `Cookie Secure` 默认开；`DJANGO_SECURE_SSL_REDIRECT` / `DJANGO_SECURE_HSTS_SECONDS` 开关（默认关）
+- [x] 生产环境 `SECRET_KEY` 未改时拒绝启动（DEBUG 交给上线门禁）
+- [x] `deploy.sh` 上线流程加 `check --deploy` 门禁（实测拦下 W018/W012/W016）
+- [x] Nginx：`limit_req` 限 `/login/`、`/admin/login/`（zone 由 install.sh 幂等追加）
+- [x] 文档：拿到自有证书后的四步启用清单
 
-### 阶段 3 · 登录暴力破解防护（V3）
-- [ ] 引入 `django-axes`，失败计数与锁定
-- [ ] 登录成功/失败/锁定写审计
-- [ ] 用例：连续失败后锁定、锁定期间正确口令也拒绝、成功登录重置计数
+### 阶段 3 · 登录暴力破解防护（V3）✅
+- [x] 引入 `django-axes`，账号与 IP 两个维度各算，10 次锁 30 分钟
+- [x] 锁定写审计（不记口令）；后台可查看与提前解锁
+- [x] 用例：锁定期间正确口令也拒绝、成功登录不清 IP 计数、审计不含口令
 
 ### 阶段 4 · 上传文件边界（V5）
 - [ ] 新增 `PRIVATE_MEDIA_ROOT` 与 `private_storage`；受保护文件迁出 `mediafiles/`

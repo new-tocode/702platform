@@ -177,8 +177,18 @@ LOCALE_PATHS = [BASE_DIR / "locale"]
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
+
+# 公开的媒体：首页轮播、历年获奖、成员风采、公开通知的配图。Nginx 把 /media/
+# 直出这个目录，因为这些内容本来就对匿名访客开放。
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "mediafiles"
+
+# 受保护的上传件：项目书、批注版、归档版、帖子图、头像、个人图册。它们的可见性由
+# 业务规则决定，所以**刻意不在 mediafiles/ 之下**——Nginx 的 /media/ 永远指不到
+# 这里，取文件只能走视图，视图里的权限判定才有意义。见 core/storage.py。
+PRIVATE_MEDIA_ROOT = Path(
+    os.environ.get("DJANGO_PRIVATE_MEDIA_ROOT", BASE_DIR / "protected_media")
+)
 
 # 静态资源指纹：生产环境 collectstatic 后，{% static %} 解析为 app.<hash>.css，
 # 与 Nginx 的 expires 7d 配合，部署即让浏览器里的旧样式失效。开发环境不加指纹，

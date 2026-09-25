@@ -4,6 +4,8 @@ from django.contrib.auth.models import AbstractUser, UserManager as DjangoUserMa
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
+from core.storage import neutral_upload_to, private_storage
+
 from .validators import (
     AVATAR_HELP_TEXT,
     GALLERY_HELP_TEXT,
@@ -76,7 +78,10 @@ class Profile(models.Model):
     full_name = models.CharField(_("姓名"), max_length=128, blank=True)
     avatar = models.ImageField(
         _("头像"),
-        upload_to="avatars/%Y/%m/",
+        # 头像与图册只出现在登录后的页面（个人页、只读资料页、社团空间名单），
+        # 所以它们不该躺在 Nginx 直出的 /media/ 下：那里谁拿到路径谁就能取。
+        upload_to=neutral_upload_to("avatars"),
+        storage=private_storage,
         blank=True,
         validators=[validate_avatar],
         help_text=AVATAR_HELP_TEXT,
@@ -146,7 +151,8 @@ class GalleryImage(models.Model):
     )
     image = models.ImageField(
         _("图像"),
-        upload_to="gallery/%Y/%m/",
+        upload_to=neutral_upload_to("gallery"),
+        storage=private_storage,
         validators=[validate_gallery_image],
         help_text=GALLERY_HELP_TEXT,
     )

@@ -4,6 +4,8 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import models
 
+from core.storage import neutral_upload_to, private_storage
+
 from .validators import validate_proposal_file
 
 
@@ -25,7 +27,11 @@ class ProjectGroup(models.Model):
     college = models.CharField("学院", max_length=128, blank=True)
     proposal = models.FileField(
         "项目书",
-        upload_to="project_proposals/%Y/%m/",
+        # 落盘名与用户填的名字脱钩：原名常带组名与人名（「项目书 终版-张三.docx」
+        # 是典型叫法），而文件名会跟着文件走进备份、走进运维的 ls、走进下载头。
+        # 存放在私有根下，取件走 projects.views.group_proposal_download。
+        upload_to=neutral_upload_to("project_proposals"),
+        storage=private_storage,
         blank=True,
         validators=[validate_proposal_file],
         help_text="支持 doc、docx、pdf；由项目组联系人维护，用于提交同行评审。",

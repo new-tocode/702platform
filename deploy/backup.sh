@@ -35,7 +35,12 @@ PGPASSWORD="$DJANGO_DB_PASSWORD" pg_dump \
     --port "${DJANGO_DB_PORT:-5432}" \
     "$DJANGO_DB_NAME" | gzip > "backups/db-$STAMP.sql.gz"
 
-tar -czf "backups/media-$STAMP.tar.gz" mediafiles/
+# 两个上传目录都要备份：mediafiles/ 是公开的媒体库配图，protected_media/ 是
+# 项目书、批注版、头像、图册这些受保护的文件（它们刻意不在 mediafiles/ 之下，
+# 所以只打包前者会把它们整批漏掉）。目录可能还不存在，缺一个就跳过那一个。
+tar -czf "backups/media-$STAMP.tar.gz" \
+    $( [ -d mediafiles ] && echo mediafiles/ ) \
+    $( [ -d protected_media ] && echo protected_media/ )
 
 # 按保留份数清理旧的 db 与 media 备份（各自独立保留 RETAIN 份）
 ls -1t backups/db-*.sql.gz  2>/dev/null | tail -n +$((RETAIN + 1)) | xargs -r rm --

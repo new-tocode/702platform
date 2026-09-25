@@ -15,6 +15,9 @@ mediafiles/review_annotations/
 mediafiles/review_archives/
 mediafiles/avatars/
 mediafiles/gallery/
+# 受保护的上传件（项目书、批注版、头像、图册）落在这里，与 mediafiles/ 分开：
+# 它不在 Nginx 的 /media/ 之下，只能经视图取。
+protected_media/
 # logs/*.log* 覆盖 RotatingFileHandler 的轮转备份（django.log.1、.log.gz 等）
 logs/*.log*
 

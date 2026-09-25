@@ -55,7 +55,7 @@
                 <div class="panel-body">
                     <div class="avatar-block">
                         {% if profile.avatar %}
-                            <img class="avatar" src="{{ profile.avatar.url }}" alt="{% translate '当前头像' %}">
+                            <img class="avatar" src="{% url 'accounts:avatar_file' user.pk %}" alt="{% translate '当前头像' %}">
                         {% else %}
                             <span class="avatar avatar-blank" aria-hidden="true">{{ avatar_initial }}</span>
                         {% endif %}
@@ -131,7 +131,7 @@
                 <div class="gallery">
                     {% for image in gallery_images %}
                         <figure class="gitem gitem-{{ image.layout }}">
-                            <img src="{{ image.image.url }}" alt="">
+                            <img src="{% url 'accounts:gallery_file' image.pk %}" alt="">
                             <figcaption>
                                 <div class="gitem-meta">
                                     <span>#{{ forloop.counter|stringformat:"02d" }}</span>

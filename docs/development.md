@@ -211,6 +211,24 @@ source env.local.sh          # 必须：不加载会因缺少库名/账号/密�
 uuid（见 `core/storage.py`），因为原文件名会带人名、组名，而文件名会跟着文件走进备份、
 运维的 `ls` 与下载头。新增上传模型时，先想清楚它属于哪一类。
 
+**受保护上传件的取件口**（一律 `@login_required`，权限判定在视图里）：
+
+| 取件口 | 覆盖 | 判据 |
+|---|---|---|
+| `accounts:avatar_file` | 成员头像 | 登录即可（只出现在登录后的页面） |
+| `accounts:gallery_file` | 个人图册 | 登录即可 |
+| `discussion:post_image` | 帖子图片 | 能进社团空间 |
+| `projects:group_proposal_download` | 项目书 | `can_view_group` |
+| `reviews:annotated` / `reviews:archive_download` | 批注版 / 归档版 | `can_view_group` |
+
+模板里**不要**写 `{{ field.url }}`：受保护文件的存储刻意让 `url()` 抛异常（防的是
+Python 代码里拼地址）。模板要的是「有就渲染成链接、没有就渲染成文本」，用
+`{{ field|file_url }}`（见 `core/templatetags/file_urls.py`），取不到时给空串。
+
+**备份要覆盖两个目录**：`mediafiles/`（公开配图）与 `protected_media/`（项目书、
+批注版、头像、图册）。后者刻意不在前者之下，只打包 `mediafiles/` 会把受保护文件
+整批漏掉——`deploy/backup.sh` 与 `deploy/deploy.sh` 都已同时打包两个。
+
 **媒体上传限制**：图片 `jpg/jpeg/png/webp/gif` ≤10MB（Pillow 解码校验）；视频 `mp4`（查 `ftyp`）/`webm`（查 EBML 头）≤500MB。项目书与评审人的批注版项目书 `doc/docx/pdf` ≤20MB（扩展名 + 文件头签名，复用同一校验器）。扩展名、大小、MIME、签名任一不符即拒绝。
 
 ### 3.4 中英双语与翻译文件

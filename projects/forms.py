@@ -4,6 +4,8 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.utils.translation import gettext_lazy as _
 
+from core.storage import ProtectedClearableFileInput
+
 from .models import (
     MAX_ADVISORS_PER_GROUP,
     GroupCreateRequest,
@@ -100,6 +102,9 @@ class GroupProposalForm(forms.ModelForm):
     class Meta:
         model = ProjectGroup
         fields = ("proposal",)
+        # 受保护文件没有公开 URL，Django 原版 widget 会因此整块不渲染
+        # （看不到当前文件名、也没有清除勾选），换成本项目那个按文件名判断的。
+        widgets = {"proposal": ProtectedClearableFileInput()}
         labels = {"proposal": _("项目书")}
         help_texts = {"proposal": _("支持 doc、docx、pdf，上传后即可提交审核。")}
 

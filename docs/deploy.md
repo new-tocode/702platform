@@ -196,6 +196,44 @@ systemctl restart club702
 
 `auth.Permission.content_type` 是 CASCADE（权限随之消失），`admin.LogEntry.content_type` 是 SET_NULL（后台操作历史保留、只是内容类型置空），所以这一步是安全的；不做的话，Admin 的权限列表里会出现指向已不存在模型的条目。
 
+## 3.5 受保护上传件的目录迁移（一次性）
+
+从「安全检查」那一版起，项目书、批注版、归档版、帖子图、头像、个人图册从
+`mediafiles/` 搬到了 `protected_media/`。原因是前者由 Nginx 的 `/media/` 直出，
+谁拿到路径谁就能取，而这几类文件的可见性由业务规则决定——视图里的权限判定因此
+形同虚设。两个目录分开之后，`/media/` 只映射公开的媒体库配图。
+
+**这次上线要按停机窗口做**，因为数据迁移 `core.0002_rehome_protected_uploads`
+会**真实移动磁盘上的文件**：
+
+```bash
+# 1. 先备份（备份脚本已同时打包两个目录）
+sudo -u club bash -c "cd /opt/702platform && source env.sh && ./deploy/backup.sh"
+
+# 2. 停服，避免迁移期间有人正好在读文件
+sudo systemctl stop club702
+
+# 3. 部署（deploy.sh 会自动跑 migrate，其中就含这条搬运）
+sudo -u club bash -c './deploy/deploy.sh v<新版本>'
+```
+
+迁移的特点：
+
+* **幂等**：两个根的相对路径相同，搬完数据库里的字段值不用改；重跑只会发现目标
+  已存在。中途失败可以原地重来。
+* **不因缺文件而中止**：数据库里指向的文件若已不存在（运维挪过、备份不完整），
+  只记一条 `private_media.missing` 警告并跳过，其余照搬。
+* **可回滚**：反向迁移把文件搬回 `mediafiles/`。回滚代码的同时跑
+  `manage.py migrate core 0001` 即可。
+
+迁移跑完后，`protected_media/` 应当出现在应用目录下，且**不在** Nginx 的任何
+`location` 里（配置里只映射 `mediafiles/`）。可以这样确认没有旁路：
+
+```bash
+# 取一个受保护文件的相对路径，拼成 /media/<路径> 请求，应当是 404
+curl -s -o /dev/null -w '%{http_code}\n' https://<域名>/media/project_proposals/...
+```
+
 ## 4. 备份与恢复
 
 备份由 **`club702-backup.service`（oneshot）+ `club702-backup.timer`** 驱动，不用 cron：统一由 systemd 管理、`systemctl list-timers` 可查、`Persistent=true` 可补跑错过的备份。
@@ -215,7 +253,15 @@ gunzip -c backups/db-XXXX.sql.gz | PGPASSWORD=... psql -U club702 club702
 tar -xzf backups/media-XXXX.tar.gz -C /opt/702platform
 ```
 
+**媒体备份包含两个目录**：`mediafiles/`（媒体库配图，公开）与 `protected_media/`
+（项目书、批注版、头像、图册，只经视图送出）。后者刻意不在前者之下，所以
+`tar` 必须同时收两个；少一个会让受保护文件整批丢失，而数据库里的路径还指着它们。
+`deploy/backup.sh` 与 `deploy/deploy.sh` 都已同时打包，自定义脚本时留意这一条。
+
 保留份数由 `DJANGO_BACKUP_RETAIN` 控制（默认 14）；`backups/` 建议异地同步（脚本结尾留了 rsync 示意）。建议每季度做一次恢复演练。
+
+> 备份里包含实名身份与全部评审意见，比在线库更集中。`backups/` 已随 `.gitignore`
+> 排除在版本库外，权限也应只给部署用户；有条件的把异地副本加密。
 
 ## 5. 日常运维
 
