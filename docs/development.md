@@ -147,7 +147,8 @@
 | `djangorestframework>=3.16,<3.17` | 为后续 API 预留：只装在 `INSTALLED_APPS` 里，当前没有任何 serializer／viewset／APIView |
 | `bleach>=6.2,<7` | 富文本 HTML 白名单过滤 |
 | `markdown>=3.8,<4` | Markdown 渲染 |
-| `Pillow>=11.3,<12` | 校验上传图片真实格式 |
+| `Pillow>=11.3,<12` | 校验上传图片真实格式，并挡住解压炸弹 |
+| `django-axes>=8.3,<9` | 登录失败计数与锁定（账号、IP 两个维度各算各的） |
 | `psycopg[binary]>=3.2,<4` | PostgreSQL 驱动 |
 
 `requirements-prod.txt` 仅增 `gunicorn`。版本写成"下限+上限"，允许补丁更新、避免未验证的主版本跳变。
@@ -183,7 +184,11 @@ source env.local.sh          # 必须：不加载会因缺少库名/账号/密�
 | `DJANGO_DB_USER` / `DJANGO_DB_PASSWORD` | 空 | PostgreSQL 账号/密码 |
 | `DJANGO_DB_HOST` / `DJANGO_DB_PORT` | `127.0.0.1` / `5432` | PostgreSQL 地址/端口 |
 | `DJANGO_TIME_ZONE` | `Asia/Shanghai` | 时区 |
-| `DJANGO_SESSION_COOKIE_SECURE` / `DJANGO_CSRF_COOKIE_SECURE` | `0` | 仅 HTTPS 发送 Cookie；生产设 `1` |
+| `DJANGO_SESSION_COOKIE_SECURE` / `DJANGO_CSRF_COOKIE_SECURE` | `1` | 仅 HTTPS 发送 Cookie；**默认开启**，只有纯 http 部署才改 `0` |
+| `DJANGO_PROXY_SSL_HEADER` | `0` | TLS 由 Nginx 或上层代理终结时设 `1` |
+| `DJANGO_SECURE_SSL_REDIRECT` | `0` | 整站跳 https；拿到自有证书后再开，理由见 [`deploy.md`](deploy.md) |
+| `DJANGO_SECURE_HSTS_SECONDS` | `0` | HSTS 有效期；**不要轻易开**，开之前先读 [`deploy.md`](deploy.md) |
+| `DJANGO_PRIVATE_MEDIA_ROOT` | `protected_media/` | 受保护上传件的落盘根目录（不在 `mediafiles/` 下） |
 
 生产投放方式（占位符 + 校验）见 [`deploy.md`](deploy.md)。
 
@@ -192,10 +197,19 @@ source env.local.sh          # 必须：不加载会因缺少库名/账号/密�
 | 配置 | 值 | 作用 |
 |---|---|---|
 | `STATIC_URL` / `STATIC_ROOT` / `STATICFILES_DIRS` | `/static/` / `staticfiles/` / `static/` | 静态文件 |
-| `MEDIA_URL` / `MEDIA_ROOT` | `/media/` / `mediafiles/` | 上传媒体 |
+| `MEDIA_URL` / `MEDIA_ROOT` | `/media/` / `mediafiles/` | **公开**媒体（媒体库配图），Nginx 直出 |
+| `PRIVATE_MEDIA_ROOT` | `protected_media/` | **受保护**上传件（项目书、批注版、归档版、帖子图、头像、图册），只能经视图取 |
+| `AXES_FAILURE_LIMIT` / `AXES_LOCKOUT_PARAMETERS` | `10` / 账号与 IP 各算 | 登录失败锁定；锁定响应见 `accounts/axes.py` |
 | `AUTH_USER_MODEL` | `accounts.User` | 已迁移，不可中途更换 |
 | `LOGIN_URL` / `LOGIN_REDIRECT_URL` / `LOGOUT_REDIRECT_URL` | `accounts:login` / `accounts:member_home` / `accounts:home` | 登录跳转 |
 | `AUTH_PASSWORD_VALIDATORS` | 相似度/最小长度/常见密码/纯数字 | 密码强度 |
+
+**上传件的两类去处**：媒体库（首页轮播、历年获奖、成员风采、公开通知的配图）落在
+`mediafiles/`，Nginx 的 `/media/` 直出，因为它本来就对匿名访客开放；其余上传件
+（项目书、批注版、归档版、帖子图、头像、个人图册）落在 `protected_media/`，**刻意不在
+`mediafiles/` 之下**——取文件一律经过视图，权限判定才有意义。受保护文件落盘名统一换成
+uuid（见 `core/storage.py`），因为原文件名会带人名、组名，而文件名会跟着文件走进备份、
+运维的 `ls` 与下载头。新增上传模型时，先想清楚它属于哪一类。
 
 **媒体上传限制**：图片 `jpg/jpeg/png/webp/gif` ≤10MB（Pillow 解码校验）；视频 `mp4`（查 `ftyp`）/`webm`（查 EBML 头）≤500MB。项目书与评审人的批注版项目书 `doc/docx/pdf` ≤20MB（扩展名 + 文件头签名，复用同一校验器）。扩展名、大小、MIME、签名任一不符即拒绝。
 

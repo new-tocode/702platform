@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 702platform\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-25 14:23+0800\n"
+"POT-Creation-Date: 2026-09-25 15:55+0800\n"
 "PO-Revision-Date: 2026-09-19 18:39\n"
 "Last-Translator: 702platform\n"
 "Language-Team: 702platform\n"
@@ -33,12 +33,37 @@ msgstr "Change Password"
 msgid "更新登录密码"
 msgstr "Update your login password"
 
+#: accounts/axes.py:32
+msgid "请稍后再试。"
+msgstr "Please try again later."
+
+#: accounts/axes.py:35
+#, python-format
+msgid "请 %(hours)s 小时后再试。"
+msgstr "Please try again in %(hours)s hour(s)."
+
+#: accounts/axes.py:36
+#, python-format
+msgid "请 %(minutes)s 分钟后再试。"
+msgstr "Please try again in %(minutes)s minute(s)."
+
+#: accounts/axes.py:76
+#, python-format
+msgid "登录尝试次数过多，该账号或该网络已被暂时锁定，%(cooloff)s"
+msgstr ""
+"Too many login attempts. This account or network has been temporarily locked. "
+"%(cooloff)s"
+
+#: accounts/axes.py:81
+msgid "登录已锁定"
+msgstr "Login locked"
+
 #: accounts/forms.py:162 accounts/models.py:78 accounts/validators.py:35
 #: templates/accounts/profile.html:53
 msgid "头像"
 msgstr "Avatar"
 
-#: accounts/forms.py:166 accounts/forms.py:178 core/uploads.py:109
+#: accounts/forms.py:166 accounts/forms.py:178 core/uploads.py:107
 msgid "请选择要上传的图片。"
 msgstr "Please choose an image to upload."
 
@@ -329,28 +354,28 @@ msgstr "Audit log"
 msgid "查看平台关键操作记录"
 msgstr "Review the platform's key operations"
 
-#: core/uploads.py:84 core/uploads.py:97
+#: core/uploads.py:82 core/uploads.py:95
 msgid "上传文件不是有效的图片。"
 msgstr "The uploaded file is not a valid image."
 
-#: core/uploads.py:90
+#: core/uploads.py:88
 #, python-format
 msgid "图片过大（%(width)s×%(height)s 像素），请压缩后再上传。"
 msgstr ""
 "The image is too large (%(width)s×%(height)s pixels). Please compress it and "
 "upload again."
 
-#: core/uploads.py:115
+#: core/uploads.py:113
 #, python-format
 msgid "%(label)s仅支持 %(allowed)s 格式。"
 msgstr "%(label)s supports only these formats: %(allowed)s."
 
-#: core/uploads.py:120
+#: core/uploads.py:118
 #, python-format
 msgid "%(label)s不能超过 %(limit)s MB。"
 msgstr "%(label)s cannot exceed %(limit)s MB."
 
-#: core/uploads.py:130
+#: core/uploads.py:128
 msgid "文件类型与图片不符，请确认选的是图片。"
 msgstr "That file is not an image."
 

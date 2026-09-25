@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
+    "axes",
     "accounts.apps.AccountsConfig",
     "notices.apps.NoticesConfig",
     "media.apps.MediaConfig",
@@ -62,6 +63,9 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    # 登录锁定的响应翻译成页面：axes 的后端在口令校验前抛「已锁定」，这个中间件
+    # 把它变成 403 页面。少了它，那个异常会直接冒到 500。
+    "axes.middleware.AxesMiddleware",
     "config.middleware.RequestLoggingMiddleware",
     "config.middleware.ForcePasswordChangeMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
@@ -107,6 +111,37 @@ AUTH_USER_MODEL = "accounts.User"
 LOGIN_URL = "accounts:login"
 LOGIN_REDIRECT_URL = "accounts:member_home"
 LOGOUT_REDIRECT_URL = "accounts:home"
+
+# 认证后端。AxesBackend 放在最前：它先看这个账号/IP 是否已经锁着，已经锁了就
+# 直接拒绝，正确的口令同样不放行——否则「锁定」只是一句提示，爆破者只要撞对
+# 一次就能进来。ModelBackend 在后，负责真正的口令校验。
+AUTHENTICATION_BACKENDS = [
+    "axes.backends.AxesStandaloneBackend",
+    "django.contrib.auth.backends.ModelBackend",
+]
+
+# 登录失败锁定（django-axes）。
+#
+# 两个维度各算各的，因为攻击形态不同：同一账号被很多 IP 试（撞库）与同一 IP 试
+# 很多账号（扫号）是两件事，只按其中一个维度计都会漏掉另一半。
+#
+# 阈值 10 次：这已经够挡住脚本爆破（10 次尝试猜不中一个合规口令），同时给共用
+# 出口 IP 留出余量——成员常在小范围里共用一个出口，一个人手误几次不该把同 IP 的
+# 其他人一起关在门外。axes 只支持两个维度共用一个阈值（AXES_FAILURE_LIMIT 是
+# 一个数，不能按维度分别设），所以这里取的是「挡得住暴力、又不至于误伤」的折中。
+AXES_FAILURE_LIMIT = 10
+AXES_LOCKOUT_PARAMETERS = [["username"], ["ip_address"]]
+# 30 分钟后自动恢复，不需要管理员日常介入；确实需要提前放行时走后台。
+AXES_COOLOFF_TIME = 0.5  # 小时
+# 成功登录清空该账号的失败计数，但**不清 IP 那一格**——否则一个已经知道口令的
+# 攻击者可以隔几次就成功登一次，把 IP 计数刷掉，那这道防线就等于没有。
+AXES_RESET_ON_SUCCESS = False
+# 锁定期间不再刷新计时：否则攻击者只要持续尝试就能把合法用户永久关在门外，
+# 那本身就是一种拒绝服务。
+AXES_RESET_COOL_OFF_ON_FAILURE_DURING_LOCKOUT = False
+# 锁定时的响应交给我们自己，好把措辞与站内其他提示统一（默认是个英文裸页）。
+AXES_LOCKOUT_CALLABLE = "accounts.axes.lockout_response"
+AXES_VERBOSE = False
 
 AUTH_PASSWORD_VALIDATORS = [
     {
