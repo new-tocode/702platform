@@ -144,10 +144,10 @@
 | 依赖 | 作用 |
 |---|---|
 | `Django>=5.2,<5.3` | Web 框架、ORM、认证、Session、Admin、迁移、模板、测试 |
-| `djangorestframework>=3.16,<3.17` | 为后续 API 预留：只装在 `INSTALLED_APPS` 里，当前没有任何 serializer／viewset／APIView |
+| `djangorestframework>=3.17.2,<3.18` | 为后续 API 预留：只装在 `INSTALLED_APPS` 里，当前没有任何 serializer／viewset／APIView |
 | `bleach>=6.2,<7` | 富文本 HTML 白名单过滤 |
 | `markdown>=3.8,<4` | Markdown 渲染 |
-| `Pillow>=11.3,<12` | 校验上传图片真实格式，并挡住解压炸弹 |
+| `Pillow>=12.3,<13` | 校验上传图片真实格式，并挡住解压炸弹（12.x 修掉 11.3.0 的 35 个已知漏洞） |
 | `django-axes>=8.3,<9` | 登录失败计数与锁定（账号、IP 两个维度各算各的） |
 | `psycopg[binary]>=3.2,<4` | PostgreSQL 驱动 |
 
@@ -161,6 +161,15 @@
 .venv/bin/pip-compile --generate-hashes --output-file requirements.txt requirements.in
 .venv/bin/pip-compile --generate-hashes --output-file requirements-prod.txt requirements-prod.in
 ```
+
+**升级依赖后要留意两件事**：
+
+1. **glibc 版本**。Pillow 12.x 的 Linux 轮子改用 `manylinux_2_28` 标签（要求
+   glibc ≥ 2.28），不再提供 `manylinux_2_17`。生产机是 Alibaba Cloud Linux 3、
+   glibc 2.32，够用；但换更老的系统就会退回源码编译（需要系统装 libjpeg 等开发包）。
+2. **跑一遍全量测试**，尤其 `core.tests.ImageUploadBombAcceptanceTests`——解压炸弹
+   防护依赖 Pillow 的 `DecompressionBombError` 与 `MAX_IMAGE_PIXELS`，主版本升级
+   必须确认这两个还在、行为没变。
 
 > `pip-compile --generate-hashes` 会把**所有平台**的轮子哈希都收进锁文件
 > （实测 `pillow` 106 个、`psycopg-binary` 66 个），所以本地 3.13 生成的锁文件

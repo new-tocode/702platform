@@ -1,8 +1,8 @@
 Django>=5.2,<5.3
-djangorestframework>=3.16,<3.17
+djangorestframework>=3.17.2,<3.18
 # 登录失败计数与锁定：口令是可猜的短串，不限速的登录接口等于把爆破成本降到零。
 django-axes>=8.3,<9
 bleach>=6.2,<7
 markdown>=3.8,<4
-Pillow>=11.3,<12
+Pillow>=12.3,<13
 psycopg[binary]>=3.2,<4
