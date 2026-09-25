@@ -17,7 +17,7 @@
 git clone <仓库地址> /opt/702platform && cd /opt/702platform
 python3 -m venv .venv
 .venv/bin/python -m pip install --upgrade pip
-.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m pip install --require-hashes -r requirements.txt
 
 # 配置数据库（必填；其余用默认）
 export DJANGO_SECRET_KEY="$(.venv/bin/python -c 'import secrets; print(secrets.token_urlsafe(50))')"
@@ -58,7 +58,7 @@ cd /opt/702platform
 git clone <仓库地址> .
 python3 -m venv .venv
 .venv/bin/python -m pip install --upgrade pip
-.venv/bin/python -m pip install -r requirements.txt -r requirements-prod.txt
+.venv/bin/python -m pip install --require-hashes -r requirements.txt -r requirements-prod.txt
 ```
 
 ### 2.3 配置 env.sh
@@ -258,10 +258,38 @@ tar -xzf backups/media-XXXX.tar.gz -C /opt/702platform
 `tar` 必须同时收两个；少一个会让受保护文件整批丢失，而数据库里的路径还指着它们。
 `deploy/backup.sh` 与 `deploy/deploy.sh` 都已同时打包，自定义脚本时留意这一条。
 
-保留份数由 `DJANGO_BACKUP_RETAIN` 控制（默认 14）；`backups/` 建议异地同步（脚本结尾留了 rsync 示意）。建议每季度做一次恢复演练。
+保留份数由 `DJANGO_BACKUP_RETAIN` 控制（默认 14）。
 
-> 备份里包含实名身份与全部评审意见，比在线库更集中。`backups/` 已随 `.gitignore`
-> 排除在版本库外，权限也应只给部署用户；有条件的把异地副本加密。
+### 备份位置与加密
+
+备份默认落在 **`/var/backups/club702`**（`DJANGO_BACKUP_DIR` 可改），**不在应用目录
+里**。这一条是有意的：systemd 给应用进程整个 `APP_DIR` 的写权限，备份留在里面就等于
+和它保护的东西住在一起——应用被攻陷或主机被勒索时，数据与备份一起没。目录权限
+`700`、属主是部署用户，由 `install.sh` 建好。
+
+**加密**：在 `env.sh` 里填 `DJANGO_BACKUP_GPG_RECIPIENT`（gpg 公钥的收件人标识），
+备份就会加密后落盘；不填则明文保存，脚本每次都会打印提醒。备份里是实名身份、学号
+手机号与全部评审意见，比在线库更集中，值得加密：
+
+```bash
+# 在备份机或你自己的机器上生成密钥对，把公钥导入服务器
+gpg --full-generate-key                       # 生成（私钥保管好，恢复时要用）
+gpg --export --armor <邮箱> > backup-pub.asc  # 导出公钥
+# 服务器上导入，然后 env.sh 里填 DJANGO_BACKUP_GPG_RECIPIENT=<邮箱>
+sudo -u club gpg --import backup-pub.asc
+```
+
+恢复加密备份：`gpg --decrypt db-XXXX.sql.gz.gpg | gunzip | psql ...`。
+
+**异地**：本机备份挡不住主机级故障（磁盘损坏、误删、勒索），异地那份才是最后一道。
+脚本结尾留了 rsync 示意，把它接进定时任务即可。
+
+**一致性**：数据库与媒体是分两步导出的，不是同一时间点的快照，恢复后可能出现
+「库里有记录、媒体文件缺失」。社团规模下这个窗口是秒级，可以接受；要严格一致就先
+停写。数据库与媒体用同一份时间戳命名，配对恢复即可。
+
+> `backups/`（旧位置）已随 `.gitignore` 排除在版本库外。**建议每季度做一次真实恢复
+> 演练**——没验证过的备份不算备份。
 
 ## 5. 日常运维
 

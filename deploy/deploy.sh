@@ -31,30 +31,19 @@ if [[ -n "$DEPLOY_USER" ]] && [[ "$(id -u)" -eq 0 ]] && [[ "$(id -un)" != "$DEPL
 fi
 
 echo "==> 1/6 备份数据库和媒体（分别保留 ${DJANGO_BACKUP_RETAIN:-14} 份）"
-mkdir -p backups
-STAMP="$(date +%F-%H%M)"
-PGPASSWORD="$DJANGO_DB_PASSWORD" pg_dump \
-    --username "$DJANGO_DB_USER" \
-    --host "${DJANGO_DB_HOST:-127.0.0.1}" \
-    --port "${DJANGO_DB_PORT:-5432}" \
-    "$DJANGO_DB_NAME" | gzip > "backups/db-$STAMP.sql.gz"
-# 两个上传目录都要备份：mediafiles/ 是公开的媒体库配图，protected_media/ 是
-# 项目书、批注版、头像、图册这些受保护的文件（它们刻意不在 mediafiles/ 之下，
-# 所以只打包前者会把它们整批漏掉）。目录可能还不存在，缺一个就跳过那一个。
-tar -czf "backups/media-$STAMP.tar.gz" \
-    $( [ -d mediafiles ] && echo mediafiles/ ) \
-    $( [ -d protected_media ] && echo protected_media/ )
-RETAIN="${DJANGO_BACKUP_RETAIN:-14}"
-ls -1t backups/db-*.sql.gz    2>/dev/null | tail -n +$((RETAIN + 1)) | xargs -r rm --
-ls -1t backups/media-*.tar.gz 2>/dev/null | tail -n +$((RETAIN + 1)) | xargs -r rm --
-echo "    备份完成: backups/db-$STAMP.sql.gz"
+# 直接复用 backup.sh，不再在这里抄一遍 pg_dump 与 tar：两份实现迟早会漂移，而
+# 「发布前先备份」是回滚的前提，它出错没人会发现——直到真需要回滚的那一天。
+"$APP_DIR/deploy/backup.sh"
 
 echo "==> 2/6 切换版本 $TAG"
 git fetch --tags origin
 git checkout "$TAG"
 
 echo "==> 3/6 安装/更新依赖"
-.venv/bin/python -m pip install --quiet -r requirements.txt -r requirements-prod.txt
+# --require-hashes：锁文件里每个包都带哈希，安装时校验——依赖被篡改或供应链
+# 投毒会在这里失败，而不是安静地装上一个被换过的包。
+.venv/bin/python -m pip install --quiet --require-hashes \
+    -r requirements.txt -r requirements-prod.txt
 
 echo "==> 4/6 部署配置门禁"
 # check --deploy 会在上线之前把「DEBUG 还开着」「Cookie 没带 Secure」「SECRET_KEY

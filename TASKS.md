@@ -53,13 +53,14 @@
 - [x] 用例：逐项核对长度口径表、三件事在截止后都不能动
 - 注：管理员才能写的正文（通知、内容页、竞赛说明等）不设上限——威胁面小，正文本就长
 
-### 阶段 6 · 依赖、CI 与文档收尾（V7、V8）
-- [ ] `requirements.in` + pip-tools 锁定
-- [ ] GitHub Actions：`check --deploy` + 全部测试 + pip-audit
-- [ ] `backup.sh`：备份移出 `ReadWritePaths`、加 `age`/`gpg` 加密钩子、媒体与库一致性
-- [ ] 更新 `docs/deploy.md`、`docs/development.md`、`README.md`
-- [ ] 修正 `安全检查.md` 里 V8 关于 `admin.E408` 的错误陈述（实测 `check` 无任何问题）
-- [ ] 删除本清单
+### 阶段 6 · 依赖、CI 与文档收尾（V7、V8）✅
+- [x] `requirements.in` + pip-tools 锁定（带哈希，安装走 `--require-hashes`）
+- [x] GitHub Actions：`check --deploy` + 全部测试 + pip-audit
+- [x] 备份移出应用目录（`/var/backups/club702`）、gpg 加密钩子、一致性窗口说明；
+      `deploy.sh` 改为复用 `backup.sh`，两份实现不再漂移
+- [x] 更新 `docs/deploy.md`、`docs/development.md`、`docs/architecture.md`、`README.md`
+- [x] 修正 `安全检查.md` 里 V8 关于 `admin.E408` 的错误陈述（实测 `check` 无任何问题），
+      并补一份「修复状态」总表
 
 ## 每阶段收尾必做
 

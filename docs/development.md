@@ -151,7 +151,23 @@
 | `django-axes>=8.3,<9` | 登录失败计数与锁定（账号、IP 两个维度各算各的） |
 | `psycopg[binary]>=3.2,<4` | PostgreSQL 驱动 |
 
-`requirements-prod.txt` 仅增 `gunicorn`。版本写成"下限+上限"，允许补丁更新、避免未验证的主版本跳变。
+`requirements-prod.txt` 仅增 `gunicorn`。
+
+**依赖用 pip-tools 锁定**：`.in` 是源（写区间），`.txt` 是 `pip-compile --generate-hashes`
+生成的锁文件（精确版本 + 哈希），**锁文件要一起提交**。改依赖时改 `.in` 再重新编译：
+
+```bash
+.venv/bin/pip install pip-tools
+.venv/bin/pip-compile --generate-hashes --output-file requirements.txt requirements.in
+.venv/bin/pip-compile --generate-hashes --output-file requirements-prod.txt requirements-prod.in
+```
+
+安装时带 `--require-hashes`（`deploy.sh` 与 CI 都是这个口径）：每个包按哈希校验，
+依赖被篡改或供应链投毒会当场失败，而不是安静地装上一个被换过的包。
+
+**CI**（`.github/workflows/ci.yml`）在每次 push 与 PR 上跑三件事：`check --deploy`
+门禁、全部测试、`pip-audit` 依赖漏洞扫描。门禁那一步与 `deploy.sh` 里那道是同一
+口径，只是提前到合并前。
 
 ## 3. 环境与配置
 

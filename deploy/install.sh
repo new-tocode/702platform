@@ -124,7 +124,7 @@ fi
 # 项目依赖（不自动 pip install，只检测）
 for pkg in django rest_framework bleach markdown PIL psycopg gunicorn; do
     if ! "$APP_DIR/.venv/bin/python" -c "import $pkg" >/dev/null 2>&1; then
-        MISSING+=("Python 依赖未安装: $pkg（请先执行: $APP_DIR/.venv/bin/python -m pip install -r requirements.txt -r requirements-prod.txt）")
+        MISSING+=("Python 依赖未安装: $pkg（请先执行: $APP_DIR/.venv/bin/python -m pip install --require-hashes -r requirements.txt -r requirements-prod.txt）")
     fi
 done
 
@@ -252,11 +252,21 @@ info "编译界面翻译（英文）"
 run_as_app .venv/bin/python manage.py compilemessages -l en
 ok "界面翻译已编译"
 
-# 备份目录（club702-backup.service 的 ReadWritePaths 依赖它存在，缺失会导致服务 226/NAMESPACE 启动失败）
+# 备份目录（club702-backup.service 的 ReadWritePaths 依赖它存在，缺失会导致服务
+# 226/NAMESPACE 启动失败）。默认在应用目录**之外**：应用进程对 APP_DIR 有写权限，
+# 备份留在里面就等于和它保护的东西住在一起。
+BACKUP_DIR="${DJANGO_BACKUP_DIR:-/var/backups/club702}"
 info "确保备份目录存在"
-sudo mkdir -p "$APP_DIR/backups"
-sudo chown "$DEPLOY_SYSTEM_USER:$DEPLOY_SYSTEM_USER" "$APP_DIR/backups"
-ok "备份目录就绪: $APP_DIR/backups"
+sudo mkdir -p "$BACKUP_DIR"
+sudo chown "$DEPLOY_SYSTEM_USER:$DEPLOY_SYSTEM_USER" "$BACKUP_DIR"
+sudo chmod 700 "$BACKUP_DIR"
+ok "备份目录就绪: $BACKUP_DIR（仅 $DEPLOY_SYSTEM_USER 可读写）"
+
+# 受保护上传件的目录：backup.service 的 ReadOnlyPaths 与应用的写入都要它存在
+info "确保受保护上传目录存在"
+sudo mkdir -p "$APP_DIR/protected_media"
+sudo chown "$DEPLOY_SYSTEM_USER:$DEPLOY_SYSTEM_USER" "$APP_DIR/protected_media"
+ok "受保护上传目录就绪: $APP_DIR/protected_media"
 
 # ---------- 8. 注册 systemd 服务 ----------
 info "注册 systemd 服务与备份定时器"
@@ -273,6 +283,7 @@ RENDER=(
     -e "s|@@SSL_KEY_PATH@@|${SSL_KEY_PATH:-}|g"
     -e "s|@@BACKUP_SCHEDULE@@|$DJANGO_BACKUP_SCHEDULE|g"
     -e "s|@@BACKUP_RETAIN@@|$DJANGO_BACKUP_RETAIN|g"
+    -e "s|@@BACKUP_DIR@@|${DJANGO_BACKUP_DIR:-/var/backups/club702}|g"
     -e "s|@@VENV@@|$APP_DIR/.venv|g"
     -e "s|@@PG_SERVICE@@|${PG_SERVICE:-postgresql.service}|g"
 )
@@ -378,7 +389,8 @@ ${GRN}  首次部署完成                              ${RST}
 ${GRN}============================================${RST}
   应用服务 : systemctl status club702
   备份定时 : systemctl list-timers | grep club702
-  手动备份 : /opt 下执行 backups/ 相关脚本
+  手动备份 : sudo -u ${DEPLOY_SYSTEM_USER} ${APP_DIR}/deploy/backup.sh
+  备份位置 : ${DJANGO_BACKUP_DIR:-/var/backups/club702}（备份未加密时脚本会提醒）
   访问入口 : http://${DEPLOY_DOMAIN}/
   管理后台 : http://${DEPLOY_DOMAIN}/admin/
   日志     : journalctl -u club702 -f
