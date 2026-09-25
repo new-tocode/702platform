@@ -101,16 +101,55 @@ sudo apt install certbot python3-certbot-nginx
 sudo certbot --nginx -d club.example.com
 ```
 
-启用后回到 `env.sh` 打开安全项并重启：
+#### 现状：证书是借来的
+
+本平台目前没有自己的域名备案与证书，线上 HTTPS 用的是**另一个已备案站点**的证书
+（该站点与本平台无关）。这带来两个必须记住的后果：
+
+- **HSTS 绝对不要开。** HSTS 一旦生效，浏览器会在有效期内拒绝一切非 https 访问，
+  用户点「继续访问」也绕不过去。借用证书随时可能被收回，那时域名就被锁死了——
+  只能换域名，或者让每个用户去清 HSTS 缓存。`DJANGO_SECURE_HSTS_SECONDS` 因此
+  默认是 0，也不要手工去改。
+- **不做整站跳 https。** 线上确实有人用 `http://IP` 直接访问；硬跳会把 IP 这条
+  入口打到那个不属于本平台的域名上。`DJANGO_SECURE_SSL_REDIRECT` 默认关。
+
+Cookie 的 Secure 标志反过来是**默认开**的：站点全程 https（IP 直连也一样），
+所以给会话与 CSRF Cookie 加 Secure 不挡任何人，却能防住「登录后会话被同网段
+明文取走」。`env.template` 里两项默认就是 1。
+
+#### 拿到自己的证书之后
+
+按这个顺序做，每步确认无误再走下一步：
+
+1. 先只把证书挂上（`SSL_CERT_PATH` / `SSL_KEY_PATH`），确认 HTTPS 正常。
+2. `env.sh` 里打开代理头与受信来源，重启：
+   ```bash
+   DJANGO_PROXY_SSL_HEADER=1
+   DJANGO_CSRF_TRUSTED_ORIGINS=https://club.example.com
+   ```
+3. 确认全站没有 http 访问需求后，再开整站跳转：
+   ```bash
+   DJANGO_SECURE_SSL_REDIRECT=1
+   ```
+4. HSTS **最后**再考虑，且先给一个很短的窗口试水：
+   ```bash
+   DJANGO_SECURE_HSTS_SECONDS=60      # 先 60 秒，确认一周无事再逐步加长
+   ```
+   加长到 31536000（一年）之前，想清楚证书续期是不是自动的——证书一断，长窗口的
+   HSTS 会让站点在整个窗口内都进不去。
+
+上面 3、4 两步做的同时，`config/settings.py` 里的 `SILENCED_SYSTEM_CHECKS` 会
+自动放回对应的 `security.W008` / `security.W004` 告警，`check --deploy` 随即重新
+盯住它们——静音是跟着开关走的，不是写死的。
+
+任何一步之后都可以跑：
 
 ```bash
-DJANGO_SESSION_COOKIE_SECURE=1
-DJANGO_CSRF_COOKIE_SECURE=1
-DJANGO_PROXY_SSL_HEADER=1
-DJANGO_CSRF_TRUSTED_ORIGINS=https://club.example.com
+.venv/bin/python manage.py check --deploy --fail-level WARNING
 ```
 
-启用 HTTPS 后建议再跑一次 `.venv/bin/python manage.py check --deploy`。
+`deploy.sh` 在上线流程里已经内置了这一条：**任何告警都会让这次发布中止**，宁可不发，
+也不让站点安静地退化。
 
 ### 2.6 上线自检
 
@@ -129,7 +168,7 @@ cd /opt/702platform
 sudo -u club bash -c './deploy/deploy.sh v1.0.1'   # club = DEPLOY_SYSTEM_USER
 ```
 
-`deploy.sh` 自动：备份库与媒体（保留 RETAIN 份）→ checkout tag → 升级依赖 → `migrate` + `collectstatic` + `compilemessages` → 重启 → 健康检查。任何一步失败即中止。版本号命名 `v主.次.修订`（修订=修复，次=新功能，主=不兼容）。
+`deploy.sh` 自动：备份库与媒体（保留 RETAIN 份）→ checkout tag → 升级依赖 → **`check --deploy` 门禁** → `migrate` + `collectstatic` + `compilemessages` → 重启 → 健康检查。任何一步失败即中止，其中门禁那一步会拦下「DEBUG 还开着」「Cookie 没带 Secure」「SECRET_KEY 还是源码默认值」这类不会让站点起不来、只会让它安静地不安全的问题。版本号命名 `v主.次.修订`（修订=修复，次=新功能，主=不兼容）。
 
 ### 回滚
 

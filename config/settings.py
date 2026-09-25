@@ -161,17 +161,54 @@ STORAGES = {
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# Explicit production-safe cookie defaults. HTTPS deployments can enable the
-# secure flags through environment variables without changing Python code.
+# Cookie 与安全头。
+#
+# 两个 Secure 标志**默认开启**：线上是全程 https（服务器自己 443，或上层代理
+# 终结 TLS），IP 直连也一样，所以给会话与 CSRF Cookie 加上 Secure 不挡任何人。
+# 以前默认关着，等于把「登录后会话可被同网段明文取走」交给部署者去发现——这类
+# 默认值该站在安全那一侧。
+#
+# 唯一的例外是纯 http 的部署，那种环境要在 env.sh 里显式改回 0，否则浏览器不会
+# 带上会话 Cookie，谁都登录不了。
 SESSION_COOKIE_HTTPONLY = True
-SESSION_COOKIE_SECURE = env_bool("DJANGO_SESSION_COOKIE_SECURE", False)
-CSRF_COOKIE_SECURE = env_bool("DJANGO_CSRF_COOKIE_SECURE", False)
+SESSION_COOKIE_SECURE = env_bool("DJANGO_SESSION_COOKIE_SECURE", True)
+CSRF_COOKIE_SECURE = env_bool("DJANGO_CSRF_COOKIE_SECURE", True)
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "DENY"
 
-# Reverse proxy / HTTPS support (all optional, off by default).
-# Set DJANGO_PROXY_SSL_HEADER=1 only when Nginx (or an equivalent trusted
-# proxy) terminates TLS and always sets X-Forwarded-Proto itself.
+# 整站跳 https。**默认关**：现用的证书借自另一个已备案的站点，随时可能收回；
+# 而确实有人用 http://IP 直接访问，硬跳会把 IP 这条入口打到域名上去（那个域名
+# 还不属于本平台）。拿到自己的证书后再打开。
+SECURE_SSL_REDIRECT = env_bool("DJANGO_SECURE_SSL_REDIRECT", False)
+
+# HSTS。**默认关，且要格外谨慎**：一旦生效，浏览器会在有效期内拒绝一切非 https
+# 访问，用户点「继续访问」也绕不过去。证书是借来的情况下开它，等证书被收回时
+# 站点就被锁死了——只能换域名，或者让每个用户去清 HSTS 缓存。拿到本平台自己的、
+# 稳定的证书后再考虑，初值也建议先给 60 秒试水。
+SECURE_HSTS_SECONDS = int(os.environ.get("DJANGO_SECURE_HSTS_SECONDS", "0"))
+if SECURE_HSTS_SECONDS:
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool(
+        "DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS", False
+    )
+    SECURE_HSTS_PRELOAD = env_bool("DJANGO_SECURE_HSTS_PRELOAD", False)
+
+# 上面两处「有意关闭」对应的告警一并静音。不静音的话，check --deploy 的输出里
+# 永远压着这两条，deploy.sh 的上线门禁就没法用「有任何告警即失败」这条简单规则
+# ——一条永远为真的告警会把整道门禁变成摆设。
+#
+# 静音条件与关闭条件绑在一起：拿到自己的证书、把两个开关打开之后，告警自动回来。
+SILENCED_SYSTEM_CHECKS = [
+    check
+    for check, silenced in (
+        ("security.W004", not SECURE_HSTS_SECONDS),
+        ("security.W008", not SECURE_SSL_REDIRECT),
+    )
+    if silenced
+]
+
+# Reverse proxy / HTTPS support. Set DJANGO_PROXY_SSL_HEADER=1 when TLS is
+# terminated by Nginx or an equivalent trusted proxy that always sets
+# X-Forwarded-Proto itself.
 if env_bool("DJANGO_PROXY_SSL_HEADER", False):
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
@@ -273,12 +310,16 @@ LOGGING = {
 # ---------------------------------------------------------------------------
 # 生产配置自检
 #
-# 上面每一项都有安全默认值，唯独 SECRET_KEY 只能由部署者给对。漏设的后果是
+# 上面每一项都有安全默认值，唯独 SECRET_KEY 只能由部署者给对，而漏设的后果是
 # 静默的：站点照常起来，只是会话签名用的是公开在源码里的那把钥匙，任何人都能
 # 伪造出有效的会话 Cookie。manage.py check --deploy 会提示，但那要有人主动去跑。
 #
-# 所以改成拒绝启动：起不来是响的，起得来但是错的才是危险的。
-# 本地开发不受影响——本地本来就该用这把开发密钥。
+# 所以这一条改成拒绝启动：起不来是响的，起得来但是错的才是危险的。
+# 本地开发不受影响——本地本来就用这把开发密钥。
+#
+# DEBUG 不在这里判：它由 deploy/deploy.sh 上线时的 check --deploy 门禁拦下
+# （security.W018），那份检查同时覆盖 HSTS、Cookie、SSL 跳转等其余项，比
+# 散在 settings 里的逐条判断更不容易漏。
 if not DEBUG and SECRET_KEY == "django-insecure-development-only-change-me":
     raise ImproperlyConfigured(
         "生产环境必须设置 DJANGO_SECRET_KEY（不能沿用源码里的开发默认值）。"

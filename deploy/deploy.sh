@@ -30,7 +30,7 @@ if [[ -n "$DEPLOY_USER" ]] && [[ "$(id -u)" -eq 0 ]] && [[ "$(id -un)" != "$DEPL
     exec sudo -u "$DEPLOY_USER" bash "$0" "$TAG"
 fi
 
-echo "==> 1/5 备份数据库和媒体（分别保留 ${DJANGO_BACKUP_RETAIN:-14} 份）"
+echo "==> 1/6 备份数据库和媒体（分别保留 ${DJANGO_BACKUP_RETAIN:-14} 份）"
 mkdir -p backups
 STAMP="$(date +%F-%H%M)"
 PGPASSWORD="$DJANGO_DB_PASSWORD" pg_dump \
@@ -44,21 +44,27 @@ ls -1t backups/db-*.sql.gz    2>/dev/null | tail -n +$((RETAIN + 1)) | xargs -r 
 ls -1t backups/media-*.tar.gz 2>/dev/null | tail -n +$((RETAIN + 1)) | xargs -r rm --
 echo "    备份完成: backups/db-$STAMP.sql.gz"
 
-echo "==> 2/5 切换版本 $TAG"
+echo "==> 2/6 切换版本 $TAG"
 git fetch --tags origin
 git checkout "$TAG"
 
-echo "==> 3/5 安装/更新依赖"
+echo "==> 3/6 安装/更新依赖"
 .venv/bin/python -m pip install --quiet -r requirements.txt -r requirements-prod.txt
 
-echo "==> 4/5 数据库迁移 + 静态文件 + 界面翻译"
+echo "==> 4/6 部署配置门禁"
+# check --deploy 会在上线之前把「DEBUG 还开着」「Cookie 没带 Secure」「SECRET_KEY
+# 还是源码默认值」这类退化拦下来。这类问题不会让站点起不来，只会让它安静地不安全，
+# 事后再发现往往已经跑了一段时间。所以放在重启服务之前：宁可这次发布失败。
+.venv/bin/python manage.py check --deploy --fail-level WARNING
+
+echo "==> 5/6 数据库迁移 + 静态文件 + 界面翻译"
 .venv/bin/python manage.py migrate --noinput
 .venv/bin/python manage.py collectstatic --noinput
 # 界面英文的 .mo 是构建产物（不进版本库）：按这个 tag 里的 .po 现编，线上就永远
 # 与 .po 一致。服务器缺 gettext 会在这里直接失败——比英文页面静默退回中文好。
 .venv/bin/python manage.py compilemessages -l en
 
-echo "==> 5/5 重启服务 + 健康检查"
+echo "==> 6/6 重启服务 + 健康检查"
 systemctl restart "$SERVICE_NAME"
 sleep 2
 if curl -fsS "$SITE_URL" > /dev/null; then

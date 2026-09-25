@@ -334,6 +334,23 @@ fi
 if [[ -n "$NGINX_ENLINK" && ! -e "$NGINX_ENLINK" ]]; then
     ln -s "$NGINX_CONF" "$NGINX_ENLINK"
 fi
+# 限流区必须定义在 http 上下文里，而站点配置（conf.d/*.conf、sites-enabled/*）
+# 是包含在 http 块**内部**的，写不进去。所以由本脚本往 nginx.conf 追加一次定义
+# （幂等：已有同名 zone 就跳过），站点配置里的 limit_req 引用它。
+NGINX_MAIN_CONF="/etc/nginx/nginx.conf"
+if [[ -f "$NGINX_MAIN_CONF" ]] && ! grep -q "zone=club702_login" "$NGINX_MAIN_CONF"; then
+    info "向 nginx.conf 追加登录限流区"
+    # 10m 共享内存约可容纳 16 万个 IP；登录是低频操作，够用很久。
+    if sed -i "/^http {/a\    limit_req_zone \$binary_remote_addr zone=club702_login:10m rate=20r/m;" "$NGINX_MAIN_CONF"; then
+        ok "已加入 limit_req_zone club702_login（20 次/分钟/IP）"
+    else
+        warn "追加 nginx.conf 失败，站点配置里的 limit_req 会因缺少 zone 而让 nginx -t 报错"
+        warn "请手工在 nginx.conf 的 http 块内加入："
+        warn "  limit_req_zone \$binary_remote_addr zone=club702_login:10m rate=20r/m;"
+        exit 1
+    fi
+fi
+
 if ! nginx -t >/dev/null 2>&1; then
     fail "Nginx 配置测试失败："
     nginx -t 2>&1 | sed "s/^/  /"
