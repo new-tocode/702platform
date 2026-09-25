@@ -6,10 +6,15 @@ competitions 成了唯一一个把事务写进视图的应用。
 """
 
 from django.db import IntegrityError, transaction
+from django.utils.translation import gettext_lazy as _
 
 from core.audit import record_audit
 
 from .models import CompetitionRegistration
+
+
+class RegistrationClosed(Exception):
+    """报名已截止或已关闭，不能再改动这条登记。"""
 
 
 class DuplicateRegistration(Exception):
@@ -82,9 +87,15 @@ def save_registration(
 def withdraw_registration(*, registration, actor, request=None):
     """放弃报名。
 
+    与报名、修改一样受截止时间约束：这三件事都是「改这条登记」，没有理由让其中
+    一件事在截止后仍然可用。少了这道校验，截止、甚至名单已经报给主办方之后，联系
+    人还能把记录删掉——真实后果是平台记录与已上报名单对不上，要等对账时才发现。
+
     审计的 detail 里是竞赛与项目组的 id，必须在删除前先取出来——记录没了就
     取不到了。审计本身仍写在删除之后，与合并前一致。
     """
+    if not registration.competition.is_registration_open:
+        raise RegistrationClosed(_("该竞赛已关闭报名或已超过报名截止时间，无法放弃。"))
     detail = {
         "competition_id": registration.competition_id,
         "group_id": registration.group_id,

@@ -97,7 +97,7 @@ class ProjectSubmission(models.Model):
         default="",
         help_text="决定本轮需要几名评审人；升级前创建的送审留空，沿用两人制。",
     )
-    message = models.TextField("提交说明", blank=True)
+    message = models.TextField("提交说明", max_length=5000, blank=True)
     status = models.CharField(
         "状态",
         max_length=20,
@@ -245,7 +245,7 @@ class ReviewTask(models.Model):
         choices=DECISION_CHOICES,
         blank=True,
     )
-    comment = models.TextField("意见", blank=True)
+    comment = models.TextField("意见", max_length=5000, blank=True)
     is_override = models.BooleanField(
         "超级评审决定",
         default=False,
@@ -443,7 +443,7 @@ class ReviewerLeave(models.Model):
     starts_at = models.DateTimeField("请假开始")
     ends_at = models.DateTimeField("请假结束")
     # 成员中心用 ModelForm 的默认标签渲染这一栏，所以这个 verbose_name 是前台文案。
-    reason = models.TextField(_("事由"), blank=True)
+    reason = models.TextField(_("事由"), max_length=500, blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,

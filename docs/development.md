@@ -189,6 +189,7 @@ source env.local.sh          # 必须：不加载会因缺少库名/账号/密�
 | `DJANGO_SECURE_SSL_REDIRECT` | `0` | 整站跳 https；拿到自有证书后再开，理由见 [`deploy.md`](deploy.md) |
 | `DJANGO_SECURE_HSTS_SECONDS` | `0` | HSTS 有效期；**不要轻易开**，开之前先读 [`deploy.md`](deploy.md) |
 | `DJANGO_PRIVATE_MEDIA_ROOT` | `protected_media/` | 受保护上传件的落盘根目录（不在 `mediafiles/` 下） |
+| `DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS` / `DJANGO_SECURE_HSTS_PRELOAD` | `0` | 仅在 HSTS 已开启时生效 |
 
 生产投放方式（占位符 + 校验）见 [`deploy.md`](deploy.md)。
 
@@ -200,6 +201,7 @@ source env.local.sh          # 必须：不加载会因缺少库名/账号/密�
 | `MEDIA_URL` / `MEDIA_ROOT` | `/media/` / `mediafiles/` | **公开**媒体（媒体库配图），Nginx 直出 |
 | `PRIVATE_MEDIA_ROOT` | `protected_media/` | **受保护**上传件（项目书、批注版、归档版、帖子图、头像、图册），只能经视图取 |
 | `AXES_FAILURE_LIMIT` / `AXES_LOCKOUT_PARAMETERS` | `10` / 账号与 IP 各算 | 登录失败锁定；锁定响应见 `accounts/axes.py` |
+| `FILE_UPLOAD_MAX_MEMORY_SIZE` / `DATA_UPLOAD_MAX_MEMORY_SIZE` | `5 MB` | 显式写死，不让它随 Django 版本漂；文件上传走流式解析不受后者限制 |
 | `AUTH_USER_MODEL` | `accounts.User` | 已迁移，不可中途更换 |
 | `LOGIN_URL` / `LOGIN_REDIRECT_URL` / `LOGOUT_REDIRECT_URL` | `accounts:login` / `accounts:member_home` / `accounts:home` | 登录跳转 |
 | `AUTH_PASSWORD_VALIDATORS` | 相似度/最小长度/常见密码/纯数字 | 密码强度 |
@@ -228,6 +230,16 @@ Python 代码里拼地址）。模板要的是「有就渲染成链接、没有�
 **备份要覆盖两个目录**：`mediafiles/`（公开配图）与 `protected_media/`（项目书、
 批注版、头像、图册）。后者刻意不在前者之下，只打包 `mediafiles/` 会把受保护文件
 整批漏掉——`deploy/backup.sh` 与 `deploy/deploy.sh` 都已同时打包两个。
+
+**用户可填文本的长度上限**：成员能自由填写的长文本都有上限（评审意见 5000、
+送审说明 5000、入组申请理由 2000、项目组描述 2000、组介绍 2000、报名备注 2000、
+请假事由 500、借用备注 1000）。没有上限的文本字段是一条廉价的写入放大路径——
+一次请求就能塞进很大的内容，把库撑大、把后台列表与页面渲染拖慢。表单与模型两边
+都写：表单先给出友好报错，模型兜住后台表单与脚本写入。核心用例
+`core.tests.UserSuppliedTextLimitAcceptanceTests` 会逐项核对这张口径表。
+
+管理员才能写的正文（通知正文、公开内容页、竞赛说明等）不设上限——它们的威胁面
+小得多，而正文本来就可能是长内容。
 
 **媒体上传限制**：图片 `jpg/jpeg/png/webp/gif` ≤10MB（Pillow 解码校验）；视频 `mp4`（查 `ftyp`）/`webm`（查 EBML 头）≤500MB。项目书与评审人的批注版项目书 `doc/docx/pdf` ≤20MB（扩展名 + 文件头签名，复用同一校验器）。扩展名、大小、MIME、签名任一不符即拒绝。
 

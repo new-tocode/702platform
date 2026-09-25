@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 702platform\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-25 15:55+0800\n"
+"POT-Creation-Date: 2026-09-25 17:33+0800\n"
 "PO-Revision-Date: 2026-09-19 18:39\n"
 "Last-Translator: 702platform\n"
 "Language-Team: 702platform\n"
@@ -51,14 +51,14 @@ msgstr "Please try again in %(minutes)s minute(s)."
 #, python-format
 msgid "登录尝试次数过多，该账号或该网络已被暂时锁定，%(cooloff)s"
 msgstr ""
-"Too many login attempts. This account or network has been temporarily locked. "
-"%(cooloff)s"
+"Too many login attempts. This account or network has been temporarily "
+"locked. %(cooloff)s"
 
 #: accounts/axes.py:81
 msgid "登录已锁定"
 msgstr "Login locked"
 
-#: accounts/forms.py:162 accounts/models.py:78 accounts/validators.py:35
+#: accounts/forms.py:162 accounts/models.py:80 accounts/validators.py:35
 #: templates/accounts/profile.html:53
 msgid "头像"
 msgstr "Avatar"
@@ -67,7 +67,7 @@ msgstr "Avatar"
 msgid "请选择要上传的图片。"
 msgstr "Please choose an image to upload."
 
-#: accounts/forms.py:174 accounts/models.py:148
+#: accounts/forms.py:174 accounts/models.py:153
 msgid "图像"
 msgstr "Image"
 
@@ -91,63 +91,63 @@ msgstr "The current password is incorrect."
 msgid "两次输入的新密码不一致。"
 msgstr "The two new passwords do not match."
 
-#: accounts/models.py:76 templates/projects/group_detail.html:78
+#: accounts/models.py:78 templates/projects/group_detail.html:78
 #: templates/projects/group_manage.html:100
 msgid "姓名"
 msgstr "Name"
 
-#: accounts/models.py:85
+#: accounts/models.py:90
 msgid "学号"
 msgstr "Student ID"
 
-#: accounts/models.py:91 projects/forms.py:88
+#: accounts/models.py:96 projects/forms.py:98
 #: templates/accounts/member_profile_readonly.html:44
 #: templates/projects/group_detail.html:64
 #: templates/projects/group_list.html:45
 msgid "学院"
 msgstr "College"
 
-#: accounts/models.py:92 templates/accounts/member_profile_readonly.html:45
+#: accounts/models.py:97 templates/accounts/member_profile_readonly.html:45
 msgid "专业"
 msgstr "Major"
 
-#: accounts/models.py:94 templates/accounts/member_profile_readonly.html:46
+#: accounts/models.py:99 templates/accounts/member_profile_readonly.html:46
 msgid "特长"
 msgstr "Specialties"
 
-#: accounts/models.py:97
+#: accounts/models.py:102
 msgid "可填写多项，用顿号或逗号分隔。"
 msgstr "You can list several, separated by commas."
 
-#: accounts/models.py:99 templates/accounts/member_profile_readonly.html:48
+#: accounts/models.py:104 templates/accounts/member_profile_readonly.html:48
 msgid "手机号"
 msgstr "Phone"
 
-#: accounts/models.py:100 templates/accounts/member_profile_readonly.html:49
+#: accounts/models.py:105 templates/accounts/member_profile_readonly.html:49
 msgid "其他联系方式"
 msgstr "Other contact"
 
-#: accounts/models.py:102 templates/accounts/member_profile_readonly.html:47
+#: accounts/models.py:107 templates/accounts/member_profile_readonly.html:47
 msgid "个人简介"
 msgstr "Bio"
 
-#: accounts/models.py:105
+#: accounts/models.py:110
 msgid "最多 1000 字。"
 msgstr "Up to 1000 characters."
 
-#: accounts/models.py:136
+#: accounts/models.py:141
 msgid "普通"
 msgstr "Normal"
 
-#: accounts/models.py:137
+#: accounts/models.py:142
 msgid "大图"
 msgstr "Large"
 
-#: accounts/models.py:138
+#: accounts/models.py:143
 msgid "整行"
 msgstr "Full width"
 
-#: accounts/models.py:154
+#: accounts/models.py:160
 msgid "排布"
 msgstr "Layout"
 
@@ -299,50 +299,60 @@ msgid "从所选项目组成员中指定，可以是联系人本人。"
 msgstr ""
 "Chosen from the selected group's members; the contact may lead the team."
 
-#: competitions/forms.py:31 equipment/forms.py:20
+#: competitions/forms.py:32 equipment/forms.py:20
 msgid "备注"
 msgstr "Note"
 
-#: competitions/forms.py:74 competitions/views.py:116
+#: competitions/forms.py:75 competitions/views.py:117
 msgid "该竞赛已关闭报名或已超过报名截止时间。"
 msgstr ""
 "This competition is closed for registration or its deadline has passed."
 
-#: competitions/forms.py:76
+#: competitions/forms.py:77
 msgid "你无权为这个项目组登记报名。"
 msgstr "You cannot register this project group."
 
-#: competitions/forms.py:86 competitions/views.py:144 competitions/views.py:222
+#: competitions/forms.py:87 competitions/views.py:145 competitions/views.py:223
 msgid "该项目组已经登记过这场竞赛，不能重复报名。"
 msgstr "This project group is already registered for this competition."
 
-#: competitions/forms.py:91 competitions/forms.py:112
+#: competitions/forms.py:92 competitions/forms.py:113
 msgid "参赛成员必须属于所选项目组。"
 msgstr "Team members must belong to the selected project group."
 
-#: competitions/forms.py:93 competitions/forms.py:114
+#: competitions/forms.py:94 competitions/forms.py:115
 msgid "竞赛组长必须属于所选项目组。"
 msgstr "The team leader must belong to the selected project group."
 
-#: competitions/forms.py:95
+#: competitions/forms.py:96
 msgid "竞赛组长必须是参赛成员之一。"
 msgstr "The team leader must be one of the team members."
 
-#: competitions/views.py:160
+#: competitions/services.py:98
+#, fuzzy
+#| msgid "该竞赛已关闭报名或已超过报名截止时间，无法修改。"
+msgid "该竞赛已关闭报名或已超过报名截止时间，无法放弃。"
+msgstr ""
+"Registration for this competition is closed or past its deadline, so it "
+"cannot be withdrawn."
+"This competition is closed for registration or its deadline has passed; it "
+"can no longer be edited."
+
+#: competitions/views.py:161
 msgid "竞赛报名登记成功。"
 msgstr "Registration submitted."
 
-#: competitions/views.py:191
+#: competitions/views.py:192
 msgid "该竞赛已关闭报名或已超过报名截止时间，无法修改。"
 msgstr ""
 "This competition is closed for registration or its deadline has passed; it "
 "can no longer be edited."
 
-#: competitions/views.py:224
+#: competitions/views.py:225
 msgid "报名信息已更新。"
 msgstr "Registration updated."
 
-#: competitions/views.py:251
+#: competitions/views.py:263
 msgid "已放弃该竞赛报名。"
 msgstr "Registration withdrawn."
 
@@ -379,7 +389,7 @@ msgstr "%(label)s cannot exceed %(limit)s MB."
 msgid "文件类型与图片不符，请确认选的是图片。"
 msgstr "That file is not an image."
 
-#: discussion/forms.py:16 discussion/models.py:11
+#: discussion/forms.py:16 discussion/models.py:13
 msgid "中文名称"
 msgstr "Chinese name"
 
@@ -387,8 +397,8 @@ msgstr "Chinese name"
 msgid "已有同名板块。"
 msgstr "A board with that name already exists."
 
-#: discussion/forms.py:59 discussion/models.py:78 discussion/models.py:86
-#: discussion/models.py:87 discussion/validators.py:53
+#: discussion/forms.py:59 discussion/models.py:80 discussion/models.py:91
+#: discussion/models.py:92 discussion/validators.py:54
 #: templates/discussion/space.html:126
 msgid "帖子图片"
 msgstr "Post image"
@@ -397,7 +407,7 @@ msgstr "Post image"
 msgid "最多 3 张，每张不超过 3 MB。"
 msgstr "Up to 3 images per post, no more than 3 MB each."
 
-#: discussion/forms.py:66 discussion/models.py:50
+#: discussion/forms.py:66 discussion/models.py:52
 msgid "正文"
 msgstr "Body"
 
@@ -426,81 +436,81 @@ msgstr "Comment"
 msgid "请输入评论内容。"
 msgstr "Enter a comment."
 
-#: discussion/models.py:12
+#: discussion/models.py:14
 msgid "英文名称"
 msgstr "English name"
 
-#: discussion/models.py:17
+#: discussion/models.py:19
 msgid "创建人"
 msgstr "Created by"
 
-#: discussion/models.py:19
+#: discussion/models.py:21
 msgid "创建时间"
 msgstr "Created at"
 
-#: discussion/models.py:22 discussion/models.py:23
+#: discussion/models.py:24 discussion/models.py:25
 msgid "社团空间板块"
 msgstr "Discussion board"
 
-#: discussion/models.py:41 templates/discussion/space.html:58
+#: discussion/models.py:43 templates/discussion/space.html:58
 msgid "板块"
 msgstr "Board"
 
-#: discussion/models.py:47 discussion/models.py:132
+#: discussion/models.py:49 discussion/models.py:137
 msgid "作者"
 msgstr "Author"
 
-#: discussion/models.py:49 templates/notices/list.html:27
+#: discussion/models.py:51 templates/notices/list.html:27
 msgid "标题"
 msgstr "Title"
 
-#: discussion/models.py:51 templates/discussion/space.html:111
+#: discussion/models.py:53 templates/discussion/space.html:111
 #: templates/discussion/space.html:145 templates/home.html:54
 #: templates/notices/list.html:36
 msgid "置顶"
 msgstr "Pinned"
 
-#: discussion/models.py:52
+#: discussion/models.py:54
 msgid "发布时间"
 msgstr "Posted"
 
-#: discussion/models.py:53
+#: discussion/models.py:55
 msgid "更新时间"
 msgstr "Updated"
 
-#: discussion/models.py:56 discussion/models.py:57
+#: discussion/models.py:58 discussion/models.py:59
 msgid "社团空间帖子"
 msgstr "Discussion post"
 
-#: discussion/models.py:75 discussion/models.py:126
+#: discussion/models.py:77 discussion/models.py:131
 msgid "帖子"
 msgstr "Post"
 
-#: discussion/models.py:82
+#: discussion/models.py:87
 msgid "文件大小"
 msgstr "File size"
 
-#: discussion/models.py:83
+#: discussion/models.py:88
 msgid "上传时间"
 msgstr "Uploaded"
 
-#: discussion/models.py:134
+#: discussion/models.py:139
 msgid "评论内容"
 msgstr "Comment"
 
-#: discussion/models.py:135
+#: discussion/models.py:140
 msgid "评论时间"
 msgstr "Commented"
 
-#: discussion/models.py:138
+#: discussion/models.py:143
 msgid "删除时间"
 msgstr "Deleted at"
 
-#: discussion/models.py:145
+#: discussion/models.py:150
 msgid "删除人"
 msgstr "Deleted by"
 
-#: discussion/models.py:152 discussion/models.py:153
+#: discussion/models.py:157 discussion/models.py:158
 msgid "社团空间评论"
 msgstr "Discussion comment"
 
@@ -559,31 +569,31 @@ msgstr "Save changes"
 msgid "帖子已删除。"
 msgstr "Post deleted."
 
-#: discussion/views.py:254
+#: discussion/views.py:259
 msgid "评论已发布。"
 msgstr "Comment posted."
 
-#: discussion/views.py:281
+#: discussion/views.py:286
 msgid "评论已删除。"
 msgstr "Comment deleted."
 
-#: discussion/views.py:297
+#: discussion/views.py:302
 msgid "置顶状态无效。"
 msgstr "Invalid pin state."
 
-#: discussion/views.py:317
+#: discussion/views.py:322
 msgid "帖子已置顶。"
 msgstr "Post pinned."
 
-#: discussion/views.py:317
+#: discussion/views.py:322
 msgid "已取消置顶。"
 msgstr "Post unpinned."
 
-#: discussion/views.py:348
+#: discussion/views.py:353
 msgid "板块已创建。"
 msgstr "Board created."
 
-#: discussion/views.py:381
+#: discussion/views.py:386
 msgid "板块已删除。"
 msgstr "Board deleted."
 
@@ -667,65 +677,65 @@ msgstr "Browse project groups, contacts and members"
 msgid "申请理由"
 msgstr "Reason for applying"
 
-#: projects/forms.py:56
+#: projects/forms.py:65
 msgid "项目组名称"
 msgstr "Project group name"
 
-#: projects/forms.py:57
+#: projects/forms.py:66
 msgid "项目组描述"
 msgstr "Project group description"
 
-#: projects/forms.py:58
+#: projects/forms.py:67
 msgid "学院（选填）"
 msgstr "College (optional)"
 
-#: projects/forms.py:59
+#: projects/forms.py:68
 msgid "指导老师 1（选填）"
 msgstr "Advisor 1 (optional)"
 
-#: projects/forms.py:60
+#: projects/forms.py:69
 msgid "指导老师 2（选填）"
 msgstr "Advisor 2 (optional)"
 
-#: projects/forms.py:61
+#: projects/forms.py:70
 msgid "指导老师 3（选填）"
 msgstr "Advisor 3 (optional)"
 
-#: projects/forms.py:70 templates/projects/group_detail.html:102
+#: projects/forms.py:80 templates/projects/group_detail.html:102
 #: templates/projects/group_manage.html:133
 msgid "项目组介绍"
 msgstr "Group description"
 
-#: projects/forms.py:81
+#: projects/forms.py:91
 msgid "指导老师 1"
 msgstr "Advisor 1"
 
-#: projects/forms.py:82
+#: projects/forms.py:92
 msgid "指导老师 2"
 msgstr "Advisor 2"
 
-#: projects/forms.py:83
+#: projects/forms.py:93
 msgid "指导老师 3"
 msgstr "Advisor 3"
 
-#: projects/forms.py:103 templates/projects/group_detail.html:188
+#: projects/forms.py:116 templates/projects/group_detail.html:188
 #: templates/projects/group_manage.html:180
 msgid "项目书"
 msgstr "Proposal"
 
-#: projects/forms.py:104
+#: projects/forms.py:117
 msgid "支持 doc、docx、pdf，上传后即可提交审核。"
 msgstr "Accepts doc, docx and pdf; upload it to submit for review."
 
-#: projects/forms.py:111
+#: projects/forms.py:124
 msgid "新联系人"
 msgstr "New contact"
 
-#: projects/forms.py:113
+#: projects/forms.py:126
 msgid "只能从当前项目组成员中选择。"
 msgstr "Only current members of this group can be chosen."
 
-#: projects/forms.py:128 projects/services.py:326
+#: projects/forms.py:141 projects/services.py:326
 msgid "新联系人必须是该项目组成员。"
 msgstr "The new contact must be a member of this project group."
 
@@ -916,31 +926,31 @@ msgstr ""
 msgid "提交说明"
 msgstr "Submission note"
 
-#: reviews/forms.py:39
+#: reviews/forms.py:42
 msgid "例如：申请开题、申请参加 XX 竞赛"
 msgstr "e.g. starting the project, or entering competition XX"
 
-#: reviews/forms.py:53
+#: reviews/forms.py:56
 msgid "评审决定"
 msgstr "Review decision"
 
-#: reviews/forms.py:54
+#: reviews/forms.py:57
 msgid "评审意见"
 msgstr "Review comment"
 
-#: reviews/forms.py:55 reviews/forms.py:94
+#: reviews/forms.py:58 reviews/forms.py:99
 msgid "请说明通过或需要修改的理由。"
 msgstr "Explain why it should be approved or needs revision."
 
-#: reviews/forms.py:78
+#: reviews/forms.py:83
 msgid "初审决定"
 msgstr "Preliminary decision"
 
-#: reviews/forms.py:79
+#: reviews/forms.py:84
 msgid "初审意见"
 msgstr "Preliminary comment"
 
-#: reviews/forms.py:81
+#: reviews/forms.py:86
 msgid ""
 "通过后按送审类型随机分配评审人，进入正式评审；需修改则本轮直接打回项目组，不"
 "分配评审人。"
@@ -949,18 +959,18 @@ msgstr ""
 "and the round moves to review; if it needs revision, the round goes straight "
 "back to the group with no reviewers assigned."
 
-#: reviews/forms.py:84
+#: reviews/forms.py:89
 msgid "请说明通过或需要修改的理由；打回时项目组会据此修改项目书。"
 msgstr ""
 "Explain why it should be approved or needs revision; if you send it back, "
 "the group will revise the proposal accordingly."
 
-#: reviews/forms.py:97 templates/projects/group_detail.html:209
+#: reviews/forms.py:102 templates/projects/group_detail.html:209
 #: templates/projects/group_detail.html:219
 msgid "批注版项目书"
 msgstr "Annotated proposal"
 
-#: reviews/forms.py:101
+#: reviews/forms.py:106
 msgid ""
 "选填；支持 doc、docx、pdf。可在项目书上直接批注后上传，也可只填文字意见。请勿"
 "在文件属性中保留可识别个人身份的信息。"
@@ -969,15 +979,15 @@ msgstr ""
 "annotations, or just give a written comment. Please do not leave identifying "
 "information in the file's properties."
 
-#: reviews/forms.py:122
+#: reviews/forms.py:127
 msgid "请假开始"
 msgstr "Leave starts"
 
-#: reviews/forms.py:127
+#: reviews/forms.py:132
 msgid "请假结束"
 msgstr "Leave ends"
 
-#: reviews/forms.py:131
+#: reviews/forms.py:136
 msgid ""
 "请假期间不会被分配新的初审或评审请求，到点自动恢复；已有的任务不受影响。"
 msgstr ""
@@ -985,11 +995,11 @@ msgstr ""
 "you; it resumes automatically at the end, and tasks you already hold are "
 "unaffected."
 
-#: reviews/forms.py:141
+#: reviews/forms.py:146
 msgid "例如：考试周、外出比赛"
 msgstr "e.g. exam week, a competition away"
 
-#: reviews/forms.py:150 reviews/services.py:528
+#: reviews/forms.py:155 reviews/services.py:528
 msgid "请假结束时间必须晚于开始时间。"
 msgstr "Leave must end after it starts."
 
@@ -1087,31 +1097,31 @@ msgstr "That reviewer already holds a task in this round."
 msgid "本轮已经出过结论"
 msgstr "This round already has a decision"
 
-#: reviews/models.py:45
+#: reviews/models.py:44
 msgid "竞赛立项"
 msgstr "Competition — project start"
 
-#: reviews/models.py:46
+#: reviews/models.py:45
 msgid "竞赛省赛"
 msgstr "Competition — provincial"
 
-#: reviews/models.py:47
+#: reviews/models.py:46
 msgid "竞赛国赛"
 msgstr "Competition — national"
 
-#: reviews/models.py:48
+#: reviews/models.py:47
 msgid "大创立项"
 msgstr "Innovation program — start"
 
-#: reviews/models.py:49
+#: reviews/models.py:48
 msgid "大创中期"
 msgstr "Innovation program — midterm"
 
-#: reviews/models.py:50
+#: reviews/models.py:49
 msgid "大创结题"
 msgstr "Innovation program — final"
 
-#: reviews/models.py:458
+#: reviews/models.py:446
 msgid "事由"
 msgstr "Reason"
 

@@ -78,7 +78,7 @@ class CompetitionRegistration(models.Model):
         related_name="competition_registrations",
         verbose_name="参赛成员",
     )
-    remark = models.TextField("备注", blank=True)
+    remark = models.TextField("备注", max_length=2000, blank=True)
     created_at = models.DateTimeField("登记时间", auto_now_add=True)
     updated_at = models.DateTimeField("更新时间", auto_now=True)
 

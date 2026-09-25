@@ -35,6 +35,9 @@ class SubmissionForm(forms.Form):
     message = forms.CharField(
         label=_("提交说明"),
         required=False,
+        # 无上限的文本字段是一条廉价的写入放大路径：一次请求就能塞进几百 MB，
+        # 把库撑大、把后台列表与页面渲染拖慢。5000 字对「申请开题」这类说明足够宽裕。
+        max_length=5000,
         widget=forms.Textarea(
             attrs={"rows": 3, "placeholder": _("例如：申请开题、申请参加 XX 竞赛")}
         ),
@@ -59,6 +62,8 @@ class DecisionForm(forms.Form):
         widget=forms.RadioSelect,
     )
     comment = forms.CharField(
+        # 评审意见要写清楚理由，但不能没有上限——理由同上。5000 字远超正常意见长度。
+        max_length=5000,
         widget=forms.Textarea(attrs={"rows": 6}),
     )
 

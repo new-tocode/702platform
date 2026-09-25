@@ -34,11 +34,18 @@ class AdvisorSlotsMixin:
 
 
 class GroupJoinRequestForm(forms.ModelForm):
+    message = forms.CharField(
+        label=_("申请理由"),
+        required=False,
+        # 与模型侧的 max_length 一致：两边都写是为了让表单先给出友好报错，
+        # 而不是让数据库层抛 IntegrityError。
+        max_length=2000,
+        widget=forms.Textarea(attrs={"rows": 4}),
+    )
+
     class Meta:
         model = GroupJoinRequest
         fields = ("message",)
-        labels = {"message": _("申请理由")}
-        widgets = {"message": forms.Textarea(attrs={"rows": 4})}
 
 
 class GroupCreateRequestForm(AdvisorSlotsMixin, forms.ModelForm):
@@ -63,6 +70,7 @@ class GroupCreateRequestForm(AdvisorSlotsMixin, forms.ModelForm):
             "advisor_3": _("指导老师 3（选填）"),
         }
         widgets = {"description": forms.Textarea(attrs={"rows": 5})}
+        # 描述与组介绍是成员可自由填写的长文本，模型侧同样收了口径。
 
 
 class GroupDescriptionForm(forms.ModelForm):

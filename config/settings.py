@@ -206,6 +206,13 @@ STORAGES = {
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# 上传体积上限显式写死。视频要到 500 MB，所以文件那一条必须跟着放宽；内存里
+# 处理的那条（表单字段、JSON 体）保持小值——它防的是「一个请求就把几百 MB 读进
+# 内存」。这两个值过去依赖 Django 的默认值，那些默认值会随版本变。
+FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024      # 超过就落临时文件，不占内存
+DATA_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024      # 非文件请求体的上限
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 2000               # 字段数上限，防畸形表单
+
 # Cookie 与安全头。
 #
 # 两个 Secure 标志**默认开启**：线上是全程 https（服务器自己 443，或上层代理

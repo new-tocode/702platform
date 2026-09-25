@@ -85,7 +85,7 @@ class EquipmentBorrow(models.Model):
         choices=STATUS_CHOICES,
         default=BORROWED,
     )
-    remark = models.TextField("备注", blank=True)
+    remark = models.TextField("备注", max_length=1000, blank=True)
     created_at = models.DateTimeField("登记时间", auto_now_add=True)
     updated_at = models.DateTimeField("更新时间", auto_now=True)
 

@@ -572,3 +572,72 @@ class UploadChannelsRejectBombsAcceptanceTests(TestCase):
 
         with self.assertRaises(ValidationError):
             validate_media_file(self._bomb(), IMAGE)
+
+
+class UserSuppliedTextLimitAcceptanceTests(TestCase):
+    """成员可自由填写的长文本都有上限。
+
+    没有上限的文本字段是一条廉价的写入放大路径：一次请求就能塞进很大的内容，
+    把库撑大、把后台列表与页面渲染拖慢。过去评审意见、送审说明、入组申请理由、
+    建组描述、组介绍、报名备注这六处都没有约束——对比之下帖子正文限 20000、
+    评论限 4000、个人简介限 1000，说明口径本来就有，只是这几处漏了。
+
+    两边都要有：表单先用友好报错挡住，模型侧兜住后台表单与脚本写入。
+    """
+
+    #: (模型, 字段, 上限)。上限写在模型上，表单跟着模型走（显式声明的那几处也一致）。
+    LIMITED_FIELDS = (
+        ("reviews", "ProjectSubmission", "message", 5000),
+        ("reviews", "ReviewTask", "comment", 5000),
+        ("projects", "ProjectGroup", "description", 2000),
+        ("projects", "GroupJoinRequest", "message", 2000),
+        ("projects", "GroupCreateRequest", "description", 2000),
+        ("competitions", "CompetitionRegistration", "remark", 2000),
+        ("reviews", "ReviewerLeave", "reason", 500),
+        ("equipment", "EquipmentBorrow", "remark", 1000),
+        # 帖子与评论本来就有表单上限，这里把模型侧也钉住——后台表单与脚本写入
+        # 走的是模型，只靠表单挡不住。
+        ("discussion", "Post", "content", 20000),
+        ("discussion", "Comment", "content", 4000),
+    )
+
+    def test_every_user_supplied_long_text_has_a_limit(self):
+        from django.apps import apps
+
+        missing = []
+        for app_label, model_name, field_name, expected in self.LIMITED_FIELDS:
+            field = apps.get_model(app_label, model_name)._meta.get_field(field_name)
+            if field.max_length != expected:
+                missing.append(
+                    f"{app_label}.{model_name}.{field_name}="
+                    f"{field.max_length}（应为 {expected}）"
+                )
+
+        self.assertEqual(missing, [], f"这些字段的长度口径不对：{missing}")
+
+    def test_forms_carry_the_same_limit(self):
+        """表单侧显式声明的那几处，上限与模型一致。
+
+        两边不一致会比没有上限更糟：表单放过、模型拒绝，用户拿到的是一个
+        数据库层的 500 而不是一句「太长了」。
+        """
+        from competitions.forms import CompetitionRegistrationForm
+        from projects.forms import GroupJoinRequestForm
+        from reviews.forms import DecisionForm, SubmissionForm
+
+        self.assertEqual(DecisionForm.base_fields["comment"].max_length, 5000)
+        self.assertEqual(SubmissionForm.base_fields["message"].max_length, 5000)
+        self.assertEqual(GroupJoinRequestForm.base_fields["message"].max_length, 2000)
+        self.assertEqual(
+            CompetitionRegistrationForm.base_fields["remark"].max_length, 2000
+        )
+
+    def test_an_over_long_review_comment_is_rejected(self):
+        from reviews.forms import DecisionForm
+
+        form = DecisionForm(
+            data={"decision": "approve", "comment": "很长" * 3000}
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn("comment", form.errors)
