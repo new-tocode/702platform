@@ -1,12 +1,14 @@
 """账号相关的写操作。
 
-三件事：后台批量授予／撤销评审资格，以及个人信息页上的头像与个人图册。资格那件
-要事务、要审计，所以不写在 admin 里——那里过去改资格连审计都不留。
+四件事：后台批量授予／撤销评审资格、后台批量增删用户组成员，以及个人信息页上的
+头像与个人图册。资格与组员那两件要事务、要审计，所以不写在 admin 里——那里过去
+改资格连审计都不留。
 
 上传相关的写入口也收在这里，而不是散进视图：换头像、删图册都要连磁盘上的文件
 一起处理，两件事得挨着做，而且不该让视图去碰存储层。
 """
 
+from django.contrib.auth.models import Group
 from django.db import transaction
 from django.db.models import Max, Sum
 from django.utils.translation import gettext_lazy as _
@@ -62,6 +64,47 @@ def set_qualification(*, users, flag, value, actor, request=None):
         request=request,
     )
     return len(targets)
+
+
+def set_group_members(*, group, members, actor, request=None):
+    """把用户组的成员整份设成 ``members``，返回（新加入, 已移出）两份名单。
+
+    后台的「组内用户」是个穿梭框：提交上来的是这个组**应有**的全部成员，所以这里
+    做的是覆盖而不是增量。整份与现状比一次、只动真正变了的人——重复保存同一份名单
+    既不写库也不留审计行（与 :func:`set_qualification` 同一条口径）。
+
+    组成员关系决定内部通知投给谁（``Notice.visible_groups``），所以每次真正的变更
+    都留一条审计：谁进来、谁出去。
+
+    ``members`` 里的账号不必已经保存——传 ``User`` 实例即可。
+    """
+    wanted = {user.pk: user for user in members}
+    with transaction.atomic():
+        # 两个管理员同时保存同一个组时，不加锁就是各读各的现状、各写各的，最后拼出
+        # 一份谁也没提交过的名单。锁在这一行上，两次保存排成队。
+        Group.objects.select_for_update().get(pk=group.pk)
+        current = set(group.user_set.values_list("pk", flat=True))
+        added = [user for pk, user in wanted.items() if pk not in current]
+        removed = list(User.objects.filter(pk__in=current - set(wanted)))
+        if added:
+            group.user_set.add(*added)
+        if removed:
+            group.user_set.remove(*removed)
+
+    if not added and not removed:
+        return (), ()
+
+    record_audit(
+        action="accounts.group.membership.update",
+        user=actor,
+        target=group,
+        detail={
+            "added": [user.get_username() for user in added],
+            "removed": [user.get_username() for user in removed],
+        },
+        request=request,
+    )
+    return added, removed
 
 
 def set_avatar(*, profile, uploaded_file, actor, request=None):
