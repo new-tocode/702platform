@@ -15,6 +15,17 @@ if [ "$#" -ne 1 ]; then
 fi
 TAG="$1"
 
+# env.sh 里是数据库口令、SECRET_KEY 与超管口令。它由 install.sh 从模板 cp 而来，
+# 权限随 umask（实测生产上曾是 664，同机其它账号可读）。install.sh 每次运行都会收紧，
+# 但**日常部署走的是本脚本**，所以这里也收一次。
+#
+# 放在 source 之前（先收紧再读内容），也放在切换用户之前（两种调用方式都覆盖到；
+# chmod 只改模式位，不改属主，所以以 root 身份先做也不会把属主弄错）。
+if [[ -f env.sh ]] && [[ "$(stat -c '%a' env.sh)" != "600" ]]; then
+    chmod 600 env.sh
+    echo "    已将 env.sh 权限收紧为 600（内含数据库口令与 SECRET_KEY）"
+fi
+
 set -a
 # shellcheck disable=SC1090
 source env.sh
@@ -29,6 +40,7 @@ DEPLOY_USER="${DEPLOY_SYSTEM_USER:-}"
 if [[ -n "$DEPLOY_USER" ]] && [[ "$(id -u)" -eq 0 ]] && [[ "$(id -un)" != "$DEPLOY_USER" ]]; then
     exec sudo -u "$DEPLOY_USER" bash "$0" "$TAG"
 fi
+
 
 echo "==> 1/6 备份数据库和媒体（分别保留 ${DJANGO_BACKUP_RETAIN:-14} 份）"
 # 直接复用 backup.sh，不再在这里抄一遍 pg_dump 与 tar：两份实现迟早会漂移，而

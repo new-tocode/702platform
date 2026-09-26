@@ -130,11 +130,7 @@ Cookie 上带不带 `Secure` 属性的（Django 里就是 `secure=settings.SESSI
 「这个请求其实是 https」，影响 `request.is_secure()`、CSRF 的 Origin 校验、
 以及 `SECURE_SSL_REDIRECT` 会不会误判成死循环。
 
-但生产 `env.sh` 里 `DJANGO_PROXY_SSL_HEADER=0` 是个**实际存在的隐患**：Nginx 明明发了
-`X-Forwarded-Proto`，Django 却看不见，于是把 https 请求当成 http。这在当前没造成故障
-（没开跳转），但一旦哪天开了 `SECURE_SSL_REDIRECT`，就会变成无限重定向。建议一并打开。
-
-#### 升级到本版本时要改的 env.sh
+#### 升级到本版本时要改的 env.sh（四项，缺一不可）
 
 新版本里这几项的代码默认值虽然已经调过，但**生产 `env.sh` 里是显式写死的，会覆盖
 代码默认值**——所以要生效必须改 `env.sh`：
@@ -143,16 +139,45 @@ Cookie 上带不带 `Secure` 属性的（Django 里就是 `secure=settings.SESSI
 # 会话与 CSRF Cookie 只走 https（成员全走 https，不会挡住任何人）
 DJANGO_SESSION_COOKIE_SECURE=1
 DJANGO_CSRF_COOKIE_SECURE=1
-# 让 Django 认得 Nginx 发来的 X-Forwarded-Proto（见上文说明）
+# 让 Django 认得 Nginx 发来的 X-Forwarded-Proto
 DJANGO_PROXY_SSL_HEADER=1
-
-# 备份位置保持默认（应用目录内）即可。想搬到应用之外更安全，见 5.x 节。
+# 受信来源：成员实际访问的**每个**入口都要写，含协议
+DJANGO_CSRF_TRUSTED_ORIGINS=https://<域名>,https://<公网IP>
 ```
 
-改完 `deploy.sh` 的 `check --deploy` 门禁才能通过——否则它会以
-`security.W012` / `W016` 中止部署（这是有意设计的：宁可发布失败，也不让站点安静地
-不安全）。`DJANGO_SECURE_SSL_REDIRECT` 与 `DJANGO_SECURE_HSTS_SECONDS` **继续留空
-或 0**，理由见上。
+前三项改完才能通过 `deploy.sh` 的 `check --deploy` 门禁，否则它以 `security.W012` /
+`W016` 中止部署（有意设计：宁可发布失败，也不让站点安静地不安全）。
+`DJANGO_SECURE_SSL_REDIRECT` 与 `DJANGO_SECURE_HSTS_SECONDS` **继续留空或 0**，理由见上。
+
+**第四项 `DJANGO_CSRF_TRUSTED_ORIGINS` 不是可选项，漏填的后果是表单提交 403。**
+这一条在 2026-09-26 的生产上实测确认过。Django 每次 POST 都会把浏览器发来的
+`Origin` 头与「`request.is_secure()` 判断出的协议 + Host」比对，对不上就拒绝：
+
+```
+Forbidden (Origin checking failed - https://47.105.110.158 does not match any trusted origins.)
+```
+
+生产上 TLS 由 Nginx 终结、Django 自己看不出是 https（除非开 `PROXY_SSL_HEADER`），
+于是它期望 `http://…` 而浏览器发的是 `https://…`，必然对不上。生产日志里为此积累过
+140 次 `Referer checking failed - no Referer` 与 34 次
+`Referer is insecure while host is secure`——都是同一个根因的不同表现。
+
+**为什么以前「看起来能用」**：不带 `Origin` 头的 POST 在 `is_secure()=False` 时不做
+校验，就侥幸过了；带 `Origin` 头的现代浏览器请求会被拒。所以这是「偶发提交失败」的
+来源，不是一直坏。
+
+四个开关的实测组合（`https://<IP>` 入口、Nginx 发 `X-Forwarded-Proto: https`）：
+
+| 配置 | `is_secure()` | Origin 校验 |
+|---|---|---|
+| 现状（`PROXY=0`、`TRUSTED` 空） | False | **拒绝** |
+| 只改 `PROXY_SSL_HEADER=1` | True | 通过，但会**追加** Referer 校验（Django 对 HTTPS 的额外保护） |
+| 只加 `TRUSTED_ORIGINS` | False | **仍拒绝**（`is_secure()` 没变） |
+| **两个都设** | True | **通过** ← 正确组合 |
+
+所以 `PROXY_SSL_HEADER` 与 `CSRF_TRUSTED_ORIGINS` 要一起设：前者让 Django 知道
+自己在 https 下，后者给出白名单。`server_name` 含域名与 IP 两项，两个入口都要写进
+`CSRF_TRUSTED_ORIGINS`。
 
 #### 拿到自己的证书之后
 
@@ -203,12 +228,13 @@ cd ~/applications/702platform
 ```bash
 cd ~/applications/702platform
 
-# 1) 先改 env.sh 的三项（理由与取值见 2.5 节）
+# 1) 先改 env.sh 的四项（理由与取值见 2.5 节；第四项漏填会导致表单提交 403）
 #    DJANGO_SESSION_COOKIE_SECURE=1
 #    DJANGO_CSRF_COOKIE_SECURE=1
 #    DJANGO_PROXY_SSL_HEADER=1
-#    改完确认权限只有自己能读：chmod 600 env.sh
-vi env.sh && chmod 600 env.sh
+#    DJANGO_CSRF_TRUSTED_ORIGINS=https://<域名>,https://<公网IP>
+#    （chmod 600 由 deploy.sh 自己会做，手工改完顺手执行一次也无妨）
+vi env.sh
 
 # 2) 跑部署（它会：备份 → 切版本 → 装依赖 → check --deploy 门禁 → 迁移 →
 #    静态文件 → 编译翻译 → 重启 → 健康检查；任何一步失败即中止）
@@ -222,13 +248,14 @@ ls -d protected_media                                   # 迁移建出来的受�
 
 这一版里**不需要停机**：那条会移动文件的数据迁移在生产数据上是空操作（见 3.5 节）。
 
-如果第 1 步忘了改，第 2 步会停在门禁那一步、以 `security.W012`/`W016` 报错退出
-——迁移都还没跑，服务也还是旧版在跑，**不会造成任何破坏**。补上 `env.sh` 再跑一次
-即可。
+如果第 1 步的前三项忘了改，第 2 步会停在门禁那一步、以 `security.W012`/`W016` 报错
+退出——迁移都还没跑，服务也还是旧版在跑，**不会造成任何破坏**。补上再跑一次即可。
 
-### 回滚
+但**第四项（`CSRF_TRUSTED_ORIGINS`）漏填不会被门禁拦下**：它不是 `check --deploy`
+的检查项，症状要等成员提交表单时才出现（403，见 2.5 节的实测）。所以这一项请照着
+模板逐字确认，别凭印象。
 
-`deploy.sh` 自动：备份库与媒体（保留 RETAIN 份）→ checkout tag → 升级依赖 → **`check --deploy` 门禁** → `migrate` + `collectstatic` + `compilemessages` → 重启 → 健康检查。任何一步失败即中止，其中门禁那一步会拦下「DEBUG 还开着」「Cookie 没带 Secure」「SECRET_KEY 还是源码默认值」这类不会让站点起不来、只会让它安静地不安全的问题。版本号命名 `v主.次.修订`（修订=修复，次=新功能，主=不兼容）。
+`deploy.sh` 自动：备份库与媒体（保留 RETAIN 份）→ **`chmod 600 env.sh`** → checkout tag → 升级依赖 → **`check --deploy` 门禁** → `mkdir -p protected_media` → `migrate` + `collectstatic` + `compilemessages` → 重启 → 健康检查。任何一步失败即中止，其中门禁那一步会拦下「DEBUG 还开着」「Cookie 没带 Secure」「SECRET_KEY 还是源码默认值」这类不会让站点起不来、只会让它安静地不安全的问题。版本号命名 `v主.次.修订`（修订=修复，次=新功能，主=不兼容）。
 
 ### 回滚
 
@@ -333,9 +360,26 @@ tar -xzf backups/media-XXXX.tar.gz -C /opt/702platform
 ### 备份位置与加密
 
 备份默认落在 **`/var/backups/club702`**（`DJANGO_BACKUP_DIR` 可改），**不在应用目录
-里**。这一条是有意的：systemd 给应用进程整个 `APP_DIR` 的写权限，备份留在里面就等于
-和它保护的东西住在一起——应用被攻陷或主机被勒索时，数据与备份一起没。目录权限
-`700`、属主是部署用户，由 `install.sh` 建好。
+里**。
+
+**这一条防的是什么，要说清楚**：systemd 给了应用进程整个应用目录的写权限
+（`club702.service` 的 `ReadWritePaths=APP_DIR`，配合 `ProtectSystem=full`）。备份
+留在应用目录里，意味着**一旦 Web 应用被攻陷，攻击者能删改备份**——而备份的意义正是
+「数据被改了还能回到从前」。外置目录不在那个可写范围里，应用进程碰不到它。
+
+**它防不住什么**：拿到部署用户 Shell 的人（SSH 登录、或被提权到该账号的攻击者）
+照样能 `rm -rf` 那个目录，因为属主就是它。要防这种情况只能靠**异地副本**（见下）。
+所以三件事的优先级是：**异地副本 > 移出应用目录 > 加密**。
+
+**目录怎么建**：`/var` 属 root，日常部署（`deploy.sh`）不提权、建不出来，所以由
+`install.sh`（有 sudo）负责一次性创建并 `chown` 给部署用户。`backup.sh` 每次运行会
+自己把权限收紧到 `700`（目录）与 `600`（文件）——实测过旧备份是 `644`、目录 `755`，
+同机任何账号都能读走。若目录创建失败，脚本会打印需要执行的三条 `sudo` 命令。
+
+> `backup.sh` 自己的兜底值是**应用目录内**，与这里的推荐值不同，这是有意的：它由
+> systemd timer 每天自动跑，兜底值指向一个尚未创建的外置目录会让**备份直接失败**
+> （比备份在应用内更糟）。新部署由 `install.sh` 建目录、`env.template` 写路径；
+> 老部署不受升级影响。
 
 **加密**：在 `env.sh` 里填 `DJANGO_BACKUP_GPG_RECIPIENT`（gpg 公钥的收件人标识），
 备份就会加密后落盘；不填则明文保存，脚本每次都会打印提醒。备份里是实名身份、学号
@@ -353,6 +397,31 @@ sudo -u club gpg --import backup-pub.asc
 
 **异地**：本机备份挡不住主机级故障（磁盘损坏、误删、勒索），异地那份才是最后一道。
 脚本结尾留了 rsync 示意，把它接进定时任务即可。
+
+**取回本地**（手动备份一份到自己的机器）：下载**时间戳相同**的一对文件——它们是分两步
+导出的，只取其一会出现「库里有记录、文件没了」。
+
+```bash
+# 带外置目录时，先把最近的一对名字取出来
+ssh <部署用户>@<服务器> 'ls -1t /var/backups/club702/db-*.sql.gz | head -1; \
+                         ls -1t /var/backups/club702/media-*.tar.gz | head -1'
+
+# 无公网 IP 的实例用 workbench CLI（单文件上限 1GB）
+STAMP=2026-09-26-0934
+workbench download /var/backups/club702/db-$STAMP.sql.gz    ./backup-db-$STAMP.sql.gz \
+  --instance-id <实例ID> --port <SSH端口> --user-name <部署用户>
+workbench download /var/backups/club702/media-$STAMP.tar.gz ./backup-media-$STAMP.tar.gz \
+  --instance-id <实例ID> --port <SSH端口> --user-name <部署用户>
+```
+
+取回后**在本地加密或放进加密盘**：`db-*.sql.gz` 里有成员姓名、学号手机号、密码散列
+与全部评审意见，是你电脑上最敏感的文件之一。
+
+恢复：
+```bash
+gunzip -c backup-db-<时间戳>.sql.gz | PGPASSWORD=... psql -U <用户> <库名>
+tar -xzf backup-media-<时间戳>.tar.gz -C <应用目录>
+```
 
 **一致性**：数据库与媒体是分两步导出的，不是同一时间点的快照，恢复后可能出现
 「库里有记录、媒体文件缺失」。社团规模下这个窗口是秒级，可以接受；要严格一致就先
