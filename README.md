@@ -40,7 +40,8 @@ source env.local.sh          # PostgreSQL 连接配置；不加载会连接失�
 
 | 文档 | 内容 |
 |---|---|
-| [`docs/architecture.md`](docs/architecture.md) | 架构：模块划分、数据模型、权限设计、路由、关键流程 |
+| [`docs/`](docs/README.md) | **文档索引**：四份文档各回答什么问题 |
+| [`docs/architecture/`](docs/architecture/README.md) | 架构：按 app 分篇的数据模型、权限设计、路由、关键流程 |
 | [`docs/development.md`](docs/development.md) | 开发指南：目录结构、环境配置、常用命令、测试与验收、日志调试、FAQ |
 | [`docs/deploy.md`](docs/deploy.md) | 部署手册：快速验证、生产一步脚本、更新回滚、备份恢复、运维 |
 | [`安全检查.md`](安全检查.md) | 安全性审查报告：威胁模型、逐类检查结果、风险清单与修复状态 |

@@ -6,11 +6,11 @@
 
 ## 阶段 1：测试文件分层
 
-- [ ] 1.1 `accounts/tests.py`（1651 行）→ `accounts/tests/` 包：按主题拆 13 个类，抽 `factories.py`（建账号 + 头像/图册的上传件制造）
-- [ ] 1.2 `discussion/tests.py`（1176 行）→ `discussion/tests/` 包；`DiscussionViewTests`（504 行 / 17 用例）拆成视图几个主题
-- [ ] 1.3 `projects/tests.py`（667 行）→ `projects/tests/` 包；`ProjectGroupAcceptanceTests`（407 行 / 23 用例）拆开
-- [ ] 1.4 `core/tests.py`（643 行）→ `core/tests/` 包（入口注册表 / 审计 / 翻译兜底 / 上传校验）
-- [ ] 每个阶段跑该 app 的测试，最后一个阶段跑全量
+- [x] 1.1 `accounts/tests.py`（1651 行）→ `accounts/tests/` 包：按主题拆 13 个类，抽 `factories.py`（建账号 + 头像/图册的上传件制造）
+- [x] 1.2 `discussion/tests.py`（1176 行）→ `discussion/tests/` 包；`DiscussionViewTests`（504 行 / 17 用例）拆成视图几个主题
+- [x] 1.3 `projects/tests.py`（667 行）→ `projects/tests/` 包；`ProjectGroupAcceptanceTests`（407 行 / 23 用例）拆开
+- [x] 1.4 `core/tests.py`（643 行）→ `core/tests/` 包（入口注册表 / 审计 / 翻译兜底 / 上传校验）
+- [x] 每个阶段跑该 app 的测试，最后一个阶段跑全量
 
 ## 阶段 2：文档分层
 
