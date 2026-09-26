@@ -39,6 +39,8 @@ from .services import (
 
 User = get_user_model()
 TEST_MEDIA_ROOT = Path(tempfile.mkdtemp(prefix="discussion-tests-"))
+#: 受保护上传件的落盘根。与 TEST_MEDIA_ROOT 平级，见 accounts/tests.py 的说明。
+TEST_PRIVATE_MEDIA_ROOT = Path(tempfile.mkdtemp(prefix="discussion-tests-private-"))
 
 
 class DiscussionModelTests(TestCase):
@@ -154,12 +156,13 @@ def png_upload(name="post.png", size=(10, 10)):
     return SimpleUploadedFile(name, stream.getvalue(), content_type="image/png")
 
 
-@override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
+@override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT, PRIVATE_MEDIA_ROOT=TEST_PRIVATE_MEDIA_ROOT)
 class DiscussionImageTests(TestCase):
     @classmethod
     def tearDownClass(cls):
         super().tearDownClass()
         shutil.rmtree(TEST_MEDIA_ROOT, ignore_errors=True)
+        shutil.rmtree(TEST_PRIVATE_MEDIA_ROOT, ignore_errors=True)
 
     def setUp(self):
         self.member = User.objects.create_user(
@@ -666,12 +669,13 @@ class DiscussionSelectorTests(TestCase):
             selected.comments.all()[0].author.profile.full_name
 
 
-@override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
+@override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT, PRIVATE_MEDIA_ROOT=TEST_PRIVATE_MEDIA_ROOT)
 class DiscussionViewTests(TestCase):
     @classmethod
     def tearDownClass(cls):
         super().tearDownClass()
         shutil.rmtree(TEST_MEDIA_ROOT, ignore_errors=True)
+        shutil.rmtree(TEST_PRIVATE_MEDIA_ROOT, ignore_errors=True)
 
     def setUp(self):
         self.member = self._make_user("discussion-view-member")

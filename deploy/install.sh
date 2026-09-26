@@ -33,9 +33,18 @@ fi
 # ---------- 1. env.sh 必须存在 ----------
 if [[ ! -f "$ENV_FILE" ]]; then
     cp "$TEMPLATE" "$ENV_FILE"
+    chmod 600 "$ENV_FILE"
     fail "首次运行，已从模板创建 $ENV_FILE"
     fail "请编辑该文件，把所有 <尖括号> 占位符替换为真实值后重新运行本脚本"
     exit 1
+fi
+
+# env.sh 里是数据库口令、SECRET_KEY 与超管口令。cp 出来的文件权限随 umask，
+# 可能是 644——同一台机器上的其它低权账号就能读走全部机密。每次运行都收紧一次，
+# 历史上的宽权限也就跟着修好了。
+if [[ "$(stat -c '%a' "$ENV_FILE")" != "600" ]]; then
+    chmod 600 "$ENV_FILE"
+    ok "已将 $ENV_FILE 权限收紧为 600（内含数据库口令与 SECRET_KEY）"
 fi
 
 # ---------- 2. 配置检测：占位符未替换则全部列出并中止 ----------
@@ -115,7 +124,7 @@ fi
 # 项目依赖（不自动 pip install，只检测）
 for pkg in django rest_framework bleach markdown PIL psycopg gunicorn; do
     if ! "$APP_DIR/.venv/bin/python" -c "import $pkg" >/dev/null 2>&1; then
-        MISSING+=("Python 依赖未安装: $pkg（请先执行: $APP_DIR/.venv/bin/python -m pip install -r requirements.txt -r requirements-prod.txt）")
+        MISSING+=("Python 依赖未安装: $pkg（请先执行: $APP_DIR/.venv/bin/python -m pip install --require-hashes -r requirements.txt -r requirements-prod.txt）")
     fi
 done
 
@@ -243,11 +252,25 @@ info "编译界面翻译（英文）"
 run_as_app .venv/bin/python manage.py compilemessages -l en
 ok "界面翻译已编译"
 
-# 备份目录（club702-backup.service 的 ReadWritePaths 依赖它存在，缺失会导致服务 226/NAMESPACE 启动失败）
+# 备份目录。默认在应用目录内——外置目录通常属 root，安装脚本能提权但**日常部署
+# 不能**，把默认值放在外面会让 deploy.sh 的第一次备份就失败。想外置的话在 env.sh
+# 里设 DJANGO_BACKUP_DIR，这里会照它的值建。
+BACKUP_DIR="${DJANGO_BACKUP_DIR:-$APP_DIR/backups}"
 info "确保备份目录存在"
-sudo mkdir -p "$APP_DIR/backups"
-sudo chown "$DEPLOY_SYSTEM_USER:$DEPLOY_SYSTEM_USER" "$APP_DIR/backups"
-ok "备份目录就绪: $APP_DIR/backups"
+sudo mkdir -p "$BACKUP_DIR"
+sudo chown "$DEPLOY_SYSTEM_USER:$DEPLOY_SYSTEM_USER" "$BACKUP_DIR"
+sudo chmod 700 "$BACKUP_DIR"
+ok "备份目录就绪: $BACKUP_DIR"
+if [[ "$BACKUP_DIR" == "$APP_DIR"/* ]]; then
+    warn "备份目录在应用目录内：应用被攻陷或主机被勒索时，备份会与数据一起没"
+    warn "想外置：建好目录后在 env.sh 里设 DJANGO_BACKUP_DIR=<路径>"
+fi
+
+# 受保护上传件的目录：backup.service 的 ReadOnlyPaths 与应用的写入都要它存在
+info "确保受保护上传目录存在"
+sudo mkdir -p "$APP_DIR/protected_media"
+sudo chown "$DEPLOY_SYSTEM_USER:$DEPLOY_SYSTEM_USER" "$APP_DIR/protected_media"
+ok "受保护上传目录就绪: $APP_DIR/protected_media"
 
 # ---------- 8. 注册 systemd 服务 ----------
 info "注册 systemd 服务与备份定时器"
@@ -264,6 +287,7 @@ RENDER=(
     -e "s|@@SSL_KEY_PATH@@|${SSL_KEY_PATH:-}|g"
     -e "s|@@BACKUP_SCHEDULE@@|$DJANGO_BACKUP_SCHEDULE|g"
     -e "s|@@BACKUP_RETAIN@@|$DJANGO_BACKUP_RETAIN|g"
+    -e "s|@@BACKUP_DIR@@|${DJANGO_BACKUP_DIR:-$APP_DIR/backups}|g"
     -e "s|@@VENV@@|$APP_DIR/.venv|g"
     -e "s|@@PG_SERVICE@@|${PG_SERVICE:-postgresql.service}|g"
 )
@@ -325,6 +349,23 @@ fi
 if [[ -n "$NGINX_ENLINK" && ! -e "$NGINX_ENLINK" ]]; then
     ln -s "$NGINX_CONF" "$NGINX_ENLINK"
 fi
+# 限流区必须定义在 http 上下文里，而站点配置（conf.d/*.conf、sites-enabled/*）
+# 是包含在 http 块**内部**的，写不进去。所以由本脚本往 nginx.conf 追加一次定义
+# （幂等：已有同名 zone 就跳过），站点配置里的 limit_req 引用它。
+NGINX_MAIN_CONF="/etc/nginx/nginx.conf"
+if [[ -f "$NGINX_MAIN_CONF" ]] && ! grep -q "zone=club702_login" "$NGINX_MAIN_CONF"; then
+    info "向 nginx.conf 追加登录限流区"
+    # 10m 共享内存约可容纳 16 万个 IP；登录是低频操作，够用很久。
+    if sed -i "/^http {/a\    limit_req_zone \$binary_remote_addr zone=club702_login:10m rate=20r/m;" "$NGINX_MAIN_CONF"; then
+        ok "已加入 limit_req_zone club702_login（20 次/分钟/IP）"
+    else
+        warn "追加 nginx.conf 失败，站点配置里的 limit_req 会因缺少 zone 而让 nginx -t 报错"
+        warn "请手工在 nginx.conf 的 http 块内加入："
+        warn "  limit_req_zone \$binary_remote_addr zone=club702_login:10m rate=20r/m;"
+        exit 1
+    fi
+fi
+
 if ! nginx -t >/dev/null 2>&1; then
     fail "Nginx 配置测试失败："
     nginx -t 2>&1 | sed "s/^/  /"
@@ -352,7 +393,8 @@ ${GRN}  首次部署完成                              ${RST}
 ${GRN}============================================${RST}
   应用服务 : systemctl status club702
   备份定时 : systemctl list-timers | grep club702
-  手动备份 : /opt 下执行 backups/ 相关脚本
+  手动备份 : sudo -u ${DEPLOY_SYSTEM_USER} ${APP_DIR}/deploy/backup.sh
+  备份位置 : ${DJANGO_BACKUP_DIR:-$APP_DIR/backups}（备份未加密时脚本会提醒）
   访问入口 : http://${DEPLOY_DOMAIN}/
   管理后台 : http://${DEPLOY_DOMAIN}/admin/
   日志     : journalctl -u club702 -f

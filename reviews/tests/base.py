@@ -48,11 +48,21 @@ class ReviewTestCase(TestCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.media_root = tempfile.mkdtemp()
-        cls._media_override = override_settings(MEDIA_ROOT=cls.media_root)
+        # 受保护的上传件（项目书、批注版）落在 PRIVATE_MEDIA_ROOT，不在 MEDIA_ROOT
+        # 之下，所以两个根都要给临时目录：只覆盖一个，另一个就会把测试文件写进
+        # 仓库里的真实目录。
+        cls.private_media_root = tempfile.mkdtemp()
+        cls._media_override = override_settings(
+            MEDIA_ROOT=cls.media_root,
+            PRIVATE_MEDIA_ROOT=cls.private_media_root,
+        )
         cls._media_override.enable()
         # 清理按注册的逆序执行：先删目录，再把设置放回去。
         cls.addClassCleanup(cls._media_override.disable)
         cls.addClassCleanup(shutil.rmtree, cls.media_root, ignore_errors=True)
+        cls.addClassCleanup(
+            shutil.rmtree, cls.private_media_root, ignore_errors=True
+        )
 
     # --- 把一轮送审推过两道关 -----------------------------------------------
 

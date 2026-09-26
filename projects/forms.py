@@ -4,6 +4,8 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.utils.translation import gettext_lazy as _
 
+from core.storage import ProtectedClearableFileInput
+
 from .models import (
     MAX_ADVISORS_PER_GROUP,
     GroupCreateRequest,
@@ -32,11 +34,18 @@ class AdvisorSlotsMixin:
 
 
 class GroupJoinRequestForm(forms.ModelForm):
+    message = forms.CharField(
+        label=_("申请理由"),
+        required=False,
+        # 与模型侧的 max_length 一致：两边都写是为了让表单先给出友好报错，
+        # 而不是让数据库层抛 IntegrityError。
+        max_length=2000,
+        widget=forms.Textarea(attrs={"rows": 4}),
+    )
+
     class Meta:
         model = GroupJoinRequest
         fields = ("message",)
-        labels = {"message": _("申请理由")}
-        widgets = {"message": forms.Textarea(attrs={"rows": 4})}
 
 
 class GroupCreateRequestForm(AdvisorSlotsMixin, forms.ModelForm):
@@ -61,6 +70,7 @@ class GroupCreateRequestForm(AdvisorSlotsMixin, forms.ModelForm):
             "advisor_3": _("指导老师 3（选填）"),
         }
         widgets = {"description": forms.Textarea(attrs={"rows": 5})}
+        # 描述与组介绍是成员可自由填写的长文本，模型侧同样收了口径。
 
 
 class GroupDescriptionForm(forms.ModelForm):
@@ -100,6 +110,9 @@ class GroupProposalForm(forms.ModelForm):
     class Meta:
         model = ProjectGroup
         fields = ("proposal",)
+        # 受保护文件没有公开 URL，Django 原版 widget 会因此整块不渲染
+        # （看不到当前文件名、也没有清除勾选），换成本项目那个按文件名判断的。
+        widgets = {"proposal": ProtectedClearableFileInput()}
         labels = {"proposal": _("项目书")}
         help_texts = {"proposal": _("支持 doc、docx、pdf，上传后即可提交审核。")}
 
