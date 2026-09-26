@@ -67,12 +67,23 @@ set +a
 for var in DJANGO_SECRET_KEY DJANGO_ALLOWED_HOSTS DJANGO_DB_NAME \
            DJANGO_DB_USER DJANGO_DB_PASSWORD DJANGO_SUPERUSER_USERNAME \
            DJANGO_SUPERUSER_EMAIL DJANGO_SUPERUSER_PASSWORD \
-           DEPLOY_DOMAIN DEPLOY_PUBLIC_IP DEPLOY_SYSTEM_USER DJANGO_BACKUP_SCHEDULE; do
+           DEPLOY_DOMAIN DEPLOY_PUBLIC_IP DEPLOY_SYSTEM_USER DJANGO_BACKUP_SCHEDULE \
+           DJANGO_CSRF_TRUSTED_ORIGINS; do
     if [[ -z "${!var:-}" ]]; then
         fail "env.sh 缺少必需配置项 $var（请参照 deploy/env.template）"
         exit 1
     fi
 done
+
+# 上面那道「非空」检查拦不住一种情况：值形如 https://<DOMAIN>,https://<PUBLIC_IP>
+# ——非空，但尖括号还在，等于没填。模板里这一项是逗号分隔的多个来源，不符合上面
+# 那条 UNFILLED 正则（它只管「整行就是一个 <...>」），所以漏得过去。
+# 而漏填的后果是静默的：CSRF_TRUSTED_ORIGINS 变成一串无效来源，表单提交照样 403。
+if [[ "$DJANGO_CSRF_TRUSTED_ORIGINS" == *"<"* || "$DJANGO_CSRF_TRUSTED_ORIGINS" == *">"* ]]; then
+    fail "DJANGO_CSRF_TRUSTED_ORIGINS 里还有未替换的 <> 占位符：$DJANGO_CSRF_TRUSTED_ORIGINS"
+    fail "请写上成员实际访问的每个入口（含协议），例如 https://club.example.com,https://1.2.3.4"
+    exit 1
+fi
 
 # ---------- 3. 依赖环境检测（只提示，不自动安装） ----------
 MISSING=()
@@ -252,18 +263,21 @@ info "编译界面翻译（英文）"
 run_as_app .venv/bin/python manage.py compilemessages -l en
 ok "界面翻译已编译"
 
-# 备份目录。默认在应用目录内——外置目录通常属 root，安装脚本能提权但**日常部署
-# 不能**，把默认值放在外面会让 deploy.sh 的第一次备份就失败。想外置的话在 env.sh
-# 里设 DJANGO_BACKUP_DIR，这里会照它的值建。
-BACKUP_DIR="${DJANGO_BACKUP_DIR:-$APP_DIR/backups}"
+# 备份目录。推荐 /var/backups/club702（见 env.template 的说明）——外置目录不在
+# systemd 给应用进程的可写范围里，被攻陷的 Web 应用碰不到备份。本脚本有 sudo，
+# 正好负责那一次性的创建；之后 backup.sh 会自己收紧权限、自己判断可写性。
+#
+# 默认值与 env.template 保持一致：env.sh 里填了什么就用什么，没填则退回应用目录内。
+BACKUP_DIR="${DJANGO_BACKUP_DIR:-/var/backups/club702}"
 info "确保备份目录存在"
 sudo mkdir -p "$BACKUP_DIR"
 sudo chown "$DEPLOY_SYSTEM_USER:$DEPLOY_SYSTEM_USER" "$BACKUP_DIR"
 sudo chmod 700 "$BACKUP_DIR"
 ok "备份目录就绪: $BACKUP_DIR"
 if [[ "$BACKUP_DIR" == "$APP_DIR"/* ]]; then
-    warn "备份目录在应用目录内：应用被攻陷或主机被勒索时，备份会与数据一起没"
-    warn "想外置：建好目录后在 env.sh 里设 DJANGO_BACKUP_DIR=<路径>"
+    warn "备份目录在应用目录内：systemd 给了应用进程该目录的写权限，"
+    warn "被攻陷的 Web 应用能删改备份。建议在 env.sh 里设"
+    warn "DJANGO_BACKUP_DIR=/var/backups/club702 后重跑本脚本。"
 fi
 
 # 受保护上传件的目录：backup.service 的 ReadOnlyPaths 与应用的写入都要它存在
@@ -287,7 +301,7 @@ RENDER=(
     -e "s|@@SSL_KEY_PATH@@|${SSL_KEY_PATH:-}|g"
     -e "s|@@BACKUP_SCHEDULE@@|$DJANGO_BACKUP_SCHEDULE|g"
     -e "s|@@BACKUP_RETAIN@@|$DJANGO_BACKUP_RETAIN|g"
-    -e "s|@@BACKUP_DIR@@|${DJANGO_BACKUP_DIR:-$APP_DIR/backups}|g"
+    -e "s|@@BACKUP_DIR@@|${DJANGO_BACKUP_DIR:-/var/backups/club702}|g"
     -e "s|@@VENV@@|$APP_DIR/.venv|g"
     -e "s|@@PG_SERVICE@@|${PG_SERVICE:-postgresql.service}|g"
 )
@@ -394,7 +408,7 @@ ${GRN}============================================${RST}
   应用服务 : systemctl status club702
   备份定时 : systemctl list-timers | grep club702
   手动备份 : sudo -u ${DEPLOY_SYSTEM_USER} ${APP_DIR}/deploy/backup.sh
-  备份位置 : ${DJANGO_BACKUP_DIR:-$APP_DIR/backups}（备份未加密时脚本会提醒）
+  备份位置 : ${DJANGO_BACKUP_DIR:-/var/backups/club702}（备份未加密时脚本会提醒）
   访问入口 : http://${DEPLOY_DOMAIN}/
   管理后台 : http://${DEPLOY_DOMAIN}/admin/
   日志     : journalctl -u club702 -f
