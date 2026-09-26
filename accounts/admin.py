@@ -36,9 +36,17 @@ def _qualification_action(*, flag, label, value):
 
     六个动作只有字段名、文案与取值不同，所以由这里生成——八份各自的
     ``@admin.action`` 只会让「谁在改资格、怎么留痕」散成八处。
+
+    ``permissions=["change"]`` 是这个装饰器的**白名单**功能：不声明时 Django
+    对所有人放行，只挂 ``view_user`` 的只读观察者也能提交这个动作。那道关不
+    是装饰性的——``set_qualification`` 是给程序调用的服务函数，不看请求是谁
+    发的，所以这里是唯一的 HTTP 门槛。
     """
 
-    @admin.action(description=f"{'授予' if value else '撤销'}{label}资格")
+    @admin.action(
+        permissions=["change"],
+        description=f"{'授予' if value else '撤销'}{label}资格",
+    )
     def action(modeladmin, request, queryset):
         changed = set_qualification(
             users=queryset,

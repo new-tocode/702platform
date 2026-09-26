@@ -4,6 +4,7 @@ import threading
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.core.exceptions import ValidationError
 from django.db import connection
 from django.test import TestCase, TransactionTestCase
@@ -359,6 +360,120 @@ class EquipmentAcceptanceTests(TestCase):
         self.client.force_login(self.member)
         member_response = self.client.get("/admin/equipment/equipment/")
         self.assertEqual(member_response.status_code, 302)
+
+    def test_admin_can_mark_a_borrow_returned_from_the_admin_list(self):
+        """管理员能在后台归还——这道门不能把管理员误伤掉。
+
+        动作声明的是 ``permissions=["change_equipmentborrow"]``（自定义权限，
+        配 ``has_change_equipmentborrow_permission``），查的是真实的模型权限
+        ``equipment.change_equipmentborrow``。超级用户天然为真，本用例既确认
+        「管理员能归还」，也守着「这个更高的门槛没有把该放行的人挡掉」。
+
+        **已知不足**：后台列表页一次只列 50 条，这个动作只能勾选**当前页**的记录，
+        没有「全选」通道；要归还的是翻页之后那批，得先缩小筛选。写在这里是因为
+        它属于「管理员以为一次还完了、其实只还了一页」这类会安静出错的事。
+        """
+        borrow = create_borrow(
+            equipment_id=self.equipment.pk,
+            borrower=self.member,
+            planned_return_date=timezone.localdate() + timedelta(days=2),
+            remark="管理员从后台归还",
+            actor=self.member,
+        )
+        listing = reverse("admin:equipment_equipmentborrow_changelist")
+
+        self.client.force_login(self.admin)
+        self.assertEqual(self.client.get(listing).status_code, 200)
+        self.client.post(
+            listing,
+            {
+                "action": "mark_returned",
+                "_selected_action": [str(borrow.pk)],
+                "index": "0",
+            },
+            follow=True,
+        )
+
+        borrow.refresh_from_db()
+        self.assertEqual(borrow.status, EquipmentBorrow.RETURNED)
+        self.assertIsNotNone(borrow.actual_return_date)
+        self.equipment.refresh_from_db()
+        self.assertEqual(self.equipment.available_count, 2)
+
+    def test_view_only_observer_cannot_mark_a_borrow_returned(self):
+        """只挂 ``view_equipmentborrow`` 的 staff 不能归还——这是这个动作唯一
+        的门槛，也是它必须声明 ``permissions=["change"]`` 的原因。
+
+        ``is_admin`` 就是 ``is_staff``，所以「非管理员进不来」这道防线对
+        staff 里的只读观察者是**无效**的：他进得来列表页。曾经这个动作不声明
+        ``permissions``，于是 Django 对所有人放行，他在列表页拿得到它、提交后
+        借用记录真的会变成已归还、库存真的会加回去。声明之后动作只会出现在
+        ``has_change_permission`` 为真的人的下拉框里，而 Django 在
+        ``response_action`` 里用的是同一份 ``get_actions()``，所以「看得到」
+        与「提交得动」同源，下面两个断言一起守住这条。
+        """
+        borrow = create_borrow(
+            equipment_id=self.equipment.pk,
+            borrower=self.member,
+            planned_return_date=timezone.localdate() + timedelta(days=2),
+            remark="只读观察者不能归还",
+            actor=self.member,
+        )
+        observer = User.objects.create_user(
+            username="equipment-view-only",
+            password="Observer-Password-123!",
+        )
+        observer.must_change_password = False
+        observer.is_staff = True
+        observer.save(update_fields=["must_change_password", "is_staff"])
+        observer.user_permissions.add(
+            Permission.objects.get(codename="view_equipmentborrow")
+        )
+        listing = reverse("admin:equipment_equipmentborrow_changelist")
+
+        # 看得到列表（view 权限够用），但页面上没有这个动作可挑。
+        self.client.force_login(observer)
+        page = self.client.get(listing)
+        self.assertEqual(page.status_code, 200)
+        self.assertNotContains(page, "mark_returned")
+
+        # 绕过页面直接 POST 也不行。
+        self.client.post(
+            listing,
+            {
+                "action": "mark_returned",
+                "_selected_action": [str(borrow.pk)],
+                "index": "0",
+            },
+            follow=True,
+        )
+        borrow.refresh_from_db()
+        self.assertEqual(borrow.status, EquipmentBorrow.BORROWED)
+        self.equipment.refresh_from_db()
+        self.assertEqual(self.equipment.available_count, 1)
+
+    def test_non_staff_member_cannot_reach_the_borrow_admin_list(self):
+        borrow = create_borrow(
+            equipment_id=self.equipment.pk,
+            borrower=self.member,
+            planned_return_date=timezone.localdate() + timedelta(days=2),
+            remark="成员不能进后台归还",
+            actor=self.member,
+        )
+        self.client.force_login(self.member)
+
+        response = self.client.post(
+            reverse("admin:equipment_equipmentborrow_changelist"),
+            {
+                "action": "mark_returned",
+                "_selected_action": [str(borrow.pk)],
+                "index": "0",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        borrow.refresh_from_db()
+        self.assertEqual(borrow.status, EquipmentBorrow.BORROWED)
 
 
 class ConcurrentEquipmentBorrowTests(TransactionTestCase):
