@@ -522,7 +522,7 @@ Comment（评论）
 
 - 「项目组联系人」**不新建用户组存储**：身份由 `ProjectGroup.leader` 计算，判定收敛在 `projects/permissions.py`（`is_project_contact` / `is_project_member` / `can_manage_group` / `can_use_equipment` / `groups_visible_to`），其他模块复用这些函数，避免出现会漂移的副本。
 - **评审资格的判定归评审应用**：`reviews/permissions.py`（`is_reviewer` / `is_preliminary_reviewer` / `is_super_reviewer` / `qualifies_for_stage` / `has_review_qualification` / `may_receive_tasks` / `has_review_claim`）。projects 与 accounts 只在函数体内局部 import 这一个模块——依赖方向因此是单向的，projects 不会再为了问一句「他是不是评审人」而去读评审的模型。
-- 「组成员关系」通过 `ProjectGroup.members` 表达；「内部通知的用户组」仍是 Django `auth.Group`（`Notice.visible_groups`），两套"组"语义不同，不可混淆。
+- 「组成员关系」通过 `ProjectGroup.members` 表达；「内部通知的用户组」仍是 Django `auth.Group`（`Notice.visible_groups`），两套"组"语义不同，不可混淆。 反过来，Django `auth.Group` 的成员关系挂在 `User.groups` 上——组页那个穿梭框因此不是模型字段，而是在表单里显式声明、由 `accounts.services.set_group_members` 落库。
 - **「谁算管理员」只有一处写法**：`core/permissions.py` 的 `is_admin(user)`（`is_staff` 或 `is_superuser`）。此前 `is_staff` 与 `is_staff or is_superuser` 两种写法并存，同一个问题两个答案；现在各应用一律问它。`projects.permissions.can_decide_group_create_requests` 保留为业务语义名（「谁能审建组申请」），函数体委托 `is_admin`。
 - 社团空间的帖子管理沿用 `is_admin()`（staff 或 superuser）；板块管理单独要求 Django `is_superuser`，不能用评审资格代替。空间成员范围是 `is_active=True` 且已完成首次改密的账号。
 - **依赖方向**：跨应用引用只经 `permissions`／`services`／`selectors` 的公开函数，且不在模块加载期互相牵连（需要时用函数内局部 import）。`projects` 与 `reviews` 之间原本有一处双向 import，随着 `reviews` 改问 `core.permissions.is_admin` 而消失。
@@ -709,6 +709,7 @@ core / registry.py
   | 项目组成员 | 他所在的每个项目组，以及在各组里是联系人还是成员 |
 
   六张名册都是只读的（`core.admin.RoleRosterAdmin`），顶上有一句「这个身份从哪来」。
+- **用户组（`auth.Group`）的成员直接在组页增删**：这个「组」只用于内部通知的投递范围（`Notice.visible_groups`），既不是项目组（`ProjectGroup`），也不是身份名册。组页的「组内用户」是一个穿梭框，左侧候选池是**全部账号**（一次挑一批人加进来），右侧是组内现成的人；候选与已选都渲染成「账号（姓名，学院）」。保存走 `accounts.services.set_group_members`：**整份覆盖**、与现状比对后只动真正变了的人（重复保存同一份名单既不写库也不留审计行，与 `set_qualification` 同一条口径），写入在事务里先 `select_for_update` 锁住该组那一行（两个管理员同时保存同一份名单，不会各读各的现状、拼出一份谁也没提交过的结果），每次真正的变更留一条 `accounts.group.membership.update` 审计（谁进来、谁出去）。
 - 账号后台的「权限」区仍然可以逐个发放三种资格：`is_reviewer`（评审）、`is_preliminary_reviewer`（初审）、`is_super_reviewer`（超级评审）；三者在列表页可直接筛选。**批量**发放走用户列表页的六个动作（授予／撤销 × 三种资格），写入经 `accounts.services.set_qualification` 并留审计；新建账号的表单上也能直接勾选，省掉「先建号、再进详情页勾一遍」。
 - 评审相关记录以**只读留痕**为主，四处例外：评审人请假的两个时间可在列表上直接改（`list_editable`）；待评审且该轮未判结论的评审任务可在详情页改派评审人；待初审且该轮仍在初审中的初审任务同理；**整轮送审可删除**（连同它的初审与评审任务，已归档的轮次除外）。写操作都经服务层或审计日志留痕。
 - 按需定制更友好的发布表单（本期以 Admin 为主）。

@@ -2,7 +2,9 @@
 
 import logging
 
+from django import forms
 from django.contrib import admin, messages
+from django.contrib.admin import widgets as admin_widgets
 from django.contrib.auth.admin import GroupAdmin as DjangoGroupAdmin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 from django.contrib.auth.models import Group
@@ -25,7 +27,7 @@ from .models import (
     SuperReviewerRole,
     User,
 )
-from .services import set_qualification
+from .services import set_group_members, set_qualification
 
 
 logger = logging.getLogger(__name__)
@@ -206,42 +208,116 @@ class UserAdmin(ProfileNameMixin, DjangoUserAdmin):
         )
 
 
+# Group 先被 django.contrib.auth 注册过一次，这里换成我们这一份。
 admin.site.unregister(Group)
+
+
+def _member_label(user):
+    """用户组穿梭框里的一行：账号打头，后面带上姓名与学院。
+
+    组名册上认人靠账号；姓名与学院是给人看的（同名同姓时也才分得清），所以哪一节
+    没有就不写，不出现空括号。这里不查库——queryset 已经把 profile 带上了。
+    """
+    profile = getattr(user, "profile", None)
+    parts = [
+        part
+        for part in (
+            profile.full_name if profile else "",
+            profile.college if profile else "",
+        )
+        if part
+    ]
+    return f"{user.get_username()}（{'，'.join(parts)}）" if parts else user.get_username()
+
+
+class MemberChoiceField(forms.ModelMultipleChoiceField):
+    """组员的候选与已选，都按 :func:`_member_label` 渲染。"""
+
+    def label_from_instance(self, user):
+        return _member_label(user)
+
+
+class GroupAdminForm(forms.ModelForm):
+    """用户组的编辑表单，多一个「组内用户」的穿梭框。
+
+    ``Group`` 上并没有一个叫 ``members`` 的多对多字段——成员关系挂在 ``User``
+    那一侧（``user.groups``），所以这不是模型字段，只能在这里显式声明。它因而也
+    不归 ``ModelForm`` 的 ``_save_m2m`` 管，落库由 :meth:`save_group_members` 交给
+    ``accounts.services.set_group_members``（那边带事务、行锁与审计）。
+    """
+
+    members = MemberChoiceField(
+        label="组内用户",
+        queryset=User.objects.none(),
+        required=False,
+        widget=admin_widgets.FilteredSelectMultiple("用户", False),
+        help_text="左侧是全部账号，右侧是组内用户；保存后生效（与「权限」一样）。",
+    )
+
+    class Meta:
+        model = Group
+        fields = ("name", "permissions")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # 左侧可选池是全部账号：既包括还没入组的（在这里挑人加进来），也包括已经在组里的
+        # （否则右侧现成的人会被判成非法选项，一保存就报「不是合法选项」）。姓名与学院
+        # 一并带出来，免得渲染每一行时各查一次。
+        self.fields["members"].queryset = (
+            User.objects.select_related("profile").order_by("username")
+        )
+        if self.instance and self.instance.pk:
+            self.initial["members"] = self.instance.user_set.order_by("username")
+
+    def save_group_members(self, *, actor, request=None):
+        """把提交上来的成员名单整份落库，返回（新加入, 已移出）。"""
+        return set_group_members(
+            group=self.instance,
+            members=self.cleaned_data.get("members") or (),
+            actor=actor,
+            request=request,
+        )
 
 
 @admin.register(Group)
 class GroupAdmin(DjangoGroupAdmin):
-    """Extend the built-in group admin with a read-only member overview."""
+    """用户组：成员不再是只读的一段文字，而是一个可增删的穿梭框。
 
+    这个「组」是 Django 的 ``auth.Group``，只用于内部通知的投递范围
+    （``Notice.visible_groups``）——不是项目组（``ProjectGroup``，见 projects 应用），
+    也不是身份名册。成员关系挂在 ``User`` 上，所以左侧候选人是全部账号：在这里一次
+    挑一批人加进来或移出去，省得回用户列表页挨个勾。
+    """
+
+    form = GroupAdminForm
     list_display = ("name", "member_count")
     search_fields = ("name", "user__username", "user__profile__full_name")
     fieldsets = (
         (None, {"fields": ("name", "permissions")}),
-        ("组内用户", {"fields": ("members_overview",)}),
+        ("组内用户", {"fields": ("members",)}),
     )
-    readonly_fields = ("members_overview",)
 
     def get_queryset(self, request):
         return (
             super()
             .get_queryset(request)
             .annotate(_member_count=Count("user", distinct=True))
-            .prefetch_related("user_set__profile")
         )
 
     @admin.display(description="用户数", ordering="_member_count")
     def member_count(self, obj):
         return obj._member_count
 
-    @admin.display(description="属于该组的用户")
-    def members_overview(self, obj):
-        if not obj.pk:
-            return "保存后可查看组内用户。"
-        names = [
-            user.profile.full_name or user.username
-            for user in obj.user_set.all()
-        ]
-        return "、".join(names) or "（暂无用户）"
+    def save_related(self, request, form, formsets, change):
+        super().save_related(request, form, formsets, change)
+        added, removed = form.save_group_members(actor=request.user, request=request)
+        if added or removed:
+            self.message_user(
+                request,
+                "用户组「%s」成员已更新：加入 %d 人，移出 %d 人。"
+                % (form.instance.name, len(added), len(removed)),
+                messages.SUCCESS,
+            )
 
 
 # --- 四张全局身份名册 -------------------------------------------------------
