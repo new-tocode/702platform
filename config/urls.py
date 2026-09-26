@@ -46,4 +46,7 @@ urlpatterns += i18n_patterns(
 )
 
 if settings.DEBUG:
+    # 开发环境由 Django 送出媒体文件。只挂 MEDIA_ROOT（公开的媒体库配图）；
+    # 受保护的上传件在 PRIVATE_MEDIA_ROOT，**刻意不挂**——它们只能经视图取，
+    # 本地也照这个口径走，免得「开发能直接访问、线上不能」这种差异掩盖了问题。
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

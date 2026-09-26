@@ -21,13 +21,12 @@ The ``review_type`` labels are **platform-local tags** and deliberately have no
 foreign key to ``competitions.Competition``.
 """
 
-import uuid
-
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+from core.storage import neutral_upload_to, private_storage
 from projects.models import ProjectGroup
 from projects.validators import validate_proposal_file
 
@@ -64,26 +63,13 @@ REVIEWER_QUOTA = {
 DEFAULT_REVIEWERS = 2
 
 
-def _neutral_name(filename):
-    """Return a uuid-based storage name that carries no user information."""
-    extension = filename.rsplit(".", 1)[-1].lower() if "." in filename else "bin"
-    return f"{uuid.uuid4().hex}.{extension}"
-
-
-def upload_annotated_proposal(instance, filename):
-    """Store a reviewer's annotated copy under a name that hides the reviewer.
-
-    Reviewer attachments must never carry the reviewer's name into storage: the
-    anonymous-by-default contract would leak through a filename such as
-    ``zhangsan-批注.docx``. The download views hand out a neutral
-    ``Content-Disposition`` on top of this.
-    """
-    return f"review_annotations/{timezone.now():%Y/%m}/{_neutral_name(filename)}"
-
-
-def upload_archived_proposal(instance, filename):
-    """Store an archived annotated copy under the same neutral naming."""
-    return f"review_archives/{timezone.now():%Y/%m}/{_neutral_name(filename)}"
+#: 评审人的批注版与归档件：落盘名一律 uuid。
+#:
+#: 匿名是评审的硬约束，而文件名是最容易漏的一处——``zhangsan-批注.docx`` 这样的
+#: 名字会把评审人直接写进存储层，再跟着备份与运维的 ls 一路扩散出去。命名口径与
+#: 其他受保护上传件统一到 core.storage，只在目录前缀上区分。
+upload_annotated_proposal = neutral_upload_to("review_annotations")
+upload_archived_proposal = neutral_upload_to("review_archives")
 
 
 class ProjectSubmission(models.Model):
@@ -111,7 +97,7 @@ class ProjectSubmission(models.Model):
         default="",
         help_text="决定本轮需要几名评审人；升级前创建的送审留空，沿用两人制。",
     )
-    message = models.TextField("提交说明", blank=True)
+    message = models.TextField("提交说明", max_length=5000, blank=True)
     status = models.CharField(
         "状态",
         max_length=20,
@@ -259,7 +245,7 @@ class ReviewTask(models.Model):
         choices=DECISION_CHOICES,
         blank=True,
     )
-    comment = models.TextField("意见", blank=True)
+    comment = models.TextField("意见", max_length=5000, blank=True)
     is_override = models.BooleanField(
         "超级评审决定",
         default=False,
@@ -268,6 +254,7 @@ class ReviewTask(models.Model):
     annotated_file = models.FileField(
         "批注版项目书",
         upload_to=upload_annotated_proposal,
+        storage=private_storage,
         blank=True,
         validators=[validate_proposal_file],
         help_text="选填；支持 doc、docx、pdf。请勿在文件属性中保留可识别个人身份的信息。",
@@ -385,6 +372,7 @@ class ArchivedProposal(models.Model):
     file = models.FileField(
         "批注版项目书",
         upload_to=upload_archived_proposal,
+        storage=private_storage,
     )
     archived_at = models.DateTimeField("归档时间", auto_now_add=True)
 
@@ -455,7 +443,7 @@ class ReviewerLeave(models.Model):
     starts_at = models.DateTimeField("请假开始")
     ends_at = models.DateTimeField("请假结束")
     # 成员中心用 ModelForm 的默认标签渲染这一栏，所以这个 verbose_name 是前台文案。
-    reason = models.TextField(_("事由"), blank=True)
+    reason = models.TextField(_("事由"), max_length=500, blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,

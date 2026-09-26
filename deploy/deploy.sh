@@ -30,35 +30,40 @@ if [[ -n "$DEPLOY_USER" ]] && [[ "$(id -u)" -eq 0 ]] && [[ "$(id -un)" != "$DEPL
     exec sudo -u "$DEPLOY_USER" bash "$0" "$TAG"
 fi
 
-echo "==> 1/5 备份数据库和媒体（分别保留 ${DJANGO_BACKUP_RETAIN:-14} 份）"
-mkdir -p backups
-STAMP="$(date +%F-%H%M)"
-PGPASSWORD="$DJANGO_DB_PASSWORD" pg_dump \
-    --username "$DJANGO_DB_USER" \
-    --host "${DJANGO_DB_HOST:-127.0.0.1}" \
-    --port "${DJANGO_DB_PORT:-5432}" \
-    "$DJANGO_DB_NAME" | gzip > "backups/db-$STAMP.sql.gz"
-tar -czf "backups/media-$STAMP.tar.gz" mediafiles/
-RETAIN="${DJANGO_BACKUP_RETAIN:-14}"
-ls -1t backups/db-*.sql.gz    2>/dev/null | tail -n +$((RETAIN + 1)) | xargs -r rm --
-ls -1t backups/media-*.tar.gz 2>/dev/null | tail -n +$((RETAIN + 1)) | xargs -r rm --
-echo "    备份完成: backups/db-$STAMP.sql.gz"
+echo "==> 1/6 备份数据库和媒体（分别保留 ${DJANGO_BACKUP_RETAIN:-14} 份）"
+# 直接复用 backup.sh，不再在这里抄一遍 pg_dump 与 tar：两份实现迟早会漂移，而
+# 「发布前先备份」是回滚的前提，它出错没人会发现——直到真需要回滚的那一天。
+"$APP_DIR/deploy/backup.sh"
 
-echo "==> 2/5 切换版本 $TAG"
+echo "==> 2/6 切换版本 $TAG"
 git fetch --tags origin
 git checkout "$TAG"
 
-echo "==> 3/5 安装/更新依赖"
-.venv/bin/python -m pip install --quiet -r requirements.txt -r requirements-prod.txt
+echo "==> 3/6 安装/更新依赖"
+# --require-hashes：锁文件里每个包都带哈希，安装时校验——依赖被篡改或供应链
+# 投毒会在这里失败，而不是安静地装上一个被换过的包。
+.venv/bin/python -m pip install --quiet --require-hashes \
+    -r requirements.txt -r requirements-prod.txt
 
-echo "==> 4/5 数据库迁移 + 静态文件 + 界面翻译"
+echo "==> 4/6 部署配置门禁"
+# check --deploy 会在上线之前把「DEBUG 还开着」「Cookie 没带 Secure」「SECRET_KEY
+# 还是源码默认值」这类退化拦下来。这类问题不会让站点起不来，只会让它安静地不安全，
+# 事后再发现往往已经跑了一段时间。所以放在重启服务之前：宁可这次发布失败。
+.venv/bin/python manage.py check --deploy --fail-level WARNING
+
+echo "==> 5/6 数据库迁移 + 静态文件 + 界面翻译"
+# 受保护上传件的目录（项目书、批注版、头像、图册）。它是后加的，老部署上没有；
+# 不先建出来，迁移里的文件搬运无处落脚、应用写入也会失败。install.sh 也会建，
+# 但日常部署走的是本脚本，这里不能省。
+mkdir -p protected_media
+
 .venv/bin/python manage.py migrate --noinput
 .venv/bin/python manage.py collectstatic --noinput
 # 界面英文的 .mo 是构建产物（不进版本库）：按这个 tag 里的 .po 现编，线上就永远
 # 与 .po 一致。服务器缺 gettext 会在这里直接失败——比英文页面静默退回中文好。
 .venv/bin/python manage.py compilemessages -l en
 
-echo "==> 5/5 重启服务 + 健康检查"
+echo "==> 6/6 重启服务 + 健康检查"
 systemctl restart "$SERVICE_NAME"
 sleep 2
 if curl -fsS "$SITE_URL" > /dev/null; then

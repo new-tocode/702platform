@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views
+from . import file_views, views
 
 
 app_name = "accounts"
@@ -15,6 +15,18 @@ urlpatterns = [
         "member/profile/<int:user_id>/",
         views.member_profile_readonly,
         name="member_profile",
+    ),
+    # 受保护文件的取件口（见 accounts/file_views.py）：头像与图册不在公开的
+    # /media/ 下，只能从这里出去。
+    path(
+        "member/avatar/<int:user_id>/",
+        file_views.avatar_file,
+        name="avatar_file",
+    ),
+    path(
+        "member/gallery/<int:pk>/file/",
+        file_views.gallery_file,
+        name="gallery_file",
     ),
     path("member/profile/avatar/", views.avatar_update, name="avatar_update"),
     path("member/profile/avatar/delete/", views.avatar_delete, name="avatar_delete"),

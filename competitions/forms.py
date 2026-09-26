@@ -28,6 +28,7 @@ class CompetitionRegistrationForm(forms.Form):
         help_text=_("从所选项目组成员中指定，可以是联系人本人。"),
     )
     remark = forms.CharField(
+        max_length=2000,
         label=_("备注"),
         required=False,
         widget=forms.Textarea(attrs={"rows": 4}),

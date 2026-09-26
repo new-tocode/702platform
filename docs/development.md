@@ -144,13 +144,49 @@
 | 依赖 | 作用 |
 |---|---|
 | `Django>=5.2,<5.3` | Web 框架、ORM、认证、Session、Admin、迁移、模板、测试 |
-| `djangorestframework>=3.16,<3.17` | 为后续 API 预留：只装在 `INSTALLED_APPS` 里，当前没有任何 serializer／viewset／APIView |
+| `djangorestframework>=3.17.2,<3.18` | 为后续 API 预留：只装在 `INSTALLED_APPS` 里，当前没有任何 serializer／viewset／APIView |
 | `bleach>=6.2,<7` | 富文本 HTML 白名单过滤 |
 | `markdown>=3.8,<4` | Markdown 渲染 |
-| `Pillow>=11.3,<12` | 校验上传图片真实格式 |
+| `Pillow>=12.3,<13` | 校验上传图片真实格式，并挡住解压炸弹（12.x 修掉 11.3.0 的 35 个已知漏洞） |
+| `django-axes>=8.3,<9` | 登录失败计数与锁定（账号、IP 两个维度各算各的） |
 | `psycopg[binary]>=3.2,<4` | PostgreSQL 驱动 |
 
-`requirements-prod.txt` 仅增 `gunicorn`。版本写成"下限+上限"，允许补丁更新、避免未验证的主版本跳变。
+`requirements-prod.txt` 仅增 `gunicorn`。
+
+**依赖用 pip-tools 锁定**：`.in` 是源（写区间），`.txt` 是 `pip-compile --generate-hashes`
+生成的锁文件（精确版本 + 哈希），**锁文件要一起提交**。改依赖时改 `.in` 再重新编译：
+
+```bash
+.venv/bin/pip install pip-tools
+.venv/bin/pip-compile --generate-hashes --output-file requirements.txt requirements.in
+.venv/bin/pip-compile --generate-hashes --output-file requirements-prod.txt requirements-prod.in
+```
+
+**升级依赖后要留意两件事**：
+
+1. **glibc 版本**。Pillow 12.x 的 Linux 轮子改用 `manylinux_2_28` 标签（要求
+   glibc ≥ 2.28），不再提供 `manylinux_2_17`。生产机是 Alibaba Cloud Linux 3、
+   glibc 2.32，够用；但换更老的系统就会退回源码编译（需要系统装 libjpeg 等开发包）。
+2. **跑一遍全量测试**，尤其 `core.tests.ImageUploadBombAcceptanceTests`——解压炸弹
+   防护依赖 Pillow 的 `DecompressionBombError` 与 `MAX_IMAGE_PIXELS`，主版本升级
+   必须确认这两个还在、行为没变。
+
+> `pip-compile --generate-hashes` 会把**所有平台**的轮子哈希都收进锁文件
+> （实测 `pillow` 106 个、`psycopg-binary` 66 个），所以本地 3.13 生成的锁文件
+> 在生产 3.12 上一样能装。验证方式（不下载，只按目标平台解析）：
+>
+> ```bash
+> pip download --require-hashes -d /tmp/chk \
+>   --python-version 312 --implementation cp --abi cp312 \
+>   --platform manylinux_2_17_x86_64 --only-binary :all: -r requirements.txt
+> ```
+
+安装时带 `--require-hashes`（`deploy.sh` 与 CI 都是这个口径）：每个包按哈希校验，
+依赖被篡改或供应链投毒会当场失败，而不是安静地装上一个被换过的包。
+
+**CI**（`.github/workflows/ci.yml`）在每次 push 与 PR 上跑三件事：`check --deploy`
+门禁、全部测试、`pip-audit` 依赖漏洞扫描。门禁那一步与 `deploy.sh` 里那道是同一
+口径，只是提前到合并前。
 
 ## 3. 环境与配置
 
@@ -183,7 +219,12 @@ source env.local.sh          # 必须：不加载会因缺少库名/账号/密�
 | `DJANGO_DB_USER` / `DJANGO_DB_PASSWORD` | 空 | PostgreSQL 账号/密码 |
 | `DJANGO_DB_HOST` / `DJANGO_DB_PORT` | `127.0.0.1` / `5432` | PostgreSQL 地址/端口 |
 | `DJANGO_TIME_ZONE` | `Asia/Shanghai` | 时区 |
-| `DJANGO_SESSION_COOKIE_SECURE` / `DJANGO_CSRF_COOKIE_SECURE` | `0` | 仅 HTTPS 发送 Cookie；生产设 `1` |
+| `DJANGO_SESSION_COOKIE_SECURE` / `DJANGO_CSRF_COOKIE_SECURE` | `1` | 仅 HTTPS 发送 Cookie；**默认开启**，只有纯 http 部署才改 `0` |
+| `DJANGO_PROXY_SSL_HEADER` | `0` | TLS 由 Nginx 或上层代理终结时设 `1` |
+| `DJANGO_SECURE_SSL_REDIRECT` | `0` | 整站跳 https；拿到自有证书后再开，理由见 [`deploy.md`](deploy.md) |
+| `DJANGO_SECURE_HSTS_SECONDS` | `0` | HSTS 有效期；**不要轻易开**，开之前先读 [`deploy.md`](deploy.md) |
+| `DJANGO_PRIVATE_MEDIA_ROOT` | `protected_media/` | 受保护上传件的落盘根目录（不在 `mediafiles/` 下） |
+| `DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS` / `DJANGO_SECURE_HSTS_PRELOAD` | `0` | 仅在 HSTS 已开启时生效 |
 
 生产投放方式（占位符 + 校验）见 [`deploy.md`](deploy.md)。
 
@@ -192,10 +233,48 @@ source env.local.sh          # 必须：不加载会因缺少库名/账号/密�
 | 配置 | 值 | 作用 |
 |---|---|---|
 | `STATIC_URL` / `STATIC_ROOT` / `STATICFILES_DIRS` | `/static/` / `staticfiles/` / `static/` | 静态文件 |
-| `MEDIA_URL` / `MEDIA_ROOT` | `/media/` / `mediafiles/` | 上传媒体 |
+| `MEDIA_URL` / `MEDIA_ROOT` | `/media/` / `mediafiles/` | **公开**媒体（媒体库配图），Nginx 直出 |
+| `PRIVATE_MEDIA_ROOT` | `protected_media/` | **受保护**上传件（项目书、批注版、归档版、帖子图、头像、图册），只能经视图取 |
+| `AXES_FAILURE_LIMIT` / `AXES_LOCKOUT_PARAMETERS` | `10` / 账号与 IP 各算 | 登录失败锁定；锁定响应见 `accounts/axes.py` |
+| `FILE_UPLOAD_MAX_MEMORY_SIZE` / `DATA_UPLOAD_MAX_MEMORY_SIZE` | `5 MB` | 显式写死，不让它随 Django 版本漂；文件上传走流式解析不受后者限制 |
 | `AUTH_USER_MODEL` | `accounts.User` | 已迁移，不可中途更换 |
 | `LOGIN_URL` / `LOGIN_REDIRECT_URL` / `LOGOUT_REDIRECT_URL` | `accounts:login` / `accounts:member_home` / `accounts:home` | 登录跳转 |
 | `AUTH_PASSWORD_VALIDATORS` | 相似度/最小长度/常见密码/纯数字 | 密码强度 |
+
+**上传件的两类去处**：媒体库（首页轮播、历年获奖、成员风采、公开通知的配图）落在
+`mediafiles/`，Nginx 的 `/media/` 直出，因为它本来就对匿名访客开放；其余上传件
+（项目书、批注版、归档版、帖子图、头像、个人图册）落在 `protected_media/`，**刻意不在
+`mediafiles/` 之下**——取文件一律经过视图，权限判定才有意义。受保护文件落盘名统一换成
+uuid（见 `core/storage.py`），因为原文件名会带人名、组名，而文件名会跟着文件走进备份、
+运维的 `ls` 与下载头。新增上传模型时，先想清楚它属于哪一类。
+
+**受保护上传件的取件口**（一律 `@login_required`，权限判定在视图里）：
+
+| 取件口 | 覆盖 | 判据 |
+|---|---|---|
+| `accounts:avatar_file` | 成员头像 | 登录即可（只出现在登录后的页面） |
+| `accounts:gallery_file` | 个人图册 | 登录即可 |
+| `discussion:post_image` | 帖子图片 | 能进社团空间 |
+| `projects:group_proposal_download` | 项目书 | `can_view_group` |
+| `reviews:annotated` / `reviews:archive_download` | 批注版 / 归档版 | `can_view_group` |
+
+模板里**不要**写 `{{ field.url }}`：受保护文件的存储刻意让 `url()` 抛异常（防的是
+Python 代码里拼地址）。模板要的是「有就渲染成链接、没有就渲染成文本」，用
+`{{ field|file_url }}`（见 `core/templatetags/file_urls.py`），取不到时给空串。
+
+**备份要覆盖两个目录**：`mediafiles/`（公开配图）与 `protected_media/`（项目书、
+批注版、头像、图册）。后者刻意不在前者之下，只打包 `mediafiles/` 会把受保护文件
+整批漏掉——`deploy/backup.sh` 与 `deploy/deploy.sh` 都已同时打包两个。
+
+**用户可填文本的长度上限**：成员能自由填写的长文本都有上限（评审意见 5000、
+送审说明 5000、入组申请理由 2000、项目组描述 2000、组介绍 2000、报名备注 2000、
+请假事由 500、借用备注 1000）。没有上限的文本字段是一条廉价的写入放大路径——
+一次请求就能塞进很大的内容，把库撑大、把后台列表与页面渲染拖慢。表单与模型两边
+都写：表单先给出友好报错，模型兜住后台表单与脚本写入。核心用例
+`core.tests.UserSuppliedTextLimitAcceptanceTests` 会逐项核对这张口径表。
+
+管理员才能写的正文（通知正文、公开内容页、竞赛说明等）不设上限——它们的威胁面
+小得多，而正文本来就可能是长内容。
 
 **媒体上传限制**：图片 `jpg/jpeg/png/webp/gif` ≤10MB（Pillow 解码校验）；视频 `mp4`（查 `ftyp`）/`webm`（查 EBML 头）≤500MB。项目书与评审人的批注版项目书 `doc/docx/pdf` ≤20MB（扩展名 + 文件头签名，复用同一校验器）。扩展名、大小、MIME、签名任一不符即拒绝。
 

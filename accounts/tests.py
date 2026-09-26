@@ -1,6 +1,7 @@
 """Stage 1 acceptance tests for accounts and forced password changes."""
 
 from io import BytesIO
+import json
 import os
 from pathlib import Path
 import re
@@ -8,12 +9,14 @@ import shutil
 import tempfile
 
 from django import forms
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser, Group
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from PIL import Image
+
 
 from core.models import AuditLog
 from projects.models import ProjectGroup
@@ -26,6 +29,10 @@ from .services import set_qualification
 
 User = get_user_model()
 TEST_MEDIA_ROOT = Path(tempfile.mkdtemp(prefix="competition-club-accounts-"))
+#: 受保护上传件的落盘根。**与 TEST_MEDIA_ROOT 平级、不是它的子目录**——两者
+#: 的分离正是被测的性质之一（受保护文件不在公开根下），做成子目录会让那条断言
+#: 失去意义。清理时两个都要删。
+TEST_PRIVATE_MEDIA_ROOT = Path(tempfile.mkdtemp(prefix="competition-club-accounts-private-"))
 
 
 def png_upload(name="avatar.png", size=(8, 8)):
@@ -425,7 +432,7 @@ class ReadOnlyMemberProfileAcceptanceTests(TestCase):
         self.assertEqual(self.member.profile.bio, "Builds small robots.")
 
 
-@override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
+@override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT, PRIVATE_MEDIA_ROOT=TEST_PRIVATE_MEDIA_ROOT)
 class AvatarAcceptanceTests(TestCase):
     """头像：上传、更换、删除，各自连文件一起处理；圆形只是显示层的裁切。"""
 
@@ -433,6 +440,7 @@ class AvatarAcceptanceTests(TestCase):
     def tearDownClass(cls):
         super().tearDownClass()
         shutil.rmtree(TEST_MEDIA_ROOT, ignore_errors=True)
+        shutil.rmtree(TEST_PRIVATE_MEDIA_ROOT, ignore_errors=True)
 
     def setUp(self):
         self.user = User.objects.create_user(
@@ -546,7 +554,7 @@ class AvatarAcceptanceTests(TestCase):
         self.assertContains(response, "删除头像")
 
 
-@override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
+@override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT, PRIVATE_MEDIA_ROOT=TEST_PRIVATE_MEDIA_ROOT)
 class PersonalGalleryAcceptanceTests(TestCase):
     """个人图册：上传、排序、排布、删除，以及「单张 5 MB、合计 100 MB」两条上限。"""
 
@@ -554,6 +562,7 @@ class PersonalGalleryAcceptanceTests(TestCase):
     def tearDownClass(cls):
         super().tearDownClass()
         shutil.rmtree(TEST_MEDIA_ROOT, ignore_errors=True)
+        shutil.rmtree(TEST_PRIVATE_MEDIA_ROOT, ignore_errors=True)
 
     def setUp(self):
         self.user = User.objects.create_user(
@@ -1208,3 +1217,226 @@ class RoleRosterAcceptanceTests(TestCase):
         self.assertTrue(member.is_reviewer)
         self.assertTrue(member.is_preliminary_reviewer)
         self.assertFalse(member.is_super_reviewer)
+
+class LoginLockoutAcceptanceTests(TestCase):
+    """登录失败到一定次数就锁，而且锁上之后**正确的口令也进不来**。
+
+    这条是整道防线的关键。如果锁定只是一句提示、后端照样校验口令，那它挡不住
+    任何人——攻击者撞对的那一次正好会成功登录。所以下面的用例里，第 N 次尝试
+    用的是**正确口令**，期望仍然是拒绝。
+
+    阈值与维度取自 settings（当前 10 次、账号与 IP 各算各的），这里不写死数字，
+    免得改配置时测试变成假绿。
+    """
+
+    def setUp(self):
+        from axes.models import AccessAttempt
+
+        AccessAttempt.objects.all().delete()
+        self.user = User.objects.create_user(
+            username="lockout-member",
+            password="Correct-Password-123!",
+        )
+        self.user.must_change_password = False
+        self.user.save(update_fields=["must_change_password"])
+        self.limit = settings.AXES_FAILURE_LIMIT
+
+    def tearDown(self):
+        from axes.models import AccessAttempt
+
+        AccessAttempt.objects.all().delete()
+
+    def _attempt(self, password):
+        return self.client.post(
+            reverse("accounts:login"),
+            {"username": self.user.username, "password": password},
+            # 每次都换一个 REMOTE_ADDR，把「账号维度」单独隔出来测：否则 IP 那一格
+            # 会先满，测到的就不是账号锁定了。
+            REMOTE_ADDR=f"10.0.0.{self._ip()}",
+        )
+
+    _counter = 0
+
+    def _ip(self):
+        type(self)._counter += 1
+        return (type(self)._counter % 200) + 1
+
+    def test_correct_password_is_refused_once_locked(self):
+        for _ in range(self.limit):
+            self._attempt("definitely-wrong")
+
+        response = self._attempt("Correct-Password-123!")
+
+        self.assertNotIn("_auth_user_id", self.client.session)
+        self.assertNotEqual(response.status_code, 302)
+
+    def test_lockout_response_says_so_in_chinese(self):
+        for _ in range(self.limit):
+            self._attempt("definitely-wrong")
+
+        response = self._attempt("definitely-wrong")
+
+        self.assertContains(response, "登录尝试次数过多", status_code=403)
+
+    def test_failures_below_the_limit_still_allow_a_correct_login(self):
+        for _ in range(self.limit - 1):
+            self._attempt("definitely-wrong")
+
+        response = self._attempt("Correct-Password-123!")
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("_auth_user_id", self.client.session)
+
+    def test_successful_login_does_not_clear_the_ip_counter(self):
+        """成功登一次不该把 IP 那一格刷掉。
+
+        否则一个已经知道口令的攻击者可以「错几次、登一次」地循环，把 IP 计数永远
+        压在阈值之下——这道防线就等于没有。用例直接盯住「第一条失败记录还在」。
+        """
+        from axes.models import AccessAttempt
+
+        for _ in range(self.limit - 1):
+            self._attempt("definitely-wrong")
+        failures_before = AccessAttempt.objects.filter(
+            failures_since_start__gt=0
+        ).count()
+        self.assertGreater(failures_before, 0, "前置条件：应当已有失败记录")
+
+        self._attempt("Correct-Password-123!")
+
+        self.assertEqual(
+            AccessAttempt.objects.filter(failures_since_start__gt=0).count(),
+            failures_before,
+            "成功登录把之前那几格的失败计数清掉了",
+        )
+
+    def test_lockout_writes_an_audit_record(self):
+        for _ in range(self.limit):
+            self._attempt("definitely-wrong")
+
+        self.assertTrue(
+            AuditLog.objects.filter(action="accounts.login.lockout").exists(),
+            "锁定没有留下审计记录",
+        )
+
+    def test_lockout_audit_never_records_the_password(self):
+        for _ in range(self.limit):
+            self._attempt("Super-Secret-Guess-999")
+
+        for entry in AuditLog.objects.filter(action="accounts.login.lockout"):
+            self.assertNotIn("Super-Secret-Guess-999", json.dumps(entry.detail))
+
+
+@override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT, PRIVATE_MEDIA_ROOT=TEST_PRIVATE_MEDIA_ROOT)
+class ProtectedUploadAccessTests(TestCase):
+    """头像与图册不在公开的 /media/ 下，只能经视图取，且要登录。
+
+    这一条是「权限判定真的在把关」与「只是一句君子协定」的分界：过去这些文件
+    躺在 Nginx 直出的 mediafiles/ 里，谁拿到路径谁就能取，视图里那些判定形同
+    虚设。现在它们落在 PRIVATE_MEDIA_ROOT，而 /media/ 指不到那里。
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.owner = User.objects.create_user(
+            username="protected-owner",
+            password="Owner-Password-123!",
+        )
+        cls.owner.must_change_password = False
+        cls.owner.save(update_fields=["must_change_password"])
+        cls.other = User.objects.create_user(
+            username="protected-other",
+            password="Other-Password-123!",
+        )
+        cls.other.must_change_password = False
+        cls.other.save(update_fields=["must_change_password"])
+
+    def setUp(self):
+        from .models import Profile
+
+        self.profile = Profile.objects.get(user=self.owner)
+        self.profile.avatar.save("我的头像.png", png_upload(), save=True)
+        # GalleryImage.save() 里跑 full_clean()，没有图建不出来——所以先建行再存图，
+        # 与 add_gallery_image 服务层的顺序一致。
+        self.image = GalleryImage(profile=self.profile)
+        self.image.image.save("我的照片.png", png_upload(), save=True)
+
+    def test_avatar_is_stored_outside_the_public_media_root(self):
+        self.profile.refresh_from_db()
+
+        self.assertTrue(
+            Path(self.profile.avatar.path).is_relative_to(TEST_PRIVATE_MEDIA_ROOT),
+            "头像没有落在受保护目录里",
+        )
+        self.assertFalse(
+            Path(self.profile.avatar.path).is_relative_to(TEST_MEDIA_ROOT),
+            "头像仍然落在公开的 media 目录下",
+        )
+
+    def test_stored_name_carries_no_user_information(self):
+        """落盘名换成 uuid：原名会带人名，而文件名会跟着文件走进备份与运维的 ls。"""
+        self.profile.refresh_from_db()
+
+        stored = Path(self.profile.avatar.name).name
+        self.assertNotIn("我的头像", stored)
+        self.assertNotIn(self.owner.username, stored)
+        self.assertTrue(stored.endswith(".png"))
+
+    def test_protected_storage_hands_out_no_url(self):
+        """受保护的存储给不出公开地址。
+
+        这里刻意**不是**抛异常：Django 的 ClearableFileInput.is_initial() 会
+        getattr(value, "url", False)，真去求值这个属性，抛异常会让 {{ form.x }}
+        在模板最深处炸掉（实测 500）。所以口径是「返回空串」，而「必须走视图」
+        由目录边界保证——受保护目录不在 MEDIA_ROOT 之下。
+        """
+        from core.storage import private_storage
+
+        self.assertEqual(private_storage.url("avatars/2026/09/whatever.png"), "")
+
+    def test_avatar_file_is_served_to_a_logged_in_member(self):
+        self.client.force_login(self.other)
+
+        response = self.client.get(
+            reverse("accounts:avatar_file", args=(self.owner.pk,))
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_gallery_file_is_served_to_a_logged_in_member(self):
+        self.client.force_login(self.other)
+
+        response = self.client.get(
+            reverse("accounts:gallery_file", args=(self.image.pk,))
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_anonymous_visitor_gets_no_avatar(self):
+        response = self.client.get(
+            reverse("accounts:avatar_file", args=(self.owner.pk,))
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("accounts:login"), response["Location"])
+
+    def test_anonymous_visitor_gets_no_gallery_image(self):
+        response = self.client.get(
+            reverse("accounts:gallery_file", args=(self.image.pk,))
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("accounts:login"), response["Location"])
+
+    def test_member_without_an_avatar_gets_404_not_500(self):
+        member = User.objects.create_user(
+            username="protected-no-avatar",
+            password="No-Avatar-Password-123!",
+        )
+        member.must_change_password = False
+        member.save(update_fields=["must_change_password"])
+        self.client.force_login(member)
+
+        response = self.client.get(reverse("accounts:avatar_file", args=(member.pk,)))
+
+        self.assertEqual(response.status_code, 404)
