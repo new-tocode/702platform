@@ -11,7 +11,7 @@ import tempfile
 from django import forms
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import AnonymousUser, Group
+from django.contrib.auth.models import AnonymousUser, Group, Permission
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -1187,6 +1187,60 @@ class RoleRosterAcceptanceTests(TestCase):
 
         self.assertNotContains(response, "授予管理员资格")
         self.assertNotContains(response, "撤销管理员资格")
+
+    def test_view_only_observer_cannot_submit_a_qualification_action(self):
+        """只读观察者不该发得出资格——这是这批动作唯一的 HTTP 门槛。
+
+        ``set_qualification`` 是给程序调用的服务函数，不看请求是谁发的；因此
+        「谁提交了这个动作」只在 ``@admin.action`` 的 ``permissions`` 白名单上
+        把关。漏声明时 Django 对所有人放行，于是一个只挂 ``view_user`` 的账号
+        能给自己或他人发资格——甚至能把目标推成超级评审。
+        """
+        observer = User.objects.create_user(
+            username="view-only-observer",
+            password="Observer-Password-123!",
+        )
+        observer.must_change_password = False
+        observer.is_staff = True
+        observer.save(update_fields=["must_change_password", "is_staff"])
+        observer.user_permissions.add(
+            Permission.objects.get(codename="view_user")
+        )
+        target = self._member("bulk-target", "被选中的人")
+
+        # 看得到列表，但页面上没有这个动作可挑。
+        self.client.force_login(observer)
+        listing = reverse("admin:accounts_user_changelist")
+        page = self.client.get(listing)
+        self.assertEqual(page.status_code, 200)
+        self.assertNotContains(page, "grant_is_reviewer")
+
+        # 绕过页面直接 POST 也不行。
+        self.client.post(
+            listing,
+            {
+                "action": "grant_is_reviewer",
+                "_selected_action": [str(target.pk)],
+                "index": "0",
+            },
+            follow=True,
+        )
+        target.refresh_from_db()
+        observer.refresh_from_db()
+        self.assertFalse(target.is_reviewer)
+
+        # 连给自己发也不行——提权路径本来从这里开始。
+        self.client.post(
+            listing,
+            {
+                "action": "grant_is_super_reviewer",
+                "_selected_action": [str(observer.pk)],
+                "index": "0",
+            },
+            follow=True,
+        )
+        observer.refresh_from_db()
+        self.assertFalse(observer.is_super_reviewer)
 
     def test_service_refuses_flags_outside_the_allowlist(self):
         with self.assertRaises(ValueError):
