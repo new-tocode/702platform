@@ -1,0 +1,100 @@
+name: CI
+
+# 三道门，都在「提交/PR」这一层跑：
+#   1. 部署配置检查（check --deploy）——线上配置退化在合并前就拦下
+#   2. 全部测试
+#   3. 依赖漏洞扫描
+#
+# 与 deploy/deploy.sh 里那道 check --deploy 门禁是一回事，只是提前到合并前：
+# 上线时才发现的配置问题，往往已经在别处跑了一段时间。
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: club702_ci
+          POSTGRES_USER: club_ci
+          POSTGRES_PASSWORD: ci-password
+        ports: ["5432:5432"]
+        # 等到能接受连接再跑测试；不加这个健康检查，第一次连接会随机失败。
+        options: >-
+          --health-cmd "pg_isready -U club_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DJANGO_DB_NAME: club702_ci
+      DJANGO_DB_USER: club_ci
+      DJANGO_DB_PASSWORD: ci-password
+      DJANGO_DB_HOST: 127.0.0.1
+      DJANGO_DB_PORT: "5432"
+      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,testserver
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: 安装依赖（按锁文件，含哈希校验）
+        run: |
+          python -m pip install --upgrade pip
+          # --require-hashes：与线上 deploy.sh 同一口径。少了它，锁文件里那些哈希
+          # 在 CI 里等于没校验，「依赖被换过」这类问题就漏过去了。
+          pip install --require-hashes -r requirements.txt -r requirements-prod.txt
+
+      # 这里**不**编译界面翻译（compilemessages）。.mo 是部署时的构建产物，
+      # deploy.sh 会按当时的 .po 现编；CI 里编一遍既不为测试所用，也验证不了什么
+      # ——翻译的兜底测试（core.tests.InterfaceTranslationAcceptanceTests）直接在
+      # 测试里解析 .po 源文件，不需要 .mo。而且它还要 runner 预装 gettext，白白
+      # 多一个失败点。
+
+      - name: 系统检查
+        run: python manage.py check
+
+      - name: 迁移是否有遗漏
+        run: python manage.py makemigrations --check --dry-run
+
+      - name: 部署配置门禁
+        # 与线上同一道门：DEBUG 还开着、Cookie 没带 Secure、SECRET_KEY 还是源码
+        # 默认值，这类问题不会让站点起不来，只会让它安静地不安全。
+        env:
+          DJANGO_DEBUG: "0"
+          # 必须 ≥50 字符且 ≥5 个不同字符，否则 check 自己会报 W009 把这一步弄红。
+          # 这是 CI 专用值，不用于任何真实环境。
+          DJANGO_SECRET_KEY: ci-only-secret-key-0123456789-abcdefghijklmnopqrstuvwxyz
+        run: python manage.py check --deploy --fail-level WARNING
+
+      - name: 测试
+        run: python manage.py test --noinput
+
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: 依赖漏洞扫描
+        run: |
+          python -m pip install --upgrade pip pip-audit
+          # 对着锁文件里那些版本扫——线上装的就是这些。
+          #
+          # 发现任何漏洞即失败，这是有意的：这条路一旦放宽，CI 就会长期带红或者
+          # 长期被忽略，真实回归反而被淹没。处置办法是升级到修复版（改
+          # requirements.in 再重新编译锁文件），而不是让这一步变绿。
+          pip-audit -r requirements.txt -r requirements-prod.txt

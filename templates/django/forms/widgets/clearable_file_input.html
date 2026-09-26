@@ -1,7 +1,16 @@
-{% load files %}{% if widget.is_initial %}
+{% load files file_urls %}{% if widget.is_initial %}
     <div class="file-current">
         <span class="file-current-label">{{ widget.initial_text }}</span>
-        <a class="file-current-name" href="{{ widget.value.url }}">{{ widget.value.name|basename }}</a>
+        {# 受保护的上传件（项目书、批注版）没有公开地址，file_url 会给出空串；
+           公开的媒体库配图有。能取到地址的渲染成链接，取不到的只显示名字——
+           而不是让整个页面在渲染时炸掉。 #}
+        {% with url=widget.value|file_url %}
+            {% if url %}
+                <a class="file-current-name" href="{{ url }}">{{ widget.value.name|basename }}</a>
+            {% else %}
+                <span class="file-current-name">{{ widget.value.name|basename }}</span>
+            {% endif %}
+        {% endwith %}
         {% if not widget.required %}
             <label class="file-clear" for="{{ widget.checkbox_id }}">
                 <input type="checkbox" name="{{ widget.checkbox_name }}" id="{{ widget.checkbox_id }}"{% if widget.attrs.disabled %} disabled{% endif %}{% if widget.attrs.checked %} checked{% endif %}>

@@ -26,7 +26,7 @@
 
 ```bash
 python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m pip install --require-hashes -r requirements.txt
 
 source env.local.sh          # PostgreSQL 连接配置；不加载会连接失败
 .venv/bin/python manage.py migrate
@@ -43,10 +43,18 @@ source env.local.sh          # PostgreSQL 连接配置；不加载会连接失�
 | [`docs/architecture.md`](docs/architecture.md) | 架构：模块划分、数据模型、权限设计、路由、关键流程 |
 | [`docs/development.md`](docs/development.md) | 开发指南：目录结构、环境配置、常用命令、测试与验收、日志调试、FAQ |
 | [`docs/deploy.md`](docs/deploy.md) | 部署手册：快速验证、生产一步脚本、更新回滚、备份恢复、运维 |
+| [`安全检查.md`](安全检查.md) | 安全性审查报告：威胁模型、逐类检查结果、风险清单与修复状态 |
 | `deploy/` | 部署工件：`install.sh`、`deploy.sh`、`backup.sh`、systemd/Nginx 模板、`env.template` |
 
 ## 日志
 
 开发环境日志同时输出到终端并写入 `logs/django.log`（10MB 轮转，保留 5 份）。每个请求带 `X-Request-ID` 响应头，与日志中 `request_id` 对应。认证日志不会记录明文密码。
 
-生产环境至少设置：`DJANGO_SECRET_KEY`、`DJANGO_DEBUG=0`、`DJANGO_ALLOWED_HOSTS`、数据库 `DJANGO_DB_*`，HTTPS 下再开 `DJANGO_SESSION_COOKIE_SECURE`/`DJANGO_CSRF_COOKIE_SECURE`。
+生产环境至少设置：`DJANGO_SECRET_KEY`、`DJANGO_DEBUG=0`、`DJANGO_ALLOWED_HOSTS`、数据库 `DJANGO_DB_*`。`SECRET_KEY` 沿用源码默认值时应用**拒绝启动**（起不来是响的，起得来但是错的才是危险的）。
+
+Cookie 的 `Secure` 标志代码默认开启（站点全程 https）；只有纯 http 部署才需要显式关掉。
+**注意**：若 `env.sh` 里已经显式写了 `DJANGO_SESSION_COOKIE_SECURE=0`，它会覆盖代码默认值——升级时要一并改成 `1`。`deploy/deploy.sh` 内置的 `check --deploy` 门禁会在 Cookie 没带 Secure、`DEBUG` 还开着这类退化时中止发布（宁可发布失败，也不让站点安静地不安全）。HTTPS、HSTS 与 SSL 跳转的开关与启用顺序见 [`docs/deploy.md`](docs/deploy.md) 的 HTTPS 一节。
+
+登录失败达 10 次（账号与 IP 各算各的）会锁定 30 分钟，管理员可在 `/admin/axes/accessattempt/` 查看并删除记录以提前解锁。
+
+上传件分两类存放：媒体库配图这类**公开**内容在 `mediafiles/`（Nginx 的 `/media/` 直出）；项目书、批注版、头像、图册这类**受保护**内容在 `protected_media/`，不在 `/media/` 之下，取文件一律经视图做权限判定，落盘名统一换成 uuid。备份脚本同时打包两个目录。详见 [`docs/deploy.md`](docs/deploy.md) 的「受保护上传件的目录迁移」一节。

@@ -20,6 +20,7 @@ from .models import Competition, CompetitionRegistration
 from .permissions import is_competition_manager
 from .services import (
     DuplicateRegistration,
+    RegistrationClosed,
     save_registration,
     withdraw_registration,
 )
@@ -243,10 +244,21 @@ def competition_registration_withdraw(request, pk):
         )
         raise PermissionDenied
 
-    withdraw_registration(
-        registration=registration,
-        actor=request.user,
-        request=request,
-    )
-    messages.success(request, _("已放弃该竞赛报名。"))
+    try:
+        withdraw_registration(
+            registration=registration,
+            actor=request.user,
+            request=request,
+        )
+    except RegistrationClosed as exc:
+        # 与报名、修改用同一句话：三件事都受截止时间约束。
+        messages.error(request, str(exc))
+        logger.warning(
+            "competition.registration.withdraw.rejected registration_id=%s username=%s reason=closed_or_expired",
+            registration.pk,
+            request.user.get_username(),
+            extra={"request_id": getattr(request, "request_id", "-")},
+        )
+    else:
+        messages.success(request, _("已放弃该竞赛报名。"))
     return redirect("competitions:list")

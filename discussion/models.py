@@ -4,7 +4,9 @@ from django.db.models.functions import Lower
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from .validators import post_image_upload_to, validate_post_image
+from core.storage import neutral_upload_to, private_storage
+
+from .validators import validate_post_image
 
 
 class Board(models.Model):
@@ -47,7 +49,7 @@ class Post(models.Model):
         verbose_name=_("作者"),
     )
     title = models.CharField(_("标题"), max_length=200)
-    content = models.TextField(_("正文"))
+    content = models.TextField(_("正文"), max_length=20000)
     is_pinned = models.BooleanField(_("置顶"), default=False)
     created_at = models.DateTimeField(_("发布时间"), auto_now_add=True)
     updated_at = models.DateTimeField(_("更新时间"), auto_now=True)
@@ -76,7 +78,10 @@ class PostImage(models.Model):
     )
     image = models.ImageField(
         _("帖子图片"),
-        upload_to=post_image_upload_to,
+        # 帖子图只能发给能进社团空间的账号，所以不进公开的 /media/；
+        # discussion.views.post_image 负责判定与送出。
+        upload_to=neutral_upload_to("discussion"),
+        storage=private_storage,
         validators=[validate_post_image],
     )
     file_size = models.PositiveBigIntegerField(_("文件大小"), default=0, editable=False)
@@ -131,7 +136,7 @@ class Comment(models.Model):
         related_name="discussion_comments",
         verbose_name=_("作者"),
     )
-    content = models.TextField(_("评论内容"))
+    content = models.TextField(_("评论内容"), max_length=4000)
     created_at = models.DateTimeField(_("评论时间"), auto_now_add=True)
     # 删除是软删除：行与内容都留着，只在界面上让位给一行说明。硬删会让一条
     # 有人回过的评论凭空消失、连删过这件事都没有痕迹；删除动作另有审计。

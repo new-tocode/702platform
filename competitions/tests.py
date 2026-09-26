@@ -380,3 +380,67 @@ class CompetitionAcceptanceTests(TestCase):
         self.client.force_login(self.member)
         member_response = self.client.get("/admin/competitions/competition/")
         self.assertEqual(member_response.status_code, 302)
+
+
+class RegistrationDeadlineAcceptanceTests(TestCase):
+    """报名、修改、放弃三件事都受截止时间约束。
+
+    放弃原本没有这道校验：截止之后（甚至名单已经报给主办方之后）联系人仍能删掉
+    记录，真实后果是平台记录与已上报名单对不上，要等对账时才发现。三条路走的是
+    同一个 `Competition.is_registration_open`，这里一并钉住。
+    """
+
+    def setUp(self):
+        self.leader = User.objects.create_user(
+            username="deadline-leader",
+            password="Leader-Password-123!",
+        )
+        self.leader.must_change_password = False
+        self.leader.save(update_fields=["must_change_password"])
+        self.group = ProjectGroup.objects.create(name="截止测试组", leader=self.leader)
+        self.competition = Competition.objects.create(
+            title="已截止的竞赛",
+            description="说明",
+            deadline=timezone.now() - timedelta(days=1),
+            published_by=self.leader,
+        )
+        self.registration = CompetitionRegistration.objects.create(
+            competition=self.competition,
+            group=self.group,
+            team_leader=self.leader,
+            registered_by=self.leader,
+        )
+        self.client.force_login(self.leader)
+
+    def test_withdraw_is_refused_after_the_deadline(self):
+        response = self.client.post(
+            reverse("competitions:registration_withdraw", args=(self.registration.pk,))
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(
+            CompetitionRegistration.objects.filter(pk=self.registration.pk).exists(),
+            "截止之后报名记录仍然被删掉了",
+        )
+
+    def test_edit_is_refused_after_the_deadline(self):
+        response = self.client.get(
+            reverse("competitions:registration_edit", args=(self.registration.pk,))
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(
+            CompetitionRegistration.objects.filter(pk=self.registration.pk).exists()
+        )
+
+    def test_withdraw_still_works_while_the_competition_is_open(self):
+        self.competition.deadline = timezone.now() + timedelta(days=1)
+        self.competition.save(update_fields=["deadline"])
+
+        self.client.post(
+            reverse("competitions:registration_withdraw", args=(self.registration.pk,))
+        )
+
+        self.assertFalse(
+            CompetitionRegistration.objects.filter(pk=self.registration.pk).exists()
+        )

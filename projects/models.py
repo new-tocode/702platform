@@ -4,6 +4,8 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import models
 
+from core.storage import neutral_upload_to, private_storage
+
 from .validators import validate_proposal_file
 
 
@@ -21,11 +23,15 @@ class ProjectGroup(models.Model):
         blank=True,
         verbose_name="成员",
     )
-    description = models.TextField("简介", blank=True)
+    description = models.TextField("简介", max_length=2000, blank=True)
     college = models.CharField("学院", max_length=128, blank=True)
     proposal = models.FileField(
         "项目书",
-        upload_to="project_proposals/%Y/%m/",
+        # 落盘名与用户填的名字脱钩：原名常带组名与人名（「项目书 终版-张三.docx」
+        # 是典型叫法），而文件名会跟着文件走进备份、走进运维的 ls、走进下载头。
+        # 存放在私有根下，取件走 projects.views.group_proposal_download。
+        upload_to=neutral_upload_to("project_proposals"),
+        storage=private_storage,
         blank=True,
         validators=[validate_proposal_file],
         help_text="支持 doc、docx、pdf；由项目组联系人维护，用于提交同行评审。",
@@ -137,7 +143,7 @@ class GroupJoinRequest(models.Model):
         related_name="group_join_requests",
         verbose_name="申请人",
     )
-    message = models.TextField("申请理由", blank=True)
+    message = models.TextField("申请理由", max_length=2000, blank=True)
     status = models.CharField(
         "状态",
         max_length=16,
@@ -196,7 +202,7 @@ class GroupCreateRequest(models.Model):
     )
 
     name = models.CharField("项目组名称", max_length=200)
-    description = models.TextField("项目组描述")
+    description = models.TextField("项目组描述", max_length=2000)
     college = models.CharField("学院", max_length=128, blank=True)
     # 指导老师在申请上先占三个固定槽位（与 MAX_ADVISORS_PER_GROUP 一一对应），
     # 审核通过时转成 ProjectAdvisor 行。申请记录不是项目组，不另建一张子表。

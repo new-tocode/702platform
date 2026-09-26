@@ -25,7 +25,7 @@
             <div class="panel-body">
                 <div class="avatar-block">
                     {% if profile and profile.avatar %}
-                        <img class="avatar" src="{{ profile.avatar.url }}" alt="{{ display_name }}">
+                        <img class="avatar" src="{% url 'accounts:avatar_file' member.pk %}" alt="{{ display_name }}">
                     {% else %}
                         <span class="avatar avatar-blank" aria-hidden="true">{{ avatar_initial }}</span>
                     {% endif %}
@@ -84,7 +84,7 @@
                 <div class="gallery">
                     {% for image in gallery_images %}
                         <figure class="gitem gitem-{{ image.layout }}">
-                            <img src="{{ image.image.url }}" alt="">
+                            <img src="{% url 'accounts:gallery_file' image.pk %}" alt="">
                         </figure>
                     {% endfor %}
                 </div>

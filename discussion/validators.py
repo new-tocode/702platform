@@ -34,10 +34,11 @@ POST_IMAGE_LIMIT = 3
 
 
 def post_image_upload_to(instance, filename):
-    """帖子图片落盘用随机名：原文件名可能带个人信息，也免得重名互相覆盖。
+    """帖子图片的落盘名：随机名，不带用户信息。
 
-    ``upload_to`` 是函数时 Django 原样采用返回值，不再做 strftime，所以日期目录
-    要在这里自己算出来——写成 ``%Y`` 会真的落一个叫 ``%Y`` 的目录。
+    历史迁移（0004/0006）引用这个名字，所以函数留着；**新上传不走它**——
+    现在统一用 ``core.storage.neutral_upload_to``，命名口径与其余受保护上传件
+    相同，且落盘根换成了 ``PRIVATE_MEDIA_ROOT``。
     """
     return (
         f"discussion/{timezone.now():%Y/%m}/"

@@ -214,7 +214,12 @@ def post_delete(request, post_id):
 @login_required
 @require_GET
 def post_image(request, image_id):
-    """帖子图片只发给能进社团空间的账号：MEDIA 是公开目录，不能直接把路径交出去。"""
+    """帖子图片只发给能进社团空间的账号。
+
+    图片现在落在 PRIVATE_MEDIA_ROOT（见 core/storage.py），Nginx 的 /media/
+    指不到它，所以这个视图是唯一出口——判定因此是真的在把关，而不只是「别把
+    路径交出去」的君子协定。
+    """
     _require_member(request)
     image = get_object_or_404(PostImage, pk=image_id)
     try:

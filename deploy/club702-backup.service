@@ -9,8 +9,12 @@ Group=@@APP_USER@@
 WorkingDirectory=@@APP_DIR@@
 EnvironmentFile=@@APP_DIR@@/env.sh
 ExecStart=@@APP_DIR@@/deploy/backup.sh
-# 备份出去的结果写在 APP_DIR/backups，需要真正读写的路径
-ReadWritePaths=@@APP_DIR@@/backups @@APP_DIR@@/mediafiles
+# 只读两个上传目录（公开的 mediafiles 与受保护的 protected_media），写只给备份目录。
+# 用 "-" 前缀是 systemd 的约定：路径不存在就跳过，不报错。不加它的话，缺任何一个
+# 目录都会让服务以 226/NAMESPACE 启动失败——而 protected_media 是后加的，老部署上
+# 没有它，备份会整个停摆。
+ReadWritePaths=-@@BACKUP_DIR@@
+ReadOnlyPaths=-@@APP_DIR@@/mediafiles -@@APP_DIR@@/protected_media
 
 [Install]
 WantedBy=multi-user.target
