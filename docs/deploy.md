@@ -78,10 +78,12 @@ vi env.sh
 | `DJANGO_DB_NAME` / `DJANGO_DB_USER` | `club702` | 库名/角色（脚本自动创建） |
 | `DJANGO_DB_PASSWORD` | 随机长串 | 数据库密码 |
 | `DJANGO_SUPERUSER_USERNAME` / `_EMAIL` / `_PASSWORD` | `admin` / 邮箱 / 随机串 | 首次部署自动创建的超管 |
-| `DEPLOY_SERVER_NAME` | `club.example.com` | Nginx `server_name` 与健康检查入口 |
+| `DEPLOY_DOMAIN` / `DEPLOY_PUBLIC_IP` | `club.example.com` / `1.2.3.4` | Nginx `server_name`（两项都写上）与 `deploy.sh` 健康检查的 `Host` 头 |
 | `DEPLOY_SYSTEM_USER` | `club` | 运行应用与备份的 Linux 系统用户 |
 
 **有默认值、一般不改**：`DJANGO_APP_HOST/PORT`(`127.0.0.1`/`8000`)、`DJANGO_DB_HOST/PORT`(`127.0.0.1`/`5432`)、`DJANGO_BACKUP_SCHEDULE`(`daily`)、`DJANGO_BACKUP_RETAIN`(`14`)、`DJANGO_DEBUG`/Cookie/Proxy 项（安全默认，HTTPS 就绪后按需改）。
+另有 `DJANGO_BACKUP_DIR`（备份落盘位置）与 `DJANGO_BACKUP_GPG_RECIPIENT`（备份加密），
+见 4 节「备份位置与加密」。
 
 ### 2.4 运行部署脚本
 
@@ -203,7 +205,21 @@ Forbidden (Origin checking failed - https://47.105.110.158 does not match any tr
 
 ### 2.6 上线自检
 
-`curl -i http://127.0.0.1:8000/` 期望 200 且响应头含 `X-Request-ID`。再按业务流程走一遍：公开首页 → 管理员建成员账号 → 成员首次登录强制改密 → 内部通知按组可见 → 项目组/联系人竞赛报名 → 设备借还 → `/admin/core/auditlog/` 只读审计。
+`deploy.sh` 的收尾健康检查**先打 Nginx、打不通再退回直连 gunicorn**，通过后会打印这次
+验到了哪一层（`经 Nginx（Host: … → 127.0.0.1:80）` 或 `直连 gunicorn（…，未经 Nginx）`）。
+**两种结果的含义不同**：成员走的是 Nginx 这条路，只验到直连等于**没验到成员看到的那一层**
+——Django 确实活着，但 Nginx 与它的转发可能是坏的。早先的版本只打直连，于是「成员看到 502、
+部署报成功」是可能的。所以看到「直连」就要去查 Nginx（`nginx -t`、`systemctl status nginx`、
+`journalctl -u nginx -n 50`），别把它当成绿灯。
+
+两条路手工复核：
+
+```bash
+curl -i -H 'Host: <DEPLOY_DOMAIN>' http://127.0.0.1:80/   # 经本机 Nginx；Nginx 不在本机时换成真实入口
+curl -i http://127.0.0.1:8000/                            # 直连，期望 200 且响应头含 X-Request-ID
+```
+
+再按业务流程走一遍：公开首页 → 管理员建成员账号 → 成员首次登录强制改密 → 内部通知按组可见 → 项目组/联系人竞赛报名 → 设备借还 → `/admin/core/auditlog/` 只读审计。
 
 ## 3. 更新与回滚
 
@@ -237,7 +253,8 @@ cd ~/applications/702platform
 vi env.sh
 
 # 2) 跑部署（它会：备份 → 切版本 → 装依赖 → check --deploy 门禁 → 迁移 →
-#    静态文件 → 编译翻译 → 重启 → 健康检查；任何一步失败即中止）
+#    静态文件 → 编译翻译 → 重启 → 健康检查（先打 Nginx、再退回直连 gunicorn）；
+#    任何一步失败即中止）
 ./deploy/deploy.sh v<新版本>
 
 # 3) 起来之后确认三件事
@@ -255,19 +272,37 @@ ls -d protected_media                                   # 迁移建出来的受�
 的检查项，症状要等成员提交表单时才出现（403，见 2.5 节的实测）。所以这一项请照着
 模板逐字确认，别凭印象。
 
-`deploy.sh` 自动：备份库与媒体（保留 RETAIN 份）→ **`chmod 600 env.sh`** → checkout tag → 升级依赖 → **`check --deploy` 门禁** → `mkdir -p protected_media` → `migrate` + `collectstatic` + `compilemessages` → 重启 → 健康检查。任何一步失败即中止，其中门禁那一步会拦下「DEBUG 还开着」「Cookie 没带 Secure」「SECRET_KEY 还是源码默认值」这类不会让站点起不来、只会让它安静地不安全的问题。版本号命名 `v主.次.修订`（修订=修复，次=新功能，主=不兼容）。
+`deploy.sh` 自动：备份库与媒体（保留 RETAIN 份）→ **`chmod 600 env.sh`** → checkout tag → 升级依赖 → **`check --deploy` 门禁** → `mkdir -p protected_media` → `migrate` + `collectstatic` + `compilemessages` → 重启 → 健康检查（先打 Nginx、再退回直连 gunicorn，详见 2.6）。任何一步失败即中止，其中门禁那一步会拦下「DEBUG 还开着」「Cookie 没带 Secure」「SECRET_KEY 还是源码默认值」这类不会让站点起不来、只会让它安静地不安全的问题。版本号命名 `v主.次.修订`（修订=修复，次=新功能，主=不兼容）。
 
 ### 回滚
+
+健康检查失败时 `deploy.sh` 会把这套步骤直接打印出来。**回滚不能靠重跑 `deploy.sh`**：
+它第一步是备份（无害但会多留一份）、第五步却是**正向** `migrate`，方向与回滚相反——
+用新代码的迁移去回滚旧代码，只会把事情弄得更糟。
 
 ```bash
 cd ~/applications/702platform
 set -a; source env.sh; set +a
 git checkout v1.0.0
-.venv/bin/python manage.py migrate --noinput
+.venv/bin/python manage.py migrate --noinput   # 仅当这一版带了迁移；反向迁移在旧 tag 的代码里
 systemctl restart club702
 ```
 
-迁移本身出问题：停服后 `gunzip -c backups/db-<发布前>.sql.gz | PGPASSWORD=... psql -U $DJANGO_DB_USER $DJANGO_DB_NAME`（发布前那份备份在 RETAIN 份内不会被提前清掉）。
+> 注意 `env.sh` 与 `backups/` 都在 `.gitignore` 里，`git checkout` 不会动它们——回滚
+> **不会**把配置和备份一起退回去（这正是想要的：配置里有前一次发布补上的项，退回去反而
+> 可能过不了旧版门禁）。但如果这次发布**改了 `env.sh` 里的必需项**（如
+> `DJANGO_CSRF_TRUSTED_ORIGINS`），旧版本代码不会因此出问题，无需回退配置。
+
+数据库也要退回时，用**发布前**那份备份手工恢复（它在 `RETAIN` 份内不会被提前清掉）：
+
+```bash
+systemctl stop club702
+gunzip -c "$BACKUP_DIR/db-<发布前那份>.sql.gz" | PGPASSWORD="$DJANGO_DB_PASSWORD" \
+    psql -U "$DJANGO_DB_USER" -h "${DJANGO_DB_HOST:-127.0.0.1}" "$DJANGO_DB_NAME"
+systemctl start club702
+```
+
+恢复会覆盖当前数据，**确认过再执行**。
 
 ### 破坏性迁移纪律
 
