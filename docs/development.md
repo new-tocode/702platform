@@ -112,7 +112,7 @@
 - **字体**：只用系统字体栈（Noto Sans SC → 苹方 → 微软雅黑），不加载外部字体；等宽字只用于编号、日期、文件规格这类真值，不做装饰。
 - **动效**：`.reveal` 只在页面载入时编排一次淡入，并遵守 `prefers-reduced-motion`；不要给每个区块加逐条动画。
 - 表单控件由元素选择器统一着色，新增字段无需加 class。`templates/django/forms/widgets/clearable_file_input.html` 覆盖了 Django 的文件控件默认模板，与 `app.css` 的 `.file-current` 一族配套。
-- 页面专属脚本放在 `static/js/` 并由模板引用；不要写内联 `<script>`。社团空间的板块滑轨使用原生横向滚动，确认提示由 `static/js/discussion.js` 渐进增强。
+- 页面专属脚本放在 `static/js/` 并由模板引用；不要写内联 `<script>`。社团空间的板块滑轨使用原生横向滚动，过长的帖子由 `static/js/discussion.js` 折到一屏并放出「展开全文」（折叠高度只写在 CSS 里），确认提示同样由它渐进增强。
 
 ### 1.2 分层约定
 

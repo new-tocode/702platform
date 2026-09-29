@@ -167,3 +167,22 @@ class PostViewTests(DiscussionViewTestCase):
         self.assertEqual(response.status_code, 400)
         post.refresh_from_db()
         self.assertFalse(post.is_pinned)
+    def test_post_body_carries_expand_hook_and_is_never_precollapsed(self):
+        """折叠由脚本加：模板只留下钩子，正文照原样整段出现在 HTML 里。
+
+        服务端判断不了渲染后的高度（同字数可以是三行也可以是一屏），所以
+        ``is-collapsed`` 不能由模板写上——没有脚本的浏览器会拿到一段永远展不开的
+        半截正文。按钮同理，先带 ``hidden``，等脚本量出溢出再放出来。
+        """
+        post = self._post()
+        self.client.force_login(self.member)
+
+        page = self.client.get(reverse("discussion:board", args=(self.board.pk,)))
+
+        self.assertContains(page, f'id="post-content-{post.pk}"')
+        self.assertContains(
+            page,
+            '<button class="btn btn-sm discussion-post-more" type="button" hidden'
+            f' aria-expanded="false" aria-controls="post-content-{post.pk}">展开全文</button>',
+        )
+        self.assertNotContains(page, "is-collapsed")
