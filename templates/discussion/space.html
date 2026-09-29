@@ -118,7 +118,11 @@
                                     <span>{% if post.author.profile.full_name %}{{ post.author.profile.full_name }}{% else %}{{ post.author.username }}{% endif %}</span>
                                     <span class="muted">{% translate "发布于" %} {{ post.created_at|date:"Y-m-d H:i" }}</span>
                                 </div>
-                                <div class="prose discussion-post-content">{{ post.content|render_markdown }}</div>
+                                {# 折的是正文自己；没有脚本时它整段照常显示，按钮由脚本放出（见 static/js/discussion.js）。 #}
+                                <div class="discussion-post-body">
+                                    <div class="prose discussion-post-content" id="post-content-{{ post.pk }}" tabindex="-1">{{ post.content|render_markdown }}</div>
+                                    <button class="btn btn-sm discussion-post-more" type="button" hidden aria-expanded="false" aria-controls="post-content-{{ post.pk }}">{% translate "展开全文" %}</button>
+                                </div>
                                 {% if post.images.all %}
                                     <div class="discussion-post-images">
                                         {% for image in post.images.all %}

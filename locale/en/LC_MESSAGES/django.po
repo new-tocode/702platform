@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 702platform\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-25 17:33+0800\n"
+"POT-Creation-Date: 2026-09-29 18:35+0800\n"
 "PO-Revision-Date: 2026-09-19 18:39\n"
 "Last-Translator: 702platform\n"
 "Language-Team: 702platform\n"
@@ -190,7 +190,7 @@ msgstr "Preliminary reviewer"
 msgid "超级评审"
 msgstr "Super reviewer"
 
-#: accounts/services.py:136
+#: accounts/services.py:179
 #, python-format
 msgid "图册合计不能超过 %(limit)s MB，当前已用 %(used)s MB。"
 msgstr ""
@@ -334,9 +334,8 @@ msgstr "The team leader must be one of the team members."
 msgid "该竞赛已关闭报名或已超过报名截止时间，无法放弃。"
 msgstr ""
 "Registration for this competition is closed or past its deadline, so it "
-"cannot be withdrawn."
-"This competition is closed for registration or its deadline has passed; it "
-"can no longer be edited."
+"cannot be withdrawn.This competition is closed for registration or its "
+"deadline has passed; it can no longer be edited."
 
 #: competitions/views.py:161
 msgid "竞赛报名登记成功。"
@@ -399,7 +398,7 @@ msgstr "A board with that name already exists."
 
 #: discussion/forms.py:59 discussion/models.py:80 discussion/models.py:91
 #: discussion/models.py:92 discussion/validators.py:54
-#: templates/discussion/space.html:126
+#: templates/discussion/space.html:130
 msgid "帖子图片"
 msgstr "Post image"
 
@@ -427,8 +426,8 @@ msgstr "A post can have at most 3 images."
 msgid "每篇帖子最多保留 3 张图片。"
 msgstr "A post can contain at most 3 images."
 
-#: discussion/forms.py:113 templates/discussion/space.html:150
-#: templates/discussion/space.html:151
+#: discussion/forms.py:113 templates/discussion/space.html:154
+#: templates/discussion/space.html:155
 msgid "评论"
 msgstr "Comment"
 
@@ -465,7 +464,7 @@ msgid "标题"
 msgstr "Title"
 
 #: discussion/models.py:53 templates/discussion/space.html:111
-#: templates/discussion/space.html:145 templates/home.html:54
+#: templates/discussion/space.html:149 templates/home.html:54
 #: templates/notices/list.html:36
 msgid "置顶"
 msgstr "Pinned"
@@ -1600,7 +1599,7 @@ msgstr "Move up"
 msgid "下移"
 msgstr "Move down"
 
-#: templates/accounts/profile.html:153 templates/discussion/space.html:160
+#: templates/accounts/profile.html:153 templates/discussion/space.html:164
 msgid "删除"
 msgstr "Delete"
 
@@ -1919,72 +1918,76 @@ msgstr "Add board"
 msgid "发布于"
 msgstr "Posted"
 
-#: templates/discussion/space.html:133
+#: templates/discussion/space.html:124
+msgid "展开全文"
+msgstr "Show more"
+
+#: templates/discussion/space.html:137
 msgid "编辑"
 msgstr "Edit"
 
-#: templates/discussion/space.html:136
+#: templates/discussion/space.html:140
 msgid "确定删除这篇帖子及其评论吗？"
 msgstr "Delete this post and its comments?"
 
-#: templates/discussion/space.html:138
+#: templates/discussion/space.html:142
 msgid "删除帖子"
 msgstr "Delete post"
 
-#: templates/discussion/space.html:145
+#: templates/discussion/space.html:149
 msgid "取消置顶"
 msgstr "Unpin"
 
-#: templates/discussion/space.html:158
+#: templates/discussion/space.html:162
 msgid "确定删除这条评论吗？"
 msgstr "Delete this comment?"
 
-#: templates/discussion/space.html:167
+#: templates/discussion/space.html:171
 msgid "还没有评论。"
 msgstr "No comments yet."
 
-#: templates/discussion/space.html:171
+#: templates/discussion/space.html:175
 msgid "写下评论"
 msgstr "Write a comment"
 
-#: templates/discussion/space.html:172
+#: templates/discussion/space.html:176
 msgid "写下评论…"
 msgstr "Write a comment…"
 
-#: templates/discussion/space.html:173
+#: templates/discussion/space.html:177
 msgid "发表评论"
 msgstr "Post comment"
 
-#: templates/discussion/space.html:179
+#: templates/discussion/space.html:183
 msgid "这个板块还没有帖子，发布第一篇吧。"
 msgstr "No posts in this board yet. Start the conversation with the first one."
 
-#: templates/discussion/space.html:184
+#: templates/discussion/space.html:188
 msgid "帖子分页"
 msgstr "Post pagination"
 
-#: templates/discussion/space.html:186
+#: templates/discussion/space.html:190
 msgid "上一页"
 msgstr "Previous page"
 
-#: templates/discussion/space.html:188
+#: templates/discussion/space.html:192
 #, python-format
 msgid "第 %(current)s / %(total)s 页"
 msgstr "Page %(current)s of %(total)s"
 
-#: templates/discussion/space.html:190
+#: templates/discussion/space.html:194
 msgid "下一页"
 msgstr "Next page"
 
-#: templates/discussion/space.html:195
+#: templates/discussion/space.html:199
 msgid "社团空间还没有板块。"
 msgstr "There are no boards in the club space yet."
 
-#: templates/discussion/space.html:199
+#: templates/discussion/space.html:203
 msgid "创建第一个板块"
 msgstr "Create the first board"
 
-#: templates/discussion/space.html:204
+#: templates/discussion/space.html:208
 msgid "创建板块"
 msgstr "Create a board"
 
