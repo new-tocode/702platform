@@ -4,8 +4,12 @@
 任何随机结果**（项目组没有抽签），统一发放不会让断言时灵时不灵。
 """
 
+import shutil
+import tempfile
+
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase, override_settings
 from ..models import (
     GroupCreateRequest,
     GroupJoinRequest,
@@ -16,8 +20,32 @@ from ..models import (
 
 User = get_user_model()
 
+#: 项目书内容无关紧要，能过 ``validate_proposal_file`` 的签名与大小两道关即可。
+PROPOSAL_BYTES = b"%PDF-1.4 test proposal"
+
+
+def proposal_upload(name="proposal.pdf"):
+    return SimpleUploadedFile(name, PROPOSAL_BYTES, content_type="application/pdf")
+
 
 class ProjectViewTestCase(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        # 项目书落在 PRIVATE_MEDIA_ROOT。不隔离它，凡是**真的上传成功**的用例都会
+        # 把字节写进仓库里的 protected_media/，留下没人清理的孤儿文件——而过去
+        # 这里恰恰没有一条上传成功的用例，所以这个洞一直没被发现。
+        cls.private_media_root = tempfile.mkdtemp()
+        cls._media_override = override_settings(
+            PRIVATE_MEDIA_ROOT=cls.private_media_root
+        )
+        cls._media_override.enable()
+        # 清理按注册的逆序执行：先删目录，再把设置放回去。
+        cls.addClassCleanup(cls._media_override.disable)
+        cls.addClassCleanup(
+            shutil.rmtree, cls.private_media_root, ignore_errors=True
+        )
+
     def setUp(self):
         self.admin = User.objects.create_superuser(
             username="project-admin",

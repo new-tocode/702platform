@@ -1,16 +1,16 @@
 import logging
-import mimetypes
 from pathlib import Path
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
-from django.http import FileResponse, Http404, HttpResponseBadRequest
+from django.http import Http404, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext as _
 from django.views.decorators.http import require_GET, require_POST, require_http_methods
 
+from core.downloads import serve_file
 from core.permissions import is_admin, require
 
 from .forms import BoardForm, CommentForm, PostForm
@@ -222,18 +222,11 @@ def post_image(request, image_id):
     """
     _require_member(request)
     image = get_object_or_404(PostImage, pk=image_id)
-    try:
-        file_handle = image.image.open("rb")
-    except FileNotFoundError as exc:
-        raise Http404 from exc
-    content_type = (
-        mimetypes.guess_type(image.image.name)[0] or "application/octet-stream"
-    )
-    return FileResponse(
-        file_handle,
+    # 帖子图是页面里当 <img> 用的，不是给人下载的件，所以不带指纹头。
+    return serve_file(
+        image.image,
+        download_name=f"post-image{Path(image.image.name).suffix.lower()}",
         as_attachment=False,
-        filename=f"post-image{Path(image.image.name).suffix.lower()}",
-        content_type=content_type,
     )
 
 

@@ -95,6 +95,8 @@ sudo ./deploy/install.sh
 脚本会：校验无残留占位符 → 检测依赖（python/venv/各 Python 包/systemd/Nginx/PostgreSQL/gettext/备份日历表达式/部署用户，缺项则打印补法并中止）→ 幂等建角色与库 → `migrate` + `collectstatic` + `compilemessages` → 幂等建超管 → 注册并启动 `club702.service` 与 `club702-backup.{service,timer}` → 生成 Nginx 站点并 `nginx -t` + reload → 健康检查。
 
 > 常见疑问：脚本不会自己下载安装；占位符没替换会逐个列出并中止；重复运行安全（建库/建超管幂等）；备份 timer 依赖本机 `pg_dump` 与媒体目录，单机形态下就在本机。
+>
+> 升级到带「文件指纹」的版本时，`migrate` 会顺带读一遍盘上的上传件，把已有文件的 SHA-256 补进记录（几百个文件几秒钟），**不需要额外跑任何命令**。若日志里出现 `file_digest.backfill.missing`，说明那条记录指着文件而盘上没有——迁移会跳过它继续，但那是数据不完整，值得查一下。
 
 ### 2.5 HTTPS
 

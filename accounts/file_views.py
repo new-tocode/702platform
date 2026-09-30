@@ -13,39 +13,19 @@
 """
 
 import logging
-import mimetypes
 from pathlib import Path
 
 from django.contrib.auth.decorators import login_required
-from django.http import FileResponse, Http404
+from django.http import Http404
 from django.shortcuts import get_object_or_404
 from django.views.decorators.http import require_GET
+
+from core.downloads import serve_file
 
 from .models import GalleryImage, Profile
 
 
 logger = logging.getLogger(__name__)
-
-
-def protected_file_response(file_field, *, download_name):
-    """把受保护存储里的文件送出去。
-
-    文件不在盘上时按 404 处理而不是 500：运维挪过文件、备份恢复不完整都会走到
-    这一支，那种情况下 404 更贴切，也不会把路径写进错误页。
-    """
-    try:
-        handle = file_field.open("rb")
-    except FileNotFoundError as exc:
-        raise Http404 from exc
-    content_type = (
-        mimetypes.guess_type(file_field.name)[0] or "application/octet-stream"
-    )
-    return FileResponse(
-        handle,
-        as_attachment=False,
-        filename=download_name,
-        content_type=content_type,
-    )
 
 
 @login_required
@@ -59,8 +39,12 @@ def avatar_file(request, user_id):
     if not profile_obj.avatar:
         raise Http404
     extension = Path(profile_obj.avatar.name).suffix.lower()
-    return protected_file_response(
-        profile_obj.avatar, download_name=f"avatar{extension}"
+    # 头像与图册是页面上的图，不是给人下载的件：指纹照算、照存库，但不随响应
+    # 发出去——校验值是给「下载下来要核对」的文档准备的。
+    return serve_file(
+        profile_obj.avatar,
+        download_name=f"avatar{extension}",
+        as_attachment=False,
     )
 
 
@@ -70,6 +54,8 @@ def gallery_file(request, pk):
     """个人图册里的一张图。图册是个人主页上给成员看的那一块，登录即可取。"""
     image = get_object_or_404(GalleryImage, pk=pk)
     extension = Path(image.image.name).suffix.lower()
-    return protected_file_response(
-        image.image, download_name=f"gallery{extension}"
+    return serve_file(
+        image.image,
+        download_name=f"gallery{extension}",
+        as_attachment=False,
     )

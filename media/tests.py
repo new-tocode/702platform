@@ -1,5 +1,6 @@
 """Acceptance tests for media type, signature and size validation."""
 
+import hashlib
 from io import BytesIO
 from pathlib import Path
 import shutil
@@ -58,6 +59,21 @@ class MediaValidationAcceptanceTests(TestCase):
         self.assertGreater(media.file_size, 0)
         self.assertGreaterEqual(media.size_in_mb, 0)
         self.assertTrue(Path(media.file.path).exists())
+
+    def test_saved_file_records_its_sha256(self):
+        """媒体库走后台的上传口，落盘时同样留下指纹。"""
+        upload = png_upload()
+        payload = upload.read()
+        upload.seek(0)
+
+        media = MediaFile.objects.create(
+            file=upload,
+            kind=MediaFile.IMAGE,
+            caption="社团标志",
+            uploader=self.user,
+        )
+
+        self.assertEqual(media.sha256, hashlib.sha256(payload).hexdigest())
 
     def test_valid_mp4_is_saved(self):
         media = MediaFile.objects.create(
