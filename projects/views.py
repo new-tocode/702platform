@@ -8,12 +8,13 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db.models import Count, Prefetch
-from django.http import FileResponse, Http404
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext as _, ngettext
 from django.views.decorators.http import require_POST
 
 from core.audit import record_audit
+from core.downloads import serve_file
 from core.permissions import is_admin, require
 
 from .forms import (
@@ -243,10 +244,12 @@ def group_proposal_download(request, pk):
         raise PermissionDenied
     if not group.proposal:
         raise Http404(_("该项目组尚未上传项目书。"))
-    return FileResponse(
-        group.proposal.open("rb"),
+    return serve_file(
+        group.proposal,
+        # 落盘名已被换成 uuid（见 core/storage.py），下到的就是这个中性名字。
+        download_name=os.path.basename(group.proposal.name),
         as_attachment=True,
-        filename=os.path.basename(group.proposal.name),
+        sha256=group.sha256,
     )
 
 
