@@ -4,6 +4,7 @@ from django.contrib.auth.models import AbstractUser, UserManager as DjangoUserMa
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
+from core.hashing import FileDigestMixin
 from core.storage import neutral_upload_to, private_storage
 
 from .validators import (
@@ -66,8 +67,10 @@ class User(AbstractUser):
         verbose_name_plural = "用户"
 
 
-class Profile(models.Model):
+class Profile(FileDigestMixin, models.Model):
     """Member-editable profile fields kept separate from authentication data."""
+
+    digest_field = "avatar"
 
     user = models.OneToOneField(
         User,
@@ -126,12 +129,14 @@ class Profile(models.Model):
 GALLERY_TOTAL_MAX_BYTES = 100 * 1024 * 1024
 
 
-class GalleryImage(models.Model):
+class GalleryImage(FileDigestMixin, models.Model):
     """个人图册里的一张图。
 
     图册挂在个人资料上而不是账号上：它和头像、简介一样属于「我是谁」那一块，
     账号被删时一并消失（``Profile`` 本就随账号级联）。
     """
+
+    digest_field = "image"
 
     #: 排布：这张图在页面栅格里占几格。
     LAYOUT_NORMAL = "normal"

@@ -13,7 +13,6 @@ import hashlib
 import logging
 
 from django.db import models
-from django.utils.translation import gettext_lazy as _
 
 from .uploads import reset_file_position
 
@@ -61,12 +60,13 @@ class FileDigestMixin(models.Model):
     #: 要计算指纹的文件字段名。子类必须指定。
     digest_field = ""
 
+    # 小写十六进制。不给 help_text：editable=False 的字段不进任何表单，写了也
+    # 没有地方显示——想说明它是什么，说明写在上面那段 docstring 里。
     sha256 = models.CharField(
         "SHA-256",
         max_length=DIGEST_LENGTH,
         blank=True,
         editable=False,
-        help_text="文件内容的 SHA-256 指纹，上传时自动计算，供下载人校对。",
     )
 
     def save(self, *args, **kwargs):

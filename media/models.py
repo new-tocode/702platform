@@ -3,16 +3,22 @@
 from django.conf import settings
 from django.db import models
 
+from core.hashing import FileDigestMixin
+
 from .validators import IMAGE, VIDEO, validate_media_file
 
 
-class MediaFile(models.Model):
+class MediaFile(FileDigestMixin, models.Model):
     IMAGE = IMAGE
     VIDEO = VIDEO
     KIND_CHOICES = (
         (IMAGE, "图片"),
         (VIDEO, "视频"),
     )
+
+    #: 媒体库的文件走 Nginx 直出，没有下载视图，指纹因此只在后台与数据层可见；
+    #: 它管的是「这张获奖照片还是当初上传的那张吗」。
+    digest_field = "file"
 
     file = models.FileField("文件", upload_to="uploads/%Y/%m/")
     kind = models.CharField("媒体类型", max_length=16, choices=KIND_CHOICES)

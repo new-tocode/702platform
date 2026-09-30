@@ -4,12 +4,16 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import models
 
+from core.hashing import FileDigestMixin
 from core.storage import neutral_upload_to, private_storage
 
 from .validators import validate_proposal_file
 
 
-class ProjectGroup(models.Model):
+class ProjectGroup(FileDigestMixin, models.Model):
+    #: 项目书是评审结论的依据，下载页上会附出它的 SHA-256 供人比对。
+    digest_field = "proposal"
+
     name = models.CharField("组名", max_length=200)
     leader = models.ForeignKey(
         settings.AUTH_USER_MODEL,

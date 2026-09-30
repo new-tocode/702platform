@@ -1,5 +1,6 @@
 """个人图册：上传、排序、排布、删除，以及「单张 5 MB、合计 100 MB」两条上限。"""
 
+import hashlib
 import re
 import shutil
 from pathlib import Path
@@ -62,6 +63,17 @@ class PersonalGalleryAcceptanceTests(TestCase):
         self.assertLess(images[0].sort_order, images[1].sort_order)
         self.assertGreater(images[0].file_size, 0)
         self.assertTrue(AuditLog.objects.filter(action="accounts.gallery.add").exists())
+
+    def test_uploading_an_image_records_its_sha256(self):
+        upload = png_upload("hashed.png")
+        payload = upload.read()
+        upload.seek(0)
+
+        self.client.post(reverse("accounts:gallery_upload"), {"image": upload})
+
+        self.assertEqual(
+            self.images()[0].sha256, hashlib.sha256(payload).hexdigest()
+        )
 
     def test_an_image_larger_than_five_megabytes_is_rejected(self):
         response = self.client.post(

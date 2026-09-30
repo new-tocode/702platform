@@ -1,5 +1,6 @@
 """帖子配图：张数、大小与文件校验。"""
 
+import hashlib
 import shutil
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -76,6 +77,26 @@ class DiscussionImageTests(TestCase):
 
         self.assertFalse(PostImage.objects.filter(post_id=post.pk).exists())
         self.assertTrue(all(not storage.exists(name) for name in stored_names))
+
+    def test_each_uploaded_image_records_its_own_sha256(self):
+        """一帖多图是平台上唯一的批量上传口，每张各自留指纹。"""
+        uploads = [png_upload(f"hash-{n}.png", size=(8 + n, 8 + n)) for n in range(3)]
+        payloads = []
+        for upload in uploads:
+            payloads.append(upload.read())
+            upload.seek(0)
+
+        post = create_post(
+            board_id=self.board.pk,
+            title="Hashed images",
+            content="三张各算各的。",
+            actor=self.member,
+            images=uploads,
+        )
+
+        for image, payload in zip(post.images.order_by("pk"), payloads):
+            with self.subTest(image_id=image.pk):
+                self.assertEqual(image.sha256, hashlib.sha256(payload).hexdigest())
 
     def test_fourth_image_and_images_over_three_megabytes_are_rejected(self):
         with self.assertRaises(DiscussionError):
