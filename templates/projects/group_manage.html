@@ -192,6 +192,7 @@
                         <div class="btn-row">
                             <a class="btn btn-sm" href="{% url 'projects:group_proposal_download' group.pk %}">{% translate "下载当前项目书" %}</a>
                         </div>
+                        {% include "includes/checksum.html" with digest=group.sha256 %}
                     {% else %}
                         <p class="muted">{% translate "尚未上传项目书。" %}</p>
                     {% endif %}

@@ -60,7 +60,8 @@ class ProjectGroupAdmin(admin.ModelAdmin):
     list_filter = ("created_at", "updated_at")
     filter_horizontal = ("members",)
     list_select_related = ("leader",)
-    readonly_fields = ("created_at", "updated_at")
+    # sha256 是 editable=False 的自动字段，不进表单——要在这里列出来才看得到。
+    readonly_fields = ("created_at", "updated_at", "sha256")
     ordering = ("name", "id")
 
     @admin.display(description="成员数")

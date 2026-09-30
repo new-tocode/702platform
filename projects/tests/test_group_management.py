@@ -97,6 +97,32 @@ class GroupManagementViewTests(ProjectViewTestCase):
         self.group.refresh_from_db()
         self.assertEqual(self.group.sha256, hashlib.sha256(payload).hexdigest())
 
+    def test_manage_page_shows_the_whole_digest_next_to_the_download_button(self):
+        """校验值要真的渲染出来，而且是完整的 64 位。
+
+        Django 对不存在的变量渲染空串、不报错，`{% if digest %}` 于是安静地为假
+        ——模板里把字段名写错一个字母，整块校验值就会无声消失。所以这里断言的是
+        页面上出现了那串值，而不是「没有报错」。
+        """
+        upload = proposal_upload()
+        payload = upload.read()
+        upload.seek(0)
+        self.client.force_login(self.leader)
+        self.client.post(
+            reverse("projects:group_proposal_update", args=(self.group.pk,)),
+            {"proposal": upload},
+        )
+
+        response = self.client.get(
+            reverse("projects:group_manage", args=(self.group.pk,))
+        )
+
+        digest = hashlib.sha256(payload).hexdigest()
+        self.assertContains(response, digest)
+        self.assertContains(response, "校验值 SHA-256")
+        # 默认收起：展开与否交给 <details>，不在服务端加 open。
+        self.assertContains(response, '<details class="checksum">')
+
     def test_manage_page_lists_pending_request_and_real_proposal_file(self):
         GroupJoinRequest.objects.create(
             group=self.group,
