@@ -28,6 +28,7 @@ ReviewTask（任务卡：初审一道关、评审一个评审团，两张表合�
   - decision       approve（通过）| revise（需修改）
   - comment        意见
   - annotated_file 批注版项目书（选填；只有评审阶段会填）
+  - sha256         annotated_file 的 SHA-256 指纹（上传时自动算，见 [core.md](core.md)）
   - is_override    该行来自超级评审的一票决定（只有评审阶段会有）
   - assigned_at / completed_at
   - 唯一约束：① (submission, reviewer)——一人一轮一席；② (submission) WHERE
@@ -39,6 +40,7 @@ ArchivedProposal（批注版项目书归档）
   - submission   FK(ProjectSubmission)
   - source_task  FK(ReviewTask)
   - file         批注版项目书
+  - sha256       file 的 SHA-256 指纹；与来源任务上那份相同——两边对不上就说明归档之后被动过
   - archived_at
   - 唯一约束：(source_task)，保证归档幂等
 
