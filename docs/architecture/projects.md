@@ -13,6 +13,8 @@ ProjectGroup
   - members        M2M(User) 组员（保存时自动确保项目组联系人也在成员列表中）
   - description    简介
   - college        学院
+  - proposal       项目书（doc/docx/pdf，≤20 MB，落私有根、uuid 命名；下载走 projects.views）
+  - sha256         proposal 的 SHA-256 指纹（上传时自动算，见 [core.md](core.md)）
   - created_at
   - updated_at
 

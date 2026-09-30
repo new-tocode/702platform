@@ -53,5 +53,6 @@ MediaFile（统一媒体库，供各内容模型通过 M2M/FK 引用）
   - caption       说明文字（可选）
   - uploader      FK(User)
   - file_size     文件大小（字节）
+  - sha256        file 的 SHA-256 指纹（上传时自动算，见 [core.md](core.md)）
   - created_at
 ```
