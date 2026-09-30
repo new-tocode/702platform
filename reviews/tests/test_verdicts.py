@@ -4,6 +4,8 @@
 里；下载入口的权限也归这一块，因为它们是同一批文件的出口。
 """
 
+import hashlib
+
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 
@@ -22,6 +24,7 @@ from ..services import (
 )
 from .base import ReviewTestCase
 from .factories import (
+    PROPOSAL_BYTES,
     make_admin,
     make_group,
     make_preliminary_reviewer,
@@ -223,6 +226,35 @@ class VerdictTests(ReviewTestCase):
         for record in archived:
             self.assertEqual(record.group_id, self.group.pk)
             self.assertTrue(record.file.name)
+
+    def test_annotated_copy_and_its_archive_share_one_digest(self):
+        """批注版落库时留指纹；归档是它的副本，两份指纹因此相同。
+
+        归档走的是 ``ArchivedProposal.file.save(name, 已上传的件)``——同一份
+        字节再落一次盘，是平台上唯一的「服务端二次落盘」。两份指纹一致，也
+        就是「归档之后没人动过它」。
+        """
+        submission = self._submit()
+
+        self._approve_both(submission, reviewer_one=pdf("annotated.pdf"))
+
+        task = self._assignment(submission, self.reviewer_one)
+        archived = ArchivedProposal.objects.get(
+            submission=submission, source_task=task
+        )
+        expected = hashlib.sha256(PROPOSAL_BYTES).hexdigest()
+        self.assertEqual(task.sha256, expected)
+        self.assertEqual(archived.sha256, expected)
+
+    def test_written_only_verdicts_leave_no_digest(self):
+        """没附件就没有指纹——空字段配空指纹，不编一个出来。"""
+        submission = self._submit()
+
+        self._approve_both(submission)
+
+        self.assertEqual(
+            self._assignment(submission, self.reviewer_one).sha256, ""
+        )
 
     def test_archive_filename_does_not_leak_the_reviewer(self):
         submission = self._submit()

@@ -26,6 +26,7 @@ from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+from core.hashing import FileDigestMixin
 from core.storage import neutral_upload_to, private_storage
 from projects.models import ProjectGroup
 from projects.validators import validate_proposal_file
@@ -192,7 +193,7 @@ class ProjectSubmission(models.Model):
         return self.tasks.filter(status=ReviewTask.PENDING).count()
 
 
-class ReviewTask(models.Model):
+class ReviewTask(FileDigestMixin, models.Model):
     """一轮送审里的一张任务卡：初审一道关，评审一个评审团。
 
     两道关的任务**形状相同**——同一个持有人概念、同一个状态机、同一对结论、同样的
@@ -219,6 +220,9 @@ class ReviewTask(models.Model):
     APPROVE = lifecycle.DECISION_APPROVE
     REVISE = lifecycle.DECISION_REVISE
     DECISION_CHOICES = lifecycle.DECISION_CHOICES
+
+    #: 评审人随结论附上的批注版；下载页上附出它的 SHA-256 供人比对。
+    digest_field = "annotated_file"
 
     submission = models.ForeignKey(
         ProjectSubmission,
@@ -342,7 +346,7 @@ def preliminary_task_of(submission):
     return submission.tasks.filter(stage=ReviewTask.PRELIMINARY).first()
 
 
-class ArchivedProposal(models.Model):
+class ArchivedProposal(FileDigestMixin, models.Model):
     """An approved round's annotated proposal, kept as the group's record.
 
     One row per reviewer who actually attached an annotated copy — reviewers who
@@ -350,6 +354,10 @@ class ArchivedProposal(models.Model):
     duplicated here. Rows are written once when a round turns ``approved`` and
     are immutable afterwards.
     """
+
+    #: 归档件是批注版在通过那一刻的副本，指纹因此与源任务上的那份一致——
+    #: 两边对不上就说明归档之后被动过。
+    digest_field = "file"
 
     group = models.ForeignKey(
         ProjectGroup,
