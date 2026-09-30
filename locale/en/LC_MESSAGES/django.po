@@ -2817,3 +2817,7 @@ msgstr "No completed reviews."
 #: templates/reviews/queue.html:339
 msgid "本轮已由超级评审敲定，无需再审"
 msgstr "A super reviewer settled this round; no review needed"
+
+#: templates/includes/checksum.html:14
+msgid "校验值 SHA-256"
+msgstr "SHA-256 checksum"

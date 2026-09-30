@@ -160,6 +160,7 @@
                                                             <div class="btn-row">
                                                                 <a class="btn btn-sm" href="{% url 'reviews:annotated' assignment.pk %}">{% translate "下载批注版" %}</a>
                                                             </div>
+                                                            {% include "includes/checksum.html" with digest=assignment.sha256 %}
                                                         {% endif %}
                                                     {% elif assignment.is_released %}
                                                         <span class="chip chip-off">{% translate "已释放" %}</span>
@@ -198,6 +199,7 @@
                         <div class="btn-row">
                             <a class="btn btn-sm" href="{% url 'projects:group_proposal_download' group.pk %}">{% translate "下载项目书" %}</a>
                         </div>
+                        {% include "includes/checksum.html" with digest=group.sha256 %}
                     {% else %}
                         <p class="muted">{% translate "尚未上传项目书。" %}</p>
                     {% endif %}
@@ -222,6 +224,7 @@
                                     <div class="btn-row">
                                         <a class="btn btn-sm" href="{% url 'reviews:archive_download' archived.pk %}">{% translate "下载" %}</a>
                                     </div>
+                                    {% include "includes/checksum.html" with digest=archived.sha256 %}
                                 </div>
                             </div>
                         {% empty %}
@@ -283,6 +286,7 @@
                         <div class="btn-row">
                             <a class="btn btn-sm" href="{% url 'projects:group_proposal_download' group.pk %}">{% translate "下载项目书" %}</a>
                         </div>
+                        {% include "includes/checksum.html" with digest=group.sha256 %}
                         <form method="post" action="{% url 'reviews:override' latest_submission.pk %}" enctype="multipart/form-data">
                             {% csrf_token %}
                             {{ override_form.non_field_errors }}
@@ -328,6 +332,7 @@
                         <div class="btn-row">
                             <a class="btn btn-sm" href="{% url 'projects:group_proposal_download' group.pk %}">{% translate "下载项目书" %}</a>
                         </div>
+                        {% include "includes/checksum.html" with digest=group.sha256 %}
                         <form method="post" action="{% url 'reviews:preliminary_complete' my_preliminary.pk %}">
                             {% csrf_token %}
                             {{ preliminary_form.non_field_errors }}
@@ -362,6 +367,7 @@
                         <div class="btn-row">
                             <a class="btn btn-sm" href="{% url 'projects:group_proposal_download' group.pk %}">{% translate "下载项目书" %}</a>
                         </div>
+                        {% include "includes/checksum.html" with digest=group.sha256 %}
                         <form method="post" action="{% url 'reviews:complete' my_assignment.pk %}" enctype="multipart/form-data">
                             {% csrf_token %}
                             {{ review_form.non_field_errors }}

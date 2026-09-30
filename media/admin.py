@@ -24,11 +24,11 @@ class MediaFileAdmin(admin.ModelAdmin):
         (
             "上传信息",
             {
-                "fields": ("uploader", "file_size", "created_at"),
+                "fields": ("uploader", "file_size", "sha256", "created_at"),
             },
         ),
     )
-    readonly_fields = ("uploader", "file_size", "created_at")
+    readonly_fields = ("uploader", "file_size", "sha256", "created_at")
     list_display = (
         "filename_display",
         "kind",

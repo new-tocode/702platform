@@ -24,7 +24,7 @@
 | [competitions.md](competitions.md) | 竞赛与报名 |
 | [equipment.md](equipment.md) | 设备台账与借用 |
 | [discussion.md](discussion.md) | 社团空间：板块、帖子、评论、成员目录 |
-| [core.md](core.md) | 操作入口注册表、审计日志、通用上传校验 |
+| [core.md](core.md) | 操作入口注册表、审计日志、通用上传校验、文件指纹与取件出口 |
 
 ## 横切与参考
 

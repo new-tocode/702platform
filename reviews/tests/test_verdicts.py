@@ -4,6 +4,8 @@
 里；下载入口的权限也归这一块，因为它们是同一批文件的出口。
 """
 
+import hashlib
+
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 
@@ -22,6 +24,7 @@ from ..services import (
 )
 from .base import ReviewTestCase
 from .factories import (
+    PROPOSAL_BYTES,
     make_admin,
     make_group,
     make_preliminary_reviewer,
@@ -223,6 +226,62 @@ class VerdictTests(ReviewTestCase):
         for record in archived:
             self.assertEqual(record.group_id, self.group.pk)
             self.assertTrue(record.file.name)
+
+    def test_annotated_copy_and_its_archive_share_one_digest(self):
+        """批注版落库时留指纹；归档是它的副本，两份指纹因此相同。
+
+        归档走的是 ``ArchivedProposal.file.save(name, 已上传的件)``——同一份
+        字节再落一次盘，是平台上唯一的「服务端二次落盘」。两份指纹一致，也
+        就是「归档之后没人动过它」。
+        """
+        submission = self._submit()
+
+        self._approve_both(submission, reviewer_one=pdf("annotated.pdf"))
+
+        task = self._assignment(submission, self.reviewer_one)
+        archived = ArchivedProposal.objects.get(
+            submission=submission, source_task=task
+        )
+        expected = hashlib.sha256(PROPOSAL_BYTES).hexdigest()
+        self.assertEqual(task.sha256, expected)
+        self.assertEqual(archived.sha256, expected)
+
+    def test_group_detail_renders_both_the_annotated_and_the_archived_digest(self):
+        """批注版与归档件各自的校验值都要渲染出来，各出现在自己那一块。
+
+        项目书用的是同一串字节，拿它的指纹做断言会被项目书那一块满足、测不出批注
+        版写错字段名。这里给批注版换一份不同的内容，再数它出现的次数——两处（评审
+        任务上的、归档里的）都渲染了才对。
+        """
+        submission = self._submit()
+        annotated = SimpleUploadedFile(
+            "annotated.pdf",
+            b"%PDF-1.4 annotated copy",
+            content_type="application/pdf",
+        )
+        self._approve_both(submission, reviewer_one=annotated)
+        self.client.force_login(self.contact)
+
+        response = self.client.get(
+            reverse("projects:group_detail", args=(self.group.pk,))
+        )
+
+        body = response.content.decode()
+        self.assertEqual(
+            body.count(hashlib.sha256(b"%PDF-1.4 annotated copy").hexdigest()), 2
+        )
+        # 项目书那份也在：三个下载入口各带各的校验值。
+        self.assertIn(hashlib.sha256(PROPOSAL_BYTES).hexdigest(), body)
+
+    def test_written_only_verdicts_leave_no_digest(self):
+        """没附件就没有指纹——空字段配空指纹，不编一个出来。"""
+        submission = self._submit()
+
+        self._approve_both(submission)
+
+        self.assertEqual(
+            self._assignment(submission, self.reviewer_one).sha256, ""
+        )
 
     def test_archive_filename_does_not_leak_the_reviewer(self):
         submission = self._submit()

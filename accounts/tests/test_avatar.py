@@ -1,5 +1,6 @@
 """头像：上传、更换、删除，各自连文件一起处理；圆形只是显示层的裁切。"""
 
+import hashlib
 import re
 import shutil
 from pathlib import Path
@@ -59,6 +60,41 @@ class AvatarAcceptanceTests(TestCase):
         self.assertTrue(
             AuditLog.objects.filter(action="accounts.avatar.update").exists()
         )
+
+    def test_uploading_an_avatar_records_its_sha256(self):
+        """指纹要落库，而且得是新图那份。
+
+        这条通道走的是 ``save(update_fields=["avatar", "updated_at"])``：指纹
+        不在调用方给的写入列表里，要不是 mixin 把它并进去，算出来的值只会停在
+        内存里——库里永远空着，页面也就没得可展示。
+        """
+        upload = png_upload()
+        payload = upload.read()
+        upload.seek(0)
+
+        self.upload(upload)
+
+        self.user.profile.refresh_from_db()
+        self.assertEqual(
+            self.user.profile.sha256, hashlib.sha256(payload).hexdigest()
+        )
+
+    def test_replacing_an_avatar_refreshes_the_sha256(self):
+        self.upload(png_upload("first.png"))
+        self.user.profile.refresh_from_db()
+        first = self.user.profile.sha256
+
+        # 尺寸不同，内容就不同——同参数生成的 PNG 是逐字节一样的。
+        upload = png_upload("second.png", size=(16, 16))
+        payload = upload.read()
+        upload.seek(0)
+        self.upload(upload)
+
+        self.user.profile.refresh_from_db()
+        self.assertEqual(
+            self.user.profile.sha256, hashlib.sha256(payload).hexdigest()
+        )
+        self.assertNotEqual(self.user.profile.sha256, first)
 
     def test_replacing_an_avatar_deletes_the_previous_file(self):
         self.upload(png_upload("first.png"))

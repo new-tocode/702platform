@@ -6,11 +6,12 @@ import os
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
-from django.http import FileResponse, Http404
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext as _, ngettext
 from django.views.decorators.http import require_POST
 
+from core.downloads import serve_file
 from core.permissions import require
 from projects.permissions import can_view_group
 
@@ -272,12 +273,13 @@ def annotated_file_download(request, pk):
     )
     # Serve through this view rather than exposing the media URL: Nginx serves
     # /media/ straight from disk, which would bypass the permission check above.
-    return FileResponse(
-        assignment.annotated_file.open("rb"),
-        as_attachment=True,
-        filename=_annotated_filename(
+    return serve_file(
+        assignment.annotated_file,
+        download_name=_annotated_filename(
             assignment.annotated_file, assignment.submission.round
         ),
+        as_attachment=True,
+        sha256=assignment.sha256,
     )
 
 
@@ -296,8 +298,9 @@ def archived_proposal_download(request, pk):
         request.user.get_username(),
         extra={"request_id": getattr(request, "request_id", "-")},
     )
-    return FileResponse(
-        archived.file.open("rb"),
+    return serve_file(
+        archived.file,
+        download_name=_annotated_filename(archived.file, archived.submission.round),
         as_attachment=True,
-        filename=_annotated_filename(archived.file, archived.submission.round),
+        sha256=archived.sha256,
     )
