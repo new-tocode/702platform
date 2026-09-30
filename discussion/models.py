@@ -4,6 +4,7 @@ from django.db.models.functions import Lower
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+from core.hashing import FileDigestMixin
 from core.storage import neutral_upload_to, private_storage
 
 from .validators import validate_post_image
@@ -69,7 +70,9 @@ class Post(models.Model):
         return self.title
 
 
-class PostImage(models.Model):
+class PostImage(FileDigestMixin, models.Model):
+    digest_field = "image"
+
     post = models.ForeignKey(
         Post,
         on_delete=models.CASCADE,

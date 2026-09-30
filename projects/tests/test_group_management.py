@@ -1,5 +1,7 @@
 """管理页：只有联系人能开，改简介、学院与指导老师。"""
 
+import hashlib
+
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from ..models import (
@@ -9,7 +11,7 @@ from ..models import (
     ProjectGroup,
 )
 from ..services import GroupManagementError, update_group_info
-from .base import ProjectViewTestCase
+from .base import ProjectViewTestCase, proposal_upload
 
 
 class GroupManagementViewTests(ProjectViewTestCase):
@@ -77,6 +79,24 @@ class GroupManagementViewTests(ProjectViewTestCase):
             "转让联系人",
         ):
             self.assertContains(response, section)
+    def test_uploading_a_proposal_records_its_sha256(self):
+        """项目书是唯一一条走 ``ModelForm.save()`` 落盘的受保护上传。"""
+        upload = proposal_upload()
+        payload = upload.read()
+        upload.seek(0)
+        self.client.force_login(self.leader)
+
+        response = self.client.post(
+            reverse("projects:group_proposal_update", args=(self.group.pk,)),
+            {"proposal": upload},
+        )
+
+        self.assertRedirects(
+            response, reverse("projects:group_manage", args=(self.group.pk,))
+        )
+        self.group.refresh_from_db()
+        self.assertEqual(self.group.sha256, hashlib.sha256(payload).hexdigest())
+
     def test_manage_page_lists_pending_request_and_real_proposal_file(self):
         GroupJoinRequest.objects.create(
             group=self.group,
