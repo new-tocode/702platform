@@ -246,6 +246,33 @@ class VerdictTests(ReviewTestCase):
         self.assertEqual(task.sha256, expected)
         self.assertEqual(archived.sha256, expected)
 
+    def test_group_detail_renders_both_the_annotated_and_the_archived_digest(self):
+        """批注版与归档件各自的校验值都要渲染出来，各出现在自己那一块。
+
+        项目书用的是同一串字节，拿它的指纹做断言会被项目书那一块满足、测不出批注
+        版写错字段名。这里给批注版换一份不同的内容，再数它出现的次数——两处（评审
+        任务上的、归档里的）都渲染了才对。
+        """
+        submission = self._submit()
+        annotated = SimpleUploadedFile(
+            "annotated.pdf",
+            b"%PDF-1.4 annotated copy",
+            content_type="application/pdf",
+        )
+        self._approve_both(submission, reviewer_one=annotated)
+        self.client.force_login(self.contact)
+
+        response = self.client.get(
+            reverse("projects:group_detail", args=(self.group.pk,))
+        )
+
+        body = response.content.decode()
+        self.assertEqual(
+            body.count(hashlib.sha256(b"%PDF-1.4 annotated copy").hexdigest()), 2
+        )
+        # 项目书那份也在：三个下载入口各带各的校验值。
+        self.assertIn(hashlib.sha256(PROPOSAL_BYTES).hexdigest(), body)
+
     def test_written_only_verdicts_leave_no_digest(self):
         """没附件就没有指纹——空字段配空指纹，不编一个出来。"""
         submission = self._submit()

@@ -558,6 +558,18 @@ input[type="file"] { font: inherit; font-size: 13px; color: var(--ink-2); }
 .doc-name { font-weight: 600; font-size: 13px; line-height: 1.5; }
 .doc-spec { font-family: var(--mono); font-size: 11px; color: var(--ink-3); margin-top: 3px; }
 
+/* --- 校验值 --- */
+/* 折叠成一行，展开是一串 64 位十六进制。等宽字在这里是本职：它是一份规格，
+   要能逐字符比对。`user-select: all` 让单击选中整串，省得手动拖过 64 个字符。 */
+.checksum { margin-top: 10px; }
+.checksum > summary { cursor: pointer; font-size: 11px; color: var(--ink-3); }
+.checksum > summary:hover { color: var(--blue); }
+.checksum code {
+  display: block; margin-top: 5px;
+  font-family: var(--mono); font-size: 11px; line-height: 1.6; color: var(--ink-2);
+  word-break: break-all; user-select: all;
+}
+
 /* --- 提示条 --- */
 .flash { list-style: none; margin: 18px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .flash li {

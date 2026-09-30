@@ -1,0 +1,17 @@
+{% load i18n %}
+{% comment %}
+文件的 SHA-256 校验值，折叠成一行「校验值 SHA-256」。
+
+默认收起是刻意的：64 位十六进制铺在页面上会盖过文件本身的信息，而它只在
+「下载下来之后想核对一下」这个时刻才有用。用原生 <details>，不引脚本——
+全站只有一处 JS，不该为这点交互破例。
+
+`digest` 为空时整块不渲染：图片类不展示校验值，历史文件也可能还没回填。
+宁可什么都不显示，也不显示一个空壳。
+{% endcomment %}
+{% if digest %}
+    <details class="checksum">
+        <summary>{% translate "校验值 SHA-256" %}</summary>
+        <code>{{ digest }}</code>
+    </details>
+{% endif %}
