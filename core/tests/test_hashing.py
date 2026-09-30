@@ -9,6 +9,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
+from django.core.exceptions import ImproperlyConfigured
 from django.core.files.base import ContentFile
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connection, models
@@ -32,6 +33,19 @@ class ProbeFile(FileDigestMixin, models.Model):
     digest_field = "attachment"
     attachment = models.FileField(upload_to="probe/", storage=private_storage, blank=True)
     label = models.CharField(max_length=20, blank=True)
+
+    class Meta:
+        app_label = "core"
+
+
+class ProbeFileWithoutDigestField(FileDigestMixin, models.Model):
+    """故意不声明 ``digest_field``：这个配置错误必须当场炸。
+
+    它只会让指纹永远为空——不报错、不崩，只是那个字段静默地失效，而症状
+    （「这个文件怎么没有校验值」）离原因很远。
+    """
+
+    attachment = models.FileField(upload_to="probe/", storage=private_storage, blank=True)
 
     class Meta:
         app_label = "core"
@@ -86,6 +100,12 @@ class FileDigestMixinTests(TestCase):
         # 里，tearDownClass 回滚时一并撤销，不用手工删。
         with connection.schema_editor() as editor:
             editor.create_model(ProbeFile)
+
+    def test_missing_digest_field_fails_loudly(self):
+        probe = ProbeFileWithoutDigestField()
+
+        with self.assertRaises(ImproperlyConfigured):
+            probe.save()
 
     def test_new_upload_is_hashed(self):
         probe = ProbeFile(label="x")

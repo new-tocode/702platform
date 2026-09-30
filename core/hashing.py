@@ -12,6 +12,7 @@
 import hashlib
 import logging
 
+from django.core.exceptions import ImproperlyConfigured
 from django.db import models
 
 from .uploads import reset_file_position
@@ -70,6 +71,13 @@ class FileDigestMixin(models.Model):
     )
 
     def save(self, *args, **kwargs):
+        if not self.digest_field:
+            # 忘了声明只会让指纹永远为空——不报错、不崩，只是这个字段静默地
+            # 失效。宁可当场炸在开发者面前。
+            raise ImproperlyConfigured(
+                f"{type(self).__name__} 继承了 FileDigestMixin，却没有声明 "
+                f"digest_field。"
+            )
         update_fields = kwargs.get("update_fields")
         if update_fields is not None and self.digest_field not in update_fields:
             # 文件这一列根本不在写入范围里。Django 因此不会调用 FileField 的
