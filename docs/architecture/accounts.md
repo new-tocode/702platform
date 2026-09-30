@@ -20,6 +20,7 @@ Profile（User 一对一扩展）
   - user          OneToOne(User)
   - full_name     姓名（单一字段）
   - avatar        头像（图片，≤2 MB；圆形只是展示层的裁切，原图不动）
+  - sha256        avatar 的 SHA-256 指纹（上传时自动算，见 [core.md](core.md)）
   - student_id    学号（唯一）
   - college       学院
   - major         专业
@@ -32,6 +33,7 @@ Profile（User 一对一扩展）
 GalleryImage（个人图册里的一张图，随 Profile 级联删除）
   - profile       FK(Profile)
   - image         图片（≤5 MB；一个人的全部图像合计 ≤100 MB）
+  - sha256        image 的 SHA-256 指纹（上传时自动算）
   - layout        normal（普通）| wide（大图，占两格）| full（整行铺满）
   - sort_order    用户逐张调出来的顺序，页面按 (sort_order, id) 排
   - file_size     文件大小（字节）

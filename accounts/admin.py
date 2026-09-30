@@ -77,6 +77,8 @@ def _qualification_action(*, flag, label, value):
 
 @admin.register(Profile)
 class ProfileAdmin(admin.ModelAdmin):
+    # sha256 是 editable=False 的自动字段，不进表单——要在这里列出来才看得到。
+    readonly_fields = ("sha256",)
     list_display = (
         "user",
         "full_name",

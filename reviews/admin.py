@@ -149,6 +149,7 @@ class ReviewTaskAdmin(admin.ModelAdmin):
         "decision",
         "comment",
         "annotated_file",
+        "sha256",
         "is_override",
         "assigned_at",
         "completed_at",
@@ -244,6 +245,7 @@ class ArchivedProposalAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
         "submission",
         "source_task",
         "file",
+        "sha256",
         "archived_at",
     )
     date_hierarchy = "archived_at"
