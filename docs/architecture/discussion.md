@@ -35,6 +35,7 @@ Comment（评论）
 ```
 
 - 空间和成员目录只对活跃、已完成首次改密的登录账号开放。板块选择器在内容区顶部横向滚动；帖子列表分页，评论按时间展示。
+- **过长的帖子先折到一屏内**，正文下缘给一个「展开全文」；点开后整段展开，不再折回去。折叠高度是 `.discussion-post-content.is-collapsed` 的 `max-height`（`static/css/app.css`），也是「多长算长」的唯一判据——`static/js/discussion.js` 不重复这个数字，它先套上这个类，再问浏览器有没有真的溢出，溢出了才放出按钮（短帖因此既不折也没有按钮）。模板里不写 `is-collapsed`：折叠归脚本，没有脚本时页面就是全文直接展开，这也是那按钮默认带 `hidden` 的原因。
 - 帖子作者可编辑/删除自己的帖子并增删图片；管理员由 `core.permissions.is_admin()` 判定，可删除任意帖子、置顶/取消置顶；仅 Django 超级管理员可创建/删除板块。权限与图片上限在 `discussion.permissions`、服务层与视图分别校验。
 - **评论是软删除**：作者可删自己的评论、管理员可删任意评论（`can_delete_comment`，与删帖口径对称）。删除只写 `deleted_at`/`deleted_by`，行与内容都留着——一条有人回过的评论硬删掉，「删过」这件事就无从追查；删除动作另有 `discussion.comment.delete` 审计。
   - 已删除的评论由 `Comment.objects` 这个默认经理统一挡掉（反向关系 `post.comments` 走的也是它），要看全貌走 `Comment.all_objects`。
