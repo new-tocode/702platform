@@ -696,6 +696,21 @@ td .empty, .panel-body.tight .empty {
 .discussion-author { display: flex; align-items: baseline; flex-wrap: wrap; gap: 5px 12px; margin-bottom: 12px; }
 .discussion-author > span:first-child { color: var(--blue-ink); font-weight: 600; }
 .discussion-post-content { max-width: none; overflow-wrap: anywhere; }
+/* 过长正文先折到一屏内（420px ≈ 16 行）。这个高度就是「多长算长」的唯一判据：
+   discussion.js 不重复这个数字——它先套上 is-collapsed，再问浏览器有没有真的溢出。
+   ::after 是压在下缘的渐隐，提示下面还有正文；它落在折叠框的底边上，不会被裁掉。 */
+.discussion-post-content.is-collapsed {
+  position: relative; max-height: 420px; overflow: hidden;
+}
+.discussion-post-content.is-collapsed::after {
+  content: ""; position: absolute; inset: auto 0 0 0; height: 72px;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), var(--surface));
+  pointer-events: none;
+}
+/* 展开按钮在正文下缘居中。display 先写 none 让 [hidden] 说了算（.btn 是 inline-flex，
+   不写就会被盖过），再由 :not([hidden]) 恢复成能自己居中的 flex 盒子。 */
+.discussion-post-more { display: none; width: fit-content; margin: 12px auto 0; }
+.discussion-post-more:not([hidden]) { display: flex; }
 .discussion-post-images {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 220px));
   gap: 10px; margin-top: 16px;
