@@ -1,7 +1,12 @@
 {% extends "base.html" %}
-{% load i18n rendering %}
+{% load i18n rendering static %}
 
 {% block title %}{% translate "历年获奖" %} - {% translate "竞赛社团管理平台" %}{% endblock %}
+
+{% block extra_head %}
+    {{ block.super }}
+    <script defer src="{% static 'js/awards.js' %}"></script>
+{% endblock %}
 
 {% block content %}
 <div class="wrap">
@@ -44,10 +49,34 @@
         {% endif %}
     </form>
 
+    {# 下载表单把整张列表包起来：勾选与提交是同一件事，分居两处反而要多写脚本去拼。 #}
+    {# 没有脚本时，勾选、全选之外的交互都照常——计数与全选由 awards.js 渐进增强。 #}
+    {% if can_download and page_has_certificates %}
+        <form method="post" action="{% url 'content:award_certificates' %}" data-award-bar>
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+            <div class="award-bulkbar">
+                <label class="award-bulkall">
+                    <input type="checkbox" data-award-all>
+                    <span>{% translate "全选本页" %}</span>
+                </label>
+                <button class="btn btn-primary btn-sm" type="submit">{% translate "下载所选证书" %}</button>
+                {# 这句先按「已选 1 条」渲染出来（英文因此还分得了单复数），脚本只把里面的 #}
+                {# 数字换掉——不拼句子，也不往模板里塞占位符。 #}
+                <span class="muted" data-award-counter hidden>{% blocktranslate count counter=1 %}已选 1 条{% plural %}已选 {{ counter }} 条{% endblocktranslate %}</span>
+            </div>
+    {% endif %}
+
     {% for award in awards %}
         <div class="panel reveal">
             <div class="panel-head">
-                <h2>{{ award.title }}</h2>
+                <div class="award-heading">
+                    {% if can_download and page_has_certificates and award.certificates.all %}
+                        <input type="checkbox" name="award" value="{{ award.pk }}" data-award-pick
+                               aria-label="{% blocktranslate with title=award.title %}选择「{{ title }}」{% endblocktranslate %}">
+                    {% endif %}
+                    <h2>{{ award.title }}</h2>
+                </div>
                 <span class="count">{{ award.year }}</span>
             </div>
             <div class="panel-body">
@@ -77,6 +106,8 @@
             <div class="empty">{% translate "暂时没有获奖记录。" %}</div>
         {% endif %}
     {% endfor %}
+
+    {% if can_download and page_has_certificates %}</form>{% endif %}
 
     {% if page_obj.has_other_pages %}
         <nav class="discussion-pagination" aria-label="{% translate '获奖记录分页' %}">

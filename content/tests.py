@@ -603,3 +603,205 @@ class AwardSearchAndPagingTests(TestCase):
 
         self.assertIn("每页", body)
         self.assertIn("per_page=40", body)
+
+
+class CertificateArchiveTests(TestCase):
+    """勾选若干条记录，把它们的获奖证书打成一个 zip 下载。"""
+
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        shutil.rmtree(TEST_MEDIA_ROOT, ignore_errors=True)
+
+    def setUp(self):
+        self.member = User.objects.create_user(
+            username="archive-member", password="Member-Password-123!"
+        )
+        self.member.must_change_password = False
+        self.member.save(update_fields=["must_change_password"])
+        self.url = reverse("content:award_certificates")
+
+    @override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
+    def media(self, name, kind=MediaFile.IMAGE, caption=""):
+        return MediaFile.objects.create(
+            file=image_upload(name) if kind == MediaFile.IMAGE else video_upload(name),
+            kind=kind,
+            caption=caption,
+            uploader=self.member,
+        )
+
+    def award(self, title, year=2024, **media):
+        award = Award.objects.create(
+            title=title, competition="赛事", year=year, level="国家级"
+        )
+        for field, items in media.items():
+            getattr(award, field).add(*items)
+        return award
+
+    def archive_of(self, response):
+        """把响应体读成一个 zip。FileResponse 是流式的，没有 .content。"""
+        import zipfile
+
+        return zipfile.ZipFile(BytesIO(b"".join(response.streaming_content)))
+
+    @override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
+    def test_member_downloads_selected_certificates_only(self):
+        first = self.award(
+            "数学建模一等奖",
+            certificates=[self.media("a.png")],
+            photos=[self.media("scene.png")],
+        )
+        second = self.award("程序设计银奖", year=2023, certificates=[self.media("b.png")])
+        self.award("没传证书的奖", year=2022)
+        self.client.force_login(self.member)
+
+        response = self.client.post(self.url, {"award": [first.pk, second.pk]})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/zip")
+        bundle = self.archive_of(response)
+        self.assertEqual(len(bundle.namelist()), 2)
+        self.assertEqual(
+            sorted(bundle.namelist()),
+            ["2023-程序设计银奖.png", "2024-数学建模一等奖.png"],
+        )
+        # 参赛图片不进包：这是「下载获奖证书」这句话的字面意思。
+        self.assertNotIn("scene", "".join(bundle.namelist()))
+
+    @override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
+    def test_download_name_is_the_attachment_name_and_is_utf8(self):
+        award = self.award("建模", certificates=[self.media("a.png")])
+        self.client.force_login(self.member)
+
+        response = self.client.post(self.url, {"award": [award.pk]})
+
+        disposition = response["Content-Disposition"]
+        self.assertIn("attachment", disposition)
+        self.assertIn("filename*=utf-8''", disposition.lower())
+        self.assertIn("%E8%8E%B7%E5%A5%96%E8%AF%81%E4%B9%A6", disposition)  # 获奖证书
+
+    @override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
+    def test_duplicate_names_get_a_serial(self):
+        award = self.award(
+            "同名证书", certificates=[self.media("same.png"), self.media("same.png")]
+        )
+        self.client.force_login(self.member)
+
+        bundle = self.archive_of(self.client.post(self.url, {"award": [award.pk]}))
+
+        self.assertEqual(
+            sorted(bundle.namelist()), ["2024-同名证书-1.png", "2024-同名证书-2.png"]
+        )
+
+    def test_guests_are_sent_to_login(self):
+        response = self.client.post(self.url, {"award": ["1"]})
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("accounts:login"), response["Location"])
+
+    @override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
+    def test_get_is_not_allowed(self):
+        self.client.force_login(self.member)
+
+        self.assertEqual(self.client.get(self.url).status_code, 405)
+
+    @override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
+    def test_nothing_selected_returns_to_the_list_with_a_message(self):
+        award = self.award("有证书", certificates=[self.media("a.png")])
+        self.client.force_login(self.member)
+
+        response = self.client.post(
+            self.url, {"award": [], "next": f"/awards/?q=x"}, follow=True
+        )
+
+        self.assertRedirects(response, "/awards/?q=x")
+        self.assertIn("请先勾选要下载的获奖记录。", [str(m) for m in response.context["messages"]])
+
+    @override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
+    def test_selection_without_certificates_is_refused(self):
+        award = self.award("只有现场图", photos=[self.media("scene.png")])
+        self.client.force_login(self.member)
+
+        response = self.client.post(self.url, {"award": [award.pk]}, follow=True)
+
+        self.assertRedirects(response, reverse("content:awards"))
+        self.assertIn(
+            "所选的记录里还没有上传获奖证书。",
+            [str(m) for m in response.context["messages"]],
+        )
+
+    @override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
+    def test_bogus_ids_are_ignored_rather_than_crashing(self):
+        award = self.award("有证书", certificates=[self.media("a.png")])
+        self.client.force_login(self.member)
+
+        response = self.client.post(self.url, {"award": ["abc", str(award.pk), "-1"]})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(self.archive_of(response).namelist()), 1)
+
+    @override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
+    def test_missing_files_are_skipped_not_fatal(self):
+        kept = self.media("kept.png")
+        gone = self.media("gone.png")
+        award = self.award("两张证书", certificates=[kept, gone])
+        Path(gone.file.path).unlink()
+        self.client.force_login(self.member)
+
+        response = self.client.post(self.url, {"award": [award.pk]}, follow=True)
+
+        bundle = self.archive_of(response)
+        # 缺的那张跳过，剩下这张照常进包；序号只落在真正装进去的文件上，
+        # 所以剩一张时名字里没有序号。
+        self.assertEqual(bundle.namelist(), ["2024-两张证书.png"])
+
+    @override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
+    def test_too_many_records_at_once_is_refused(self):
+        awards = [
+            self.award(f"奖项 {index}", year=2000 + index, certificates=[self.media(f"{index}.png")])
+            for index in range(3)
+        ]
+        self.client.force_login(self.member)
+
+        with override_settings():
+            from . import views
+
+            original = views.MAX_ARCHIVE_AWARDS
+            views.MAX_ARCHIVE_AWARDS = 2
+            try:
+                response = self.client.post(
+                    self.url, {"award": [award.pk for award in awards]}, follow=True
+                )
+            finally:
+                views.MAX_ARCHIVE_AWARDS = original
+
+        self.assertIn(
+            "一次最多打包 2 条记录，请分批下载。",
+            [str(m) for m in response.context["messages"]],
+        )
+
+    @override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
+    def test_only_members_see_the_checkboxes(self):
+        award = self.award("有证书", certificates=[self.media("a.png")])
+
+        guest = self.client.get(reverse("content:awards")).content.decode()
+        self.assertNotIn("data-award-pick", guest)
+        self.assertNotIn("下载所选证书", guest)
+
+        self.client.force_login(self.member)
+        member = self.client.get(reverse("content:awards")).content.decode()
+        self.assertContains(self.client.get(reverse("content:awards")), "下载所选证书")
+        self.assertIn(f'value="{award.pk}"', member)
+        self.assertIn("已选 1 条", member)
+        self.assertIn("全选本页", member)
+
+    @override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
+    def test_records_without_certificates_have_no_checkbox(self):
+        with_certificate = self.award("有证书", certificates=[self.media("a.png")])
+        without = self.award("没证书", year=2019)
+        self.client.force_login(self.member)
+
+        body = self.client.get(reverse("content:awards")).content.decode()
+
+        self.assertIn(f'value="{with_certificate.pk}"', body)
+        self.assertNotIn(f'value="{without.pk}"', body)
