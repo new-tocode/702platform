@@ -2,12 +2,19 @@
 
 import logging
 
+from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, render
 
-from .models import Award, ContentPage, Showcase
+from .models import ContentPage, Showcase
+from .selectors import search_awards
 
 
 logger = logging.getLogger(__name__)
+
+
+#: 每页条数的可选项与默认值。首个值是默认：选项由用户选，默认由代码定。
+PER_PAGE_OPTIONS = (10, 20, 40)
+DEFAULT_PER_PAGE = PER_PAGE_OPTIONS[0]
 
 
 def page_detail(request, slug):
@@ -68,15 +75,50 @@ def about(request):
     return render(request, "content/about.html", {"page": page})
 
 
+def _per_page(raw):
+    """每页条数只认白名单里那三个值。
+
+    ``per_page`` 来自地址栏，任何整数都照单全收的话，``?per_page=100000`` 就是
+    一次对全表的渲染——参数是用户给的，上限就得由这里说了算。
+    """
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return DEFAULT_PER_PAGE
+    return value if value in PER_PAGE_OPTIONS else DEFAULT_PER_PAGE
+
+
 def awards(request):
-    award_list = Award.objects.prefetch_related("certificates", "photos").all()
+    keyword = request.GET.get("q", "").strip()
+    per_page = _per_page(request.GET.get("per_page"))
+    paginator = Paginator(search_awards(query=keyword), per_page)
+    page = paginator.get_page(request.GET.get("page"))
     logger.info(
-        "content.awards.view count=%s user=%s",
-        award_list.count(),
+        "content.awards.view total=%s query=%s per_page=%s page=%s user=%s",
+        paginator.count,
+        keyword,
+        per_page,
+        page.number,
         request.user.get_username() if request.user.is_authenticated else "anonymous",
         extra={"request_id": getattr(request, "request_id", "-")},
     )
-    return render(request, "content/awards.html", {"awards": award_list})
+    return render(
+        request,
+        "content/awards.html",
+        {
+            "awards": page.object_list,
+            "page_obj": page,
+            "total": paginator.count,
+            "keyword": keyword,
+            "per_page": per_page,
+            "per_page_options": PER_PAGE_OPTIONS,
+            # 页码窗口在视图里算：模板里做不出「当前页前后各两页、首尾各一页」这种
+            # 带省略号的序列，而几百条记录分下来可能有几十页。
+            "page_range": list(
+                paginator.get_elided_page_range(page.number, on_each_side=2, on_ends=1)
+            ),
+        },
+    )
 
 
 def showcase(request):

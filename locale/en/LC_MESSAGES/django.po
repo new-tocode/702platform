@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 702platform\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-01 19:19+0800\n"
+"POT-Creation-Date: 2026-10-01 19:26+0800\n"
 "PO-Revision-Date: 2026-09-19 18:39\n"
 "Last-Translator: 702platform\n"
 "Language-Team: 702platform\n"
@@ -1809,34 +1809,76 @@ msgid_plural "共 %(counter)s 项记录"
 msgstr[0] "1 record"
 msgstr[1] "%(counter)s records"
 
-#: templates/content/awards.html:30
+#: templates/content/awards.html:27
+msgid "搜索姓名、指导老师、赛事、级别或年份"
+msgstr "Search by name, advisor, competition, level or year"
+
+#: templates/content/awards.html:28
+msgid "搜索获奖记录"
+msgstr "Search awards"
+
+#: templates/content/awards.html:32 templates/discussion/space.html:37
+msgid "搜索"
+msgstr "Search"
+
+#: templates/content/awards.html:33
+msgid "清除"
+msgstr "Clear"
+
+#: templates/content/awards.html:37
+msgid "每页"
+msgstr "Per page"
+
+#: templates/content/awards.html:55
 msgid "赛事名称"
 msgstr "Competition"
 
-#: templates/content/awards.html:32
+#: templates/content/awards.html:57
 msgid "获奖级别"
 msgstr "Award level"
 
-#: templates/content/awards.html:35 templates/projects/group_detail.html:65
+#: templates/content/awards.html:60 templates/projects/group_detail.html:65
 #: templates/projects/group_list.html:48
 msgid "指导老师"
 msgstr "Advisors"
 
-#: templates/content/awards.html:39
+#: templates/content/awards.html:64
 msgid "获奖人 / 团队"
 msgstr "Winners / team"
 
-#: templates/content/awards.html:42
+#: templates/content/awards.html:67
 msgid "获奖证书"
 msgstr "Award certificates"
 
-#: templates/content/awards.html:43
+#: templates/content/awards.html:68
 msgid "参赛图片"
 msgstr "Competition photos"
 
-#: templates/content/awards.html:49
+#: templates/content/awards.html:75
+#, python-format
+msgid "没有匹配「%(keyword)s」的获奖记录。"
+msgstr "No awards match “%(keyword)s”."
+
+#: templates/content/awards.html:77
 msgid "暂时没有获奖记录。"
 msgstr "No awards yet."
+
+#: templates/content/awards.html:82
+msgid "获奖记录分页"
+msgstr "Award pages"
+
+#: templates/content/awards.html:84 templates/discussion/space.html:190
+msgid "上一页"
+msgstr "Previous page"
+
+#: templates/content/awards.html:96 templates/discussion/space.html:194
+msgid "下一页"
+msgstr "Next page"
+
+#: templates/content/awards.html:100 templates/discussion/space.html:192
+#, python-format
+msgid "第 %(current)s / %(total)s 页"
+msgstr "Page %(current)s of %(total)s"
 
 #: templates/content/page_index.html:17
 #, python-format
@@ -1888,10 +1930,6 @@ msgstr "Search member names"
 #: templates/discussion/space.html:36
 msgid "搜索姓名"
 msgstr "Search names"
-
-#: templates/discussion/space.html:37
-msgid "搜索"
-msgstr "Search"
 
 #: templates/discussion/space.html:50
 msgid "没有找到匹配的成员。"
@@ -1979,19 +2017,6 @@ msgstr "No posts in this board yet. Start the conversation with the first one."
 #: templates/discussion/space.html:188
 msgid "帖子分页"
 msgstr "Post pagination"
-
-#: templates/discussion/space.html:190
-msgid "上一页"
-msgstr "Previous page"
-
-#: templates/discussion/space.html:192
-#, python-format
-msgid "第 %(current)s / %(total)s 页"
-msgstr "Page %(current)s of %(total)s"
-
-#: templates/discussion/space.html:194
-msgid "下一页"
-msgstr "Next page"
 
 #: templates/discussion/space.html:199
 msgid "社团空间还没有板块。"
