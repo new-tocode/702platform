@@ -14,10 +14,35 @@
         <div class="head-row">
             <div>
                 <h1>{% translate "历年获奖" %}</h1>
-                {% if awards %}<div class="sub">{% blocktranslate count counter=awards|length %}共 1 项记录{% plural %}共 {{ counter }} 项记录{% endblocktranslate %}</div>{% endif %}
+                {% if total %}<div class="sub">{% blocktranslate count counter=total %}共 1 项记录{% plural %}共 {{ counter }} 项记录{% endblocktranslate %}</div>{% endif %}
             </div>
         </div>
     </div>
+
+    {# 搜索与每页条数写在同一个 GET 表单里：提交搜索时把 per_page 一并带上， #}
+    {# 否则搜一次就被打回默认条数。 #}
+    <form class="award-toolbar" method="get" role="search">
+        <div class="award-search">
+            <input type="search" name="q" value="{{ keyword }}" autocomplete="off"
+                   placeholder="{% translate '搜索姓名、指导老师、赛事、级别或年份' %}"
+                   aria-label="{% translate '搜索获奖记录' %}">
+            {% if per_page != per_page_options.0 %}
+                <input type="hidden" name="per_page" value="{{ per_page }}">
+            {% endif %}
+            <button class="btn btn-primary" type="submit">{% translate "搜索" %}</button>
+            {% if keyword %}<a class="btn" href="{% querystring q=None page=None %}">{% translate "清除" %}</a>{% endif %}
+        </div>
+        {% if total > per_page_options.0 %}
+            <div class="award-perpage">
+                <span class="muted">{% translate "每页" %}</span>
+                {% for size in per_page_options %}
+                    <a class="chip{% if size == per_page %} chip-on{% endif %}"
+                       href="{% querystring per_page=size page=None %}"
+                       {% if size == per_page %}aria-current="true"{% endif %}>{{ size }}</a>
+                {% endfor %}
+            </div>
+        {% endif %}
+    </form>
 
     {% for award in awards %}
         <div class="panel reveal">
@@ -46,7 +71,34 @@
             </div>
         </div>
     {% empty %}
-        <div class="empty">{% translate "暂时没有获奖记录。" %}</div>
+        {% if keyword %}
+            <div class="empty">{% blocktranslate %}没有匹配「{{ keyword }}」的获奖记录。{% endblocktranslate %}</div>
+        {% else %}
+            <div class="empty">{% translate "暂时没有获奖记录。" %}</div>
+        {% endif %}
     {% endfor %}
+
+    {% if page_obj.has_other_pages %}
+        <nav class="discussion-pagination" aria-label="{% translate '获奖记录分页' %}">
+            {% if page_obj.has_previous %}
+                <a class="btn btn-sm" href="{% querystring page=page_obj.previous_page_number %}">{% translate "上一页" %}</a>
+            {% endif %}
+            {% for number in page_range %}
+                {% if number == page_obj.paginator.ELLIPSIS %}
+                    <span class="muted">…</span>
+                {% elif number == page_obj.number %}
+                    <span class="chip chip-on" aria-current="page">{{ number }}</span>
+                {% else %}
+                    <a class="chip" href="{% querystring page=number %}">{{ number }}</a>
+                {% endif %}
+            {% endfor %}
+            {% if page_obj.has_next %}
+                <a class="btn btn-sm" href="{% querystring page=page_obj.next_page_number %}">{% translate "下一页" %}</a>
+            {% endif %}
+        </nav>
+        <div class="award-pageinfo muted">
+            {% blocktranslate with current=page_obj.number total=page_obj.paginator.num_pages %}第 {{ current }} / {{ total }} 页{% endblocktranslate %}
+        </div>
+    {% endif %}
 </div>
 {% endblock %}
