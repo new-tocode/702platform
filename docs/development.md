@@ -40,7 +40,12 @@
 │   ├── forms.py / validators.py / views.py / urls.py
 │   └── tests.py
 ├── content/                          # 公开展示：简介、获奖、成员风采
-│   ├── models.py / views.py / urls.py / admin.py
+│   ├── models.py                     # ContentPage、Award（证书/参赛图两类附件）、Showcase、HomeSlide
+│   ├── selectors.py                  # 获奖列表的搜索（一个关键字匹配五个字段 + 年份）
+│   ├── similarity.py                 # 获奖判重：归一化 + pg_trgm 逐字段相似度
+│   ├── archives.py                   # 勾选的证书打包成 zip（临时文件 + ZIP_STORED）
+│   ├── permissions.py / forms.py / validators.py / services.py
+│   ├── views.py / urls.py / admin.py
 │   ├── templatetags/rendering.py     # Markdown 安全渲染
 │   └── tests.py
 ├── media/                            # 图片/视频媒体库
@@ -87,6 +92,7 @@
 │   ├── permissions.py                # 跨应用权限口径：is_admin（谁算管理员）与视图门槛 require
 │   ├── admin.py                      # 后台共用件：只读 mixin、姓名列、身份名册基类
 │   ├── uploads.py                    # 上传文件的通用处理（扩展名、读指针复位、图片校验——媒体库/头像/图册共用一份）
+│   ├── forms.py                      # 跨应用共用的表单件（多文件字段，社团空间与获奖表单共用）
 │   ├── models.py / audit.py          # AuditLog 与统一审计函数
 │   ├── context_processors.py         # 注入操作入口与顶栏当前栏目
 │   ├── stats.py                      # 首页概览计数
@@ -208,6 +214,11 @@ source env.local.sh          # 必须：不加载会因缺少库名/账号/密�
 
 > 本应用已移除 SQLite。任何 `migrate` / `test` / `runserver` 前都要先 `source env.local.sh`；看到 `fe_sendauth: no password supplied` 之类错误即是忘了 source。
 
+**一个数据库扩展**：迁移 `content.0004_pg_trgm` 会 `CREATE EXTENSION pg_trgm`（获奖判重用它算
+相似度）。pg_trgm 自 PostgreSQL 13 起是 trusted 扩展，**库的属主即可创建**，本地与
+`deploy/install.sh` 建的库都满足；万一权限被收走，用超级用户执行一次 `CREATE EXTENSION pg_trgm;`
+再重跑迁移。
+
 ### 3.2 环境变量（`config/settings.py` 读取）
 
 | 变量 | 默认值 | 作用 |
@@ -232,6 +243,7 @@ source env.local.sh          # 必须：不加载会因缺少库名/账号/密�
 
 | 配置 | 值 | 作用 |
 |---|---|---|
+| `INSTALLED_APPS` 里的 `django.contrib.postgres` | — | 只为 PostgreSQL 自带的函数与查找（获奖判重用的 `pg_trgm` 相似度）；无模型、无迁移 |
 | `STATIC_URL` / `STATIC_ROOT` / `STATICFILES_DIRS` | `/static/` / `staticfiles/` / `static/` | 静态文件 |
 | `MEDIA_URL` / `MEDIA_ROOT` | `/media/` / `mediafiles/` | **公开**媒体（媒体库配图），Nginx 直出 |
 | `PRIVATE_MEDIA_ROOT` | `protected_media/` | **受保护**上传件（项目书、批注版、归档版、帖子图、头像、图册），只能经视图取 |
@@ -375,7 +387,7 @@ source env.local.sh
 |---|---|
 | `accounts` | 管理员发放账号/重置密码；首次登录强制改密、改密后解锁；资料维护（姓名/学号/学院/专业/特长/联系方式）；无注册、无自助找回；审计与日志不含明文密码；非 staff 不能进后台；**身份名册与批量授予**——六张名册只列持有人且没有分配入口（新增页 403），建号表单可直接勾选资格，用户列表页的六个批量动作授予/撤销并写审计，重复授予不产生多余审计行，白名单外的字段（`is_superuser` 等）被拒，且没有「批量授予管理员资格」这个动作；**后台用户组的组内用户是穿梭框**——候选池是全部账号、一次可增删一批，重复保存同一份名单不产生审计行，真正的变更写 `accounts.group.membership.update` |
 | `notices` | `public`/`internal`/`contacts` 三种范围隔离；`internal` 按 auth 用户组、`contacts` 按项目组联系人；置顶排序；公开路由不泄漏内部/联系人通知；未授权详情 404；未改密拦截 |
-| `content` / `media` | 已发布才公开；按 slug 直连的未发布页 404，而顶栏固定入口 `/about/` 未发布时显示空状态；Markdown 经 bleach 白名单；图片/视频扩展名+大小+签名校验 |
+| `content` / `media` | 已发布才公开；按 slug 直连的未发布页 404，而顶栏固定入口 `/about/` 未发布时显示空状态；Markdown 经 bleach 白名单；图片/视频扩展名+大小+签名校验；**获奖页**：一个关键字搜全部字段、每页 10／20／40（白名单外的值回落默认）、页码链接带着关键字；勾选打包下载只含证书不含参赛图（游客与未选为空都被挡下）；登录成员可添加记录、重复项与错别字版本都被拦下而换人／换年放行，游客 GET/POST 皆拒 |
 | `projects` | 联系人由 `leader` 计算；「项目组成员」名册一行看出某人在哪些组、在各组里是联系人还是成员，且没有直接加人的入口；无组员看全部可申请、组员只看自己的组、联系人看全部并管理自己的组；申请→审核入组；拒绝后可重申；申请创建项目组（任一管理员在「评审」页同意即建组，其余管理员的待办随之消失）；移除成员；联系人转让后原联系人保留为成员；改组介绍与学院/指导老师（指导老师每组至多 3 位，空槽位不占位并自动补齐；上限在数据库层由槽位唯一约束 + CHECK 兜住，服务层另有一道）；非联系人管理页 403 |
 | `competitions` | 竞赛列表所有登录成员可见；仅项目组联系人报名（限自己的组）；参赛成员与竞赛组长须属该组且组长在参赛成员内；重复报名/截止校验；报名修改与放弃；跨组越权拒绝 |
 | `equipment` | 借用限项目组成员（入口隐藏 + 视图 403）；库存事务 + 行锁不超借；仅见本人记录；归还回补、重复归还不重复回补；管理员代还；被移出组后仍可归还 |

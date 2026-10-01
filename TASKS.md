@@ -99,10 +99,13 @@
 
 ## 阶段 7：文档与收尾
 
-- [ ] `docs/architecture/content.md`：新字段、两类附件、判重口径
-- [ ] `docs/architecture/routes.md`：新增路由
-- [ ] `docs/architecture/flows.md`：成员添加与判重的流程（若体例合适）
-- [ ] `docs/development.md`：验收要点补一条
-- [ ] `README.md`：功能段若提到获奖页则同步
-- [ ] 清掉本地验证时造的获奖数据（`E2E临时*` 与八条演示记录）
-- [ ] 删掉本清单，单独提交
+- [x] `docs/architecture/content.md`：新字段、两类附件、判重口径、四件事的「不能破坏什么」
+- [x] `docs/architecture/routes.md`：`/awards/` 补搜索与分页，成员界面加两条新路由
+- [x] `docs/development.md`：content 的模块清单、`core/forms.py`、`django.contrib.postgres`、
+      本地要能建 pg_trgm 扩展、验收要点补一条
+- [x] `docs/deploy.md`：升级时 `CREATE EXTENSION` 失败怎么办
+- [x] `README.md`：功能段加一条
+- [x] 清掉本地验证时造的获奖数据与上传件（29 条记录、5 个媒体文件）
+- [x] `flows.md` 不动：那一篇讲的是跨应用的流程（送审、报名），获奖页的四件事都在
+      `content.md` 里说得下
+- [x] 删掉本清单，单独提交
