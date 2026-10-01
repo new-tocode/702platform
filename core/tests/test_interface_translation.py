@@ -147,6 +147,27 @@ def _source_msgid_groups():
     return groups
 
 
+def _fuzzy_msgids(path):
+    """被标为 fuzzy 的条目名。
+
+    fuzzy 是「这条译文还没经人确认」的标记，而 ``compilemessages`` 会**丢掉**它们
+    ——页面上英文静默退回中文、不报任何错，正是这个模块存在的理由。所以它和空译文
+    一样，必须在验收前拦下。
+
+    msgid 可能被折成好几行，这里把整段 msgid 拼回来再报，报出来的名字才认得出。
+    """
+    flagged = []
+    for block in path.read_text(encoding="utf-8").split("\n\n"):
+        if not any(
+            line.startswith("#,") and "fuzzy" in line for line in block.splitlines()
+        ):
+            continue
+        parts = re.findall(r'^msgid (".*")$', block, re.M)
+        if parts:
+            flagged.append("".join(_unquote(part) for part in parts))
+    return flagged
+
+
 def _placeholders(text):
     """文案里的 ``%(name)s`` 占位符名字。"""
     return set(_PLACEHOLDER.findall((text or "").replace("%%", "")))
@@ -188,6 +209,17 @@ class InterfaceTranslationAcceptanceTests(TestCase):
             untranslated,
             [],
             f"这些条目还没有英文译文（补齐 msgstr 再 compilemessages）：{untranslated[:5]}",
+        )
+
+    def test_no_entry_is_left_fuzzy(self):
+        # makemessages 会把新文案「猜」成某条旧译文的近似项并标上 fuzzy，译文看着
+        # 有、编译时却被丢掉：页面上中英夹杂，没有任何报错。
+        fuzzy = sorted(_fuzzy_msgids(self.po_path))
+
+        self.assertEqual(
+            fuzzy,
+            [],
+            f"这些条目标着 fuzzy（compilemessages 会丢掉它们，英文静默退回中文）：{fuzzy[:5]}",
         )
 
     def test_plural_entries_keep_both_forms(self):
