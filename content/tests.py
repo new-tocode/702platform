@@ -888,6 +888,16 @@ class AwardSimilarityTests(TestCase):
             self.find(competition="某赛事", title="无级别奖项", level="省级", year=2020, winners="")
         )
 
+    def test_leaving_an_optional_field_blank_does_not_slip_past(self):
+        """填了级别的那条在前，重复提交时级别留空——仍是同一条。
+
+        「没填」不等于「不一样」：按不一样处理的话，重复的人只要把选填项空着就能
+        绕过去，而留空恰恰是重复提交最常见的样子。
+        """
+        self.assertEqual(self.find(level=""), self.existing)
+        self.assertEqual(self.find(winners=""), self.existing)
+        self.assertEqual(self.find(level="", winners=""), self.existing)
+
     def test_record_can_be_excluded_from_its_own_check(self):
         self.assertIsNone(self.find(exclude_pk=self.existing.pk))
 
