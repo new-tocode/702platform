@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 702platform\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-01 19:35+0800\n"
+"POT-Creation-Date: 2026-10-01 19:49+0800\n"
 "PO-Revision-Date: 2026-09-19 18:39\n"
 "Last-Translator: 702platform\n"
 "Language-Team: 702platform\n"
@@ -354,6 +354,31 @@ msgstr "Registration updated."
 #: competitions/views.py:263
 msgid "已放弃该竞赛报名。"
 msgstr "Registration withdrawn."
+
+#: content/archives.py:91
+#, python-format
+msgid "获奖证书_%(date)s.zip"
+msgstr "Award certificates_%(date)s.zip"
+
+#: content/views.py:187
+msgid "请先勾选要下载的获奖记录。"
+msgstr "Select the awards you want to download first."
+
+#: content/views.py:192
+#, python-format
+msgid "一次最多打包 %(limit)s 条记录，请分批下载。"
+msgstr "At most %(limit)s records per archive — please download in batches."
+
+#: content/views.py:201
+msgid "所选的记录里还没有上传获奖证书。"
+msgstr "The selected records have no award certificates yet."
+
+#: content/views.py:216
+#, python-format
+msgid "有 %(count)s 个证书文件已不在服务器上，没有打进压缩包。"
+msgstr ""
+"%(count)s certificate files are no longer on the server and were left out of "
+"the archive."
 
 #: core/apps.py:15
 msgid "审计日志"
@@ -1586,7 +1611,8 @@ msgstr "View my awards"
 
 #: templates/accounts/profile.html:98
 msgid "先在上面填好姓名，才能按名字找到你的获奖记录。"
-msgstr "Fill in your name above first — that is what the awards search looks for."
+msgstr ""
+"Fill in your name above first — that is what the awards search looks for."
 
 #: templates/accounts/profile.html:131
 #, python-format
@@ -1639,7 +1665,7 @@ msgid "社团简介"
 msgstr "About the Club"
 
 #: templates/base.html:24 templates/content/awards.html:4
-#: templates/content/awards.html:12 templates/content/awards.html:16
+#: templates/content/awards.html:17 templates/content/awards.html:21
 #: templates/home.html:73
 msgid "历年获奖"
 msgstr "Awards"
@@ -1819,80 +1845,100 @@ msgstr ""
 "The club introduction has not been published yet; an administrator will add "
 "it."
 
-#: templates/content/awards.html:17
+#: templates/content/awards.html:22
 #, python-format
 msgid "共 1 项记录"
 msgid_plural "共 %(counter)s 项记录"
 msgstr[0] "1 record"
 msgstr[1] "%(counter)s records"
 
-#: templates/content/awards.html:27
+#: templates/content/awards.html:32
 msgid "搜索姓名、指导老师、赛事、级别或年份"
 msgstr "Search by name, advisor, competition, level or year"
 
-#: templates/content/awards.html:28
+#: templates/content/awards.html:33
 msgid "搜索获奖记录"
 msgstr "Search awards"
 
-#: templates/content/awards.html:32 templates/discussion/space.html:37
+#: templates/content/awards.html:37 templates/discussion/space.html:37
 msgid "搜索"
 msgstr "Search"
 
-#: templates/content/awards.html:33
+#: templates/content/awards.html:38
 msgid "清除"
 msgstr "Clear"
 
-#: templates/content/awards.html:37
+#: templates/content/awards.html:42
 msgid "每页"
 msgstr "Per page"
 
-#: templates/content/awards.html:55
+#: templates/content/awards.html:61
+msgid "全选本页"
+msgstr "Select all on this page"
+
+#: templates/content/awards.html:63
+msgid "下载所选证书"
+msgstr "Download selected certificates"
+
+#: templates/content/awards.html:66
+#, python-format
+msgid "已选 1 条"
+msgid_plural "已选 %(counter)s 条"
+msgstr[0] "1 selected"
+msgstr[1] "%(counter)s selected"
+
+#: templates/content/awards.html:76
+#, python-format
+msgid "选择「%(title)s」"
+msgstr "Select “%(title)s”"
+
+#: templates/content/awards.html:84
 msgid "赛事名称"
 msgstr "Competition"
 
-#: templates/content/awards.html:57
+#: templates/content/awards.html:86
 msgid "获奖级别"
 msgstr "Award level"
 
-#: templates/content/awards.html:60 templates/projects/group_detail.html:65
+#: templates/content/awards.html:89 templates/projects/group_detail.html:65
 #: templates/projects/group_list.html:48
 msgid "指导老师"
 msgstr "Advisors"
 
-#: templates/content/awards.html:64
+#: templates/content/awards.html:93
 msgid "获奖人 / 团队"
 msgstr "Winners / team"
 
-#: templates/content/awards.html:67
+#: templates/content/awards.html:96
 msgid "获奖证书"
 msgstr "Award certificates"
 
-#: templates/content/awards.html:68
+#: templates/content/awards.html:97
 msgid "参赛图片"
 msgstr "Competition photos"
 
-#: templates/content/awards.html:75
+#: templates/content/awards.html:104
 #, python-format
 msgid "没有匹配「%(keyword)s」的获奖记录。"
 msgstr "No awards match “%(keyword)s”."
 
-#: templates/content/awards.html:77
+#: templates/content/awards.html:106
 msgid "暂时没有获奖记录。"
 msgstr "No awards yet."
 
-#: templates/content/awards.html:82
+#: templates/content/awards.html:113
 msgid "获奖记录分页"
 msgstr "Award pages"
 
-#: templates/content/awards.html:84 templates/discussion/space.html:190
+#: templates/content/awards.html:115 templates/discussion/space.html:190
 msgid "上一页"
 msgstr "Previous page"
 
-#: templates/content/awards.html:96 templates/discussion/space.html:194
+#: templates/content/awards.html:127 templates/discussion/space.html:194
 msgid "下一页"
 msgstr "Next page"
 
-#: templates/content/awards.html:100 templates/discussion/space.html:192
+#: templates/content/awards.html:131 templates/discussion/space.html:192
 #, python-format
 msgid "第 %(current)s / %(total)s 页"
 msgstr "Page %(current)s of %(total)s"

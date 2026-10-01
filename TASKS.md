@@ -62,12 +62,14 @@
 
 ## 阶段 4：勾选与打包下载获奖证书
 
-- [ ] 每条目一个复选框，顶部全选；未选时报错而不是下一个空包
-- [ ] `content/services.py`：`build_certificate_archive(award_ids)`，`zipfile` 写临时文件
-  - 重名文件加序号，文件名带年份与奖项，中文名走 zip 的 UTF-8 标志
-  - 记录缺失的文件跳过而不是整包失败
-- [ ] 视图：`POST /awards/certificates.zip`，登录成员门槛；条数上限
-- [ ] 测试：zip 内容与所选一致、未登录被拒、未选为空、缺文件不炸
+- [x] 每条目一个复选框（只出现在有证书的条目上），顶部全选；未选时报错而不是下一个空包
+- [x] `content/archives.py`：`build_certificate_archive()`，`zipfile` 写临时文件
+  - 条目名 `年份-奖项名`，重名加序号，中文名走 zip 的 UTF-8 标志
+  - 记录缺失的文件跳过（并在下一页提示跳过几个）而不是整包失败
+- [x] 视图：`POST /awards/certificates.zip`，登录成员门槛；条数上限 100
+- [x] `static/js/awards.js`：全选与「已选 N 条」，无脚本时勾选与下载照常可用
+- [x] 测试：zip 内容与所选一致、不含参赛图片、未登录被拒、GET 405、空选与无证书、
+      伪造 id、重名、缺文件、超上限、游客看不到勾选框
 
 ## 阶段 5：相似性检测
 

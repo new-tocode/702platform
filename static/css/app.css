@@ -634,6 +634,18 @@ td .empty, .panel-body.tight .empty {
 .award-search input[type="search"] { flex: 0 1 auto; width: 320px; max-width: 100%; }
 /* margin-left:auto 让它在换行后也贴在右边缘，而不是掉到下一行的行首。 */
 .award-perpage { display: flex; align-items: center; gap: 6px; font-size: 12px; margin-left: auto; }
+
+/* --- 历年获奖：勾选打包下载 --- */
+.award-bulkbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+  margin: 0 0 14px; padding: 10px 14px;
+  border: 1px solid var(--line); background: var(--surface-2);
+}
+.award-bulkall { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-2); }
+.award-bulkall input { margin: 0; }
+.award-heading { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.award-heading h2 { min-width: 0; overflow-wrap: anywhere; }
+.award-heading input[type="checkbox"] { flex: none; margin: 0; width: 16px; height: 16px; }
 .award-perpage a { text-decoration: none; }
 .award-pageinfo { margin-top: 10px; text-align: center; font-size: 12px; }
 
