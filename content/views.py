@@ -1,6 +1,7 @@
 """Public views for the club's introduction, awards and member showcase."""
 
 import logging
+from urllib.parse import quote
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -15,9 +16,11 @@ from django.views.decorators.http import require_POST
 from core.permissions import require
 
 from .archives import MAX_ARCHIVE_AWARDS, build_certificate_archive
+from .forms import AwardForm
 from .models import Award, ContentPage, Showcase
 from .permissions import can_manage_awards
 from .selectors import search_awards
+from .services import DuplicateAward, create_award
 
 
 logger = logging.getLogger(__name__)
@@ -123,7 +126,7 @@ def awards(request):
             "keyword": keyword,
             "per_page": per_page,
             "per_page_options": PER_PAGE_OPTIONS,
-            "can_download": can_manage_awards(request.user),
+            "can_contribute": can_manage_awards(request.user),
             # 本页有没有可下载的证书：一条都没有时，全选框与下载按钮不该出现
             # ——点下去只会得到「所选记录里还没有上传获奖证书」。附件已预取，
             # 这一趟判断不额外查库。
@@ -162,6 +165,64 @@ def _back_to_awards(request):
     ):
         return target
     return reverse("content:awards")
+
+
+@login_required
+def award_create(request):
+    """成员在前台添加一条获奖记录。
+
+    后台那条路照旧（``content/admin.py``）——这里是给成员用的近路，不是替代。
+    """
+    require(
+        request,
+        can_manage_awards(request.user),
+        "content.awards.create.denied",
+        action="create",
+    )
+
+    if request.method == "POST":
+        form = AwardForm(request.POST, request.FILES)
+        if form.is_valid():
+            try:
+                award = create_award(
+                    **form.award_kwargs(),
+                    uploader=request.user,
+                    request=request,
+                )
+            except DuplicateAward as exc:
+                # 判重在服务层（那边才有事务与锁），这里只把结论说成人话。
+                form.add_error(None, _duplicate_message(exc.existing))
+            else:
+                messages.success(request, _("获奖记录已添加。"))
+                # 回到列表并按奖项名搜一下：新记录不一定在头一页，让人自己翻
+                # 等于让人怀疑自己到底提交成功没有。
+                return redirect(
+                    f"{reverse('content:awards')}?q={quote(award.title)}"
+                )
+        logger.warning(
+            "content.awards.create.failure user=%s errors=%s",
+            request.user.get_username(),
+            form.errors.as_json(),
+            extra={"request_id": getattr(request, "request_id", "-")},
+        )
+    else:
+        form = AwardForm()
+
+    return render(request, "content/award_form.html", {"form": form})
+
+
+def _duplicate_message(existing):
+    """把「已经有一条了」说清楚：是哪一条、谁拿的。"""
+    detail = existing.title
+    if existing.winners:
+        detail = _("%(title)s（获奖人：%(winners)s）") % {
+            "title": existing.title,
+            "winners": existing.winners,
+        }
+    return _(
+        "已有相似的获奖记录：%(detail)s。同一条记录不必重复添加；"
+        "如果确实是另一条，请联系管理员在后台添加。"
+    ) % {"detail": detail}
 
 
 @login_required

@@ -74,6 +74,17 @@ def field_shape(**fields):
     return "\x1f".join(normalize(fields[name]) for name in _COMPARED_FIELDS)
 
 
+def identity_key(*, competition, title, level, year, winners):
+    """判重用的身份串：年份 + 四个字段的形状。
+
+    判重拿它比，写入时也拿它加锁（见 ``content.services.create_award``）——两处
+    必须是同一个串，否则锁住的不是正在比的那个东西。
+    """
+    return f"{year}\x1f" + field_shape(
+        competition=competition, title=title, level=level, winners=winners
+    )
+
+
 def find_similar_award(*, competition, title, level, year, winners, exclude_pk=None):
     """在同一年份的记录里找与新记录重复的那一条，没有就返回 ``None``。
 
