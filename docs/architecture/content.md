@@ -69,6 +69,10 @@ HomeSlide（首页轮播）
   `Award.Meta.indexes` 里已有的那个索引。写入侧的锁与这里用的是同一个身份串
   （`identity_key`），改动时两者不能分开改。
 
+> 添加表单是**成员用的前台表单**，标签在 `AwardForm.Meta.labels` 里点名、提示语的数字
+> 走 `format_lazy`——两条都是「英文界面上不能出现中文」的老坑，见
+> [development.md 的双语一节](../development.md)。
+
 > **成员在前台加记录**（`views.award_create` → `services.create_award`）与后台
 > （`admin.py`）是两条并行的路：前台判重、后台不判——「确实是另一条」的例外由管理员
 > 在后台放行，这是刻意留的后门，不是漏掉的检查。
