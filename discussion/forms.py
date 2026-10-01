@@ -3,6 +3,8 @@ from django.core.exceptions import ValidationError
 from django.db.models.functions import Lower
 from django.utils.translation import gettext_lazy as _
 
+from core.forms import MultipleFileInput, MultipleImageField
+
 from .models import Board, Comment, Post, PostImage
 from .validators import (
     POST_IMAGE_LIMIT,
@@ -35,23 +37,6 @@ class BoardForm(forms.ModelForm):
         if duplicate.exists():
             raise forms.ValidationError(_("已有同名板块。"))
         return name
-
-
-class MultipleFileInput(forms.ClearableFileInput):
-    allow_multiple_selected = True
-
-
-class MultipleImageField(forms.FileField):
-    widget = MultipleFileInput
-
-    def clean(self, data, initial=None):
-        if data in self.empty_values:
-            return []
-        uploads = data if isinstance(data, (list, tuple)) else [data]
-        return [
-            super(MultipleImageField, self).clean(upload, initial)
-            for upload in uploads
-        ]
 
 
 class PostForm(forms.ModelForm):

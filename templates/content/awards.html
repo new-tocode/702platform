@@ -21,6 +21,11 @@
                 <h1>{% translate "历年获奖" %}</h1>
                 {% if total %}<div class="sub">{% blocktranslate count counter=total %}共 1 项记录{% plural %}共 {{ counter }} 项记录{% endblocktranslate %}</div>{% endif %}
             </div>
+            {% if can_contribute %}
+                <div class="head-actions">
+                    <a class="btn btn-primary" href="{% url 'content:award_create' %}">{% translate "添加获奖记录" %}</a>
+                </div>
+            {% endif %}
         </div>
     </div>
 
@@ -51,7 +56,7 @@
 
     {# 下载表单把整张列表包起来：勾选与提交是同一件事，分居两处反而要多写脚本去拼。 #}
     {# 没有脚本时，勾选、全选之外的交互都照常——计数与全选由 awards.js 渐进增强。 #}
-    {% if can_download and page_has_certificates %}
+    {% if can_contribute and page_has_certificates %}
         <form method="post" action="{% url 'content:award_certificates' %}" data-award-bar>
             {% csrf_token %}
             <input type="hidden" name="next" value="{{ request.get_full_path }}">
@@ -71,7 +76,7 @@
         <div class="panel reveal">
             <div class="panel-head">
                 <div class="award-heading">
-                    {% if can_download and page_has_certificates and award.certificates.all %}
+                    {% if can_contribute and page_has_certificates and award.certificates.all %}
                         <input type="checkbox" name="award" value="{{ award.pk }}" data-award-pick
                                aria-label="{% blocktranslate with title=award.title %}选择「{{ title }}」{% endblocktranslate %}">
                     {% endif %}
@@ -107,7 +112,7 @@
         {% endif %}
     {% endfor %}
 
-    {% if can_download and page_has_certificates %}</form>{% endif %}
+    {% if can_contribute and page_has_certificates %}</form>{% endif %}
 
     {% if page_obj.has_other_pages %}
         <nav class="discussion-pagination" aria-label="{% translate '获奖记录分页' %}">
