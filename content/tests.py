@@ -404,6 +404,8 @@ class PublicContentAcceptanceTests(TestCase):
         self.assertIn("<figcaption>证书扫描件的说明</figcaption>", about_body)
 
     def test_award_without_advisor_or_media_renders(self):
+        # 级别与获奖人现在必填，这里空着是照着「改必填之前录进来的老记录」写：
+        # 模板对它们的判断因此不能拆。
         Award.objects.create(
             title="只有基本信息的奖项",
             competition="某赛事",
@@ -876,23 +878,30 @@ class AwardSimilarityTests(TestCase):
     def test_another_competition_is_a_different_record(self):
         self.assertIsNone(self.find(competition="中国机器人大赛"))
 
-    def test_blank_fields_are_compared_as_blank(self):
+    def test_a_legacy_row_with_blank_fields_is_still_compared(self):
+        """级别与获奖人改必填之前录进来的记录，这里空的也算数。
+
+        （新记录填不出空值——表单不放行，见 `MemberAwardCreateTests`。）
+        """
         award = Award.objects.create(
-            title="无级别奖项",
+            title="老记录的奖项",
             competition="某赛事",
             year=2020,
         )
 
-        self.assertEqual(self.find(competition="某赛事", title="无级别奖项", level="", year=2020, winners=""), award)
-        self.assertIsNone(
-            self.find(competition="某赛事", title="无级别奖项", level="省级", year=2020, winners="")
+        self.assertEqual(
+            self.find(competition="某赛事", title="老记录的奖项", level="", year=2020, winners=""),
+            award,
         )
+        # 一条填了级别、一条空着：仍当作同一条，而不是「不一样」。
+        self.assertEqual(self.find(competition="某赛事", title="老记录的奖项", level="省级", year=2020, winners=""), award)
 
-    def test_leaving_an_optional_field_blank_does_not_slip_past(self):
+    def test_leaving_a_field_blank_does_not_slip_past(self):
         """填了级别的那条在前，重复提交时级别留空——仍是同一条。
 
-        「没填」不等于「不一样」：按不一样处理的话，重复的人只要把选填项空着就能
-        绕过去，而留空恰恰是重复提交最常见的样子。
+        「没填」不等于「不一样」：按不一样处理的话，重复的人只要把这一项空着就能
+        绕过去。级别与获奖人现在必填，前台填不出空值，但判重不能只靠表单那一关
+        兜着（脚本写入、历史数据都到得了这里）。
         """
         self.assertEqual(self.find(level=""), self.existing)
         self.assertEqual(self.find(winners=""), self.existing)
@@ -1072,14 +1081,33 @@ class MemberAwardCreateTests(TestCase):
         self.assertIn("year", response.context["form"].errors)
         self.assertEqual(Award.objects.count(), 0)
 
-    def test_title_and_competition_are_required(self):
+    def test_the_five_text_fields_are_all_required(self):
         self.client.force_login(self.member)
 
-        response = self.client.post(self.url, {"year": "2024"})
+        response = self.client.post(self.url, {})
 
         errors = response.context["form"].errors
-        self.assertIn("title", errors)
-        self.assertIn("competition", errors)
+        for field in ("title", "competition", "year", "level", "winners"):
+            self.assertIn(field, errors)
+        self.assertEqual(Award.objects.count(), 0)
+
+    def test_model_also_requires_level_and_winners(self):
+        """表单之外（脚本写入、后台）也拦得住：``blank=False`` 在模型上。"""
+        award = Award(title="奖项", competition="赛事", year=2024)
+
+        with self.assertRaises(ValidationError) as caught:
+            award.full_clean()
+
+        self.assertIn("level", caught.exception.message_dict)
+        self.assertIn("winners", caught.exception.message_dict)
+
+    def test_advisor_may_stay_empty(self):
+        self.client.force_login(self.member)
+
+        response = self.client.post(self.url, {**self.payload(), "advisor": ""}, follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Award.objects.get().advisor, "")
 
     @override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
     def test_too_many_images_in_one_category_is_refused(self):
