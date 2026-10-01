@@ -4,6 +4,7 @@ from io import BytesIO
 from pathlib import Path
 import shutil
 import tempfile
+import time
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
@@ -15,6 +16,7 @@ from PIL import Image
 from media.models import MediaFile
 
 from .models import Award, ContentPage, HomeSlide, Showcase
+from .similarity import find_similar_award, normalize
 
 
 User = get_user_model()
@@ -805,3 +807,113 @@ class CertificateArchiveTests(TestCase):
 
         self.assertIn(f'value="{with_certificate.pk}"', body)
         self.assertNotIn(f'value="{without.pk}"', body)
+
+
+class AwardSimilarityTests(TestCase):
+    """判重：同一奖项 + 同一批获奖人才算同一条；全半角、空格、错别字都不算差别。"""
+
+    def setUp(self):
+        self.existing = Award.objects.create(
+            title="数学建模一等奖",
+            competition="全国大学生数学建模竞赛",
+            year=2024,
+            level="国家级",
+            winners="张三、李四",
+            advisor="王建华",
+        )
+
+    def find(self, **overrides):
+        values = {
+            "competition": "全国大学生数学建模竞赛",
+            "title": "数学建模一等奖",
+            "level": "国家级",
+            "year": 2024,
+            "winners": "张三、李四",
+        }
+        values.update(overrides)
+        return find_similar_award(**values)
+
+    def test_normalize_folds_width_case_space_and_punctuation(self):
+        self.assertEqual(normalize("  数学建模 ＡＢＣ 一等奖  "), "数学建模abc一等奖")
+        self.assertEqual(normalize("张三，李四"), normalize("张三, 李四"))
+        self.assertEqual(normalize("Zhang-San"), "zhangsan")
+        self.assertEqual(normalize(None), "")
+
+    def test_exact_duplicate_is_found(self):
+        self.assertEqual(self.find(), self.existing)
+
+    def test_differences_of_width_space_and_punctuation_still_count_as_the_same(self):
+        # 同一个人把同一条又填了一遍，只是输入法不同。
+        self.assertEqual(
+            self.find(
+                competition="全国大学生数学建模竞赛 ",
+                winners="张三, 李四",
+            ),
+            self.existing,
+        )
+
+    def test_one_wrong_character_is_still_the_same_record(self):
+        # 「竞赛」打成「竟赛」：归一化看不出来，靠相似度这一关。
+        self.assertEqual(self.find(competition="全国大学生数学建模竟赛"), self.existing)
+
+    def test_a_different_prize_level_is_a_different_record(self):
+        self.assertIsNone(self.find(title="数学建模二等奖"))
+
+    def test_a_different_team_is_a_different_record(self):
+        self.assertIsNone(self.find(winners="王五、赵六"))
+
+    def test_one_more_teammate_is_a_different_record(self):
+        # 「张三」与「张三、李四」是两批人：同名同姓的另一个人也在队里，
+        # 合成一条会把两个人并成一个。
+        self.assertIsNone(self.find(winners="张三"))
+
+    def test_another_year_is_a_different_record(self):
+        self.assertIsNone(self.find(year=2023))
+
+    def test_another_competition_is_a_different_record(self):
+        self.assertIsNone(self.find(competition="中国机器人大赛"))
+
+    def test_blank_fields_are_compared_as_blank(self):
+        award = Award.objects.create(
+            title="无级别奖项",
+            competition="某赛事",
+            year=2020,
+        )
+
+        self.assertEqual(self.find(competition="某赛事", title="无级别奖项", level="", year=2020, winners=""), award)
+        self.assertIsNone(
+            self.find(competition="某赛事", title="无级别奖项", level="省级", year=2020, winners="")
+        )
+
+    def test_record_can_be_excluded_from_its_own_check(self):
+        self.assertIsNone(self.find(exclude_pk=self.existing.pk))
+
+    def test_missing_year_has_nothing_to_compare_against(self):
+        self.assertIsNone(self.find(year=None))
+
+    def test_check_stays_bounded_with_hundreds_of_records(self):
+        """几百条记录下判重不能退化成整表逐条比。"""
+        bulk = [
+            Award(
+                title=f"填充奖项 {index}",
+                competition="填充赛事",
+                year=2010 + index % 10,
+                level="校级",
+                winners=f"填充成员{index}",
+            )
+            for index in range(600)
+        ]
+        Award.objects.bulk_create(bulk)
+        self.assertEqual(Award.objects.count(), 601)
+
+        # 一字之差的那条：第一关（逐条比字符串）过不了，才轮到第二关算相似度，
+        # 两条查询各一次——不会因为记录变多就按条数长出查询。
+        with self.assertNumQueries(2):
+            started = time.perf_counter()
+            found = self.find(competition="全国大学生数学建模竟赛")
+            elapsed = time.perf_counter() - started
+
+        self.assertEqual(found, self.existing)
+        # 上限给得很松——正常在十几毫秒；这条线是防「整表逐条比」的退化，
+        # 不是性能指标。
+        self.assertLess(elapsed, 0.5)
