@@ -329,13 +329,10 @@ msgid "竞赛组长必须是参赛成员之一。"
 msgstr "The team leader must be one of the team members."
 
 #: competitions/services.py:98
-#, fuzzy
-#| msgid "该竞赛已关闭报名或已超过报名截止时间，无法修改。"
 msgid "该竞赛已关闭报名或已超过报名截止时间，无法放弃。"
 msgstr ""
 "Registration for this competition is closed or past its deadline, so it "
-"cannot be withdrawn.This competition is closed for registration or its "
-"deadline has passed; it can no longer be edited."
+"cannot be withdrawn."
 
 #: competitions/views.py:161
 msgid "竞赛报名登记成功。"
@@ -391,10 +388,8 @@ msgid "最多上传 %(limit)s 张，这次选了 %(count)s 张。"
 msgstr "Up to %(limit)s files — you selected %(count)s."
 
 #: content/views.py:196
-#, fuzzy
-#| msgid "获奖记录分页"
 msgid "获奖记录已添加。"
-msgstr "Award pages"
+msgstr "The award has been added."
 
 #: content/views.py:218
 #, python-format
@@ -1898,10 +1893,8 @@ msgstr ""
 
 #: templates/content/award_form.html:4 templates/content/award_form.html:16
 #: templates/content/awards.html:26
-#, fuzzy
-#| msgid "搜索获奖记录"
 msgid "添加获奖记录"
-msgstr "Search awards"
+msgstr "Add an award"
 
 #: templates/content/award_form.html:17
 msgid ""
@@ -1926,10 +1919,8 @@ msgid "添加记录"
 msgstr "Add record"
 
 #: templates/content/award_form.html:75
-#, fuzzy
-#| msgid "历年获奖"
 msgid "返回历年获奖"
-msgstr "Awards"
+msgstr "Back to awards"
 
 #: templates/content/awards.html:22
 #, python-format
