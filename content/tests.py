@@ -335,7 +335,7 @@ class PublicContentAcceptanceTests(TestCase):
             level="省级",
             winners="乙队",
         )
-        newer.attachments.add(self.image)
+        newer.certificates.add(self.image)
 
         response = self.client.get(reverse("content:awards"))
         body = response.content.decode()
@@ -345,6 +345,73 @@ class PublicContentAcceptanceTests(TestCase):
         self.assertIn(newer.title, body)
         self.assertLess(body.index(newer.title), body.index(older.title))
         self.assertIn(self.image.file.url, body)
+
+    def test_award_shows_advisor_and_splits_certificates_from_photos(self):
+        """证书与参赛图各成一组，且图下不再出现说明小字。"""
+        award = Award.objects.create(
+            title="数学建模一等奖",
+            competition="全国大学生数学建模竞赛",
+            year=2025,
+            level="国家级",
+            winners="张三",
+            advisor="李老师、王老师",
+        )
+        certificate = MediaFile.objects.create(
+            file=image_upload("certificate.png"),
+            kind=MediaFile.IMAGE,
+            caption="证书扫描件的说明",
+            uploader=self.admin,
+        )
+        photo = MediaFile.objects.create(
+            file=image_upload("scene.png"),
+            kind=MediaFile.IMAGE,
+            caption="现场照片的说明",
+            uploader=self.admin,
+        )
+        award.certificates.add(certificate)
+        award.photos.add(photo)
+
+        response = self.client.get(reverse("content:awards"))
+        body = response.content.decode()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "李老师、王老师")
+        # 两个分组标题各出现一次，两组图都在，且证书排在参赛图片之前。
+        self.assertEqual(body.count("获奖证书"), 1)
+        self.assertEqual(body.count("参赛图片"), 1)
+        self.assertLess(body.index("获奖证书"), body.index("参赛图片"))
+        self.assertEqual(body.count(certificate.file.url), 1)
+        self.assertEqual(body.count(photo.file.url), 1)
+        self.assertLess(body.index(certificate.file.url), body.index(photo.file.url))
+        # 说明小字去掉，但仍留在 alt 里给读屏软件。
+        self.assertNotIn("证书扫描件的说明<", body)
+        self.assertNotIn("现场照片的说明<", body)
+        self.assertIn('alt="证书扫描件的说明"', body)
+        # 别处（社团简介）的说明小字不受影响。
+        page = ContentPage.objects.create(
+            slug="about",
+            title="简介",
+            content="正文",
+            is_published=True,
+        )
+        page.attachments.add(certificate)
+        about_body = self.client.get(reverse("content:about")).content.decode()
+        self.assertIn("<figcaption>证书扫描件的说明</figcaption>", about_body)
+
+    def test_award_without_advisor_or_media_renders(self):
+        Award.objects.create(
+            title="只有基本信息的奖项",
+            competition="某赛事",
+            year=2023,
+        )
+
+        response = self.client.get(reverse("content:awards"))
+        body = response.content.decode()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("只有基本信息的奖项", body)
+        self.assertNotIn("指导老师", body)
+        self.assertNotIn("获奖证书", body)
 
     def test_only_active_showcase_entries_are_public(self):
         active = Showcase.objects.create(
