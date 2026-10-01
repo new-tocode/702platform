@@ -162,9 +162,11 @@ def _fuzzy_msgids(path):
             line.startswith("#,") and "fuzzy" in line for line in block.splitlines()
         ):
             continue
-        parts = re.findall(r'^msgid (".*")$', block, re.M)
-        if parts:
-            flagged.append("".join(_unquote(part) for part in parts))
+        # msgid 可能被折成好几行：第一行 msgid ""、后面几行是续行，都要收进来，
+        # 否则报出来的名字是空的，等于没说。
+        match = re.search(r'^msgid (.*(?:\n".*")*)', block, re.M)
+        if match:
+            flagged.append("".join(_unquote(line) for line in match.group(1).splitlines()))
     return flagged
 
 

@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 702platform\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-01 20:08+0800\n"
+"POT-Creation-Date: 2026-10-01 21:32+0800\n"
 "PO-Revision-Date: 2026-09-19 18:39\n"
 "Last-Translator: 702platform\n"
 "Language-Team: 702platform\n"
@@ -365,7 +365,8 @@ msgstr "Award certificates"
 #: content/forms.py:32
 #, python-format
 msgid "最多 %(limit)s 张，每张不超过 %(mb)s MB；可打包下载。"
-msgstr "Up to %(limit)s images, %(mb)s MB each; they can be downloaded as an archive."
+msgstr ""
+"Up to %(limit)s images, %(mb)s MB each; they can be downloaded as an archive."
 
 #: content/forms.py:37 content/validators.py:38
 #: templates/content/awards.html:102
@@ -402,9 +403,9 @@ msgid ""
 "已有相似的获奖记录：%(detail)s。同一条记录不必重复添加；如果确实是另一条，请"
 "联系管理员在后台添加。"
 msgstr ""
-"A similar award already exists: %(detail)s. There is no need to add the "
-"same record twice; if it really is a different one, ask an administrator"
-" to add it in the admin site."
+"A similar award already exists: %(detail)s. There is no need to add the same "
+"record twice; if it really is a different one, ask an administrator to add "
+"it in the admin site."
 
 #: content/views.py:248
 msgid "请先勾选要下载的获奖记录。"
@@ -1898,21 +1899,25 @@ msgstr "Add an award"
 
 #: templates/content/award_form.html:17
 msgid ""
-"填写奖项与获奖人，可附上获奖证书与参赛图片。提交后立即显示在历年获奖页面上。"
+"奖项、赛事、年份、级别与获奖人必填；指导老师与两类图片可稍后补充。提交后立即"
+"显示在历年获奖页面上。"
 msgstr ""
-"Fill in the award and its winners, and attach certificates or competitio"
-"n photos. It appears on the awards page as soon as you submit."
+"The award, competition, year, level and winners are required; advisors and "
+"the two kinds of images can be added later. It appears on the awards page as "
+"soon as you submit."
 
 #: templates/content/award_form.html:30
 msgid "如「数学建模一等奖」，写清奖名与等级。"
-msgstr "For example “First prize, mathematical modelling” — name the award and its level."
+msgstr ""
+"For example “First prize, mathematical modelling” — name the award and its "
+"level."
 
 #: templates/content/award_form.html:53
 msgid ""
 "多位获奖人用顿号分隔；这里填的名字，就是「我的获奖」按姓名搜索时匹配的名字。"
 msgstr ""
-"Separate multiple winners with a comma. The names you enter here are wha"
-"t “My awards” searches for."
+"Separate multiple winners with a comma. The names you enter here are what "
+"“My awards” searches for."
 
 #: templates/content/award_form.html:74
 msgid "添加记录"

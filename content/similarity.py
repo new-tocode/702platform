@@ -25,9 +25,11 @@ GIN 索引：那种索引只在「拿相似度当检索条件」时才有用，�
    在这一关就拦下了，连相似度都不必算。
 2. **逐字段相似度** —— 归一化之后仍可能差一个字（错别字、简写），交给 pg_trgm。
 
-第二关里有一条容易写反的规矩：**这次没填的字段不比**。级别与获奖人都是选填，
-「没填」不等于「不一样」。按「不一样」处理的话，先加的那条填了级别、重复提交时
-留空就绕过去了——而留空恰恰是重复提交最常见的样子。
+第二关里有一条容易写反的规矩：**任何一侧没填，这一项就不比**。「没填」不等于
+「不一样」。新记录空着时按「不一样」处理，先加的那条填了级别、重复提交时留空就
+绕过去了；老记录空着时按「不一样」处理，改必填之前录进来的那几条就永远拦不住重复。
+级别与获奖人现在是必填（``Award`` 上 ``blank=False``），前台填不出空值，这条规矩
+今天主要为历史数据留着——但只要库里的空值还在，它就得两边都管。
 
 阈值是按实测定的，见 :data:`FIELD_THRESHOLDS`。
 """
@@ -119,10 +121,11 @@ def find_similar_award(*, competition, title, level, year, winners, exclude_pk=N
         ) == wanted:
             return other
 
-    # 第二关：逐字段相似度，交给 pg_trgm。**这次没填的字段直接不比**：级别与获奖人
-    # 都是选填，「没填」不等于「不一样」。把它当成不一样，等于给重复开一扇门——
-    # 先加的那条填了级别，重复提交时留空，就绕过去了；而留空恰恰是重复提交最常见的
-    # 样子。空串与空串的相似度是 0，所以这里不是「比出来相等」，是压根不比。
+    # 第二关：逐字段相似度，交给 pg_trgm。**任何一侧没填，这一项就不比**——「没填」
+    # 不等于「不一样」，当成不一样就等于给重复开一扇门（先加的那条填了级别、重复提交
+    # 时留空，就绕过去了）。两边都要照顾：新记录空着是一种，老记录空着是另一种，而
+    # 级别与获奖人改必填之前录进来的记录里确实有空着的，拿它跟新记录一比就永远不相等。
+    # 空串与空串的相似度是 0，所以这里不是「比出来相等」，是压根不比。
     conditions = Q()
     scores = {}
     for field in _COMPARED_FIELDS:
@@ -130,7 +133,9 @@ def find_similar_award(*, competition, title, level, year, winners, exclude_pk=N
         if not value:
             continue
         scores[f"{field}_score"] = TrigramSimilarity(F(field), Value(value))
-        conditions &= Q(**{f"{field}_score__gte": FIELD_THRESHOLDS[field]})
+        conditions &= Q(**{f"{field}__exact": ""}) | Q(
+            **{f"{field}_score__gte": FIELD_THRESHOLDS[field]}
+        )
 
     if not scores:
         # 只有赛事与奖项是必填，真走到这里说明连它们都空着——第一关已经比过了，
