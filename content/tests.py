@@ -410,8 +410,8 @@ class PublicContentAcceptanceTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("只有基本信息的奖项", body)
-        self.assertNotIn("指导老师", body)
-        self.assertNotIn("获奖证书", body)
+        self.assertNotIn("<dt>指导老师</dt>", body)
+        self.assertNotIn("<h3 class=\"award-subtitle\">获奖证书</h3>", body)
 
     def test_only_active_showcase_entries_are_public(self):
         active = Showcase.objects.create(
@@ -483,3 +483,123 @@ class PublicContentAcceptanceTests(TestCase):
         uploaded = MediaFile.objects.get(caption="Admin 图片")
         self.assertEqual(uploaded.uploader, self.admin)
         self.assertEqual(uploaded.kind, MediaFile.IMAGE)
+
+
+class AwardSearchAndPagingTests(TestCase):
+    """一条关键字搜全部字段，条目多了按每页条数分页。
+
+    这一组只读页面、不落文件，所以不需要 MEDIA_ROOT 那套夹具。
+    """
+
+    def setUp(self):
+        self.awards = [
+            Award.objects.create(
+                title="数学建模一等奖",
+                competition="全国大学生数学建模竞赛",
+                year=2024,
+                level="国家级",
+                winners="张三、李四",
+                advisor="王老师",
+            ),
+            Award.objects.create(
+                title="程序设计银奖",
+                competition="ICPC 区域赛",
+                year=2023,
+                level="省级",
+                winners="Alice",
+                advisor="陈老师",
+            ),
+        ]
+
+    def search(self, keyword, **params):
+        return self.client.get(reverse("content:awards"), {"q": keyword, **params})
+
+    def test_keyword_matches_each_field(self):
+        cases = {
+            "张三": "数学建模一等奖",  # 姓名
+            "陈老师": "程序设计银奖",  # 指导老师
+            "建模竞赛": "数学建模一等奖",  # 赛事
+            "程序设计": "程序设计银奖",  # 奖项名称
+            "省级": "程序设计银奖",  # 级别
+            "2024": "数学建模一等奖",  # 年份
+            "24": "数学建模一等奖",  # 年份按前缀也能命中
+        }
+        for keyword, expected in cases.items():
+            with self.subTest(keyword=keyword):
+                response = self.search(keyword)
+                body = response.content.decode()
+                self.assertEqual(response.status_code, 200)
+                self.assertIn(expected, body)
+                for award in self.awards:
+                    if award.title != expected:
+                        self.assertNotIn(award.title, body)
+
+    def test_search_keeps_keyword_in_box_and_offers_clearing(self):
+        body = self.search("张三").content.decode()
+
+        self.assertIn('value="张三"', body)
+        self.assertIn(reverse("content:awards"), body)
+
+    def test_no_match_says_so_instead_of_the_empty_state(self):
+        body = self.search("查无此人").content.decode()
+
+        self.assertIn("查无此人", body)
+        self.assertNotIn("暂时没有获奖记录。", body)
+
+    def test_page_size_is_limited_to_the_offered_options(self):
+        for index in range(25):
+            Award.objects.create(
+                title=f"填充奖项 {index}",
+                competition="填充赛事",
+                year=2020,
+            )
+
+        def shown(**params):
+            body = self.client.get(reverse("content:awards"), params).content.decode()
+            return body.count('class="panel reveal"')
+
+        self.assertEqual(shown(), 10, "默认每页 10 条")
+        self.assertEqual(shown(per_page="20"), 20)
+        self.assertEqual(shown(per_page="40"), 27)
+        # 白名单外的值一律回落到默认，而不是照单全收。
+        self.assertEqual(shown(per_page="1000"), 10)
+        self.assertEqual(shown(per_page="abc"), 10)
+
+    def test_pagination_links_preserve_search_and_page_size(self):
+        for index in range(25):
+            Award.objects.create(
+                title=f"建模填充 {index}",
+                competition="全国大学生数学建模竞赛",
+                year=2020,
+            )
+
+        body = self.client.get(
+            reverse("content:awards"), {"q": "建模", "per_page": "10"}
+        ).content.decode()
+
+        self.assertIn("第 1 / 3 页", body)
+        self.assertIn("q=%E5%BB%BA%E6%A8%A1", body)  # 页码链接带着关键字
+        self.assertIn("per_page=10", body)
+
+        second = self.client.get(
+            reverse("content:awards"), {"q": "建模", "per_page": "10", "page": "2"}
+        ).content.decode()
+        self.assertIn("第 2 / 3 页", second)
+
+    def test_pagination_hidden_when_everything_fits_on_one_page(self):
+        body = self.client.get(reverse("content:awards")).content.decode()
+
+        self.assertIn("共 2 项记录", body)
+        self.assertNotIn("第 1 / 1 页", body)
+
+    def test_per_page_control_appears_only_when_paging_can_matter(self):
+        self.assertNotIn("每页", self.client.get(reverse("content:awards")).content.decode())
+
+        for index in range(11):
+            Award.objects.create(
+                title=f"填充奖项 {index}", competition="填充赛事", year=2020
+            )
+        body = self.client.get(reverse("content:awards")).content.decode()
+
+        self.assertIn("每页", body)
+        self.assertIn("per_page=40", body)
