@@ -25,6 +25,10 @@ GIN 索引：那种索引只在「拿相似度当检索条件」时才有用，�
    在这一关就拦下了，连相似度都不必算。
 2. **逐字段相似度** —— 归一化之后仍可能差一个字（错别字、简写），交给 pg_trgm。
 
+第二关里有一条容易写反的规矩：**这次没填的字段不比**。级别与获奖人都是选填，
+「没填」不等于「不一样」。按「不一样」处理的话，先加的那条填了级别、重复提交时
+留空就绕过去了——而留空恰恰是重复提交最常见的样子。
+
 阈值是按实测定的，见 :data:`FIELD_THRESHOLDS`。
 """
 
@@ -115,20 +119,22 @@ def find_similar_award(*, competition, title, level, year, winners, exclude_pk=N
         ) == wanted:
             return other
 
-    # 第二关：逐字段相似度，交给 pg_trgm。空字段不比相似度（空串与空串的相似度是
-    # 0，比不出「两边都没填」这件事），改成要求对方那个字段也是空的。
+    # 第二关：逐字段相似度，交给 pg_trgm。**这次没填的字段直接不比**：级别与获奖人
+    # 都是选填，「没填」不等于「不一样」。把它当成不一样，等于给重复开一扇门——
+    # 先加的那条填了级别，重复提交时留空，就绕过去了；而留空恰恰是重复提交最常见的
+    # 样子。空串与空串的相似度是 0，所以这里不是「比出来相等」，是压根不比。
     conditions = Q()
     scores = {}
     for field in _COMPARED_FIELDS:
         value = (values[field] or "").strip()
         if not value:
-            conditions &= Q(**{f"{field}__exact": ""})
             continue
         scores[f"{field}_score"] = TrigramSimilarity(F(field), Value(value))
         conditions &= Q(**{f"{field}_score__gte": FIELD_THRESHOLDS[field]})
 
     if not scores:
-        # 四个字段全空：第一关已经比过了，没有可以算相似度的东西。
+        # 只有赛事与奖项是必填，真走到这里说明连它们都空着——第一关已经比过了，
+        # 没有可以算相似度的东西。
         return None
 
     return (
