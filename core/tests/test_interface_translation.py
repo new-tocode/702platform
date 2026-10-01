@@ -23,7 +23,9 @@ _BLOCKTRANSLATE = re.compile(
 _PLURAL_MARK = re.compile(r"\{%\s*plural\s*%\}")
 _TEMPLATE_VAR = re.compile(r"\{\{(.*?)\}\}", re.S)
 _TEMPLATE_COMMENT = re.compile(r"\{#.*?#\}", re.S)
-_PLACEHOLDER = re.compile(r"%\((\w+)\)s")
+#: 两种占位符：``%(name)s``（% 式）与 ``{name}``（format_lazy 走 str.format）。
+#: 哪种都不能少——少了 % 式页面会 500，少了花括号式则静默丢数字。
+_PLACEHOLDER = re.compile(r"%\((\w+)\)s|\{(\w+)\}")
 _ESCAPES = {"n": "\n", "t": "\t", '"': '"', "\\": "\\"}
 
 
@@ -171,8 +173,11 @@ def _fuzzy_msgids(path):
 
 
 def _placeholders(text):
-    """文案里的 ``%(name)s`` 占位符名字。"""
-    return set(_PLACEHOLDER.findall((text or "").replace("%%", "")))
+    """文案里的占位符名字（两种写法都算）。"""
+    return {
+        percent or brace
+        for percent, brace in _PLACEHOLDER.findall((text or "").replace("%%", ""))
+    }
 
 
 class InterfaceTranslationAcceptanceTests(TestCase):

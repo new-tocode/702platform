@@ -2,6 +2,7 @@
 
 from io import BytesIO
 from pathlib import Path
+import re
 import shutil
 import tempfile
 import time
@@ -10,6 +11,7 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase, override_settings
 from django.utils import timezone
+from django.utils.functional import Promise
 from django.urls import reverse
 from django.core.files.uploadedfile import SimpleUploadedFile
 from PIL import Image
@@ -17,9 +19,10 @@ from PIL import Image
 from core.models import AuditLog
 from media.models import MediaFile
 
+from .forms import AwardForm
 from .models import Award, ContentPage, HomeSlide, Showcase
 from .similarity import find_similar_award, normalize
-from .validators import IMAGE_LIMIT
+from .validators import IMAGE_LIMIT, MAX_IMAGE_MB
 
 
 User = get_user_model()
@@ -1147,3 +1150,48 @@ class MemberAwardCreateTests(TestCase):
         body = self.client.get(self.url).content.decode()
 
         self.assertIn(f'value="{timezone.localdate().year}"', body)
+
+
+class AwardFormTranslationTests(TestCase):
+    """英文界面上不该出现中文——这一条看的是**声明**，不是渲染结果。
+
+    CI 不编译 ``.mo``（见 .github/workflows/ci.yml：测试只解析 .po 源文件），所以
+    渲染出来一律是中文，拿渲染结果断言在 CI 上必然假红。改成看声明本身：
+
+    * **标签**：ModelForm 默认拿模型的 ``verbose_name`` 当标签，而那些中文是写给后台
+      的、不进 .po——不点名 ``Meta.labels`` 就会在英文表单上原样冒出来。惰性译文是
+      个 ``Promise`` 代理，模型 ``verbose_name`` 是普通字符串，两者分得开。
+    * **提示语**：``_("…{limit}…") % {...}`` 会在**导入那一刻**求值定型（那会儿语言
+      还是中文），定型的结果就是个普通字符串；``format_lazy`` 才是代理。
+    """
+
+    def test_every_label_is_a_lazy_translation(self):
+        form = AwardForm()
+
+        plain = [
+            name
+            for name, field in form.fields.items()
+            if not isinstance(field.label, Promise)
+        ]
+
+        self.assertEqual(
+            plain, [], f"这些字段的标签不是惰性译文（多半是从模型 verbose_name 漏过来的）：{plain}"
+        )
+
+    def test_help_texts_are_formatted_lazily(self):
+        form = AwardForm()
+
+        for name in ("certificates", "photos"):
+            field = form.fields[name]
+            with self.subTest(field=name):
+                self.assertIsInstance(field.help_text, Promise)
+                # 数字确实填进去了（不是留着占位符，也不是写死的旧上限）。
+                self.assertIn(str(IMAGE_LIMIT), str(field.help_text))
+                self.assertIn(str(MAX_IMAGE_MB), str(field.help_text))
+
+    def test_model_labels_are_not_reused_on_the_front_end(self):
+        """模型上的 verbose_name 仍然只给后台用，没被顺手改成惰性。"""
+        model_labels = {field.verbose_name for field in Award._meta.fields}
+
+        self.assertIn("获奖人/团队", model_labels)
+        self.assertNotIn("获奖人 / 团队", model_labels)

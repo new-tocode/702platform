@@ -309,6 +309,23 @@ Python 代码里拼地址）。模板要的是「有就渲染成链接、没有�
 `_("%(label)s任务") % {...}` 占位；模板里用 `{% translate %}` / `{% blocktranslate %}`
 （短句写成单行，多行块加 `trimmed`）。
 
+**惰性译文不要在导入时插值。**`gettext_lazy` 拿到的是一个代理，`_("…%(limit)s…") % {...}`
+会在**写这行代码的那一刻**求值——模块导入时、类体执行时，那会儿语言还是默认的中文，
+字符串就此定型，之后切到英文也不会变（页面上就是中文）。要插值就用
+`django.utils.text.format_lazy`，它把求值推迟到渲染时：
+
+```python
+help_text=format_lazy(_("最多 {limit} 张。"), limit=IMAGE_LIMIT)   # 花括号是 str.format 式
+```
+
+`core/tests/test_interface_translation.py` 的占位符检查两种写法都认，所以换了写法不会
+漏掉翻译里的占位符错误。
+
+**前台 ModelForm 要给标签点名。**`ModelForm` 默认拿模型的 `verbose_name` 当字段标签，
+而模型上的中文是写给后台的、不进 `.po`（见下面「不在双语范围内的部分」），照搬过来就是
+英文表单上冒出中文标签。凡是给成员用的 ModelForm，都在 `Meta.labels` 里写一遍
+（`projects/forms.py` 与 `content/forms.py` 都是这么做的）。
+
 带数量的文案要能分单复数，否则英文会出现 `1 proposals`：
 
 * 模板用 `{% blocktranslate count %}`，Python 用 `ngettext()`；
