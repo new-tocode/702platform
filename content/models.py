@@ -35,11 +35,23 @@ class Award(models.Model):
     year = models.PositiveIntegerField("年份")
     level = models.CharField("获奖级别", max_length=100, blank=True)
     winners = models.TextField("获奖人/团队", blank=True)
-    attachments = models.ManyToManyField(
+    advisor = models.CharField("指导老师", max_length=200, blank=True)
+    # 附件按用途分成两类，因为它们后来的去处不同：证书要能勾选打包下载，参赛图
+    # 只在页面上看。原先只有一个 attachments，两者混在一起，下载时挑不出来。
+    certificates = models.ManyToManyField(
         MediaFile,
         blank=True,
-        related_name="awards",
-        verbose_name="奖状/现场图/视频",
+        related_name="certificate_awards",
+        verbose_name="获奖证书",
+        # 证书只收图片：打包下载会把它们整个读进内存再压，一段 500 MB 的视频
+        # 不该混进来。视频仍然是「参赛图片」那边合法的一员。
+        limit_choices_to={"kind": MediaFile.IMAGE},
+    )
+    photos = models.ManyToManyField(
+        MediaFile,
+        blank=True,
+        related_name="photo_awards",
+        verbose_name="参赛图片",
     )
     created_at = models.DateTimeField("创建时间", auto_now_add=True)
 
