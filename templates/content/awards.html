@@ -31,12 +31,18 @@
                     {% if award.level %}
                         <div><dt>{% translate "获奖级别" %}</dt><dd>{{ award.level }}</dd></div>
                     {% endif %}
+                    {% if award.advisor %}
+                        <div><dt>{% translate "指导老师" %}</dt><dd>{{ award.advisor }}</dd></div>
+                    {% endif %}
                 </dl>
                 {% if award.winners %}
                     <h3 class="award-subtitle">{% translate "获奖人 / 团队" %}</h3>
                     <div class="prose">{{ award.winners|render_markdown }}</div>
                 {% endif %}
-                {% include "includes/media.html" with media_files=award.attachments.all %}
+                {% translate "获奖证书" as certificates_heading %}
+                {% translate "参赛图片" as photos_heading %}
+                {% include "includes/award_media.html" with media_files=award.certificates.all heading=certificates_heading %}
+                {% include "includes/award_media.html" with media_files=award.photos.all heading=photos_heading %}
             </div>
         </div>
     {% empty %}

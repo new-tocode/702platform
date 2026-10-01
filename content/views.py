@@ -69,7 +69,7 @@ def about(request):
 
 
 def awards(request):
-    award_list = Award.objects.prefetch_related("attachments").all()
+    award_list = Award.objects.prefetch_related("certificates", "photos").all()
     logger.info(
         "content.awards.view count=%s user=%s",
         award_list.count(),
