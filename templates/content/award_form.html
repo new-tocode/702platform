@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% translate "添加获奖记录" %} - {% translate "竞赛社团管理平台" %}{% endblock %}
+
+{% block content %}
+<div class="wrap">
+    <div class="pagehead">
+        <div class="path">
+            <a href="{% url 'content:awards' %}">/awards</a>
+            <span>/</span>
+            <span>new</span>
+        </div>
+        <div class="head-row">
+            <div>
+                <h1>{% translate "添加获奖记录" %}</h1>
+                <div class="sub">{% translate "填写奖项与获奖人，可附上获奖证书与参赛图片。提交后立即显示在历年获奖页面上。" %}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-narrow">
+        <div class="frame reveal">
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                {{ form.non_field_errors }}
+                <div class="field">
+                    <label for="{{ form.title.id_for_label }}">{{ form.title.label }}</label>
+                    {{ form.title }}
+                    <p class="help">{% translate "如「数学建模一等奖」，写清奖名与等级。" %}</p>
+                    {{ form.title.errors }}
+                </div>
+                <div class="field">
+                    <label for="{{ form.competition.id_for_label }}">{{ form.competition.label }}</label>
+                    {{ form.competition }}
+                    {{ form.competition.errors }}
+                </div>
+                <div class="field-row">
+                    <div class="field">
+                        <label for="{{ form.year.id_for_label }}">{{ form.year.label }}</label>
+                        {{ form.year }}
+                        {{ form.year.errors }}
+                    </div>
+                    <div class="field">
+                        <label for="{{ form.level.id_for_label }}">{{ form.level.label }}</label>
+                        {{ form.level }}
+                        {{ form.level.errors }}
+                    </div>
+                </div>
+                <div class="field">
+                    <label for="{{ form.winners.id_for_label }}">{{ form.winners.label }}</label>
+                    {{ form.winners }}
+                    <p class="help">{% translate "多位获奖人用顿号分隔；这里填的名字，就是「我的获奖」按姓名搜索时匹配的名字。" %}</p>
+                    {{ form.winners.errors }}
+                </div>
+                <div class="field">
+                    <label for="{{ form.advisor.id_for_label }}">{{ form.advisor.label }}</label>
+                    {{ form.advisor }}
+                    {{ form.advisor.errors }}
+                </div>
+                <div class="field">
+                    <label for="{{ form.certificates.id_for_label }}">{{ form.certificates.label }}</label>
+                    {{ form.certificates }}
+                    <p class="help">{{ form.certificates.help_text }}</p>
+                    {{ form.certificates.errors }}
+                </div>
+                <div class="field">
+                    <label for="{{ form.photos.id_for_label }}">{{ form.photos.label }}</label>
+                    {{ form.photos }}
+                    <p class="help">{{ form.photos.help_text }}</p>
+                    {{ form.photos.errors }}
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-primary" type="submit">{% translate "添加记录" %}</button>
+                    <a class="btn" href="{% url 'content:awards' %}">{% translate "返回历年获奖" %}</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

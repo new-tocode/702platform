@@ -9,14 +9,17 @@ import time
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase, override_settings
+from django.utils import timezone
 from django.urls import reverse
 from django.core.files.uploadedfile import SimpleUploadedFile
 from PIL import Image
 
+from core.models import AuditLog
 from media.models import MediaFile
 
 from .models import Award, ContentPage, HomeSlide, Showcase
 from .similarity import find_similar_award, normalize
+from .validators import IMAGE_LIMIT
 
 
 User = get_user_model()
@@ -917,3 +920,192 @@ class AwardSimilarityTests(TestCase):
         # 上限给得很松——正常在十几毫秒；这条线是防「整表逐条比」的退化，
         # 不是性能指标。
         self.assertLess(elapsed, 0.5)
+
+
+class MemberAwardCreateTests(TestCase):
+    """登录成员在前台添加获奖记录：上传、判重、审计、门槛。"""
+
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        shutil.rmtree(TEST_MEDIA_ROOT, ignore_errors=True)
+
+    def setUp(self):
+        self.member = User.objects.create_user(
+            username="award-author", password="Member-Password-123!"
+        )
+        self.member.must_change_password = False
+        self.member.save(update_fields=["must_change_password"])
+        self.url = reverse("content:award_create")
+
+    def payload(self, **overrides):
+        values = {
+            "title": "数学建模一等奖",
+            "competition": "全国大学生数学建模竞赛",
+            "year": "2024",
+            "level": "国家级",
+            "winners": "张三、李四",
+            "advisor": "王建华",
+        }
+        values.update(overrides)
+        return values
+
+    @override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
+    def test_member_adds_a_record_with_images(self):
+        self.client.force_login(self.member)
+
+        response = self.client.post(
+            self.url,
+            {
+                **self.payload(),
+                "certificates": [image_upload("cert.png")],
+                "photos": [image_upload("scene.png")],
+            },
+            follow=True,
+        )
+
+        award = Award.objects.get(title="数学建模一等奖")
+        self.assertRedirects(
+            response, f"{reverse('content:awards')}?q=%E6%95%B0%E5%AD%A6%E5%BB%BA%E6%A8%A1%E4%B8%80%E7%AD%89%E5%A5%96"
+        )
+        self.assertEqual(award.advisor, "王建华")
+        self.assertEqual([m.kind for m in award.certificates.all()], [MediaFile.IMAGE])
+        self.assertEqual([m.kind for m in award.photos.all()], [MediaFile.IMAGE])
+        self.assertEqual(award.certificates.first().uploader, self.member)
+        self.assertIn("获奖记录已添加。", [str(m) for m in response.context["messages"]])
+
+    @override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
+    def test_images_land_in_the_shared_media_library(self):
+        self.client.force_login(self.member)
+
+        self.client.post(
+            self.url,
+            {**self.payload(), "certificates": [image_upload("cert.png")]},
+        )
+
+        uploaded = MediaFile.objects.get()
+        self.assertEqual(uploaded.uploader, self.member)
+        self.assertTrue(uploaded.file.name.startswith("uploads/"))
+
+    @override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
+    def test_creation_is_audited(self):
+        self.client.force_login(self.member)
+
+        self.client.post(self.url, self.payload())
+
+        entry = AuditLog.objects.get(action="content.award.create")
+        self.assertEqual(entry.user, self.member)
+        self.assertEqual(entry.target_id, str(Award.objects.get().pk))
+
+    def test_duplicate_record_is_refused_and_the_existing_one_is_named(self):
+        Award.objects.create(**{**self.payload(), "year": 2024})
+        self.client.force_login(self.member)
+
+        response = self.client.post(self.url, self.payload())
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Award.objects.count(), 1)
+        errors = response.context["form"].non_field_errors()
+        self.assertEqual(len(errors), 1)
+        self.assertIn("数学建模一等奖", errors[0])
+        self.assertIn("张三、李四", errors[0])
+
+    def test_duplicate_through_a_typo_is_refused_too(self):
+        Award.objects.create(**{**self.payload(), "year": 2024})
+        self.client.force_login(self.member)
+
+        response = self.client.post(
+            self.url, self.payload(competition="全国大学生数学建模竟赛")
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Award.objects.count(), 1)
+
+    def test_a_different_team_may_record_the_same_award(self):
+        Award.objects.create(**{**self.payload(), "year": 2024})
+        self.client.force_login(self.member)
+
+        response = self.client.post(
+            self.url, self.payload(winners="王五、赵六"), follow=True
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Award.objects.count(), 2)
+
+    def test_same_award_in_another_year_is_not_a_duplicate(self):
+        Award.objects.create(**{**self.payload(), "year": 2023})
+        self.client.force_login(self.member)
+
+        self.client.post(self.url, self.payload(year="2024"))
+
+        self.assertEqual(Award.objects.count(), 2)
+
+    def test_guests_cannot_open_or_post_the_form(self):
+        self.assertEqual(self.client.get(self.url).status_code, 302)
+        self.assertEqual(self.client.post(self.url, self.payload()).status_code, 302)
+        self.assertEqual(Award.objects.count(), 0)
+
+    def test_members_see_the_entry_button_on_the_list(self):
+        guest = self.client.get(reverse("content:awards")).content.decode()
+        self.assertNotIn(reverse("content:award_create"), guest)
+
+        self.client.force_login(self.member)
+        member = self.client.get(reverse("content:awards")).content.decode()
+        self.assertIn(reverse("content:award_create"), member)
+
+    def test_year_out_of_range_is_refused(self):
+        self.client.force_login(self.member)
+
+        response = self.client.post(self.url, self.payload(year="20244"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("year", response.context["form"].errors)
+        self.assertEqual(Award.objects.count(), 0)
+
+    def test_title_and_competition_are_required(self):
+        self.client.force_login(self.member)
+
+        response = self.client.post(self.url, {"year": "2024"})
+
+        errors = response.context["form"].errors
+        self.assertIn("title", errors)
+        self.assertIn("competition", errors)
+
+    @override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
+    def test_too_many_images_in_one_category_is_refused(self):
+        self.client.force_login(self.member)
+
+        response = self.client.post(
+            self.url,
+            {
+                **self.payload(),
+                "certificates": [
+                    image_upload(f"cert-{index}.png") for index in range(IMAGE_LIMIT + 1)
+                ],
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("certificates", response.context["form"].errors)
+        self.assertEqual(Award.objects.count(), 0)
+
+    @override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
+    def test_a_non_image_upload_is_refused(self):
+        self.client.force_login(self.member)
+
+        response = self.client.post(
+            self.url,
+            {**self.payload(), "certificates": [video_upload("clip.mp4")]},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("certificates", response.context["form"].errors)
+        self.assertEqual(Award.objects.count(), 0)
+
+    @override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT)
+    def test_form_asks_for_a_year_by_default(self):
+        self.client.force_login(self.member)
+
+        body = self.client.get(self.url).content.decode()
+
+        self.assertIn(f'value="{timezone.localdate().year}"', body)
