@@ -50,7 +50,9 @@ class PostForm(forms.ModelForm):
     content = forms.CharField(
         label=_("正文"),
         max_length=20000,
-        widget=forms.Textarea(attrs={"rows": 10}),
+        # data-mentions 打开 @ 补全（static/js/mentions.js）；没脚本时手打 @姓名
+        # 一样有效，服务端才是权威。
+        widget=forms.Textarea(attrs={"rows": 10, "data-mentions": "1"}),
     )
 
     class Meta:
@@ -97,7 +99,7 @@ class CommentForm(forms.ModelForm):
     content = forms.CharField(
         label=_("评论"),
         max_length=4000,
-        widget=forms.Textarea(attrs={"rows": 3}),
+        widget=forms.Textarea(attrs={"rows": 3, "data-mentions": "1"}),
     )
 
     class Meta:

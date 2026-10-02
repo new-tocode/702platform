@@ -12,6 +12,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from core.audit import record_audit
+from notices import services as notices_services
 
 from .models import (
     MAX_ADVISORS_PER_GROUP,
@@ -76,6 +77,8 @@ def apply_to_group(*, group, applicant, message="", request=None):
             if not created and message:
                 join_request.message = message
                 join_request.save(update_fields=["message", "updated_at"])
+            # 提醒归「我的消息」：联系人那里出现一条「待你审核」。
+            notices_services.notify_join_request(join_request=join_request)
     except IntegrityError as exc:  # concurrent duplicate pending application
         raise JoinRequestError(_("你已经提交过申请，请等待联系人审核。")) from exc
     record_audit(
@@ -110,6 +113,7 @@ def approve_join_request(*, join_request, actor, request=None):
         locked.decided_at = timezone.now()
         locked.save(update_fields=["status", "decided_by", "decided_at", "updated_at"])
         locked.group.members.add(locked.applicant_id)
+        notices_services.notify_join_result(join_request=locked, actor=actor)
     record_audit(
         action="projects.join.approve",
         user=actor,
@@ -130,6 +134,7 @@ def reject_join_request(*, join_request, actor, request=None):
         locked.decided_by = actor
         locked.decided_at = timezone.now()
         locked.save(update_fields=["status", "decided_by", "decided_at", "updated_at"])
+        notices_services.notify_join_result(join_request=locked, actor=actor)
     record_audit(
         action="projects.join.reject",
         user=actor,
@@ -175,6 +180,8 @@ def apply_to_create_group(
                 for field, value in fields.items():
                     setattr(create_request, field, value)
                 create_request.save(update_fields=[*fields, "updated_at"])
+            # 提醒归「我的消息」：全体管理员各出现一条（申请这一刻在册的）。
+            notices_services.notify_create_request(create_request=create_request)
     except IntegrityError as exc:  # 并发提交撞上部分唯一约束
         raise GroupCreateRequestError(
             _("你已经提交过创建项目组的申请，请等待管理员审核。")
@@ -237,6 +244,7 @@ def approve_create_request(*, create_request, actor, request=None):
                 "updated_at",
             ]
         )
+        notices_services.notify_create_result(create_request=locked, actor=actor)
     record_audit(
         action="projects.group.create.approve",
         user=actor,
@@ -264,6 +272,7 @@ def reject_create_request(*, create_request, actor, request=None):
         locked.decided_by = actor
         locked.decided_at = timezone.now()
         locked.save(update_fields=["status", "decided_by", "decided_at", "updated_at"])
+        notices_services.notify_create_result(create_request=locked, actor=actor)
     record_audit(
         action="projects.group.create.reject",
         user=actor,
