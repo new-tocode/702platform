@@ -740,6 +740,8 @@ td .empty, .panel-body.tight .empty {
 .discussion-board-create label { color: var(--ink-2); font-size: 12px; }
 .discussion-feed > * + * { margin-top: 14px; }
 .discussion-post { margin-bottom: 0; }
+/* 从「我的消息」跳过来时，目标帖子/评论亮一下；:target 是浏览器原生的，无脚本也有效 */
+.discussion-post:target { border-color: var(--blue); box-shadow: inset 3px 0 0 var(--blue); }
 .discussion-post .panel-head { align-items: flex-start; }
 .discussion-post-heading { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .discussion-post-heading h3 { min-width: 0; overflow-wrap: anywhere; }
@@ -788,6 +790,7 @@ td .empty, .panel-body.tight .empty {
 }
 .discussion-comments h4 { display: flex; align-items: baseline; gap: 7px; margin-bottom: 10px; }
 .discussion-comment { padding: 9px 0; border-bottom: 1px solid var(--line); }
+.discussion-comment:target { background: var(--blue-tint); box-shadow: inset 3px 0 0 var(--blue); }
 /* 作者、时间与删除按钮同一行；删除按钮靠 margin-left: auto 推到右端。 */
 .discussion-comment-head { display: flex; align-items: baseline; gap: 8px; }
 .discussion-comment-head strong { font-size: 12px; }

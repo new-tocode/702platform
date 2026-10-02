@@ -105,7 +105,8 @@
 
                 <div class="discussion-feed">
                     {% for post in posts_page %}
-                        <article class="panel discussion-post">
+                        {# id 是「我的消息」里提及的跳转锚点（post-N / comment-N）。 #}
+                        <article class="panel discussion-post" id="post-{{ post.pk }}">
                             <div class="panel-head">
                                 <div class="discussion-post-heading">
                                     {% if post.is_pinned %}<span class="chip chip-pin">{% translate "置顶" %}</span>{% endif %}
@@ -154,7 +155,7 @@
                                 <section class="discussion-comments" aria-label="{% translate '评论' %}">
                                     <h4>{% translate "评论" %} <span class="count">{{ post.comments.all|length }}</span></h4>
                                     {% for comment in post.comments.all %}
-                                        <div class="discussion-comment">
+                                        <div class="discussion-comment" id="comment-{{ comment.pk }}">
                                             <div class="discussion-comment-head">
                                                 <strong>{% if comment.author.profile.full_name %}{{ comment.author.profile.full_name }}{% else %}{{ comment.author.username }}{% endif %}</strong>
                                                 <span class="muted">{{ comment.created_at|date:"Y-m-d H:i" }}</span>

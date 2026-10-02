@@ -93,6 +93,25 @@ def _delete_stored_files(files):
         storage.delete(name)
 
 
+def _sync_mentions(*, post, comment, actor):
+    """把帖子/评论里的 @ 提及同步成收件人的消息。
+
+    解析归 :mod:`discussion.mentions`（只回答「提了谁」），消息的写入与撤回归
+    ``notices.services``（它拥有 Message）。局部导入，加载期不互相依赖。
+    """
+    from notices.services import sync_mention_messages
+
+    from .mentions import extract_mentions
+
+    text = comment.content if comment is not None else post.content
+    sync_mention_messages(
+        post=post,
+        comment=comment,
+        actor=actor,
+        mentioned_users=extract_mentions(text),
+    )
+
+
 def create_board(*, name_zh, name, actor, request=None):
     _require_board_creation(actor)
     try:
@@ -162,6 +181,7 @@ def create_post(*, board_id, title, content, actor, images=(), request=None):
                 content=content,
             )
             _store_post_images(post=post, uploads=uploads, saved_files=saved_files)
+            _sync_mentions(post=post, comment=None, actor=actor)
     except Exception:
         _delete_stored_files(saved_files)
         raise
@@ -224,6 +244,8 @@ def update_post(
                     files_to_delete.append((image.image.storage, image.image.name))
                     image.delete()
             _store_post_images(post=post, uploads=uploads, saved_files=saved_files)
+            # 编辑后 @ 的人可能变了：新增的写消息、被去掉的删消息。
+            _sync_mentions(post=post, comment=None, actor=actor)
     except Exception:
         _delete_stored_files(saved_files)
         raise
@@ -314,6 +336,11 @@ def delete_comment(*, comment_id, actor, request=None):
         if comment.deleted_at is not None:
             return comment.post.board_id, comment.post_id
         comment.soft_delete(actor=actor)
+        # 评论在界面上让位给一行说明，别人消息里的提及也一并撤掉（局部导入，
+        # 与 _sync_mentions 同一条理由）。
+        from notices.services import clear_mention_messages
+
+        clear_mention_messages(comment=comment)
         record_audit(
             action="discussion.comment.delete",
             user=actor,
@@ -343,6 +370,7 @@ def create_comment(*, post_id, content, actor, request=None):
             author=actor,
             content=content,
         )
+        _sync_mentions(post=post, comment=comment, actor=actor)
 
     record_audit(
         action="discussion.comment.create",
