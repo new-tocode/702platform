@@ -16,7 +16,12 @@ from core.permissions import is_admin, require
 from .forms import BoardForm, CommentForm, PostForm
 from .models import Post, PostImage
 from .permissions import can_edit_post, can_pin_post, can_view_space
-from .selectors import board_list, member_directory, posts_for_board
+from .selectors import (
+    POSTS_PER_PAGE,
+    board_list,
+    member_directory,
+    posts_for_board,
+)
 from .services import (
     BoardNameTaken,
     BoardNotEmpty,
@@ -34,7 +39,6 @@ from .services import (
 
 
 logger = logging.getLogger(__name__)
-POSTS_PER_PAGE = 12
 
 
 def _require_member(request):

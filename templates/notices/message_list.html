@@ -39,8 +39,8 @@
                 <tr>
                     <th>{% translate "类型" %}</th>
                     <th>{% translate "标题" %}</th>
-                    <th>{% translate "发布人" %}</th>
-                    <th>{% translate "范围" %}</th>
+                    <th>{% translate "来自" %}</th>
+                    <th>{% translate "说明" %}</th>
                     <th class="num right">{% translate "时间" %}</th>
                 </tr>
             </thead>
@@ -51,9 +51,9 @@
                         <td>
                             <a class="t" href="{{ row.url }}">{% if row.is_pinned %}<span class="chip chip-pin">{% translate "置顶" %}</span> {% endif %}{{ row.title }}</a>
                         </td>
-                        <td class="muted">{{ row.publisher }}</td>
-                        <td class="muted">{{ row.audience }}</td>
-                        <td class="num right">{{ row.published_at|date:"Y-m-d H:i" }}</td>
+                        <td class="muted">{{ row.actor }}</td>
+                        <td class="muted">{{ row.context }}</td>
+                        <td class="num right">{{ row.at|date:"Y-m-d H:i" }}</td>
                     </tr>
                 {% empty %}
                     <tr>
