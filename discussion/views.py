@@ -14,6 +14,7 @@ from core.downloads import serve_file
 from core.permissions import is_admin, require
 
 from .forms import BoardForm, CommentForm, PostForm
+from .mentions import mentionable_names
 from .models import Post, PostImage
 from .permissions import can_edit_post, can_pin_post, can_view_space
 from .selectors import (
@@ -69,6 +70,8 @@ def _space_context(request, *, selected_board=None):
         "board_form": BoardForm(),
         "can_manage_boards": request.user.is_superuser,
         "is_admin": is_admin(request.user),
+        # @ 补全的名单（模板里嵌成 JSON，见 static/js/mentions.js）。
+        "mention_names": mentionable_names(),
     }
 
 
@@ -131,6 +134,7 @@ def post_new(request, board_id):
             "active_board": selected_board,
             "page_heading": _("发布帖子"),
             "submit_label": _("发布帖子"),
+            "mention_names": mentionable_names(),
         },
     )
 
@@ -187,6 +191,7 @@ def post_edit(request, post_id):
             "submit_label": _("保存修改"),
             "post": post,
             "post_images": post.images.all(),
+            "mention_names": mentionable_names(),
         },
     )
 

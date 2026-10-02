@@ -804,6 +804,18 @@ td .empty, .panel-body.tight .empty {
 .link-danger:hover { color: var(--red); text-decoration: underline; }
 .discussion-comment-form { display: grid; justify-items: start; gap: 8px; margin-top: 12px; }
 .discussion-comment-form textarea { min-height: 58px; }
+
+/* --- @ 补全下拉：贴在输入框所在块的底部，无脚本时不出现 --- */
+.mention-host { position: relative; }
+.mention-menu {
+  position: absolute; left: 0; top: 100%; z-index: 30;
+  min-width: 160px; max-height: 220px; overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--line-2);
+  box-shadow: 0 8px 20px rgba(18, 80, 143, 0.12);
+}
+.mention-menu[hidden] { display: none; }
+.mention-option { padding: 7px 12px; font-size: 13px; cursor: pointer; }
+.mention-option.is-active { background: var(--blue-tint); }
 .discussion-pagination {
   display: flex; justify-content: center; align-items: center;
   gap: 12px; margin-top: 20px;

@@ -35,6 +35,11 @@ def name_map():
     return mapping
 
 
+def mentionable_names():
+    """补全列表用的姓名：去重、按名字排序。"""
+    return sorted(name_map())
+
+
 def extract_mentions(text):
     """文本里提到的人，按出现顺序去重。
 
