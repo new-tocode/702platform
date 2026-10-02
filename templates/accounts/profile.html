@@ -84,6 +84,22 @@
                 </div>
             </div>
 
+            {# 「我的获奖」= 带姓名跳到历年获奖页，那边按姓名搜的就是获奖人。 #}
+            {# 姓名没填就没有可搜的关键字，所以先请人去上面填，而不是跳过去搜个空。 #}
+            <div class="panel">
+                <div class="panel-head">
+                    <h2>{% translate "我的获奖" %}</h2>
+                </div>
+                <div class="panel-body">
+                    {% if profile.full_name %}
+                        <p class="help">{% blocktranslate with name=profile.full_name %}按姓名「{{ name }}」到历年获奖里搜索。{% endblocktranslate %}</p>
+                        <a class="btn btn-primary btn-block" href="{% url 'content:awards' %}?q={{ profile.full_name|urlencode }}">{% translate "查看我的获奖" %}</a>
+                    {% else %}
+                        <p class="muted">{% translate "先在上面填好姓名，才能按名字找到你的获奖记录。" %}</p>
+                    {% endif %}
+                </div>
+            </div>
+
             <div class="panel">
                 <div class="panel-head">
                     <h2>{% translate "当前身份" %}</h2>

@@ -1,7 +1,12 @@
 {% extends "base.html" %}
-{% load i18n rendering %}
+{% load i18n rendering static %}
 
 {% block title %}{% translate "历年获奖" %} - {% translate "竞赛社团管理平台" %}{% endblock %}
+
+{% block extra_head %}
+    {{ block.super }}
+    <script defer src="{% static 'js/awards.js' %}"></script>
+{% endblock %}
 
 {% block content %}
 <div class="wrap">
@@ -14,15 +19,69 @@
         <div class="head-row">
             <div>
                 <h1>{% translate "历年获奖" %}</h1>
-                {% if awards %}<div class="sub">{% blocktranslate count counter=awards|length %}共 1 项记录{% plural %}共 {{ counter }} 项记录{% endblocktranslate %}</div>{% endif %}
+                {% if total %}<div class="sub">{% blocktranslate count counter=total %}共 1 项记录{% plural %}共 {{ counter }} 项记录{% endblocktranslate %}</div>{% endif %}
             </div>
+            {% if can_contribute %}
+                <div class="head-actions">
+                    <a class="btn btn-primary" href="{% url 'content:award_create' %}">{% translate "添加获奖记录" %}</a>
+                </div>
+            {% endif %}
         </div>
     </div>
+
+    {# 搜索与每页条数写在同一个 GET 表单里：提交搜索时把 per_page 一并带上， #}
+    {# 否则搜一次就被打回默认条数。 #}
+    <form class="award-toolbar" method="get" role="search">
+        <div class="award-search">
+            <input type="search" name="q" value="{{ keyword }}" autocomplete="off"
+                   placeholder="{% translate '搜索姓名、指导老师、赛事、级别或年份' %}"
+                   aria-label="{% translate '搜索获奖记录' %}">
+            {% if per_page != per_page_options.0 %}
+                <input type="hidden" name="per_page" value="{{ per_page }}">
+            {% endif %}
+            <button class="btn btn-primary" type="submit">{% translate "搜索" %}</button>
+            {% if keyword %}<a class="btn" href="{% querystring q=None page=None %}">{% translate "清除" %}</a>{% endif %}
+        </div>
+        {% if total > per_page_options.0 %}
+            <div class="award-perpage">
+                <span class="muted">{% translate "每页" %}</span>
+                {% for size in per_page_options %}
+                    <a class="chip{% if size == per_page %} chip-on{% endif %}"
+                       href="{% querystring per_page=size page=None %}"
+                       {% if size == per_page %}aria-current="true"{% endif %}>{{ size }}</a>
+                {% endfor %}
+            </div>
+        {% endif %}
+    </form>
+
+    {# 下载表单把整张列表包起来：勾选与提交是同一件事，分居两处反而要多写脚本去拼。 #}
+    {# 没有脚本时，勾选、全选之外的交互都照常——计数与全选由 awards.js 渐进增强。 #}
+    {% if can_contribute and page_has_certificates %}
+        <form method="post" action="{% url 'content:award_certificates' %}" data-award-bar>
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+            <div class="award-bulkbar">
+                <label class="award-bulkall">
+                    <input type="checkbox" data-award-all>
+                    <span>{% translate "全选本页" %}</span>
+                </label>
+                <button class="btn btn-primary btn-sm" type="submit">{% translate "下载所选证书" %}</button>
+                {# 这句先按「已选 1 条」渲染出来（英文因此还分得了单复数），脚本只把里面的 #}
+                {# 数字换掉——不拼句子，也不往模板里塞占位符。 #}
+                <span class="muted" data-award-counter hidden>{% blocktranslate count counter=1 %}已选 1 条{% plural %}已选 {{ counter }} 条{% endblocktranslate %}</span>
+            </div>
+    {% endif %}
 
     {% for award in awards %}
         <div class="panel reveal">
             <div class="panel-head">
-                <h2>{{ award.title }}</h2>
+                <div class="award-heading">
+                    {% if can_contribute and page_has_certificates and award.certificates.all %}
+                        <input type="checkbox" name="award" value="{{ award.pk }}" data-award-pick
+                               aria-label="{% blocktranslate with title=award.title %}选择「{{ title }}」{% endblocktranslate %}">
+                    {% endif %}
+                    <h2>{{ award.title }}</h2>
+                </div>
                 <span class="count">{{ award.year }}</span>
             </div>
             <div class="panel-body">
@@ -31,16 +90,51 @@
                     {% if award.level %}
                         <div><dt>{% translate "获奖级别" %}</dt><dd>{{ award.level }}</dd></div>
                     {% endif %}
+                    {% if award.advisor %}
+                        <div><dt>{% translate "指导老师" %}</dt><dd>{{ award.advisor }}</dd></div>
+                    {% endif %}
                 </dl>
                 {% if award.winners %}
                     <h3 class="award-subtitle">{% translate "获奖人 / 团队" %}</h3>
                     <div class="prose">{{ award.winners|render_markdown }}</div>
                 {% endif %}
-                {% include "includes/media.html" with media_files=award.attachments.all %}
+                {% translate "获奖证书" as certificates_heading %}
+                {% translate "参赛图片" as photos_heading %}
+                {% include "includes/award_media.html" with media_files=award.certificates.all heading=certificates_heading %}
+                {% include "includes/award_media.html" with media_files=award.photos.all heading=photos_heading %}
             </div>
         </div>
     {% empty %}
-        <div class="empty">{% translate "暂时没有获奖记录。" %}</div>
+        {% if keyword %}
+            <div class="empty">{% blocktranslate %}没有匹配「{{ keyword }}」的获奖记录。{% endblocktranslate %}</div>
+        {% else %}
+            <div class="empty">{% translate "暂时没有获奖记录。" %}</div>
+        {% endif %}
     {% endfor %}
+
+    {% if can_contribute and page_has_certificates %}</form>{% endif %}
+
+    {% if page_obj.has_other_pages %}
+        <nav class="discussion-pagination" aria-label="{% translate '获奖记录分页' %}">
+            {% if page_obj.has_previous %}
+                <a class="btn btn-sm" href="{% querystring page=page_obj.previous_page_number %}">{% translate "上一页" %}</a>
+            {% endif %}
+            {% for number in page_range %}
+                {% if number == page_obj.paginator.ELLIPSIS %}
+                    <span class="muted">…</span>
+                {% elif number == page_obj.number %}
+                    <span class="chip chip-on" aria-current="page">{{ number }}</span>
+                {% else %}
+                    <a class="chip" href="{% querystring page=number %}">{{ number }}</a>
+                {% endif %}
+            {% endfor %}
+            {% if page_obj.has_next %}
+                <a class="btn btn-sm" href="{% querystring page=page_obj.next_page_number %}">{% translate "下一页" %}</a>
+            {% endif %}
+        </nav>
+        <div class="award-pageinfo muted">
+            {% blocktranslate with current=page_obj.number total=page_obj.paginator.num_pages %}第 {{ current }} / {{ total }} 页{% endblocktranslate %}
+        </div>
+    {% endif %}
 </div>
 {% endblock %}

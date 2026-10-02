@@ -195,3 +195,49 @@ class ReadOnlyMemberProfileAcceptanceTests(TestCase):
         self.assertEqual(response.status_code, 405)
         self.member.profile.refresh_from_db()
         self.assertEqual(self.member.profile.bio, "Builds small robots.")
+
+
+class MyAwardsEntryTests(TestCase):
+    """个人信息页的「我的获奖」入口：带着姓名跳到历年获奖页。"""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="award-owner",
+            password="Member-Password-123!",
+        )
+        self.user.must_change_password = False
+        self.user.save(update_fields=["must_change_password"])
+        self.client.force_login(self.user)
+
+    def test_entry_links_to_awards_page_with_the_members_name(self):
+        self.user.profile.full_name = "张三"
+        self.user.profile.save(update_fields=["full_name"])
+
+        body = self.client.get(reverse("accounts:profile")).content.decode()
+
+        self.assertIn(f"{reverse('content:awards')}?q=%E5%BC%A0%E4%B8%89", body)
+
+    def test_entry_asks_for_a_name_instead_of_searching_empty(self):
+        body = self.client.get(reverse("accounts:profile")).content.decode()
+
+        self.assertIn("先在上面填好姓名", body)
+        self.assertNotIn(f"{reverse('content:awards')}?q=", body)
+
+    def test_search_word_is_also_matched_by_the_awards_page(self):
+        """入口给出的地址，在获奖页上确实搜得到本人。"""
+        from content.models import Award
+
+        self.user.profile.full_name = "张三"
+        self.user.profile.save(update_fields=["full_name"])
+        Award.objects.create(
+            title="数学建模一等奖",
+            competition="全国大学生数学建模竞赛",
+            year=2024,
+            winners="张三、李四",
+        )
+
+        body = self.client.get(reverse("accounts:profile")).content.decode()
+        link = re.search(r'href="(/awards/\?q=[^"]+)"', body).group(1)
+        searched = self.client.get(link).content.decode()
+
+        self.assertIn("数学建模一等奖", searched)

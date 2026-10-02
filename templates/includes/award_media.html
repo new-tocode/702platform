@@ -1,0 +1,28 @@
+{% load i18n %}
+{% comment %}
+一条获奖记录里的一类附件：获奖证书或参赛图片。
+
+与 includes/media.html 的差别只有两处：图下不写说明小字（获奖页只看图，说明留给
+alt，读屏软件仍念得出来），以及多一个分组标题。其余页面照旧用 media.html。
+
+参数：media_files（附件列表）、heading（分组标题）。
+{% endcomment %}
+{% if media_files %}
+    <h3 class="award-subtitle">{{ heading }}</h3>
+    <div class="media-grid">
+        {% for media in media_files %}
+            {% if media.kind == "image" %}
+                <figure>
+                    <img src="{{ media.file.url }}" alt="{{ media.caption }}">
+                </figure>
+            {% elif media.kind == "video" %}
+                <figure>
+                    <video controls preload="metadata">
+                        <source src="{{ media.file.url }}">
+                        {% translate "您的浏览器不支持视频播放。" %}
+                    </video>
+                </figure>
+            {% endif %}
+        {% endfor %}
+    </div>
+{% endif %}
