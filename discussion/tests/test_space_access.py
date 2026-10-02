@@ -78,8 +78,12 @@ class SpaceAccessViewTests(DiscussionViewTestCase):
             reverse("accounts:member_profile", args=(self.member.pk,)),
         )
         self.assertContains(response, "Alex Chen")
-        self.assertNotContains(response, "Sam Lee")
-        self.assertNotContains(response, self.other_member.username)
+        # 「不出现 Sam Lee」只对成员目录那一块断言：页面底部还嵌着 @ 补全用的
+        # 姓名名单（见 discussion/mentions.py），那里当然有全部姓名。
+        directory = response.content.decode().split("discussion-member-list")[1]
+        directory = directory.split("discussion-main")[0]
+        self.assertNotIn("Sam Lee", directory)
+        self.assertNotIn(self.other_member.username, directory)
 
         username_search = self.client.get(
             reverse("discussion:space"),
