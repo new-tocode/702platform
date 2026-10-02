@@ -33,10 +33,23 @@ NoticeRead
 
 ## 我的消息
 
-成员中心里的 `/member/notices/`（入口、标题、面包屑都叫「我的消息」，公开通知那条线不动）：
+成员中心里的 `/member/notices/`（入口、标题、面包屑都叫「我的消息」；公开通知另有 `/notices/` 公告栏，两条线并存）。来源分两类：
 
-- **没有消息副本表**：列表实时查可见通知，未读 = 可见通知 − `NoticeRead` 回执。`notices/selectors.py` 的 `message_rows`（装配行）与 `unread_message_count`（计数）是页面与提醒共用的唯一口径。
-- **行形状 `MessageRow`**（类型／标题／url／时间／发布人／范围文本／是否已读）是页面与消息来源之间的接缝：接帖子 @ 提及、评审通知时只扩展 `message_rows` 的装配，列表页与模板不用动。类型现在只有「内部通知」一个值；范围文本对内部通知列用户组名（逗号分隔），对仅联系人通知写「仅项目组联系人」。
-- **已读**：进入详情即写回执（`notices/services.mark_read`，幂等）；「全部已读」是 POST 到 `read-all/`，`mark_all_read` 只动当前可见的未读，`ignore_conflicts` 挡住并发重复。已读是高频个人操作，不写审计。
-- **删除的连带**：发布人删除通知后，列表与计数都来自实时查询，成员侧自然消失；回执随 `CASCADE` 清掉，不留孤儿。
-- **成员中心的提醒**由 `notices/panels.member_home_context` 装配（与 `reviews.panels` 同一模式）：未读 > 0 时顶部出现提醒条、入口卡片挂计数徽标；模板按稳定 key `notices.internal` 认这一条——注册表是通用的，只有消息带计数，这是页面自己的特例。
+**广播型通知**（`Notice`）
+
+- 可见集合见上面三条 scope；列表实时查，未读 = 可见通知 − `NoticeRead` 回执（不物化副本）。
+- 进入详情即写回执（幂等）；发布人删除通知后成员侧自然消失，回执随 `CASCADE` 清掉，不留孤儿。
+
+**事件型消息**（`Message` 表，一行一个收件人）
+
+- 八个 kind 与触发点：@ 提及（帖子／评论，见 [discussion](discussion.md)）、评审任务（待初审／待评审）与结果、入组申请与结果、建组申请与结果。
+- 行里只存结构化引用（`post`／`comment`／`submission`／`join_request`／`create_request` 五个可空外键，字符串引用）与已读状态；标题、链接、说明由 `notices/selectors.py` 现取现算，来源删除即级联删行。
+- 点击走 `message/<pk>/go/` 中转：先标已读、再 302 到目标页（帖子锚点、项目组详情、评审页…）——目标页不必认识这条消息。
+- 任务类消息跟着任务生命周期走：交掉／被释放／被改派即撤（`clear_review_task_messages`），历史归评审页。
+
+**页面与口径**
+
+- 行形状 `MessageRow`（类型／标题／url／时间／来自／说明／是否已读）是页面与来源之间的接缝：`_TYPE_LABELS` 给类型列，`_CONTENT_BUILDERS` 按 kind 分发「标题／链接／来自／说明」四个字段。排序是置顶通知在最前、其余按发生时间倒序混排。
+- `unread_message_count` 与「全部已读」（POST 到 `read-all/`）同时覆盖两类；已读是高频个人操作，不写审计。
+- 成员中心的提醒由 `notices/panels.member_home_context` 装配（与 `reviews.panels` 同一模式）：未读 > 0 时顶部出现提醒条、入口卡片挂计数徽标；模板按稳定 key `notices.internal` 认这一条——注册表是通用的，只有消息带计数，这是页面自己的特例。
+- 遇到不认识的行（比如降级部署留下的 kind）跳过并记日志，不让整页 500。
