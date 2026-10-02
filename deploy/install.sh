@@ -234,6 +234,14 @@ run_as_app() {
 }
 
 # ---------- 5. migrate ----------
+# 历年获奖的判重要用 pg_trgm（content.0004_pg_trgm 会 CREATE EXTENSION）。它在多数
+# 发行版里是**单独的包**——PGDG 的 RPM 装在 postgresql<ver>-contrib 里，只装 server
+# 是没有的。缺了的话 migrate 会中途抛 traceback；先探一下可用性（只读目录），
+# 缺了就给出可照做的安装命令。
+if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_available_extensions WHERE name = 'pg_trgm'" | grep -q 1; then
+    fail "数据库缺 pg_trgm 扩展（PostgreSQL 未装 contrib 包）。RHEL 系（PGDG）: sudo dnf install -y postgresql<主版本>-contrib；Debian/Ubuntu: sudo apt install postgresql-contrib。装好后重跑本脚本，不需要重启 PostgreSQL。"
+fi
+
 info "执行数据库迁移"
 run_as_app .venv/bin/python manage.py migrate --noinput
 ok "迁移完成"
