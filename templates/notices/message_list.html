@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% translate "我的消息" %} - {% translate "竞赛社团管理平台" %}{% endblock %}
+
+{% block content %}
+<div class="wrap">
+    <div class="pagehead">
+        <div class="path">
+            <a href="{% url 'accounts:home' %}">/</a>
+            <span>/</span>
+            <span>{% translate "我的消息" %}</span>
+        </div>
+        <div class="head-row">
+            <div>
+                <h1>{% translate "我的消息" %}</h1>
+                {% if rows %}
+                    <div class="sub">
+                        {% blocktranslate count counter=rows|length %}共 1 条{% plural %}共 {{ counter }} 条{% endblocktranslate %}
+                        {% if unread_count %}· {% blocktranslate count counter=unread_count %}1 条未读{% plural %}{{ counter }} 条未读{% endblocktranslate %}{% endif %}
+                    </div>
+                {% endif %}
+            </div>
+            {% if unread_count %}
+                <div class="head-actions">
+                    <form method="post" action="{% url 'member_notices:mark_all_read' %}">
+                        {% csrf_token %}
+                        <button class="btn" type="submit">{% translate "全部已读" %}</button>
+                    </form>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {# 未读行整行加亮、标题加粗，样式见 app.css 的「我的消息」一节。 #}
+    <div class="table-wrap messages reveal">
+        <table>
+            <thead>
+                <tr>
+                    <th>{% translate "类型" %}</th>
+                    <th>{% translate "标题" %}</th>
+                    <th>{% translate "发布人" %}</th>
+                    <th>{% translate "范围" %}</th>
+                    <th class="num right">{% translate "时间" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                    <tr{% if not row.is_read %} class="unread"{% endif %}>
+                        <td class="muted">{{ row.type_label }}</td>
+                        <td>
+                            <a class="t" href="{{ row.url }}">{% if row.is_pinned %}<span class="chip chip-pin">{% translate "置顶" %}</span> {% endif %}{{ row.title }}</a>
+                        </td>
+                        <td class="muted">{{ row.publisher }}</td>
+                        <td class="muted">{{ row.audience }}</td>
+                        <td class="num right">{{ row.published_at|date:"Y-m-d H:i" }}</td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="5"><div class="empty">{% translate "暂时没有消息。" %}</div></td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
