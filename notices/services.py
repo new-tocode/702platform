@@ -48,6 +48,58 @@ def clear_mention_messages(*, comment):
     Message.objects.filter(kind=Message.MENTION, comment=comment).delete()
 
 
+def notify_preliminary_task(*, submission, reviewer):
+    """初审任务分配：给初审人一条「待初审」。"""
+    _create_task_message(
+        submission=submission,
+        reviewer=reviewer,
+        kind=Message.REVIEW_PRELIMINARY,
+    )
+
+
+def notify_review_task(*, submission, reviewer):
+    """评审任务分配或改派：给评审人一条「待评审」。"""
+    _create_task_message(
+        submission=submission,
+        reviewer=reviewer,
+        kind=Message.REVIEW,
+    )
+
+
+def _create_task_message(*, submission, reviewer, kind):
+    """同一轮、同一人、同一阶段只留一条——改派走了再回来，不攒两条、
+    也不把已经读过的那条重新标成未读。"""
+    Message.objects.get_or_create(
+        recipient=reviewer,
+        kind=kind,
+        submission=submission,
+    )
+
+
+def clear_review_task_messages(*, submission, reviewer=None):
+    """任务完成、被释放或被改派走：把对应的「待办」消息撤掉。
+
+    历史归评审页（已完成／已释放都在那里列着），消息只负责「有事等你」。
+    ``reviewer`` 为空表示撤掉这一轮的全部待办（超级评审一票定论时）。
+    """
+    messages = Message.objects.filter(
+        submission=submission,
+        kind__in=(Message.REVIEW_PRELIMINARY, Message.REVIEW),
+    )
+    if reviewer is not None:
+        messages = messages.filter(recipient=reviewer)
+    messages.delete()
+
+
+def notify_review_result(*, submission):
+    """轮次有了结论：给项目组联系人一条结果消息（一轮一条，幂等）。"""
+    Message.objects.get_or_create(
+        recipient=submission.group.leader,
+        kind=Message.REVIEW_RESULT,
+        submission=submission,
+    )
+
+
 def mark_read(*, user, notice):
     """把一条通知标为已读；已经读过就什么也不做。返回是否新写了回执。"""
     _receipt, created = NoticeRead.objects.get_or_create(user=user, notice=notice)
