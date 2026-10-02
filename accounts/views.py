@@ -169,8 +169,9 @@ def home(request):
 
 @login_required
 def member_home(request):
-    # 局部导入：让 accounts 不在模块加载期就依赖 reviews。
-    from reviews.panels import member_home_context
+    # 局部导入：让 accounts 不在模块加载期就依赖 reviews／notices。
+    from notices import panels as notices_panels
+    from reviews import panels as reviews_panels
 
     logger.debug(
         "member.home.view username=%s user_id=%s",
@@ -182,8 +183,10 @@ def member_home(request):
     # 平台概览数字只对管理员与项目组联系人呈现，普通成员与访客都不显示。
     if can_view_platform_overview(request.user):
         context["overview"] = platform_overview()
-    # 评审那一半（待办数字与请假面板）由评审应用自己装配，没有资格时返回空字典。
-    context.update(member_home_context(user=request.user))
+    # 评审那一半（待办数字与请假面板）由评审应用自己装配，没有资格时返回空字典；
+    # 消息提醒（未读计数）对新成员人人有份，未读为 0 时模板不渲染。
+    context.update(reviews_panels.member_home_context(user=request.user))
+    context.update(notices_panels.member_home_context(user=request.user))
     return render(request, "accounts/member_home.html", context)
 
 

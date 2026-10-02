@@ -1,7 +1,12 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n static %}
 
 {% block title %}{{ page_heading }} - {% translate "社团空间" %}{% endblock %}
+
+{% block extra_head %}
+    {{ block.super }}
+    <script defer src="{% static 'js/mentions.js' %}"></script>
+{% endblock %}
 
 {% block content %}
 <div class="wrap col-narrow">
@@ -48,4 +53,6 @@
         </form>
     </div>
 </div>
+{# @ 补全的姓名名单；没脚本时这段不生效，手打 @姓名 由服务端解析。 #}
+{{ mention_names|json_script:"mention-names" }}
 {% endblock %}

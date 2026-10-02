@@ -6,6 +6,7 @@
 {% block extra_head %}
     {{ block.super }}
     <script defer src="{% static 'js/discussion.js' %}"></script>
+    <script defer src="{% static 'js/mentions.js' %}"></script>
 {% endblock %}
 
 {% block content %}
@@ -105,7 +106,8 @@
 
                 <div class="discussion-feed">
                     {% for post in posts_page %}
-                        <article class="panel discussion-post">
+                        {# id 是「我的消息」里提及的跳转锚点（post-N / comment-N）。 #}
+                        <article class="panel discussion-post" id="post-{{ post.pk }}">
                             <div class="panel-head">
                                 <div class="discussion-post-heading">
                                     {% if post.is_pinned %}<span class="chip chip-pin">{% translate "置顶" %}</span>{% endif %}
@@ -154,7 +156,7 @@
                                 <section class="discussion-comments" aria-label="{% translate '评论' %}">
                                     <h4>{% translate "评论" %} <span class="count">{{ post.comments.all|length }}</span></h4>
                                     {% for comment in post.comments.all %}
-                                        <div class="discussion-comment">
+                                        <div class="discussion-comment" id="comment-{{ comment.pk }}">
                                             <div class="discussion-comment-head">
                                                 <strong>{% if comment.author.profile.full_name %}{{ comment.author.profile.full_name }}{% else %}{{ comment.author.username }}{% endif %}</strong>
                                                 <span class="muted">{{ comment.created_at|date:"Y-m-d H:i" }}</span>
@@ -173,7 +175,7 @@
                                     <form method="post" action="{% url 'discussion:comment_create' post.pk %}" class="discussion-comment-form">
                                         {% csrf_token %}
                                         <label class="visually-hidden" for="comment-{{ post.pk }}">{% translate "写下评论" %}</label>
-                                        <textarea id="comment-{{ post.pk }}" name="content" rows="2" maxlength="4000" placeholder="{% translate '写下评论…' %}" required></textarea>
+                                        <textarea id="comment-{{ post.pk }}" name="content" rows="2" maxlength="4000" placeholder="{% translate '写下评论…' %}" data-mentions="1" required></textarea>
                                         <button class="btn btn-sm" type="submit">{% translate "发表评论" %}</button>
                                     </form>
                                 </section>
@@ -212,4 +214,6 @@
         </section>
     </div>
 </div>
+{# @ 补全的姓名名单；没脚本时这段不生效，手打 @姓名 由服务端解析。 #}
+{{ mention_names|json_script:"mention-names" }}
 {% endblock %}
