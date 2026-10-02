@@ -97,6 +97,12 @@ sudo ./deploy/install.sh
 > 常见疑问：脚本不会自己下载安装；占位符没替换会逐个列出并中止；重复运行安全（建库/建超管幂等）；备份 timer 依赖本机 `pg_dump` 与媒体目录，单机形态下就在本机。
 >
 > 升级到带「文件指纹」的版本时，`migrate` 会顺带读一遍盘上的上传件，把已有文件的 SHA-256 补进记录（几百个文件几秒钟），**不需要额外跑任何命令**。若日志里出现 `file_digest.backfill.missing`，说明那条记录指着文件而盘上没有——迁移会跳过它继续，但那是数据不完整，值得查一下。
+>
+> 升级到带「历年获奖判重」的版本时，`migrate` 会执行 `CREATE EXTENSION pg_trgm`（`content.0004_pg_trgm`）。pg_trgm 随 PostgreSQL 服务端发行、无需另装软件包，且自 PostgreSQL 13 起是 trusted 扩展——**库的属主就能创建**，而 `install.sh` 正是以应用角色为属主建的库（`createdb -O "$DJANGO_DB_USER"`），所以正常升级不会卡在这里。若这一步报权限不足，用超级用户执行一次下面这条再重跑 `migrate` 即可：
+>
+> ```bash
+> sudo -u postgres psql -d "$DJANGO_DB_NAME" -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm;'
+> ```
 
 ### 2.5 HTTPS
 

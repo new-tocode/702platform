@@ -23,7 +23,9 @@ _BLOCKTRANSLATE = re.compile(
 _PLURAL_MARK = re.compile(r"\{%\s*plural\s*%\}")
 _TEMPLATE_VAR = re.compile(r"\{\{(.*?)\}\}", re.S)
 _TEMPLATE_COMMENT = re.compile(r"\{#.*?#\}", re.S)
-_PLACEHOLDER = re.compile(r"%\((\w+)\)s")
+#: 两种占位符：``%(name)s``（% 式）与 ``{name}``（format_lazy 走 str.format）。
+#: 哪种都不能少——少了 % 式页面会 500，少了花括号式则静默丢数字。
+_PLACEHOLDER = re.compile(r"%\((\w+)\)s|\{(\w+)\}")
 _ESCAPES = {"n": "\n", "t": "\t", '"': '"', "\\": "\\"}
 
 
@@ -131,15 +133,23 @@ def _template_msgid_groups(text):
     return groups
 
 
+def _source_files(suffixes):
+    """项目自己写的源码文件（范围与 makemessages 一致）。"""
+    return [
+        path
+        for path in sorted(Path(settings.BASE_DIR).rglob("*"))
+        if path.suffix in suffixes
+        and not any(
+            part.startswith(".") or part in {"__pycache__", "staticfiles", "mediafiles"}
+            for part in path.parts
+        )
+    ]
+
+
 def _source_msgid_groups():
-    """扫出源码里标记为可翻译的文案（范围与 makemessages 一致：py 与 html）。"""
+    """扫出源码里标记为可翻译的文案（py 与 html）。"""
     groups = []
-    for path in sorted(Path(settings.BASE_DIR).rglob("*")):
-        if path.suffix not in {".py", ".html"}:
-            continue
-        if any(part.startswith(".") or part in {"__pycache__", "staticfiles", "mediafiles"}
-               for part in path.parts):
-            continue
+    for path in _source_files({".py", ".html"}):
         text = path.read_text(encoding="utf-8")
         groups.extend(
             _python_msgid_groups(text) if path.suffix == ".py" else _template_msgid_groups(text)
@@ -147,9 +157,71 @@ def _source_msgid_groups():
     return groups
 
 
+def _frozen_translations():
+    """在模块或类体里给译文插值的地方。
+
+    ``_("不超过 %(limit)s MB。") % {...}`` 写在函数外面时，``%`` 会在**导入那一刻**
+    把代理解开：那会儿语言还是默认的中文，字符串就此定型，之后切到英文也不会变
+    ——「不超过 2 MB。」就这么出现在英文页面上过。函数体里的同一行没问题，那时语言
+    已经定了，所以只查函数之外的那些。
+    """
+    flagged = []
+
+    def walk(node, path, inside_function):
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+                walk(child, path, True)
+                continue
+            if (
+                not inside_function
+                and isinstance(child, ast.BinOp)
+                and isinstance(child.op, ast.Mod)
+                and isinstance(child.left, ast.Call)
+                and isinstance(child.left.func, ast.Name)
+                and child.left.func.id in _GETTEXT_CALLS
+            ):
+                name = path.relative_to(settings.BASE_DIR)
+                flagged.append(f"{name}:{child.lineno}")
+            walk(child, path, inside_function)
+
+    for path in _source_files({".py"}):
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except SyntaxError:  # 语法都不通的模块交给别的测试去报
+            continue
+        walk(tree, path, False)
+    return flagged
+
+
+def _fuzzy_msgids(path):
+    """被标为 fuzzy 的条目名。
+
+    fuzzy 是「这条译文还没经人确认」的标记，而 ``compilemessages`` 会**丢掉**它们
+    ——页面上英文静默退回中文、不报任何错，正是这个模块存在的理由。所以它和空译文
+    一样，必须在验收前拦下。
+
+    msgid 可能被折成好几行，这里把整段 msgid 拼回来再报，报出来的名字才认得出。
+    """
+    flagged = []
+    for block in path.read_text(encoding="utf-8").split("\n\n"):
+        if not any(
+            line.startswith("#,") and "fuzzy" in line for line in block.splitlines()
+        ):
+            continue
+        # msgid 可能被折成好几行：第一行 msgid ""、后面几行是续行，都要收进来，
+        # 否则报出来的名字是空的，等于没说。
+        match = re.search(r'^msgid (.*(?:\n".*")*)', block, re.M)
+        if match:
+            flagged.append("".join(_unquote(line) for line in match.group(1).splitlines()))
+    return flagged
+
+
 def _placeholders(text):
-    """文案里的 ``%(name)s`` 占位符名字。"""
-    return set(_PLACEHOLDER.findall((text or "").replace("%%", "")))
+    """文案里的占位符名字（两种写法都算）。"""
+    return {
+        percent or brace
+        for percent, brace in _PLACEHOLDER.findall((text or "").replace("%%", ""))
+    }
 
 
 class InterfaceTranslationAcceptanceTests(TestCase):
@@ -188,6 +260,26 @@ class InterfaceTranslationAcceptanceTests(TestCase):
             untranslated,
             [],
             f"这些条目还没有英文译文（补齐 msgstr 再 compilemessages）：{untranslated[:5]}",
+        )
+
+    def test_no_translation_is_interpolated_outside_a_function(self):
+        frozen = sorted(_frozen_translations())
+
+        self.assertEqual(
+            frozen,
+            [],
+            f"这些地方在模块／类体里给译文插值，会在导入时定型成中文（改用 format_lazy）：{frozen[:5]}",
+        )
+
+    def test_no_entry_is_left_fuzzy(self):
+        # makemessages 会把新文案「猜」成某条旧译文的近似项并标上 fuzzy，译文看着
+        # 有、编译时却被丢掉：页面上中英夹杂，没有任何报错。
+        fuzzy = sorted(_fuzzy_msgids(self.po_path))
+
+        self.assertEqual(
+            fuzzy,
+            [],
+            f"这些条目标着 fuzzy（compilemessages 会丢掉它们，英文静默退回中文）：{fuzzy[:5]}",
         )
 
     def test_plural_entries_keep_both_forms(self):

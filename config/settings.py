@@ -40,6 +40,9 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    # 只为 PostgreSQL 自带的那些函数与查找（获奖判重用的 pg_trgm 相似度，
+    # 见 content/similarity.py）：它不带模型、不带迁移，装上不改变别的行为。
+    "django.contrib.postgres",
     "rest_framework",
     "axes",
     "accounts.apps.AccountsConfig",
