@@ -3,7 +3,7 @@
 import re
 
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import AnonymousUser
+from django.contrib.auth.models import AnonymousUser, Group
 from django.test import TestCase
 from django.urls import reverse
 
@@ -110,6 +110,81 @@ class ProfileIdentityPanelAcceptanceTests(TestCase):
         panel = html[html.index("当前身份"): html.index("个人图册")]
         self.assertNotIn("<form", panel)
         self.assertNotIn("<button", panel)
+
+
+class ProfileUserGroupDisplayAcceptanceTests(TestCase):
+    """「当前身份」末尾的「用户组」：auth.Group（通知投递范围），没有组就不出现。
+
+    与项目组名的区分是这一条的重点：两种「组」都可以叫任何名字，页面上靠
+    chip 标签（「项目组成员」对「用户组」）而不是组名本身来分辨。
+    """
+
+    def setUp(self):
+        self.member = User.objects.create_user(
+            username="user-group-member",
+            password="Member-Password-123!",
+        )
+        self.member.must_change_password = False
+        self.member.save(update_fields=["must_change_password"])
+        self.client.force_login(self.member)
+
+    def identities_on_page(self):
+        html = self.client.get(reverse("accounts:profile")).content.decode()
+        return (
+            re.findall(r'<span class="chip chip-on">(.*?)</span>', html),
+            re.findall(r'<span class="member">(.*?)</span>', html),
+        )
+
+    def test_no_user_group_means_no_entry(self):
+        labels, groups = self.identities_on_page()
+
+        self.assertEqual(labels, [])
+        self.assertEqual(groups, [])
+
+    def test_user_groups_are_listed_by_name(self):
+        # ASCII 名让排序在数据库与 Python 两侧的期望一致。
+        self.member.groups.add(
+            Group.objects.create(name="Beta 组"),
+            Group.objects.create(name="Alpha 组"),
+        )
+
+        labels, groups = self.identities_on_page()
+
+        self.assertEqual(labels, ["用户组"])
+        self.assertEqual(groups, ["Alpha 组", "Beta 组"])
+
+    def test_user_group_entry_sits_after_the_project_identities(self):
+        joined = ProjectGroup.objects.create(
+            name="星河计划组",
+            leader=User.objects.create_user(
+                username="user-group-leader",
+                password="Leader-Password-123!",
+            ),
+        )
+        joined.members.add(self.member)
+        self.member.groups.add(Group.objects.create(name="宣传组"))
+
+        labels, groups = self.identities_on_page()
+
+        self.assertEqual(labels, ["项目组成员", "用户组"])
+        self.assertEqual(groups, ["星河计划组", "宣传组"])
+
+    def test_other_members_also_see_the_user_group_on_the_readonly_profile(self):
+        self.member.groups.add(Group.objects.create(name="技术组"))
+        viewer = User.objects.create_user(
+            username="user-group-viewer",
+            password="Viewer-Password-123!",
+        )
+        viewer.must_change_password = False
+        viewer.save(update_fields=["must_change_password"])
+        self.client.force_login(viewer)
+
+        response = self.client.get(
+            reverse("accounts:member_profile", args=[self.member.pk])
+        )
+
+        self.assertContains(response, '<span class="chip chip-on">用户组</span>')
+        self.assertContains(response, '<span class="member">技术组</span>')
 
 
 class MemberRoleDisplayAcceptanceTests(TestCase):
