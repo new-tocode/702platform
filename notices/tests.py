@@ -11,7 +11,9 @@ from django.utils import timezone
 from core.models import AuditLog
 from projects.models import ProjectGroup
 
-from .models import Notice
+from .models import Notice, NoticeRead
+from .selectors import message_rows, unread_message_count
+from .services import mark_all_read, mark_read
 
 
 User = get_user_model()
@@ -226,6 +228,144 @@ class NoticeVisibilityAcceptanceTests(TestCase):
             response.content.decode().index(pinned.title),
             response.content.decode().index(self.public_notice.title),
         )
+
+
+class MessageReadStateTests(TestCase):
+    """「我的消息」的数据层：行形状、未读计数、标已读，以及删除通知的连带。
+
+    视图层的验收（列表列、样式、按钮）另有一组，这里只钉数据口径。
+    """
+
+    def setUp(self):
+        self.admin = User.objects.create_superuser(
+            username="message-admin",
+            password="Admin-Password-123!",
+        )
+        self.admin.profile.full_name = "通知管理员"
+        self.admin.profile.save(update_fields=["full_name"])
+        self.member = User.objects.create_user(
+            username="message-member",
+            password="Member-Password-123!",
+        )
+        self.member.must_change_password = False
+        self.member.save(update_fields=["must_change_password"])
+        self.group = Group.objects.create(name="消息可见组")
+        self.member.groups.add(self.group)
+        self.contact = User.objects.create_user(
+            username="message-contact",
+            password="Contact-Password-123!",
+        )
+        self.contact.must_change_password = False
+        self.contact.save(update_fields=["must_change_password"])
+        ProjectGroup.objects.create(name="消息项目组", leader=self.contact)
+
+        now = timezone.now()
+        self.internal_notice = Notice.objects.create(
+            title="发到消息组的通知",
+            content="正文。",
+            scope=Notice.INTERNAL,
+            published_by=self.admin,
+            published_at=now - timedelta(minutes=1),
+        )
+        self.internal_notice.visible_groups.add(self.group)
+        self.contacts_notice = Notice.objects.create(
+            title="只发给联系人的通知",
+            content="正文。",
+            scope=Notice.CONTACTS,
+            published_by=self.admin,
+            published_at=now,
+        )
+        self.hidden_notice = Notice.objects.create(
+            title="别的组的通知",
+            content="正文。",
+            scope=Notice.INTERNAL,
+            published_by=self.admin,
+            published_at=now - timedelta(minutes=2),
+        )
+        self.hidden_notice.visible_groups.add(Group.objects.create(name="别的组"))
+
+    def test_rows_only_include_notices_visible_to_that_user(self):
+        member_rows = message_rows(self.member)
+        contact_rows = message_rows(self.contact)
+
+        self.assertEqual(
+            [row.title for row in member_rows],
+            ["发到消息组的通知"],
+        )
+        self.assertEqual(
+            [row.title for row in contact_rows],
+            ["只发给联系人的通知"],
+        )
+
+    def test_row_carries_type_publisher_audience_and_read_state(self):
+        row = message_rows(self.member)[0]
+
+        self.assertEqual(row.type_label, "内部通知")
+        self.assertEqual(row.publisher, "通知管理员")
+        self.assertEqual(row.audience, "消息可见组")
+        self.assertFalse(row.is_read)
+        self.assertEqual(row.url, reverse("member_notices:internal_detail", args=(self.internal_notice.pk,)))
+
+    def test_publisher_falls_back_to_username_without_full_name(self):
+        self.admin.profile.full_name = ""
+        self.admin.profile.save(update_fields=["full_name"])
+
+        row = message_rows(self.member)[0]
+
+        self.assertEqual(row.publisher, "message-admin")
+
+    def test_contacts_notice_audience_is_the_contacts_phrase(self):
+        row = message_rows(self.contact)[0]
+
+        self.assertEqual(row.audience, "仅项目组联系人")
+
+    def test_internal_notice_lists_all_visible_group_names(self):
+        self.internal_notice.visible_groups.add(Group.objects.create(name="第二个可见组"))
+
+        row = message_rows(self.member)[0]
+
+        self.assertEqual(row.audience, "消息可见组, 第二个可见组")
+
+    def test_unread_count_only_counts_visible_unread_notices(self):
+        # member 可见 1 条（hidden 那条属于别的组），且尚未读过。
+        self.assertEqual(unread_message_count(self.member), 1)
+
+        mark_read(user=self.member, notice=self.internal_notice)
+
+        self.assertEqual(unread_message_count(self.member), 0)
+
+    def test_mark_read_is_idempotent(self):
+        self.assertTrue(mark_read(user=self.member, notice=self.internal_notice))
+        self.assertFalse(mark_read(user=self.member, notice=self.internal_notice))
+
+        self.assertEqual(
+            NoticeRead.objects.filter(user=self.member).count(),
+            1,
+        )
+        self.assertTrue(message_rows(self.member)[0].is_read)
+
+    def test_mark_all_read_marks_only_this_users_visible_notices(self):
+        marked = mark_all_read(user=self.member)
+
+        self.assertEqual(marked, 1)
+        self.assertEqual(unread_message_count(self.member), 0)
+        self.assertEqual(unread_message_count(self.contact), 1)
+        self.assertFalse(
+            NoticeRead.objects.filter(user=self.member, notice=self.hidden_notice).exists()
+        )
+
+    def test_mark_all_read_is_idempotent(self):
+        self.assertEqual(mark_all_read(user=self.member), 1)
+        self.assertEqual(mark_all_read(user=self.member), 0)
+
+    def test_deleting_a_notice_drops_it_from_rows_count_and_receipts(self):
+        mark_read(user=self.member, notice=self.internal_notice)
+
+        self.internal_notice.delete()
+
+        self.assertEqual(message_rows(self.member), ())
+        self.assertEqual(unread_message_count(self.member), 0)
+        self.assertFalse(NoticeRead.objects.filter(user=self.member).exists())
 
 
 class NoticeAdminAcceptanceTests(TestCase):
