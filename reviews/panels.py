@@ -23,7 +23,6 @@ from .services import (
     can_override_review,
     open_leave_for,
     override_blocker,
-    pending_task_summary,
 )
 
 
@@ -148,10 +147,14 @@ def _pending_task_of(submission, user):
 
 
 def member_home_context(*, user):
-    """成员中心里评审那一半；没有评审资格的账号得到空字典（模板整块不渲染）。"""
+    """成员中心里评审那一半；没有评审资格的账号得到空字典（模板整块不渲染）。
+
+    这里只剩请假的面板：待办提醒已归「我的消息」（分配任务时写消息、未读计数
+    在成员中心顶部），评审页只负责把任务列出来。
+    """
     if not permissions.has_review_qualification(user):
         return {}
-    context = {"pending": pending_task_summary(user)}
+    context = {}
     if permissions.may_receive_tasks(user):
         leave = open_leave_for(user)
         context["reviewer_leave"] = leave

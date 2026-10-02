@@ -2,11 +2,9 @@
 
 import logging
 
-from django.contrib import messages
 from django.contrib.auth.signals import user_logged_in, user_login_failed
 from django.db.models.signals import post_save
 from django.dispatch import receiver
-from django.utils.translation import gettext as _
 
 from .models import Profile, User
 
@@ -45,43 +43,8 @@ def log_user_login(sender, request, user, **kwargs):
     )
 
 
-@receiver(user_logged_in)
-def remind_reviewer_of_pending_reviews(sender, request, user, **kwargs):
-    """Nudge a reviewer about unfinished reviews as soon as they log in.
-
-    The reminder is a flash message rather than a redirect: logging in should
-    not silently change the page the user asked for, and the same count is shown
-    persistently on the member centre. 初审 and 评审 are counted and named
-    separately — they are different tasks, and one number says nothing about the
-    other.
-    """
-    if request is None:
-        return
-    # Local imports keep accounts free of load-time dependencies on other apps.
-    from reviews.permissions import has_review_qualification
-    from reviews.services import pending_task_summary
-
-    if not has_review_qualification(user):
-        return
-    pending = pending_task_summary(user)
-    if not pending.parts:
-        return
-    # fail_silently: a login must never break because the reminder could not be
-    # queued — e.g. a programmatic login outside the middleware chain, where the
-    # request carries no message storage.
-    messages.warning(
-        request,
-        _("你有 %(tasks)s，请前往「评审」处理。")
-        % {"tasks": _("、").join(pending.parts)},
-        fail_silently=True,
-    )
-    logger.info(
-        "reviews.reminder.login user=%s pending_preliminary=%s pending=%s",
-        user.get_username(),
-        pending.preliminary,
-        pending.review,
-        extra={"request_id": getattr(request, "request_id", "-")},
-    )
+# 登录时不再提醒评审待办：提醒已归「我的消息」（分配任务时写消息、未读计数
+# 在成员中心），评审页只负责列出任务。
 
 
 @receiver(user_login_failed)

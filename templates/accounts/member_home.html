@@ -48,15 +48,8 @@
         {% endif %}
     </div>
 
-    {% if pending.total %}
-        <div class="todo reveal">
-            <a href="{% url 'reviews:queue' %}">
-                <span class="n">{{ pending.total }}</span>
-                <span class="t">{{ pending.headline }} · {% translate "点击前往处理" %}</span>
-            </a>
-        </div>
-    {% endif %}
-
+    {# 评审待办不再在这里提醒：分配任务时就写进了「我的消息」， #}
+    {# 未读计数由下面的提醒条一起报。评审页只负责列出任务。 #}
     {% if unread_messages %}
         <div class="todo reveal">
             <a href="{% url 'member_notices:internal_list' %}">
