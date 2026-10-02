@@ -368,6 +368,70 @@ class MessageReadStateTests(TestCase):
         self.assertFalse(NoticeRead.objects.filter(user=self.member).exists())
 
 
+class MemberHomeReminderAcceptanceTests(TestCase):
+    """成员中心上的「我的消息」：入口改名，未读时提醒条与徽标都带计数。"""
+
+    def setUp(self):
+        self.admin = User.objects.create_superuser(
+            username="reminder-admin",
+            password="Admin-Password-123!",
+        )
+        self.member = User.objects.create_user(
+            username="reminder-member",
+            password="Member-Password-123!",
+        )
+        self.member.must_change_password = False
+        self.member.save(update_fields=["must_change_password"])
+        self.group = Group.objects.create(name="提醒组")
+        self.member.groups.add(self.group)
+        self.notice = Notice.objects.create(
+            title="提醒用的通知",
+            content="正文。",
+            scope=Notice.INTERNAL,
+            published_by=self.admin,
+        )
+        self.notice.visible_groups.add(self.group)
+        self.client.force_login(self.member)
+
+    def test_entry_is_renamed_and_points_at_the_message_page(self):
+        response = self.client.get(reverse("accounts:member_home"))
+
+        self.assertContains(response, "我的消息")
+        self.assertContains(response, reverse("member_notices:internal_list"))
+        self.assertNotContains(response, "内部通知")
+
+    def test_reminder_bar_and_entry_badge_carry_the_unread_count(self):
+        second = Notice.objects.create(
+            title="第二条通知",
+            content="正文。",
+            scope=Notice.INTERNAL,
+            published_by=self.admin,
+        )
+        second.visible_groups.add(self.group)
+
+        response = self.client.get(reverse("accounts:member_home"))
+
+        self.assertContains(response, "2 条未读消息")
+        self.assertContains(response, '<span class="entry-badge">2</span>')
+
+    def test_nothing_is_rendered_once_everything_is_read(self):
+        mark_read(user=self.member, notice=self.notice)
+
+        response = self.client.get(reverse("accounts:member_home"))
+
+        self.assertContains(response, "我的消息")
+        self.assertNotContains(response, "未读消息")
+        self.assertNotContains(response, "entry-badge")
+
+    def test_unread_from_other_groups_does_not_trigger_the_reminder(self):
+        self.member.groups.clear()
+
+        response = self.client.get(reverse("accounts:member_home"))
+
+        self.assertNotContains(response, "未读消息")
+        self.assertNotContains(response, "entry-badge")
+
+
 class MessagePageAcceptanceTests(TestCase):
     """「我的消息」页：五列、未读样式、点开即已读、全部已读与删除的连带。"""
 
