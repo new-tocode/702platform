@@ -4,13 +4,14 @@ import logging
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext_lazy as _
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET, require_POST
 
 from . import services
-from .models import Notice
-from .selectors import message_rows, unread_message_count
+from .models import Message, Notice
+from .selectors import message_rows, message_target_url, unread_message_count
 from .visibility import member_visible_notices, public_visible_notices
 
 
@@ -103,6 +104,29 @@ def mark_all_read(request):
     )
     messages.success(request, _("已将全部消息标为已读。"))
     return redirect("member_notices:internal_list")
+
+
+@login_required
+@require_GET
+def message_go(request, pk):
+    """事件消息的点击去向：先标已读，再跳到目标页。
+
+    走这一跳而不是把链接直接指向目标页：目标页（帖子、项目组）并不认识这条
+    消息，「点开即已读」只能在中转处成立。
+    """
+    message = get_object_or_404(Message, pk=pk, recipient=request.user)
+    target = message_target_url(message)
+    if target is None:
+        raise Http404
+    services.mark_message_read(message=message)
+    logger.info(
+        "notice.messages.open message_id=%s kind=%s username=%s",
+        message.pk,
+        message.kind,
+        request.user.get_username(),
+        extra={"request_id": getattr(request, "request_id", "-")},
+    )
+    return redirect(target)
 
 
 @login_required

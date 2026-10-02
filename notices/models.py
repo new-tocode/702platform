@@ -99,3 +99,110 @@ class NoticeRead(models.Model):
 
     def __str__(self):
         return f"{self.user} → {self.notice}"
+
+
+class Message(models.Model):
+    """事件型消息：一行一个收件人（@ 提及、评审、申请类都走这里）。
+
+    与广播型的 ``Notice`` 分工明确：通知按可见集合实时查、用 ``NoticeRead`` 记
+    已读；事件型没有「可见集合」可言——发生时就落一行，来源删除就级联删行
+    （与「删除的通知看不到」同一条口径）。
+
+    行里只存**结构化引用与状态**，标题／链接／说明由 ``notices.selectors`` 渲染
+    时现取现算：帖子改了标题、轮次出了新结论，消息里跟着变，不存副本。引用用
+    字符串外键，notices 不在加载期依赖 discussion／reviews／projects。
+
+    「哪一类消息挂哪个引用」不在库里加约束（都为空的行是写入函数的责任，见
+    ``notices/services.py``）——五种引用的组合约束会让表结构比问题本身复杂。
+    """
+
+    MENTION = "mention"
+    REVIEW_PRELIMINARY = "review_preliminary"
+    REVIEW = "review"
+    REVIEW_RESULT = "review_result"
+    JOIN_REQUEST = "join_request"
+    JOIN_RESULT = "join_result"
+    CREATE_REQUEST = "create_request"
+    CREATE_RESULT = "create_result"
+    KIND_CHOICES = (
+        (MENTION, "提及"),
+        (REVIEW_PRELIMINARY, "初审任务"),
+        (REVIEW, "评审任务"),
+        (REVIEW_RESULT, "评审结果"),
+        (JOIN_REQUEST, "入组申请"),
+        (JOIN_RESULT, "入组结果"),
+        (CREATE_REQUEST, "建组申请"),
+        (CREATE_RESULT, "建组结果"),
+    )
+
+    recipient = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="messages",
+        verbose_name="收件人",
+    )
+    kind = models.CharField("类型", max_length=20, choices=KIND_CHOICES)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sent_messages",
+        verbose_name="发起人",
+    )
+    is_read = models.BooleanField("已读", default=False)
+    read_at = models.DateTimeField("已读时间", null=True, blank=True)
+    created_at = models.DateTimeField("产生时间", auto_now_add=True)
+
+    post = models.ForeignKey(
+        "discussion.Post",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="messages",
+        verbose_name="帖子",
+    )
+    comment = models.ForeignKey(
+        "discussion.Comment",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="messages",
+        verbose_name="评论",
+    )
+    submission = models.ForeignKey(
+        "reviews.ProjectSubmission",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="messages",
+        verbose_name="送审轮次",
+    )
+    join_request = models.ForeignKey(
+        "projects.GroupJoinRequest",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="messages",
+        verbose_name="入组申请",
+    )
+    create_request = models.ForeignKey(
+        "projects.GroupCreateRequest",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="messages",
+        verbose_name="建组申请",
+    )
+
+    class Meta:
+        verbose_name = "站内消息"
+        verbose_name_plural = "站内消息"
+        ordering = ("-created_at", "-pk")
+        indexes = [
+            models.Index(fields=("recipient", "is_read")),
+            models.Index(fields=("recipient", "-created_at", "-id")),
+        ]
+
+    def __str__(self):
+        return f"{self.get_kind_display()} → {self.recipient}"

@@ -11,9 +11,9 @@ from django.utils import timezone
 from core.models import AuditLog
 from projects.models import ProjectGroup
 
-from .models import Notice, NoticeRead
+from .models import Message, Notice, NoticeRead
 from .selectors import message_rows, unread_message_count
-from .services import mark_all_read, mark_read
+from .services import mark_all_read, mark_message_read, mark_read
 
 
 User = get_user_model()
@@ -108,7 +108,7 @@ class NoticeVisibilityAcceptanceTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertIn(reverse("accounts:login"), response["Location"])
 
-    def test_unlocked_member_can_view_internal_notice_but_not_public_route(self):
+    def test_unlocked_member_sees_internal_and_public_notices_in_my_messages(self):
         self.client.force_login(self.member)
 
         list_response = self.client.get(reverse("member_notices:internal_list"))
@@ -121,7 +121,9 @@ class NoticeVisibilityAcceptanceTests(TestCase):
 
         self.assertEqual(list_response.status_code, 200)
         self.assertContains(list_response, self.internal_notice.title)
-        self.assertNotContains(list_response, self.public_notice.title)
+        # 公开通知也从「我的消息」里走一遍——但它仍然有自己的公告栏，
+        # 而公开那条路依然不暴露内部通知（下面两行）。
+        self.assertContains(list_response, self.public_notice.title)
         self.assertEqual(detail_response.status_code, 200)
         self.assertContains(detail_response, self.internal_notice.content)
         self.assertEqual(public_detail_response.status_code, 404)
@@ -297,34 +299,34 @@ class MessageReadStateTests(TestCase):
             ["只发给联系人的通知"],
         )
 
-    def test_row_carries_type_publisher_audience_and_read_state(self):
+    def test_row_carries_type_actor_context_and_read_state(self):
         row = message_rows(self.member)[0]
 
         self.assertEqual(row.type_label, "内部通知")
-        self.assertEqual(row.publisher, "通知管理员")
-        self.assertEqual(row.audience, "消息可见组")
+        self.assertEqual(row.actor, "通知管理员")
+        self.assertEqual(row.context, "消息可见组")
         self.assertFalse(row.is_read)
         self.assertEqual(row.url, reverse("member_notices:internal_detail", args=(self.internal_notice.pk,)))
 
-    def test_publisher_falls_back_to_username_without_full_name(self):
+    def test_actor_falls_back_to_username_without_full_name(self):
         self.admin.profile.full_name = ""
         self.admin.profile.save(update_fields=["full_name"])
 
         row = message_rows(self.member)[0]
 
-        self.assertEqual(row.publisher, "message-admin")
+        self.assertEqual(row.actor, "message-admin")
 
-    def test_contacts_notice_audience_is_the_contacts_phrase(self):
+    def test_contacts_notice_context_is_the_contacts_phrase(self):
         row = message_rows(self.contact)[0]
 
-        self.assertEqual(row.audience, "仅项目组联系人")
+        self.assertEqual(row.context, "仅项目组联系人")
 
     def test_internal_notice_lists_all_visible_group_names(self):
         self.internal_notice.visible_groups.add(Group.objects.create(name="第二个可见组"))
 
         row = message_rows(self.member)[0]
 
-        self.assertEqual(row.audience, "消息可见组, 第二个可见组")
+        self.assertEqual(row.context, "消息可见组, 第二个可见组")
 
     def test_unread_count_only_counts_visible_unread_notices(self):
         # member 可见 1 条（hidden 那条属于别的组），且尚未读过。
@@ -366,6 +368,160 @@ class MessageReadStateTests(TestCase):
         self.assertEqual(message_rows(self.member), ())
         self.assertEqual(unread_message_count(self.member), 0)
         self.assertFalse(NoticeRead.objects.filter(user=self.member).exists())
+
+
+class EventMessageAggregationTests(TestCase):
+    """事件型消息（Message 表）与通知混排：行装配、计数、全部已读、跳转端点。"""
+
+    def setUp(self):
+        from discussion.models import Board, Comment, Post
+
+        self.admin = User.objects.create_superuser(
+            username="event-admin",
+            password="Admin-Password-123!",
+        )
+        self.member = User.objects.create_user(
+            username="event-member",
+            password="Member-Password-123!",
+        )
+        self.member.must_change_password = False
+        self.member.save(update_fields=["must_change_password"])
+        self.group = Group.objects.create(name="事件组")
+        self.member.groups.add(self.group)
+
+        self.notice = Notice.objects.create(
+            title="一条内部通知",
+            content="正文。",
+            scope=Notice.INTERNAL,
+            published_by=self.admin,
+            published_at=timezone.now() - timedelta(hours=2),
+        )
+        self.notice.visible_groups.add(self.group)
+
+        self.board = Board.objects.create(
+            name_zh="综合区", name="General", created_by=self.admin
+        )
+        self.post = Post.objects.create(
+            board=self.board,
+            author=self.admin,
+            title="被提及的帖子",
+            content="正文",
+        )
+        self.comment = Comment.objects.create(
+            post=self.post, author=self.admin, content="一条评论"
+        )
+        self.post_message = Message.objects.create(
+            recipient=self.member,
+            kind=Message.MENTION,
+            actor=self.admin,
+            post=self.post,
+        )
+        self.client.force_login(self.member)
+
+    def test_mention_row_carries_actor_context_and_the_go_url(self):
+        rows = message_rows(self.member)
+        mention = next(row for row in rows if row.title == "被提及的帖子")
+
+        self.assertEqual(mention.type_label, "提及")
+        self.assertEqual(mention.actor, "event-admin")
+        self.assertEqual(mention.context, "帖子")
+        self.assertEqual(
+            mention.url,
+            reverse("member_notices:message_go", args=(self.post_message.pk,)),
+        )
+        self.assertFalse(mention.is_read)
+
+    def test_comment_mention_links_to_the_comment_anchor(self):
+        comment_message = Message.objects.create(
+            recipient=self.member,
+            kind=Message.MENTION,
+            actor=self.admin,
+            post=self.post,
+            comment=self.comment,
+        )
+
+        response = self.client.get(
+            reverse("member_notices:message_go", args=(comment_message.pk,))
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            response["Location"],
+            f"{reverse('discussion:board', args=(self.board.pk,))}?page=1"
+            f"#comment-{self.comment.pk}",
+        )
+
+    def test_rows_sort_pinned_first_then_by_time(self):
+        Notice.objects.create(
+            title="更新的公开通知",
+            content="正文。",
+            scope=Notice.PUBLIC,
+            published_by=self.admin,
+            published_at=timezone.now(),
+        )
+
+        titles = [row.title for row in message_rows(self.member)]
+
+        # 公开通知最新，排最前；提及在 2 小时前的内部通知之后。
+        self.assertEqual(titles, ["更新的公开通知", "被提及的帖子", "一条内部通知"])
+
+    def test_unread_count_adds_notices_and_event_messages(self):
+        self.assertEqual(unread_message_count(self.member), 2)
+
+        mark_message_read(message=self.post_message)
+
+        self.assertEqual(unread_message_count(self.member), 1)
+
+    def test_mark_all_read_clears_both_kinds(self):
+        mark_all_read(user=self.member)
+
+        self.assertEqual(unread_message_count(self.member), 0)
+        self.post_message.refresh_from_db()
+        self.assertTrue(self.post_message.is_read)
+        self.assertIsNotNone(self.post_message.read_at)
+
+    def test_message_go_marks_read_and_redirects_to_the_post(self):
+        response = self.client.get(
+            reverse("member_notices:message_go", args=(self.post_message.pk,))
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            response["Location"],
+            f"{reverse('discussion:board', args=(self.board.pk,))}?page=1"
+            f"#post-{self.post.pk}",
+        )
+        self.post_message.refresh_from_db()
+        self.assertTrue(self.post_message.is_read)
+
+    def test_message_go_of_another_recipient_is_404(self):
+        other = User.objects.create_user(
+            username="event-other",
+            password="Other-Password-123!",
+        )
+        other.must_change_password = False
+        other.save(update_fields=["must_change_password"])
+
+        self.client.force_login(other)
+        response = self.client.get(
+            reverse("member_notices:message_go", args=(self.post_message.pk,))
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_unknown_kind_is_skipped_instead_of_breaking_the_page(self):
+        Message.objects.create(
+            recipient=self.member,
+            kind="from-the-future",
+            actor=self.admin,
+            post=self.post,
+        )
+
+        titles = [row.title for row in message_rows(self.member)]
+        response = self.client.get(reverse("member_notices:internal_list"))
+
+        self.assertNotIn("from-the-future", titles)
+        self.assertEqual(response.status_code, 200)
 
 
 class MemberHomeReminderAcceptanceTests(TestCase):
@@ -470,12 +626,12 @@ class MessagePageAcceptanceTests(TestCase):
         self.notice.visible_groups.add(self.group)
         self.client.force_login(self.member)
 
-    def test_page_shows_the_five_columns_with_type_publisher_and_audience(self):
+    def test_page_shows_the_five_columns_with_type_actor_and_context(self):
         response = self.client.get(reverse("member_notices:internal_list"))
         html = response.content.decode()
 
         self.assertContains(response, "我的消息")
-        for header in ("类型", "标题", "发布人", "范围", "时间"):
+        for header in ("类型", "标题", "来自", "说明", "时间"):
             self.assertIn(header, html)
         self.assertContains(response, "内部通知")
         self.assertContains(response, "通知管理员")
