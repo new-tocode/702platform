@@ -4,7 +4,9 @@
 「哪些通知算我的」仍归 :mod:`notices.visibility`，本模块不自己拼规则。
 """
 
-from .models import NoticeRead
+from django.utils import timezone
+
+from .models import Message, NoticeRead
 from .visibility import member_visible_notices
 
 
@@ -14,18 +16,29 @@ def mark_read(*, user, notice):
     return created
 
 
-def mark_all_read(*, user):
-    """把当前可见的未读通知一次标掉，返回本次标了几条。
+def mark_message_read(*, message):
+    """把一条事件消息标为已读（点开跳转时）。返回是否新标了。"""
+    if message.is_read:
+        return False
+    message.is_read = True
+    message.read_at = timezone.now()
+    message.save(update_fields=["is_read", "read_at"])
+    return True
 
-    与现状比对后只写缺的那些，重复提交是幂等的；``ignore_conflicts`` 挡住同一个
-    人开两个标签页同时提交时的撞车——撞上的那条已被另一路写过，跳过即可。
+
+def mark_all_read(*, user):
+    """把当前可见的未读通知与未读事件消息一次标掉，返回本次标了几条。
+
+    通知那边与现状比对后只写缺的回执（``ignore_conflicts`` 挡住重复），
+    事件消息一条 UPDATE 全清；重复提交是幂等的。
     """
     read_ids = NoticeRead.objects.filter(user=user).values("notice_id")
     unread = list(member_visible_notices(user).exclude(pk__in=read_ids))
-    if not unread:
-        return 0
-    NoticeRead.objects.bulk_create(
-        [NoticeRead(user=user, notice=notice) for notice in unread],
-        ignore_conflicts=True,
+    receipts = [NoticeRead(user=user, notice=notice) for notice in unread]
+    if receipts:
+        NoticeRead.objects.bulk_create(receipts, ignore_conflicts=True)
+    marked_events = Message.objects.filter(recipient=user, is_read=False).update(
+        is_read=True,
+        read_at=timezone.now(),
     )
-    return len(unread)
+    return len(receipts) + marked_events
