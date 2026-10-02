@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 702platform\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-02 13:11+0800\n"
+"POT-Creation-Date: 2026-10-02 16:17+0800\n"
 "PO-Revision-Date: 2026-09-19 18:39\n"
 "Last-Translator: 702platform\n"
 "Language-Team: 702platform\n"
@@ -151,11 +151,11 @@ msgstr "Full width"
 msgid "排布"
 msgstr "Layout"
 
-#: accounts/roles.py:15 accounts/selectors.py:52
+#: accounts/roles.py:15 accounts/selectors.py:57
 msgid "管理员"
 msgstr "Administrator"
 
-#: accounts/roles.py:16 accounts/selectors.py:62
+#: accounts/roles.py:16 accounts/selectors.py:67
 #: templates/projects/group_detail.html:35
 #: templates/projects/group_detail.html:86
 #: templates/projects/group_list.html:42
@@ -163,7 +163,7 @@ msgstr "Administrator"
 msgid "项目组联系人"
 msgstr "Group contact"
 
-#: accounts/roles.py:17 accounts/selectors.py:65
+#: accounts/roles.py:17 accounts/selectors.py:70
 #: templates/projects/group_manage.html:40
 msgid "项目组成员"
 msgstr "Group member"
@@ -176,19 +176,23 @@ msgstr "No project group"
 msgid "游客"
 msgstr "Guest"
 
-#: accounts/selectors.py:54 reviews/lifecycle.py:115
+#: accounts/selectors.py:59 reviews/lifecycle.py:115
 msgid "评审人"
 msgstr "Reviewer"
 
-#: accounts/selectors.py:56 reviews/lifecycle.py:103
+#: accounts/selectors.py:61 reviews/lifecycle.py:103
 msgid "初审人"
 msgstr "Preliminary reviewer"
 
-#: accounts/selectors.py:58 templates/accounts/member_home.html:45
+#: accounts/selectors.py:63 templates/accounts/member_home.html:45
 #: templates/projects/group_detail.html:152
 #: templates/projects/group_detail.html:275
 msgid "超级评审"
 msgstr "Super reviewer"
+
+#: accounts/selectors.py:76
+msgid "用户组"
+msgstr "User groups"
 
 #: accounts/services.py:179
 #, python-format
