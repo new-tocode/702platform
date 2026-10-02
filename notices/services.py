@@ -4,10 +4,15 @@
 「哪些通知算我的」仍归 :mod:`notices.visibility`，本模块不自己拼规则。
 """
 
+from django.contrib.auth import get_user_model
+from django.db.models import Q
 from django.utils import timezone
 
 from .models import Message, NoticeRead
 from .visibility import member_visible_notices
+
+
+User = get_user_model()
 
 
 def sync_mention_messages(*, post, comment, actor, mentioned_users):
@@ -97,6 +102,50 @@ def notify_review_result(*, submission):
         recipient=submission.group.leader,
         kind=Message.REVIEW_RESULT,
         submission=submission,
+    )
+
+
+def notify_join_request(*, join_request):
+    """有人申请入组：给项目组联系人一条「待你审核」（同一份申请只写一条）。"""
+    Message.objects.get_or_create(
+        recipient=join_request.group.leader,
+        kind=Message.JOIN_REQUEST,
+        join_request=join_request,
+        defaults={"actor": join_request.applicant},
+    )
+
+
+def notify_join_result(*, join_request, actor):
+    """入组申请有结果：给申请人一条（通过／拒绝在渲染时现取）。"""
+    Message.objects.get_or_create(
+        recipient=join_request.applicant,
+        kind=Message.JOIN_RESULT,
+        join_request=join_request,
+        defaults={"actor": actor},
+    )
+
+
+def notify_create_request(*, create_request):
+    """有人申请创建项目组：给**申请这一刻**的全体管理员各写一条。"""
+    admins = User.objects.filter(
+        Q(is_staff=True) | Q(is_superuser=True)
+    ).distinct()
+    for admin in admins:
+        Message.objects.get_or_create(
+            recipient=admin,
+            kind=Message.CREATE_REQUEST,
+            create_request=create_request,
+            defaults={"actor": create_request.applicant},
+        )
+
+
+def notify_create_result(*, create_request, actor):
+    """建组申请有结果：给申请人一条。"""
+    Message.objects.get_or_create(
+        recipient=create_request.applicant,
+        kind=Message.CREATE_RESULT,
+        create_request=create_request,
+        defaults={"actor": actor},
     )
 
 
