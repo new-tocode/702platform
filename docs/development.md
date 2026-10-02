@@ -319,7 +319,8 @@ help_text=format_lazy(_("最多 {limit} 张。"), limit=IMAGE_LIMIT)   # 花括�
 ```
 
 `core/tests/test_interface_translation.py` 的占位符检查两种写法都认，所以换了写法不会
-漏掉翻译里的占位符错误。
+漏掉翻译里的占位符错误；同一个文件里还有一条静态检查，专门扫「模块／类体里给译文插值」
+这种写法（函数体里的没问题），写错了当场就红。
 
 **前台 ModelForm 要给标签点名。**`ModelForm` 默认拿模型的 `verbose_name` 当字段标签，
 而模型上的中文是写给后台的、不进 `.po`（见下面「不在双语范围内的部分」），照搬过来就是

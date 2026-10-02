@@ -5,6 +5,7 @@
 共用这一份。
 """
 
+from django.utils.text import format_lazy
 from django.utils.translation import gettext_lazy as _
 
 from core.uploads import validate_image_upload
@@ -14,18 +15,22 @@ from core.uploads import validate_image_upload
 AVATAR_MAX_BYTES = 2 * 1024 * 1024
 
 #: 头像的说明文案：模型字段与上传表单共用，改上限时两处一起跟着变。
-AVATAR_HELP_TEXT = _("不超过 %(limit)s MB。") % {
-    "limit": AVATAR_MAX_BYTES // (1024 * 1024)
-}
+#:
+#: 数字走 ``format_lazy``，不能写成 ``_("…%(limit)s…") % {...}``：惰性译文与 ``%``
+#: 相遇时会在**导入那一刻**求值，那会儿语言还是默认的中文，字符串就此定型，之后
+#: 切到英文也不会变——「不超过 2 MB。」就这么出现在英文页面上过。
+AVATAR_HELP_TEXT = format_lazy(
+    _("不超过 {limit} MB。"), limit=AVATAR_MAX_BYTES // (1024 * 1024)
+)
 
 #: 图册单张的大小上限。整册的合计上限在 ``accounts.models``：那条要跨行求和的
 #: 约束落在服务层，口径跟着模型走。
 GALLERY_IMAGE_MAX_BYTES = 5 * 1024 * 1024
 
 #: 图册单张的说明文案。
-GALLERY_HELP_TEXT = _("不超过 %(limit)s MB。") % {
-    "limit": GALLERY_IMAGE_MAX_BYTES // (1024 * 1024)
-}
+GALLERY_HELP_TEXT = format_lazy(
+    _("不超过 {limit} MB。"), limit=GALLERY_IMAGE_MAX_BYTES // (1024 * 1024)
+)
 
 
 def validate_avatar(uploaded_file):
