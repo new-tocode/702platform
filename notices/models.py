@@ -60,3 +60,42 @@ class Notice(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class NoticeRead(models.Model):
+    """一条「谁读过哪条通知」的回执，撑着「我的消息」的未读状态。
+
+    未读 = 可见通知（``visibility.member_visible_notices``）减去本表——不物化
+    消息副本，所以发布人删除通知后，成员的列表与计数里自然不再出现它；本表随
+    通知级联清掉，不留孤儿（迁移里 ``on_delete=CASCADE``）。
+
+    已读是高频、个人、幂等的操作，不写审计（与登录、评审提交不同），只在视图
+    里记日志。
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="notice_reads",
+        verbose_name="用户",
+    )
+    notice = models.ForeignKey(
+        Notice,
+        on_delete=models.CASCADE,
+        related_name="reads",
+        verbose_name="通知",
+    )
+    read_at = models.DateTimeField("已读时间", default=timezone.now)
+
+    class Meta:
+        verbose_name = "通知已读回执"
+        verbose_name_plural = "通知已读回执"
+        constraints = [
+            models.UniqueConstraint(
+                fields=("user", "notice"),
+                name="unique_notice_read_per_user",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.user} → {self.notice}"
