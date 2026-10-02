@@ -44,10 +44,10 @@ class ContentPageAdmin(admin.ModelAdmin):
 
 @admin.register(Award)
 class AwardAdmin(admin.ModelAdmin):
-    list_display = ("title", "competition", "year", "level")
+    list_display = ("title", "competition", "year", "level", "advisor")
     list_filter = ("year", "level")
-    search_fields = ("title", "competition", "level", "winners")
-    filter_horizontal = ("attachments",)
+    search_fields = ("title", "competition", "level", "winners", "advisor")
+    filter_horizontal = ("certificates", "photos")
     readonly_fields = ("created_at",)
     ordering = ("-year", "-created_at", "-id")
 

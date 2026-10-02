@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 702platform\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-09-29 18:35+0800\n"
+"POT-Creation-Date: 2026-10-02 13:11+0800\n"
 "PO-Revision-Date: 2026-09-19 18:39\n"
 "Last-Translator: 702platform\n"
 "Language-Team: 702platform\n"
@@ -58,7 +58,7 @@ msgstr ""
 msgid "登录已锁定"
 msgstr "Login locked"
 
-#: accounts/forms.py:162 accounts/models.py:80 accounts/validators.py:35
+#: accounts/forms.py:162 accounts/models.py:83 accounts/validators.py:40
 #: templates/accounts/profile.html:53
 msgid "头像"
 msgstr "Avatar"
@@ -67,7 +67,7 @@ msgstr "Avatar"
 msgid "请选择要上传的图片。"
 msgstr "Please choose an image to upload."
 
-#: accounts/forms.py:174 accounts/models.py:153
+#: accounts/forms.py:174 accounts/models.py:158
 msgid "图像"
 msgstr "Image"
 
@@ -91,63 +91,63 @@ msgstr "The current password is incorrect."
 msgid "两次输入的新密码不一致。"
 msgstr "The two new passwords do not match."
 
-#: accounts/models.py:78 templates/projects/group_detail.html:78
+#: accounts/models.py:81 templates/projects/group_detail.html:78
 #: templates/projects/group_manage.html:100
 msgid "姓名"
 msgstr "Name"
 
-#: accounts/models.py:90
+#: accounts/models.py:93
 msgid "学号"
 msgstr "Student ID"
 
-#: accounts/models.py:96 projects/forms.py:98
+#: accounts/models.py:99 projects/forms.py:98
 #: templates/accounts/member_profile_readonly.html:44
 #: templates/projects/group_detail.html:64
 #: templates/projects/group_list.html:45
 msgid "学院"
 msgstr "College"
 
-#: accounts/models.py:97 templates/accounts/member_profile_readonly.html:45
+#: accounts/models.py:100 templates/accounts/member_profile_readonly.html:45
 msgid "专业"
 msgstr "Major"
 
-#: accounts/models.py:99 templates/accounts/member_profile_readonly.html:46
+#: accounts/models.py:102 templates/accounts/member_profile_readonly.html:46
 msgid "特长"
 msgstr "Specialties"
 
-#: accounts/models.py:102
+#: accounts/models.py:105
 msgid "可填写多项，用顿号或逗号分隔。"
 msgstr "You can list several, separated by commas."
 
-#: accounts/models.py:104 templates/accounts/member_profile_readonly.html:48
+#: accounts/models.py:107 templates/accounts/member_profile_readonly.html:48
 msgid "手机号"
 msgstr "Phone"
 
-#: accounts/models.py:105 templates/accounts/member_profile_readonly.html:49
+#: accounts/models.py:108 templates/accounts/member_profile_readonly.html:49
 msgid "其他联系方式"
 msgstr "Other contact"
 
-#: accounts/models.py:107 templates/accounts/member_profile_readonly.html:47
+#: accounts/models.py:110 templates/accounts/member_profile_readonly.html:47
 msgid "个人简介"
 msgstr "Bio"
 
-#: accounts/models.py:110
+#: accounts/models.py:113
 msgid "最多 1000 字。"
 msgstr "Up to 1000 characters."
 
-#: accounts/models.py:141
+#: accounts/models.py:146
 msgid "普通"
 msgstr "Normal"
 
-#: accounts/models.py:142
+#: accounts/models.py:147
 msgid "大图"
 msgstr "Large"
 
-#: accounts/models.py:143
+#: accounts/models.py:148
 msgid "整行"
 msgstr "Full width"
 
-#: accounts/models.py:160
+#: accounts/models.py:165
 msgid "排布"
 msgstr "Layout"
 
@@ -186,7 +186,7 @@ msgstr "Preliminary reviewer"
 
 #: accounts/selectors.py:58 templates/accounts/member_home.html:45
 #: templates/projects/group_detail.html:152
-#: templates/projects/group_detail.html:272
+#: templates/projects/group_detail.html:275
 msgid "超级评审"
 msgstr "Super reviewer"
 
@@ -206,12 +206,12 @@ msgstr "You have %(tasks)s — open the Review page."
 msgid "、"
 msgstr ", "
 
-#: accounts/validators.py:17 accounts/validators.py:26
-#, python-format
-msgid "不超过 %(limit)s MB。"
-msgstr "Up to %(limit)s MB."
+#: accounts/validators.py:23 accounts/validators.py:32
+#, python-brace-format
+msgid "不超过 {limit} MB。"
+msgstr "Up to {limit} MB."
 
-#: accounts/validators.py:44
+#: accounts/validators.py:49
 msgid "图册图像"
 msgstr "Gallery image"
 
@@ -227,8 +227,8 @@ msgstr "Profile saved."
 msgid "图像已加入图册。"
 msgstr "Image added to your gallery."
 
-#: accounts/views.py:337 accounts/views.py:358 projects/views.py:355
-#: projects/views.py:462
+#: accounts/views.py:337 accounts/views.py:358 projects/views.py:358
+#: projects/views.py:465
 msgid "未知操作"
 msgstr "Unknown action"
 
@@ -329,13 +329,10 @@ msgid "竞赛组长必须是参赛成员之一。"
 msgstr "The team leader must be one of the team members."
 
 #: competitions/services.py:98
-#, fuzzy
-#| msgid "该竞赛已关闭报名或已超过报名截止时间，无法修改。"
 msgid "该竞赛已关闭报名或已超过报名截止时间，无法放弃。"
 msgstr ""
 "Registration for this competition is closed or past its deadline, so it "
-"cannot be withdrawn.This competition is closed for registration or its "
-"deadline has passed; it can no longer be edited."
+"cannot be withdrawn."
 
 #: competitions/views.py:161
 msgid "竞赛报名登记成功。"
@@ -354,6 +351,107 @@ msgstr "Registration updated."
 #: competitions/views.py:263
 msgid "已放弃该竞赛报名。"
 msgstr "Registration withdrawn."
+
+#: content/archives.py:91
+#, python-format
+msgid "获奖证书_%(date)s.zip"
+msgstr "Award certificates_%(date)s.zip"
+
+#: content/forms.py:33 content/validators.py:33
+#: templates/content/awards.html:101
+msgid "获奖证书"
+msgstr "Award certificates"
+
+#: content/forms.py:37
+#, python-brace-format
+msgid "最多 {limit} 张，每张不超过 {mb} MB；可打包下载。"
+msgstr ""
+"Up to {limit} images, {mb} MB each; they can be downloaded as an archive."
+
+#: content/forms.py:44 content/validators.py:38
+#: templates/content/awards.html:102
+msgid "参赛图片"
+msgstr "Competition photos"
+
+#: content/forms.py:48
+#, python-brace-format
+msgid "最多 {limit} 张，每张不超过 {mb} MB。"
+msgstr "Up to {limit} images, {mb} MB each."
+
+#: content/forms.py:62
+msgid "奖项名称"
+msgstr "Award name"
+
+#: content/forms.py:63 templates/content/awards.html:89
+msgid "赛事名称"
+msgstr "Competition"
+
+#: content/forms.py:64
+msgid "年份"
+msgstr "Year"
+
+#: content/forms.py:65 templates/content/awards.html:91
+msgid "获奖级别"
+msgstr "Award level"
+
+#: content/forms.py:66 templates/content/awards.html:98
+msgid "获奖人 / 团队"
+msgstr "Winners / team"
+
+#: content/forms.py:67 templates/content/awards.html:94
+#: templates/projects/group_detail.html:65
+#: templates/projects/group_list.html:48
+msgid "指导老师"
+msgstr "Advisors"
+
+#: content/forms.py:85
+#, python-format
+msgid "年份需在 %(earliest)s 到 %(latest)s 之间。"
+msgstr "The year must be between %(earliest)s and %(latest)s."
+
+#: content/forms.py:116
+#, python-format
+msgid "最多上传 %(limit)s 张，这次选了 %(count)s 张。"
+msgstr "Up to %(limit)s files — you selected %(count)s."
+
+#: content/views.py:196
+msgid "获奖记录已添加。"
+msgstr "The award has been added."
+
+#: content/views.py:218
+#, python-format
+msgid "%(title)s（获奖人：%(winners)s）"
+msgstr "%(title)s (winners: %(winners)s)"
+
+#: content/views.py:223
+#, python-format
+msgid ""
+"已有相似的获奖记录：%(detail)s。同一条记录不必重复添加；如果确实是另一条，请"
+"联系管理员在后台添加。"
+msgstr ""
+"A similar award already exists: %(detail)s. There is no need to add the same "
+"record twice; if it really is a different one, ask an administrator to add "
+"it in the admin site."
+
+#: content/views.py:248
+msgid "请先勾选要下载的获奖记录。"
+msgstr "Select the awards you want to download first."
+
+#: content/views.py:253
+#, python-format
+msgid "一次最多打包 %(limit)s 条记录，请分批下载。"
+msgstr "At most %(limit)s records per archive — please download in batches."
+
+#: content/views.py:262
+msgid "所选的记录里还没有上传获奖证书。"
+msgstr "The selected records have no award certificates yet."
+
+#: content/views.py:277
+#, python-format
+msgid "有 %(count)s 个证书文件已不在服务器上，没有打进压缩包。"
+msgstr ""
+"%(count)s certificate files are no longer on the server and were left out of "
+"the archive."
 
 #: core/apps.py:15
 msgid "审计日志"
@@ -388,128 +486,128 @@ msgstr "%(label)s cannot exceed %(limit)s MB."
 msgid "文件类型与图片不符，请确认选的是图片。"
 msgstr "That file is not an image."
 
-#: discussion/forms.py:16 discussion/models.py:13
+#: discussion/forms.py:18 discussion/models.py:14
 msgid "中文名称"
 msgstr "Chinese name"
 
-#: discussion/forms.py:36 discussion/services.py:115
+#: discussion/forms.py:38 discussion/services.py:115
 msgid "已有同名板块。"
 msgstr "A board with that name already exists."
 
-#: discussion/forms.py:59 discussion/models.py:80 discussion/models.py:91
-#: discussion/models.py:92 discussion/validators.py:54
+#: discussion/forms.py:44 discussion/models.py:83 discussion/models.py:94
+#: discussion/models.py:95 discussion/validators.py:54
 #: templates/discussion/space.html:130
 msgid "帖子图片"
 msgstr "Post image"
 
-#: discussion/forms.py:62
+#: discussion/forms.py:47
 msgid "最多 3 张，每张不超过 3 MB。"
 msgstr "Up to 3 images per post, no more than 3 MB each."
 
-#: discussion/forms.py:66 discussion/models.py:52
+#: discussion/forms.py:51 discussion/models.py:53
 msgid "正文"
 msgstr "Body"
 
-#: discussion/forms.py:83
+#: discussion/forms.py:68
 msgid "请输入帖子标题。"
 msgstr "Enter a post title."
 
-#: discussion/forms.py:89
+#: discussion/forms.py:74
 msgid "请输入帖子正文。"
 msgstr "Enter the post body."
 
-#: discussion/forms.py:96 discussion/services.py:70
+#: discussion/forms.py:81 discussion/services.py:70
 msgid "每篇帖子最多上传 3 张图片。"
 msgstr "A post can have at most 3 images."
 
-#: discussion/forms.py:105 discussion/services.py:217
+#: discussion/forms.py:90 discussion/services.py:217
 msgid "每篇帖子最多保留 3 张图片。"
 msgstr "A post can contain at most 3 images."
 
-#: discussion/forms.py:113 templates/discussion/space.html:154
+#: discussion/forms.py:98 templates/discussion/space.html:154
 #: templates/discussion/space.html:155
 msgid "评论"
 msgstr "Comment"
 
-#: discussion/forms.py:125
+#: discussion/forms.py:110
 msgid "请输入评论内容。"
 msgstr "Enter a comment."
 
-#: discussion/models.py:14
+#: discussion/models.py:15
 msgid "英文名称"
 msgstr "English name"
 
-#: discussion/models.py:19
+#: discussion/models.py:20
 msgid "创建人"
 msgstr "Created by"
 
-#: discussion/models.py:21
+#: discussion/models.py:22
 msgid "创建时间"
 msgstr "Created at"
 
-#: discussion/models.py:24 discussion/models.py:25
+#: discussion/models.py:25 discussion/models.py:26
 msgid "社团空间板块"
 msgstr "Discussion board"
 
-#: discussion/models.py:43 templates/discussion/space.html:58
+#: discussion/models.py:44 templates/discussion/space.html:58
 msgid "板块"
 msgstr "Board"
 
-#: discussion/models.py:49 discussion/models.py:137
+#: discussion/models.py:50 discussion/models.py:140
 msgid "作者"
 msgstr "Author"
 
-#: discussion/models.py:51 templates/notices/list.html:27
+#: discussion/models.py:52 templates/notices/list.html:27
 msgid "标题"
 msgstr "Title"
 
-#: discussion/models.py:53 templates/discussion/space.html:111
+#: discussion/models.py:54 templates/discussion/space.html:111
 #: templates/discussion/space.html:149 templates/home.html:54
 #: templates/notices/list.html:36
 msgid "置顶"
 msgstr "Pinned"
 
-#: discussion/models.py:54
+#: discussion/models.py:55
 msgid "发布时间"
 msgstr "Posted"
 
-#: discussion/models.py:55
+#: discussion/models.py:56
 msgid "更新时间"
 msgstr "Updated"
 
-#: discussion/models.py:58 discussion/models.py:59
+#: discussion/models.py:59 discussion/models.py:60
 msgid "社团空间帖子"
 msgstr "Discussion post"
 
-#: discussion/models.py:77 discussion/models.py:131
+#: discussion/models.py:80 discussion/models.py:134
 msgid "帖子"
 msgstr "Post"
 
-#: discussion/models.py:87
+#: discussion/models.py:90
 msgid "文件大小"
 msgstr "File size"
 
-#: discussion/models.py:88
+#: discussion/models.py:91
 msgid "上传时间"
 msgstr "Uploaded"
 
-#: discussion/models.py:139
+#: discussion/models.py:142
 msgid "评论内容"
 msgstr "Comment"
 
-#: discussion/models.py:140
+#: discussion/models.py:143
 msgid "评论时间"
 msgstr "Commented"
 
-#: discussion/models.py:143
+#: discussion/models.py:146
 msgid "删除时间"
 msgstr "Deleted at"
 
-#: discussion/models.py:150
+#: discussion/models.py:153
 msgid "删除人"
 msgstr "Deleted by"
 
-#: discussion/models.py:157 discussion/models.py:158
+#: discussion/models.py:160 discussion/models.py:161
 msgid "社团空间评论"
 msgstr "Discussion comment"
 
@@ -568,31 +666,31 @@ msgstr "Save changes"
 msgid "帖子已删除。"
 msgstr "Post deleted."
 
-#: discussion/views.py:259
+#: discussion/views.py:252
 msgid "评论已发布。"
 msgstr "Comment posted."
 
-#: discussion/views.py:286
+#: discussion/views.py:279
 msgid "评论已删除。"
 msgstr "Comment deleted."
 
-#: discussion/views.py:302
+#: discussion/views.py:295
 msgid "置顶状态无效。"
 msgstr "Invalid pin state."
 
-#: discussion/views.py:322
+#: discussion/views.py:315
 msgid "帖子已置顶。"
 msgstr "Post pinned."
 
-#: discussion/views.py:322
+#: discussion/views.py:315
 msgid "已取消置顶。"
 msgstr "Post unpinned."
 
-#: discussion/views.py:353
+#: discussion/views.py:346
 msgid "板块已创建。"
 msgstr "Board created."
 
-#: discussion/views.py:386
+#: discussion/views.py:379
 msgid "板块已删除。"
 msgstr "Board deleted."
 
@@ -717,7 +815,7 @@ msgstr "Advisor 2"
 msgid "指导老师 3"
 msgstr "Advisor 3"
 
-#: projects/forms.py:116 templates/projects/group_detail.html:188
+#: projects/forms.py:116 templates/projects/group_detail.html:189
 #: templates/projects/group_manage.html:180
 msgid "项目书"
 msgstr "Proposal"
@@ -747,7 +845,7 @@ msgstr "A group can have at most %(max)s advisors."
 msgid "请先登录。"
 msgstr "Please sign in first."
 
-#: projects/services.py:67 projects/views.py:260
+#: projects/services.py:67 projects/views.py:263
 msgid "你已经是该项目组成员。"
 msgstr "You are already a member of this project group."
 
@@ -795,7 +893,7 @@ msgstr "A proposal must be a doc, docx or pdf file."
 msgid "项目书不能超过 %(limit)s MB。"
 msgstr "The proposal cannot exceed %(limit)s MB."
 
-#: projects/views.py:70
+#: projects/views.py:71
 #, python-format
 msgid ""
 "已提交第 %(round)s 轮评审（%(type)s），等待初审人初审；初审通过后将随机分配 "
@@ -810,22 +908,22 @@ msgstr[1] ""
 "Round %(round)s submitted for review (%(type)s). A preliminary reviewer "
 "looks at it first; once it passes, %(count)s reviewers are drawn at random."
 
-#: projects/views.py:198
+#: projects/views.py:199
 msgid "项目书已上传/更新。"
 msgstr "Proposal uploaded/updated."
 
-#: projects/views.py:245
+#: projects/views.py:246
 msgid "该项目组尚未上传项目书。"
 msgstr "This project group has not uploaded a proposal yet."
 
-#: projects/views.py:277
+#: projects/views.py:280
 #, python-format
 msgid "已提交加入「%(name)s」的申请，请等待联系人审核。"
 msgstr ""
 "Application to join “%(name)s” submitted; please wait for the contact to "
 "review it."
 
-#: projects/views.py:312
+#: projects/views.py:315
 msgid ""
 "已提交创建项目组的申请，等待管理员审核；任一管理员同意后项目组即刻建立，你成"
 "为项目组联系人。"
@@ -834,39 +932,39 @@ msgstr ""
 "will review it; the group is created as soon as one approves, and you become "
 "its contact."
 
-#: projects/views.py:344
+#: projects/views.py:347
 #, python-format
 msgid "已通过创建申请，项目组「%(name)s」已建立并出现在项目组列表中。"
 msgstr ""
 "Creation approved: project group “%(name)s” has been created and now appears "
 "in the group list."
 
-#: projects/views.py:353
+#: projects/views.py:356
 #, python-format
 msgid "已拒绝创建「%(name)s」的申请。"
 msgstr "The application to create “%(name)s” was rejected."
 
-#: projects/views.py:388
+#: projects/views.py:391
 msgid "学院与指导老师已更新。"
 msgstr "College and advisors updated."
 
-#: projects/views.py:399
+#: projects/views.py:402
 msgid "项目组介绍已更新。"
 msgstr "Group description updated."
 
-#: projects/views.py:410
+#: projects/views.py:413
 msgid "已转让项目组联系人。"
 msgstr "Group contact transferred."
 
-#: projects/views.py:453
+#: projects/views.py:456
 msgid "已通过该入组申请。"
 msgstr "The join application was approved."
 
-#: projects/views.py:460
+#: projects/views.py:463
 msgid "已拒绝该入组申请。"
 msgstr "The join application was rejected."
 
-#: projects/views.py:482
+#: projects/views.py:485
 #, python-format
 msgid "已将 %(name)s 移出项目组。"
 msgstr "%(name)s has been removed from the project group."
@@ -908,7 +1006,7 @@ msgid "无法提交审核。"
 msgstr "cannot submit for review."
 
 #: reviews/forms.py:28 templates/projects/group_detail.html:43
-#: templates/projects/group_detail.html:240
+#: templates/projects/group_detail.html:243
 msgid "评审类型"
 msgstr "Review type"
 
@@ -964,8 +1062,8 @@ msgstr ""
 "Explain why it should be approved or needs revision; if you send it back, "
 "the group will revise the proposal accordingly."
 
-#: reviews/forms.py:102 templates/projects/group_detail.html:209
-#: templates/projects/group_detail.html:219
+#: reviews/forms.py:102 templates/projects/group_detail.html:211
+#: templates/projects/group_detail.html:221
 msgid "批注版项目书"
 msgstr "Annotated proposal"
 
@@ -1020,12 +1118,12 @@ msgstr "Needs revision"
 
 #: reviews/lifecycle.py:52 reviews/lifecycle.py:102
 #: templates/projects/group_detail.html:133
-#: templates/projects/group_detail.html:242
+#: templates/projects/group_detail.html:245
 msgid "初审"
 msgstr "Preliminary review"
 
-#: reviews/lifecycle.py:62 templates/projects/group_detail.html:317
-#: templates/projects/group_detail.html:358
+#: reviews/lifecycle.py:62 templates/projects/group_detail.html:321
+#: templates/projects/group_detail.html:363
 msgid "待处理"
 msgstr "Pending"
 
@@ -1035,7 +1133,7 @@ msgstr "Completed"
 
 #: reviews/lifecycle.py:64 reviews/lifecycle.py:70 reviews/lifecycle.py:73
 #: templates/projects/group_detail.html:138
-#: templates/projects/group_detail.html:165 templates/reviews/queue.html:96
+#: templates/projects/group_detail.html:166 templates/reviews/queue.html:96
 #: templates/reviews/queue.html:326
 msgid "已释放"
 msgstr "Released"
@@ -1049,7 +1147,7 @@ msgstr "Pending preliminary"
 msgid "已初审"
 msgstr "Preliminary done"
 
-#: reviews/lifecycle.py:71 templates/projects/group_detail.html:168
+#: reviews/lifecycle.py:71 templates/projects/group_detail.html:169
 #: templates/reviews/queue.html:79 templates/reviews/queue.html:187
 msgid "待评审"
 msgstr "Pending review"
@@ -1096,31 +1194,31 @@ msgstr "That reviewer already holds a task in this round."
 msgid "本轮已经出过结论"
 msgstr "This round already has a decision"
 
-#: reviews/models.py:44
+#: reviews/models.py:45
 msgid "竞赛立项"
 msgstr "Competition — project start"
 
-#: reviews/models.py:45
+#: reviews/models.py:46
 msgid "竞赛省赛"
 msgstr "Competition — provincial"
 
-#: reviews/models.py:46
+#: reviews/models.py:47
 msgid "竞赛国赛"
 msgstr "Competition — national"
 
-#: reviews/models.py:47
+#: reviews/models.py:48
 msgid "大创立项"
 msgstr "Innovation program — start"
 
-#: reviews/models.py:48
+#: reviews/models.py:49
 msgid "大创中期"
 msgstr "Innovation program — midterm"
 
-#: reviews/models.py:49
+#: reviews/models.py:50
 msgid "大创结题"
 msgstr "Innovation program — final"
 
-#: reviews/models.py:446
+#: reviews/models.py:454
 msgid "事由"
 msgstr "Reason"
 
@@ -1264,12 +1362,12 @@ msgstr "Leave must end in the future."
 msgid "当前没有可取消的请假。"
 msgstr "There is no leave to cancel."
 
-#: reviews/views.py:88
+#: reviews/views.py:89
 #, python-format
 msgid "批注版项目书_R%(round)s%(ext)s"
 msgstr "Annotated proposal_R%(round)s%(ext)s"
 
-#: reviews/views.py:135
+#: reviews/views.py:136
 #, python-format
 msgid ""
 "超级评审已敲定第 %(round)s 轮：%(status)s，等待中的任务（含初审）已释放。"
@@ -1277,7 +1375,7 @@ msgstr ""
 "The super reviewer settled round %(round)s: %(status)s. Waiting tasks "
 "(including preliminary) have been released."
 
-#: reviews/views.py:151
+#: reviews/views.py:152
 #, python-format
 msgid "初审已通过，已随机分配 1 名评审人。"
 msgid_plural "初审已通过，已随机分配 %(count)s 名评审人。"
@@ -1285,28 +1383,28 @@ msgstr[0] "Preliminary review passed; 1 reviewer has been drawn at random."
 msgstr[1] ""
 "Preliminary review passed; %(count)s reviewers have been drawn at random."
 
-#: reviews/views.py:155
+#: reviews/views.py:156
 msgid "初审已打回，项目组修改项目书后可重新提交。"
 msgstr ""
 "Sent back at preliminary review; the group can revise the proposal and "
 "resubmit."
 
-#: reviews/views.py:156
+#: reviews/views.py:157
 msgid "评审已提交，感谢你的评审意见。"
 msgstr "Review submitted — thank you."
 
-#: reviews/views.py:225
+#: reviews/views.py:226
 #, python-format
 msgid "已登记评审请假：%(starts)s 至 %(ends)s，期间不再接收新的评审请求。"
 msgstr ""
 "Review leave recorded: %(starts)s to %(ends)s. No new review requests will "
 "be sent during it."
 
-#: reviews/views.py:252
+#: reviews/views.py:253
 msgid "已取消请假，即刻恢复接收评审请求。"
 msgstr "Leave cancelled; you will receive review requests again."
 
-#: reviews/views.py:265
+#: reviews/views.py:266
 msgid "该评审任务没有批注版项目书。"
 msgstr "This review task has no annotated proposal."
 
@@ -1319,10 +1417,10 @@ msgstr "Member Center"
 #: templates/accounts/password_change.html:4 templates/accounts/profile.html:4
 #: templates/base.html:6 templates/base.html:70
 #: templates/competitions/list.html:4 templates/competitions/register.html:4
-#: templates/content/about.html:4 templates/content/awards.html:4
-#: templates/content/page_detail.html:4 templates/content/page_index.html:4
-#: templates/content/showcase.html:4 templates/discussion/space.html:4
-#: templates/equipment/borrow_form.html:4
+#: templates/content/about.html:4 templates/content/award_form.html:4
+#: templates/content/awards.html:4 templates/content/page_detail.html:4
+#: templates/content/page_index.html:4 templates/content/showcase.html:4
+#: templates/discussion/space.html:4 templates/equipment/borrow_form.html:4
 #: templates/equipment/borrow_list.html:4 templates/equipment/list.html:4
 #: templates/home.html:4 templates/home.html:12 templates/notices/detail.html:4
 #: templates/notices/list.html:4 templates/projects/group_apply.html:4
@@ -1340,7 +1438,7 @@ msgstr "Hello, %(name)s."
 
 #: templates/accounts/member_home.html:20
 #: templates/accounts/member_profile_readonly.html:61
-#: templates/accounts/profile.html:89
+#: templates/accounts/profile.html:105
 msgid "当前身份"
 msgstr "Your role"
 
@@ -1504,12 +1602,12 @@ msgid "这位成员还没有填写个人资料。"
 msgstr "This member has not added any profile details yet."
 
 #: templates/accounts/member_profile_readonly.html:73
-#: templates/accounts/profile.html:104
+#: templates/accounts/profile.html:120
 msgid "暂无其他身份。"
 msgstr "No other roles."
 
 #: templates/accounts/member_profile_readonly.html:81
-#: templates/accounts/profile.html:113
+#: templates/accounts/profile.html:129
 msgid "个人图册"
 msgstr "Personal gallery"
 
@@ -1571,39 +1669,57 @@ msgstr "Upload avatar"
 msgid "删除头像"
 msgstr "Delete avatar"
 
-#: templates/accounts/profile.html:115
+#: templates/accounts/profile.html:91
+msgid "我的获奖"
+msgstr "My awards"
+
+#: templates/accounts/profile.html:95
+#, python-format
+msgid "按姓名「%(name)s」到历年获奖里搜索。"
+msgstr "Search the awards page for “%(name)s”."
+
+#: templates/accounts/profile.html:96
+msgid "查看我的获奖"
+msgstr "View my awards"
+
+#: templates/accounts/profile.html:98
+msgid "先在上面填好姓名，才能按名字找到你的获奖记录。"
+msgstr ""
+"Fill in your name above first — that is what the awards search looks for."
+
+#: templates/accounts/profile.html:131
 #, python-format
 msgid "%(counter)s 张 · %(used)s / %(limit)s MB"
 msgid_plural "%(counter)s 张 · %(used)s / %(limit)s MB"
 msgstr[0] "%(counter)s image · %(used)s / %(limit)s MB"
 msgstr[1] "%(counter)s images · %(used)s / %(limit)s MB"
 
-#: templates/accounts/profile.html:123
+#: templates/accounts/profile.html:139
 msgid "加入图册"
 msgstr "Add to gallery"
 
-#: templates/accounts/profile.html:126
+#: templates/accounts/profile.html:142
 #, python-format
 msgid "每张不超过 %(per)s MB，图册合计不超过 %(total)s MB。"
 msgstr "Up to %(per)s MB each, %(total)s MB in total."
 
-#: templates/accounts/profile.html:127
+#: templates/accounts/profile.html:143
 msgid "上传后可逐张调整顺序与排布。"
 msgstr "Once uploaded, you can set each image's order and layout."
 
-#: templates/accounts/profile.html:142
+#: templates/accounts/profile.html:158
 msgid "上移"
 msgstr "Move up"
 
-#: templates/accounts/profile.html:143
+#: templates/accounts/profile.html:159
 msgid "下移"
 msgstr "Move down"
 
-#: templates/accounts/profile.html:153 templates/discussion/space.html:164
+#: templates/accounts/profile.html:169 templates/discussion/space.html:164
 msgid "删除"
 msgstr "Delete"
 
-#: templates/accounts/profile.html:160
+#: templates/accounts/profile.html:176
 msgid "图册还是空的，从上面选一张图开始。"
 msgstr "Your gallery is empty — start by choosing an image above."
 
@@ -1622,7 +1738,7 @@ msgid "社团简介"
 msgstr "About the Club"
 
 #: templates/base.html:24 templates/content/awards.html:4
-#: templates/content/awards.html:12 templates/content/awards.html:16
+#: templates/content/awards.html:17 templates/content/awards.html:21
 #: templates/home.html:73
 msgid "历年获奖"
 msgstr "Awards"
@@ -1802,28 +1918,113 @@ msgstr ""
 "The club introduction has not been published yet; an administrator will add "
 "it."
 
-#: templates/content/awards.html:17
+#: templates/content/award_form.html:4 templates/content/award_form.html:16
+#: templates/content/awards.html:26
+msgid "添加获奖记录"
+msgstr "Add an award"
+
+#: templates/content/award_form.html:17
+msgid ""
+"奖项、赛事、年份、级别与获奖人必填；指导老师与两类图片可稍后补充。提交后立即"
+"显示在历年获奖页面上。"
+msgstr ""
+"The award, competition, year, level and winners are required; advisors and "
+"the two kinds of images can be added later. It appears on the awards page as "
+"soon as you submit."
+
+#: templates/content/award_form.html:30
+msgid "如「数学建模一等奖」，写清奖名与等级。"
+msgstr ""
+"For example “First prize, mathematical modelling” — name the award and its "
+"level."
+
+#: templates/content/award_form.html:53
+msgid ""
+"多位获奖人用顿号分隔；这里填的名字，就是「我的获奖」按姓名搜索时匹配的名字。"
+msgstr ""
+"Separate multiple winners with a comma. The names you enter here are what "
+"“My awards” searches for."
+
+#: templates/content/award_form.html:74
+msgid "添加记录"
+msgstr "Add record"
+
+#: templates/content/award_form.html:75
+msgid "返回历年获奖"
+msgstr "Back to awards"
+
+#: templates/content/awards.html:22
 #, python-format
 msgid "共 1 项记录"
 msgid_plural "共 %(counter)s 项记录"
 msgstr[0] "1 record"
 msgstr[1] "%(counter)s records"
 
-#: templates/content/awards.html:30
-msgid "赛事名称"
-msgstr "Competition"
+#: templates/content/awards.html:37
+msgid "搜索姓名、指导老师、赛事、级别或年份"
+msgstr "Search by name, advisor, competition, level or year"
 
-#: templates/content/awards.html:32
-msgid "获奖级别"
-msgstr "Award level"
+#: templates/content/awards.html:38
+msgid "搜索获奖记录"
+msgstr "Search awards"
 
-#: templates/content/awards.html:36
-msgid "获奖人 / 团队"
-msgstr "Winners / team"
+#: templates/content/awards.html:42 templates/discussion/space.html:37
+msgid "搜索"
+msgstr "Search"
 
 #: templates/content/awards.html:43
+msgid "清除"
+msgstr "Clear"
+
+#: templates/content/awards.html:47
+msgid "每页"
+msgstr "Per page"
+
+#: templates/content/awards.html:66
+msgid "全选本页"
+msgstr "Select all on this page"
+
+#: templates/content/awards.html:68
+msgid "下载所选证书"
+msgstr "Download selected certificates"
+
+#: templates/content/awards.html:71
+#, python-format
+msgid "已选 1 条"
+msgid_plural "已选 %(counter)s 条"
+msgstr[0] "1 selected"
+msgstr[1] "%(counter)s selected"
+
+#: templates/content/awards.html:81
+#, python-format
+msgid "选择「%(title)s」"
+msgstr "Select “%(title)s”"
+
+#: templates/content/awards.html:109
+#, python-format
+msgid "没有匹配「%(keyword)s」的获奖记录。"
+msgstr "No awards match “%(keyword)s”."
+
+#: templates/content/awards.html:111
 msgid "暂时没有获奖记录。"
 msgstr "No awards yet."
+
+#: templates/content/awards.html:118
+msgid "获奖记录分页"
+msgstr "Award pages"
+
+#: templates/content/awards.html:120 templates/discussion/space.html:190
+msgid "上一页"
+msgstr "Previous page"
+
+#: templates/content/awards.html:132 templates/discussion/space.html:194
+msgid "下一页"
+msgstr "Next page"
+
+#: templates/content/awards.html:136 templates/discussion/space.html:192
+#, python-format
+msgid "第 %(current)s / %(total)s 页"
+msgstr "Page %(current)s of %(total)s"
 
 #: templates/content/page_index.html:17
 #, python-format
@@ -1843,7 +2044,8 @@ msgid_plural "共 %(counter)s 位成员"
 msgstr[0] "1 member"
 msgstr[1] "%(counter)s members"
 
-#: templates/content/showcase.html:32 templates/includes/media.html:14
+#: templates/content/showcase.html:32 templates/includes/award_media.html:22
+#: templates/includes/media.html:14
 msgid "您的浏览器不支持视频播放。"
 msgstr "Your browser does not support video playback."
 
@@ -1874,10 +2076,6 @@ msgstr "Search member names"
 #: templates/discussion/space.html:36
 msgid "搜索姓名"
 msgstr "Search names"
-
-#: templates/discussion/space.html:37
-msgid "搜索"
-msgstr "Search"
 
 #: templates/discussion/space.html:50
 msgid "没有找到匹配的成员。"
@@ -1965,19 +2163,6 @@ msgstr "No posts in this board yet. Start the conversation with the first one."
 #: templates/discussion/space.html:188
 msgid "帖子分页"
 msgstr "Post pagination"
-
-#: templates/discussion/space.html:190
-msgid "上一页"
-msgstr "Previous page"
-
-#: templates/discussion/space.html:192
-#, python-format
-msgid "第 %(current)s / %(total)s 页"
-msgstr "Page %(current)s of %(total)s"
-
-#: templates/discussion/space.html:194
-msgid "下一页"
-msgstr "Next page"
 
 #: templates/discussion/space.html:199
 msgid "社团空间还没有板块。"
@@ -2138,6 +2323,10 @@ msgstr ""
 msgid "进入成员中心"
 msgstr "Go to member center"
 
+#: templates/includes/checksum.html:14
+msgid "校验值 SHA-256"
+msgstr "SHA-256 checksum"
+
 #: templates/notices/detail.html:18
 msgid "置顶通知"
 msgstr "Pinned notice"
@@ -2252,11 +2441,6 @@ msgstr "Not submitted"
 msgid "项目组信息"
 msgstr "Group details"
 
-#: templates/projects/group_detail.html:65
-#: templates/projects/group_list.html:48
-msgid "指导老师"
-msgstr "Advisors"
-
 #: templates/projects/group_detail.html:78
 #: templates/projects/group_manage.html:100
 msgid "角色"
@@ -2293,86 +2477,86 @@ msgstr "Reviewer %(number)s"
 msgid "下载批注版"
 msgstr "Download annotated copy"
 
-#: templates/projects/group_detail.html:166
+#: templates/projects/group_detail.html:167
 msgid "本轮已由超级评审敲定，该评审任务随之结束"
 msgstr "A super reviewer settled this round, so this review task is closed"
 
-#: templates/projects/group_detail.html:173
+#: templates/projects/group_detail.html:174
 msgid "评审任务"
 msgstr "Review tasks"
 
-#: templates/projects/group_detail.html:173
+#: templates/projects/group_detail.html:174
 msgid "暂无"
 msgstr "None"
 
-#: templates/projects/group_detail.html:179
+#: templates/projects/group_detail.html:180
 msgid "暂无评审记录。"
 msgstr "No review history yet."
 
-#: templates/projects/group_detail.html:195
+#: templates/projects/group_detail.html:196
 msgid "点击下载查看全文"
 msgstr "Click to download the full text"
 
-#: templates/projects/group_detail.html:199
-#: templates/projects/group_detail.html:284
-#: templates/projects/group_detail.html:329
-#: templates/projects/group_detail.html:363
+#: templates/projects/group_detail.html:200
+#: templates/projects/group_detail.html:287
+#: templates/projects/group_detail.html:333
+#: templates/projects/group_detail.html:368
 msgid "下载项目书"
 msgstr "Download proposal"
 
-#: templates/projects/group_detail.html:202
-#: templates/projects/group_manage.html:196
+#: templates/projects/group_detail.html:204
+#: templates/projects/group_manage.html:197
 msgid "尚未上传项目书。"
 msgstr "No proposal uploaded yet."
 
-#: templates/projects/group_detail.html:223
+#: templates/projects/group_detail.html:225
 msgid "下载"
 msgstr "Download"
 
-#: templates/projects/group_detail.html:228
+#: templates/projects/group_detail.html:231
 msgid "评审通过后，评审人上传的批注版项目书会归档到这里。"
 msgstr ""
 "Once a round is approved, annotated proposals uploaded by reviewers are "
 "archived here."
 
-#: templates/projects/group_detail.html:235
+#: templates/projects/group_detail.html:238
 msgid "方案状态"
 msgstr "Proposal status"
 
-#: templates/projects/group_detail.html:239 templates/reviews/queue.html:230
+#: templates/projects/group_detail.html:242 templates/reviews/queue.html:230
 #: templates/reviews/queue.html:267 templates/reviews/queue.html:295
 #: templates/reviews/queue.html:332
 msgid "轮次"
 msgstr "Round"
 
-#: templates/projects/group_detail.html:242
+#: templates/projects/group_detail.html:245
 msgid "进行中"
 msgstr "In progress"
 
-#: templates/projects/group_detail.html:244
+#: templates/projects/group_detail.html:247
 msgid "评审进度"
 msgstr "Review progress"
 
-#: templates/projects/group_detail.html:246 templates/reviews/queue.html:230
+#: templates/projects/group_detail.html:249 templates/reviews/queue.html:230
 #: templates/reviews/queue.html:295
 msgid "结论"
 msgstr "Decision"
 
-#: templates/projects/group_detail.html:250
+#: templates/projects/group_detail.html:253
 msgid "方案已通过，可按此推进项目。"
 msgstr "The proposal is approved — go ahead with the project."
 
-#: templates/projects/group_detail.html:253
+#: templates/projects/group_detail.html:256
 msgid "请根据评审意见修改项目书后重新提交。"
 msgstr "Revise the proposal according to the review comments and resubmit."
 
-#: templates/projects/group_detail.html:255
+#: templates/projects/group_detail.html:258
 msgid "本轮由初审打回（没有进入评审），请根据初审意见修改项目书后重新提交。"
 msgstr ""
 "This round was sent back at preliminary review (it never reached the "
 "reviewers); revise the proposal accordingly and resubmit."
 
-#: templates/projects/group_detail.html:258
+#: templates/projects/group_detail.html:261
 #, python-format
 msgid "等待初审人给出意见；初审通过后会随机分配 1 名评审人。"
 msgid_plural "等待初审人给出意见；初审通过后会随机分配 %(counter)s 名评审人。"
@@ -2383,7 +2567,7 @@ msgstr[1] ""
 "Waiting for the preliminary reviewer's decision; once it passes, %(counter)s "
 "reviewers are drawn at random."
 
-#: templates/projects/group_detail.html:260
+#: templates/projects/group_detail.html:263
 #, python-format
 msgid "等待评审人提交意见；1 名评审人全部通过后方案即为通过。"
 msgid_plural "等待评审人提交意见；%(counter)s 名评审人全部通过后方案即为通过。"
@@ -2394,15 +2578,15 @@ msgstr[1] ""
 "Waiting for the reviewers to respond; the proposal is approved once all "
 "%(counter)s reviewers approve."
 
-#: templates/projects/group_detail.html:264
+#: templates/projects/group_detail.html:267
 msgid "尚未提交评审。"
 msgstr "Not submitted for review yet."
 
-#: templates/projects/group_detail.html:273
+#: templates/projects/group_detail.html:276
 msgid "一票决定"
 msgstr "One vote decides"
 
-#: templates/projects/group_detail.html:277
+#: templates/projects/group_detail.html:280
 #, python-format
 msgid ""
 "你的决定会立即敲定第 %(round)s 轮，本轮尚未提交的 1 个任务（初审／评审）会随"
@@ -2419,15 +2603,15 @@ msgstr[1] ""
 "still open this round (preliminary and review) are released right away. "
 "Download the proposal first, and attach an annotated copy if you wish."
 
-#: templates/projects/group_detail.html:306
+#: templates/projects/group_detail.html:310
 msgid "提交超级评审"
 msgstr "Submit super review"
 
-#: templates/projects/group_detail.html:316
+#: templates/projects/group_detail.html:320
 msgid "我的初审"
 msgstr "My preliminary review"
 
-#: templates/projects/group_detail.html:321
+#: templates/projects/group_detail.html:325
 #, python-format
 msgid ""
 "你是第 %(round)s 轮的初审人：请先下载项目书阅读， 再决定放行还是打回。通过后"
@@ -2439,15 +2623,15 @@ msgstr ""
 "%(required)s reviewers are drawn at random according to the submission type; "
 "if you send it back, the round ends and the group can revise and resubmit."
 
-#: templates/projects/group_detail.html:347
+#: templates/projects/group_detail.html:352
 msgid "提交初审"
 msgstr "Submit preliminary decision"
 
-#: templates/projects/group_detail.html:357 templates/reviews/queue.html:16
+#: templates/projects/group_detail.html:362 templates/reviews/queue.html:16
 msgid "我的评审"
 msgstr "My reviews"
 
-#: templates/projects/group_detail.html:361
+#: templates/projects/group_detail.html:366
 msgid ""
 "请先下载本轮项目书，阅读后填写评审意见与决定；如已在项目书上批注，可一并上传"
 "批注版。"
@@ -2455,7 +2639,7 @@ msgstr ""
 "Download this round's proposal, then record your decision and comments; if "
 "you annotated the file, upload the annotated copy too."
 
-#: templates/projects/group_detail.html:385
+#: templates/projects/group_detail.html:391
 msgid "完成评审"
 msgstr "Submit review"
 
@@ -2592,20 +2776,20 @@ msgstr "up to 20 MB"
 msgid "下载当前项目书"
 msgstr "Download current proposal"
 
-#: templates/projects/group_manage.html:207
+#: templates/projects/group_manage.html:208
 msgid "上传 / 更新项目书"
 msgstr "Upload / update proposal"
 
-#: templates/projects/group_manage.html:215
-#: templates/projects/group_manage.html:257
+#: templates/projects/group_manage.html:216
+#: templates/projects/group_manage.html:258
 msgid "提交审核"
 msgstr "Submit for review"
 
-#: templates/projects/group_manage.html:217
+#: templates/projects/group_manage.html:218
 msgid "本轮未结束"
 msgstr "Round in progress"
 
-#: templates/projects/group_manage.html:224
+#: templates/projects/group_manage.html:225
 #, python-format
 msgid ""
 "第 %(round)s 轮送审正在初审中，等待初审人给出意见； 初审通过后会随机分配 "
@@ -2615,7 +2799,7 @@ msgstr ""
 "decision. If it passes, %(required)s reviewers are drawn at random; if it is "
 "sent back, the round ends."
 
-#: templates/projects/group_manage.html:230
+#: templates/projects/group_manage.html:231
 #, python-format
 msgid ""
 "第 %(round)s 轮评审尚未结束 （已审结 %(done)s / %(required)s）， 需等本轮出结"
@@ -2624,11 +2808,11 @@ msgstr ""
 "Round %(round)s is still under review (%(done)s / %(required)s decided); you "
 "can submit the next round once this one has a decision."
 
-#: templates/projects/group_manage.html:236
+#: templates/projects/group_manage.html:237
 msgid "同一条送审不会被重复提交。"
 msgstr "The same submission is never sent twice."
 
-#: templates/projects/group_manage.html:251
+#: templates/projects/group_manage.html:252
 msgid ""
 "提交后先由 1 名初审人初审，通过后才按所选类型随机分配评审人；全部评审人通过"
 "后，本项目组方案即通过。"
@@ -2637,25 +2821,25 @@ msgstr ""
 "reviewers are drawn at random according to the type you chose, and the "
 "proposal is approved when all of them approve."
 
-#: templates/projects/group_manage.html:252
+#: templates/projects/group_manage.html:253
 msgid "初审人、评审人身份对项目组匿名，评审人可另附批注版项目书。"
 msgstr ""
 "Preliminary reviewers and reviewers stay anonymous to the group; reviewers "
 "may attach an annotated proposal."
 
-#: templates/projects/group_manage.html:265
+#: templates/projects/group_manage.html:266
 msgid "转让联系人"
 msgstr "Transfer contact"
 
-#: templates/projects/group_manage.html:268
+#: templates/projects/group_manage.html:269
 msgid "转让后你仍是本项目组的普通成员。"
 msgstr "After transferring, you remain an ordinary member of this group."
 
-#: templates/projects/group_manage.html:279
+#: templates/projects/group_manage.html:280
 msgid "转让"
 msgstr "Transfer"
 
-#: templates/projects/group_manage.html:283
+#: templates/projects/group_manage.html:284
 msgid "暂无可转让的成员。"
 msgstr "No member to transfer to."
 
@@ -2817,7 +3001,3 @@ msgstr "No completed reviews."
 #: templates/reviews/queue.html:339
 msgid "本轮已由超级评审敲定，无需再审"
 msgstr "A super reviewer settled this round; no review needed"
-
-#: templates/includes/checksum.html:14
-msgid "校验值 SHA-256"
-msgstr "SHA-256 checksum"
