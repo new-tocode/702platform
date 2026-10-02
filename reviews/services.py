@@ -24,6 +24,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from core.audit import record_audit
+from notices import services as notices_services
 from projects.models import ProjectGroup
 
 from . import lifecycle
@@ -133,6 +134,10 @@ def submit_for_review(*, group, submitter, review_type, message="", request=None
             stage=ReviewTask.PRELIMINARY,
             reviewer=preliminary_reviewer,
         )
+        # 提醒归「我的消息」：给初审人写一条待办消息（评审页只负责列任务）。
+        notices_services.notify_preliminary_task(
+            submission=submission, reviewer=preliminary_reviewer
+        )
 
     record_audit(
         action="reviews.submission.create",
@@ -191,6 +196,19 @@ def _archive_annotated_proposals(submission):
             submission.group_id,
             archived_count,
         )
+
+
+def _notify_result_if_settled(submission):
+    """轮次一旦有结论，给项目组联系人写一条结果消息；还在进行中就不写。
+
+    幂等由 ``notify_review_result`` 的 get_or_create 保证——同一轮不会攒出
+    第二条结果。
+    """
+    if submission.status in (
+        ProjectSubmission.APPROVED,
+        ProjectSubmission.NEEDS_REVISION,
+    ):
+        notices_services.notify_review_result(submission=submission)
 
 
 def _settle_submission(submission):
@@ -288,6 +306,12 @@ def submit_verdict(
             update_fields.append("annotated_file")
         locked.save(update_fields=update_fields)
 
+        # 这张卡交掉了：对应的「待办」消息撤掉——消息只负责「有事等你」，
+        # 历史归评审页（已完成／已释放都在那里列着）。
+        notices_services.clear_review_task_messages(
+            submission=submission, reviewer=reviewer
+        )
+
         drawn = []
         if stage == ReviewTask.PRELIMINARY:
             if decision == ReviewTask.APPROVE:
@@ -296,6 +320,7 @@ def submit_verdict(
                 _advance(submission, lifecycle.PRELIMINARY_REVISED, at=now)
         else:
             _settle_submission(submission)
+        _notify_result_if_settled(submission)
 
     record_audit(
         action=rules.submit_action,
@@ -347,6 +372,9 @@ def _open_review_stage(submission):
             submission=submission,
             stage=ReviewTask.REVIEW,
             reviewer=reviewer_user,
+        )
+        notices_services.notify_review_task(
+            submission=submission, reviewer=reviewer_user
         )
     return reviewers
 
@@ -405,6 +433,11 @@ def override_review(
 
         if locked.status == ProjectSubmission.APPROVED:
             _archive_annotated_proposals(locked)
+
+        # 一票定论：等待中的任务刚被释放，他们的「待办」消息一并撤掉；
+        # 结论给项目组联系人写一条结果。
+        notices_services.clear_review_task_messages(submission=locked)
+        notices_services.notify_review_result(submission=locked)
 
     record_audit(
         action="reviews.submission.override",
@@ -485,9 +518,24 @@ def reassign_task(*, task, new_reviewer, actor, request=None):
                 % {"stage": rules.label}
             )
 
+        previous_reviewer = locked.reviewer
         previous_reviewer_id = locked.reviewer_id
         locked.reviewer = new_reviewer
         locked.save(update_fields=["reviewer"])
+
+        # 任务换了人：原持有人的「待办」消息撤掉，给新持有人写一条对应的
+        # （改派回来的场景由 _create_task_message 的 get_or_create 兜住）。
+        notices_services.clear_review_task_messages(
+            submission=submission, reviewer=previous_reviewer
+        )
+        if locked.stage == ReviewTask.PRELIMINARY:
+            notices_services.notify_preliminary_task(
+                submission=submission, reviewer=new_reviewer
+            )
+        else:
+            notices_services.notify_review_task(
+                submission=submission, reviewer=new_reviewer
+            )
 
     record_audit(
         action=rules.reassign_action,

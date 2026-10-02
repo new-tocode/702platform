@@ -259,6 +259,11 @@ td .t { font-size: 13px; font-weight: 500; }
 td form { margin: 0; }
 .table-wrap table { min-width: 520px; }
 
+/* --- 我的消息：未读行整行加亮、标题加粗，行首一条蓝线 --- */
+.messages tr.unread td { background: var(--blue-tint); }
+.messages tr.unread td:first-child { box-shadow: inset 3px 0 0 var(--blue); }
+.messages tr.unread .t { font-weight: 600; }
+
 /* --- 表单 --- */
 .field { margin-bottom: 16px; }
 .field label, .field-label {
@@ -512,6 +517,14 @@ input[type="file"] { font: inherit; font-size: 13px; color: var(--ink-2); }
 .entry .label { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 9px; }
 .entry .label::before { content: ""; width: 6px; height: 6px; border: 1.5px solid var(--blue); flex: none; }
 .entry:hover .label::before { background: var(--blue); }
+/* 「我的消息」入口上的未读计数徽标：推到卡片右端，与提醒条同色 */
+.entry-badge {
+  margin-left: auto; flex: none;
+  min-width: 18px; height: 18px; padding: 0 5px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--amber); color: #fff;
+  font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums;
+}
 .entry .desc { font-size: 12px; color: var(--ink-3); line-height: 1.65; }
 
 /* --- 待办 --- */
@@ -727,6 +740,8 @@ td .empty, .panel-body.tight .empty {
 .discussion-board-create label { color: var(--ink-2); font-size: 12px; }
 .discussion-feed > * + * { margin-top: 14px; }
 .discussion-post { margin-bottom: 0; }
+/* 从「我的消息」跳过来时，目标帖子/评论亮一下；:target 是浏览器原生的，无脚本也有效 */
+.discussion-post:target { border-color: var(--blue); box-shadow: inset 3px 0 0 var(--blue); }
 .discussion-post .panel-head { align-items: flex-start; }
 .discussion-post-heading { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .discussion-post-heading h3 { min-width: 0; overflow-wrap: anywhere; }
@@ -775,6 +790,7 @@ td .empty, .panel-body.tight .empty {
 }
 .discussion-comments h4 { display: flex; align-items: baseline; gap: 7px; margin-bottom: 10px; }
 .discussion-comment { padding: 9px 0; border-bottom: 1px solid var(--line); }
+.discussion-comment:target { background: var(--blue-tint); box-shadow: inset 3px 0 0 var(--blue); }
 /* 作者、时间与删除按钮同一行；删除按钮靠 margin-left: auto 推到右端。 */
 .discussion-comment-head { display: flex; align-items: baseline; gap: 8px; }
 .discussion-comment-head strong { font-size: 12px; }
@@ -788,6 +804,18 @@ td .empty, .panel-body.tight .empty {
 .link-danger:hover { color: var(--red); text-decoration: underline; }
 .discussion-comment-form { display: grid; justify-items: start; gap: 8px; margin-top: 12px; }
 .discussion-comment-form textarea { min-height: 58px; }
+
+/* --- @ 补全下拉：贴在输入框所在块的底部，无脚本时不出现 --- */
+.mention-host { position: relative; }
+.mention-menu {
+  position: absolute; left: 0; top: 100%; z-index: 30;
+  min-width: 160px; max-height: 220px; overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--line-2);
+  box-shadow: 0 8px 20px rgba(18, 80, 143, 0.12);
+}
+.mention-menu[hidden] { display: none; }
+.mention-option { padding: 7px 12px; font-size: 13px; cursor: pointer; }
+.mention-option.is-active { background: var(--blue-tint); }
 .discussion-pagination {
   display: flex; justify-content: center; align-items: center;
   gap: 12px; margin-top: 20px;

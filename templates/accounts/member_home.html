@@ -48,11 +48,13 @@
         {% endif %}
     </div>
 
-    {% if pending.total %}
+    {# 评审待办不再在这里提醒：分配任务时就写进了「我的消息」， #}
+    {# 未读计数由下面的提醒条一起报。评审页只负责列出任务。 #}
+    {% if unread_messages %}
         <div class="todo reveal">
-            <a href="{% url 'reviews:queue' %}">
-                <span class="n">{{ pending.total }}</span>
-                <span class="t">{{ pending.headline }} · {% translate "点击前往处理" %}</span>
+            <a href="{% url 'member_notices:internal_list' %}">
+                <span class="n">{{ unread_messages }}</span>
+                <span class="t">{% blocktranslate count counter=unread_messages %}1 条未读消息{% plural %}{{ counter }} 条未读消息{% endblocktranslate %} · {% translate "点击查看" %}</span>
             </a>
         </div>
     {% endif %}
@@ -96,8 +98,10 @@
         <div class="panel-body">
             <div class="entries">
                 {% for entry in operation_entries %}
+                    {# 未读徽标是「我的消息」这一条的特例：入口注册表是通用的， #}
+                    {# 只有消息带计数，所以在这里按稳定的 key 认它。 #}
                     <a class="entry" href="{{ entry.url }}">
-                        <span class="label">{{ entry.label }}</span>
+                        <span class="label">{{ entry.label }}{% if entry.key == "notices.internal" and unread_messages %}<span class="entry-badge">{{ unread_messages }}</span>{% endif %}</span>
                         <span class="desc">{{ entry.description }}</span>
                     </a>
                 {% empty %}

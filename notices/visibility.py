@@ -21,9 +21,12 @@ def member_visible_notices(user):
     """Notices visible to a logged-in, password-completed member.
 
     Internal notices come from the member's auth groups; contact-only notices
-    are included when the member is the contact of any project group.
+    are included when the member is the contact of any project group; public
+    notices reach every member — they keep their own bulletin board, and here
+    they are part of «my messages» like any other notice addressed to you.
     """
-    query = Q(scope=Notice.INTERNAL, visible_groups__in=user.groups.all())
+    query = Q(scope=Notice.PUBLIC)
+    query |= Q(scope=Notice.INTERNAL, visible_groups__in=user.groups.all())
     if is_project_contact(user):
         query |= Q(scope=Notice.CONTACTS)
     return Notice.objects.filter(query).distinct()

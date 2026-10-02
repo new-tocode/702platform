@@ -14,8 +14,8 @@ class NoticesConfig(AppConfig):
 
         register_entry(
             key="notices.internal",
-            label=_("内部通知"),
-            description=_("查看与你所属用户组相关的通知"),
+            label=_("我的消息"),
+            description=_("查看发给你的通知与消息。"),
             url_name="member_notices:internal_list",
             sort_order=30,
         )
