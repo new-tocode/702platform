@@ -59,15 +59,15 @@
 
 ## 阶段（每阶段一个提交）
 
-1. **数据层**：`NoticeRead` 模型 + 迁移；`notices/selectors.py`（消息行装配、未读计数）；
-   `notices/services.py`（`mark_read` / `mark_all_read`）；测试（约束、计数、幂等）。
-2. **我的消息页**：列表五列改造、未读样式、「全部已读」按钮、详情自动已读、
-   文案改名；测试（列内容、样式标记、自动已读、全部已读、删除后消失）。
-3. **成员中心提醒**：入口改名与描述、未读徽标、顶部提醒条；测试（0 未读不渲染、
-   有未读显示计数、点击去向）。
-4. **收尾**：`.po` 新文案与英文译文；文档同步（README、`docs/architecture/notices.md`、
-   `routes.md`、`accounts.md`、`roadmap.md` 里「站内消息」一条）；全量测试 + 浏览器
-   实测（中英双语、两页、手机宽度）。
+1. **数据层** ✅ `a16f439`：`NoticeRead` 模型 + 迁移；`notices/selectors.py`（消息行装配、
+   未读计数）；`notices/services.py`（`mark_read` / `mark_all_read`）；9 条数据层测试。
+2. **我的消息页** ✅ `3fcd3ca`：列表五列改造、未读样式、「全部已读」按钮（POST
+   `read-all/`）、详情自动已读、文案改名；9 条页面测试。
+3. **成员中心提醒** ✅ `8f24681`：入口改名与描述、`notices/panels.py`、未读徽标、
+   顶部提醒条；4 条提醒测试。
+4. **收尾** ✅：`.po` 新文案与英文译文（含清掉 gettext 猜出的 fuzzy）；文档同步
+   （README、`docs/architecture/notices.md`、`routes.md`、`roadmap.md`）；全量测试 +
+   浏览器实测（中英双语、两页、手机宽度）。
 
 ## 验收对照
 

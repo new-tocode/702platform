@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 702platform\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-02 16:17+0800\n"
+"POT-Creation-Date: 2026-10-02 16:56+0800\n"
 "PO-Revision-Date: 2026-09-19 18:39\n"
 "Last-Translator: 702platform\n"
 "Language-Team: 702platform\n"
@@ -223,48 +223,48 @@ msgstr "Gallery image"
 msgid "密码修改成功。"
 msgstr "Password updated."
 
-#: accounts/views.py:256
+#: accounts/views.py:259
 msgid "个人信息已保存。"
 msgstr "Profile saved."
 
-#: accounts/views.py:326
+#: accounts/views.py:329
 msgid "图像已加入图册。"
 msgstr "Image added to your gallery."
 
-#: accounts/views.py:337 accounts/views.py:358 projects/views.py:358
+#: accounts/views.py:340 accounts/views.py:361 projects/views.py:358
 #: projects/views.py:465
 msgid "未知操作"
 msgstr "Unknown action"
 
-#: accounts/views.py:342
+#: accounts/views.py:345
 msgid "顺序已调整。"
 msgstr "Order updated."
 
-#: accounts/views.py:346
+#: accounts/views.py:349
 msgid "已经是第一张了。"
 msgstr "That is already the first image."
 
-#: accounts/views.py:346
+#: accounts/views.py:349
 msgid "已经是最后一张了。"
 msgstr "That is already the last image."
 
-#: accounts/views.py:363
+#: accounts/views.py:366
 msgid "排布已更新。"
 msgstr "Layout updated."
 
-#: accounts/views.py:380
+#: accounts/views.py:383
 msgid "图像已删除。"
 msgstr "Image removed."
 
-#: accounts/views.py:403
+#: accounts/views.py:406
 msgid "头像已更新。"
 msgstr "Avatar updated."
 
-#: accounts/views.py:428
+#: accounts/views.py:431
 msgid "头像已删除。"
 msgstr "Avatar removed."
 
-#: accounts/views.py:430
+#: accounts/views.py:433
 msgid "当前没有头像。"
 msgstr "There is no avatar to delete."
 
@@ -278,7 +278,7 @@ msgid "查看竞赛信息；项目组联系人可为项目组报名"
 msgstr "View competitions; a group's contact can register that group"
 
 #: competitions/forms.py:18 projects/apps.py:18
-#: templates/accounts/member_home.html:75 templates/competitions/list.html:51
+#: templates/accounts/member_home.html:84 templates/competitions/list.html:51
 #: templates/projects/group_list.html:4 templates/projects/group_list.html:16
 #: templates/reviews/queue.html:230 templates/reviews/queue.html:267
 #: templates/reviews/queue.html:295 templates/reviews/queue.html:332
@@ -562,12 +562,13 @@ msgid "作者"
 msgstr "Author"
 
 #: discussion/models.py:52 templates/notices/list.html:27
+#: templates/notices/message_list.html:41
 msgid "标题"
 msgstr "Title"
 
 #: discussion/models.py:54 templates/discussion/space.html:111
 #: templates/discussion/space.html:149 templates/home.html:54
-#: templates/notices/list.html:36
+#: templates/notices/list.html:36 templates/notices/message_list.html:52
 msgid "置顶"
 msgstr "Pinned"
 
@@ -741,34 +742,44 @@ msgstr "This borrowing record has already been returned."
 msgid "已登记归还：%(name)s。"
 msgstr "Return recorded: %(name)s."
 
-#: notices/apps.py:17 notices/views.py:74
-msgid "内部通知"
-msgstr "Internal Notices"
+#: notices/apps.py:17 templates/notices/message_list.html:4
+#: templates/notices/message_list.html:12
+#: templates/notices/message_list.html:16
+msgid "我的消息"
+msgstr "My messages"
 
 #: notices/apps.py:18
-msgid "查看与你所属用户组相关的通知"
-msgstr "See notices addressed to the user groups you belong to"
+msgid "查看发给你的通知与消息。"
+msgstr "See the notices and messages sent to you."
 
-#: notices/views.py:29 templates/base.html:27 templates/home.html:45
+#: notices/selectors.py:55
+msgid "仅项目组联系人"
+msgstr "Project contacts only"
+
+#: notices/selectors.py:78
+msgid "内部通知"
+msgstr "Internal notice"
+
+#: notices/views.py:33 templates/base.html:27 templates/home.html:45
 #: templates/home.html:76
 msgid "公开通知"
 msgstr "Public Notices"
 
-#: notices/views.py:30 templates/home.html:60
+#: notices/views.py:34 templates/home.html:60
 msgid "暂时没有公开通知。"
 msgstr "No public notices yet."
 
-#: notices/views.py:55
+#: notices/views.py:59
 msgid "返回公开通知"
 msgstr "Back to public notices"
 
-#: notices/views.py:75
-msgid "暂时没有内部通知。"
-msgstr "No internal notices yet."
+#: notices/views.py:104
+msgid "已将全部消息标为已读。"
+msgstr "All messages marked as read."
 
-#: notices/views.py:100
-msgid "返回内部通知"
-msgstr "Back to internal notices"
+#: notices/views.py:128
+msgid "返回我的消息"
+msgstr "Back to my messages"
 
 #: projects/apps.py:19
 msgid "查看项目组、联系人和成员"
@@ -1427,7 +1438,8 @@ msgstr "Member Center"
 #: templates/discussion/space.html:4 templates/equipment/borrow_form.html:4
 #: templates/equipment/borrow_list.html:4 templates/equipment/list.html:4
 #: templates/home.html:4 templates/home.html:12 templates/notices/detail.html:4
-#: templates/notices/list.html:4 templates/projects/group_apply.html:4
+#: templates/notices/list.html:4 templates/notices/message_list.html:4
+#: templates/projects/group_apply.html:4
 #: templates/projects/group_create_request.html:4
 #: templates/projects/group_detail.html:4 templates/projects/group_list.html:4
 #: templates/projects/group_manage.html:4 templates/registration/login.html:4
@@ -1470,12 +1482,12 @@ msgid "初审资格"
 msgstr "Preliminary reviewer role"
 
 #: templates/accounts/member_home.html:38
-#: templates/accounts/member_home.html:113
+#: templates/accounts/member_home.html:124
 msgid "初审／评审请假"
 msgstr "Review leave"
 
 #: templates/accounts/member_home.html:39
-#: templates/accounts/member_home.html:115
+#: templates/accounts/member_home.html:126
 msgid "请假中"
 msgstr "On leave"
 
@@ -1488,19 +1500,30 @@ msgstr "Back %(ends)s"
 msgid "点击前往处理"
 msgstr "Open to handle"
 
-#: templates/accounts/member_home.html:63
+#: templates/accounts/member_home.html:64
+#, python-format
+msgid "1 条未读消息"
+msgid_plural "%(counter)s 条未读消息"
+msgstr[0] "1 unread message"
+msgstr[1] "%(counter)s unread messages"
+
+#: templates/accounts/member_home.html:64
+msgid "点击查看"
+msgstr "Open to view"
+
+#: templates/accounts/member_home.html:72
 msgid "社团概览"
 msgstr "Club overview"
 
-#: templates/accounts/member_home.html:64
+#: templates/accounts/member_home.html:73
 msgid "仅管理员与联系人可见"
 msgstr "Visible to administrators and contacts only"
 
-#: templates/accounts/member_home.html:71
+#: templates/accounts/member_home.html:80
 msgid "在册成员"
 msgstr "Registered members"
 
-#: templates/accounts/member_home.html:72
+#: templates/accounts/member_home.html:81
 #: templates/projects/group_detail.html:40
 #: templates/projects/group_manage.html:41
 #, python-format
@@ -1509,57 +1532,57 @@ msgid_plural "%(counter)s<small>人</small>"
 msgstr[0] "1<small>member</small>"
 msgstr[1] "%(counter)s<small>members</small>"
 
-#: templates/accounts/member_home.html:76
+#: templates/accounts/member_home.html:85
 #, python-format
 msgid "1<small>个</small>"
 msgid_plural "%(counter)s<small>个</small>"
 msgstr[0] "1<small>group</small>"
 msgstr[1] "%(counter)s<small>groups</small>"
 
-#: templates/accounts/member_home.html:79
+#: templates/accounts/member_home.html:88
 msgid "开放报名竞赛"
 msgstr "Open competitions"
 
-#: templates/accounts/member_home.html:80
+#: templates/accounts/member_home.html:89
 #, python-format
 msgid "1<small>项</small>"
 msgid_plural "%(counter)s<small>项</small>"
 msgstr[0] "1<small>competition</small>"
 msgstr[1] "%(counter)s<small>competitions</small>"
 
-#: templates/accounts/member_home.html:83
+#: templates/accounts/member_home.html:92
 msgid "在借设备"
 msgstr "Equipment on loan"
 
-#: templates/accounts/member_home.html:84
+#: templates/accounts/member_home.html:93
 #, python-format
 msgid "1<small>台</small>"
 msgid_plural "%(counter)s<small>台</small>"
 msgstr[0] "1<small>item</small>"
 msgstr[1] "%(counter)s<small>items</small>"
 
-#: templates/accounts/member_home.html:93
+#: templates/accounts/member_home.html:102
 msgid "可用入口"
 msgstr "Available sections"
 
-#: templates/accounts/member_home.html:104
+#: templates/accounts/member_home.html:115
 msgid "当前没有可用的业务入口。"
 msgstr "No sections are available to you right now."
 
-#: templates/accounts/member_home.html:117
+#: templates/accounts/member_home.html:128
 msgid "已安排"
 msgstr "Scheduled"
 
-#: templates/accounts/member_home.html:125
+#: templates/accounts/member_home.html:136
 #, python-format
 msgid "当前请假：%(starts)s 至 %(ends)s。"
 msgstr "Current leave: %(starts)s to %(ends)s."
 
-#: templates/accounts/member_home.html:127
+#: templates/accounts/member_home.html:138
 msgid "修改下面任一时间即可调整恢复评审的时间。"
 msgstr "Change either time below to adjust when you resume reviewing."
 
-#: templates/accounts/member_home.html:130
+#: templates/accounts/member_home.html:141
 msgid ""
 "请假期间不会被分配新的初审或评审请求，到点自动恢复；已经分配给你的任务不受影"
 "响。"
@@ -1568,11 +1591,11 @@ msgstr ""
 "you; it resumes automatically at the end, and tasks already assigned to you "
 "are unaffected."
 
-#: templates/accounts/member_home.html:151
+#: templates/accounts/member_home.html:162
 msgid "保存请假"
 msgstr "Save leave"
 
-#: templates/accounts/member_home.html:158
+#: templates/accounts/member_home.html:169
 msgid "取消请假"
 msgstr "Cancel leave"
 
@@ -2306,6 +2329,7 @@ msgid "日期"
 msgstr "Date"
 
 #: templates/home.html:46 templates/notices/list.html:28
+#: templates/notices/message_list.html:43
 msgid "范围"
 msgstr "Scope"
 
@@ -2340,7 +2364,7 @@ msgstr "Pinned notice"
 msgid "发布时间 %(published)s · 发布人 %(publisher)s"
 msgstr "Published %(published)s · by %(publisher)s"
 
-#: templates/notices/list.html:17
+#: templates/notices/list.html:17 templates/notices/message_list.html:19
 #, python-format
 msgid "共 1 条"
 msgid_plural "共 %(counter)s 条"
@@ -2350,6 +2374,33 @@ msgstr[1] "%(counter)s notices"
 #: templates/notices/list.html:26
 msgid "发布日期"
 msgstr "Published"
+
+#: templates/notices/message_list.html:20
+#, python-format
+msgid "1 条未读"
+msgid_plural "%(counter)s 条未读"
+msgstr[0] "1 unread"
+msgstr[1] "%(counter)s unread"
+
+#: templates/notices/message_list.html:28
+msgid "全部已读"
+msgstr "Mark all as read"
+
+#: templates/notices/message_list.html:40
+msgid "类型"
+msgstr "Type"
+
+#: templates/notices/message_list.html:42
+msgid "发布人"
+msgstr "Publisher"
+
+#: templates/notices/message_list.html:44
+msgid "时间"
+msgstr "Time"
+
+#: templates/notices/message_list.html:60
+msgid "暂时没有消息。"
+msgstr "No messages yet."
 
 #: templates/projects/group_apply.html:4
 #, python-format
