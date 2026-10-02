@@ -5,6 +5,10 @@
 顺序与后台「身份管理」分组的排法同源：全局身份按目录的 ``sort_order``（管理员 →
 评审人 → 初审人 → 超级评审），对象身份随其后。
 
+清单末尾另加一条「用户组」：它不在身份目录里——那是后台维护的 ``auth.Group``
+（内部通知的投递范围，``Notice.visible_groups``），不是身份、更不是项目组，
+但本人需要知道通知为什么投给自己，所以一并列在这里。
+
 只读不写，所以不叫 services；跨应用取数走 ``projects.selectors``，不直接查
 ``ProjectGroup``。
 """
@@ -21,10 +25,11 @@ from .models import GALLERY_TOTAL_MAX_BYTES, GalleryImage
 
 @dataclass(frozen=True)
 class Identity:
-    """一条身份：叫什么，以及它落在哪些项目组上。
+    """一条身份：叫什么，以及它挂在哪些组上。
 
     全局身份没有依附的对象，``groups`` 因此是空的——模板据此决定只画一个标签，
-    还是把组名一并列出来。
+    还是把组名一并列出来。组名的口径随条目而定：对象身份（项目组联系人／成员）
+    装的是 ``ProjectGroup`` 名，末条「用户组」装的是 ``auth.Group`` 名。
     """
 
     label: str
@@ -32,10 +37,10 @@ class Identity:
 
 
 def member_identities(user):
-    """该用户持有的身份，按身份目录的顺序；没持有的不出现。
+    """该用户持有的身份（末尾是所属用户组），按身份目录的顺序；没持有的不出现。
 
     对象身份（项目组联系人、项目组成员）只在真有组时才算一条，所以清单里不会
-    出现「项目组成员：无」这种空条目。
+    出现「项目组成员：无」这种空条目；末条的「用户组」同理，一个组都没有时不出现。
     """
     if not (user and user.is_authenticated):
         return ()
@@ -63,6 +68,12 @@ def member_identities(user):
     joined = tuple(group.name for group in groups_of_member(user))
     if joined:
         identities.append(Identity(_("项目组成员"), joined))
+
+    # 用户组（auth.Group）只决定内部通知投给谁，不是身份；没有组就不出现，
+    # 与对象身份同一条口径。按名称排序，与项目组名的排序口径一致。
+    user_groups = tuple(user.groups.order_by("name").values_list("name", flat=True))
+    if user_groups:
+        identities.append(Identity(_("用户组"), user_groups))
     return tuple(identities)
 
 

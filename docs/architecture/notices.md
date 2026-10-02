@@ -22,4 +22,5 @@ Notice
 - `scope=public`：首页与公开公告列表可见，访客无需登录；公开通知不配置用户组。
 - `scope=internal`：仅登录且已完成首次改密、并且属于 `visible_groups` 任一用户组的成员可见；访客和其他用户组不可见。
 - `scope=contacts`：仅登录且已是任一项目组联系人（由 `ProjectGroup.leader` 计算）的成员可见，无需配置用户组。
+- 成员想确认自己在哪些组上，看个人信息页「当前身份」末条的「用户组」即可（`accounts.selectors.member_identities`），不必问管理员。
 - 可见性判定收敛在 `notices/visibility.py` 的 `member_visible_notices(user)` 单点，列表与详情共用同一过滤条件，未授权详情返回 404。
