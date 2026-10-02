@@ -133,20 +133,64 @@ def _template_msgid_groups(text):
     return groups
 
 
+def _source_files(suffixes):
+    """项目自己写的源码文件（范围与 makemessages 一致）。"""
+    return [
+        path
+        for path in sorted(Path(settings.BASE_DIR).rglob("*"))
+        if path.suffix in suffixes
+        and not any(
+            part.startswith(".") or part in {"__pycache__", "staticfiles", "mediafiles"}
+            for part in path.parts
+        )
+    ]
+
+
 def _source_msgid_groups():
-    """扫出源码里标记为可翻译的文案（范围与 makemessages 一致：py 与 html）。"""
+    """扫出源码里标记为可翻译的文案（py 与 html）。"""
     groups = []
-    for path in sorted(Path(settings.BASE_DIR).rglob("*")):
-        if path.suffix not in {".py", ".html"}:
-            continue
-        if any(part.startswith(".") or part in {"__pycache__", "staticfiles", "mediafiles"}
-               for part in path.parts):
-            continue
+    for path in _source_files({".py", ".html"}):
         text = path.read_text(encoding="utf-8")
         groups.extend(
             _python_msgid_groups(text) if path.suffix == ".py" else _template_msgid_groups(text)
         )
     return groups
+
+
+def _frozen_translations():
+    """在模块或类体里给译文插值的地方。
+
+    ``_("不超过 %(limit)s MB。") % {...}`` 写在函数外面时，``%`` 会在**导入那一刻**
+    把代理解开：那会儿语言还是默认的中文，字符串就此定型，之后切到英文也不会变
+    ——「不超过 2 MB。」就这么出现在英文页面上过。函数体里的同一行没问题，那时语言
+    已经定了，所以只查函数之外的那些。
+    """
+    flagged = []
+
+    def walk(node, path, inside_function):
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+                walk(child, path, True)
+                continue
+            if (
+                not inside_function
+                and isinstance(child, ast.BinOp)
+                and isinstance(child.op, ast.Mod)
+                and isinstance(child.left, ast.Call)
+                and isinstance(child.left.func, ast.Name)
+                and child.left.func.id in _GETTEXT_CALLS
+            ):
+                name = path.relative_to(settings.BASE_DIR)
+                flagged.append(f"{name}:{child.lineno}")
+            walk(child, path, inside_function)
+
+    for path in _source_files({".py"}):
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except SyntaxError:  # 语法都不通的模块交给别的测试去报
+            continue
+        walk(tree, path, False)
+    return flagged
 
 
 def _fuzzy_msgids(path):
@@ -216,6 +260,15 @@ class InterfaceTranslationAcceptanceTests(TestCase):
             untranslated,
             [],
             f"这些条目还没有英文译文（补齐 msgstr 再 compilemessages）：{untranslated[:5]}",
+        )
+
+    def test_no_translation_is_interpolated_outside_a_function(self):
+        frozen = sorted(_frozen_translations())
+
+        self.assertEqual(
+            frozen,
+            [],
+            f"这些地方在模块／类体里给译文插值，会在导入时定型成中文（改用 format_lazy）：{frozen[:5]}",
         )
 
     def test_no_entry_is_left_fuzzy(self):

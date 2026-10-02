@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 702platform\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-01 21:49+0800\n"
+"POT-Creation-Date: 2026-10-02 13:11+0800\n"
 "PO-Revision-Date: 2026-09-19 18:39\n"
 "Last-Translator: 702platform\n"
 "Language-Team: 702platform\n"
@@ -58,7 +58,7 @@ msgstr ""
 msgid "登录已锁定"
 msgstr "Login locked"
 
-#: accounts/forms.py:162 accounts/models.py:83 accounts/validators.py:35
+#: accounts/forms.py:162 accounts/models.py:83 accounts/validators.py:40
 #: templates/accounts/profile.html:53
 msgid "头像"
 msgstr "Avatar"
@@ -206,12 +206,12 @@ msgstr "You have %(tasks)s — open the Review page."
 msgid "、"
 msgstr ", "
 
-#: accounts/validators.py:17 accounts/validators.py:26
-#, python-format
-msgid "不超过 %(limit)s MB。"
-msgstr "Up to %(limit)s MB."
+#: accounts/validators.py:23 accounts/validators.py:32
+#, python-brace-format
+msgid "不超过 {limit} MB。"
+msgstr "Up to {limit} MB."
 
-#: accounts/validators.py:44
+#: accounts/validators.py:49
 msgid "图册图像"
 msgstr "Gallery image"
 
@@ -365,7 +365,8 @@ msgstr "Award certificates"
 #: content/forms.py:37
 #, python-brace-format
 msgid "最多 {limit} 张，每张不超过 {mb} MB；可打包下载。"
-msgstr "Up to {limit} images, {mb} MB each; they can be downloaded as an archive."
+msgstr ""
+"Up to {limit} images, {mb} MB each; they can be downloaded as an archive."
 
 #: content/forms.py:44 content/validators.py:38
 #: templates/content/awards.html:102
