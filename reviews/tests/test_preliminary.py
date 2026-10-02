@@ -273,9 +273,14 @@ class PreliminaryReviewTests(ReviewTestCase):
             )
 
     def test_the_gate_uses_the_same_verdicts_as_a_review(self):
-        """同一对结论、同一套取值；初审只是没有批注版——它给的是理由，不是稿子。"""
+        """同一对结论、同一套取值；初审只是没有批注版——它给的是理由，不是稿子。
+
+        「同一套」钉在表单的结论字段上：它若被换成自己的子集（比如初审只留
+        「打回」），这条就该红。
+        """
         self.assertEqual(
-            ReviewTask.DECISION_CHOICES, ReviewTask.DECISION_CHOICES
+            list(PreliminaryReviewForm().fields["decision"].choices),
+            list(ReviewTask.DECISION_CHOICES),
         )
         self.assertNotIn("annotated_file", PreliminaryReviewForm().fields)
 
