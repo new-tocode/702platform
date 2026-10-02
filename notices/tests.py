@@ -368,6 +368,123 @@ class MessageReadStateTests(TestCase):
         self.assertFalse(NoticeRead.objects.filter(user=self.member).exists())
 
 
+class MessagePageAcceptanceTests(TestCase):
+    """「我的消息」页：五列、未读样式、点开即已读、全部已读与删除的连带。"""
+
+    def setUp(self):
+        self.admin = User.objects.create_superuser(
+            username="message-page-admin",
+            password="Admin-Password-123!",
+        )
+        self.admin.profile.full_name = "通知管理员"
+        self.admin.profile.save(update_fields=["full_name"])
+        self.member = User.objects.create_user(
+            username="message-page-member",
+            password="Member-Password-123!",
+        )
+        self.member.must_change_password = False
+        self.member.save(update_fields=["must_change_password"])
+        self.group = Group.objects.create(name="消息组")
+        self.member.groups.add(self.group)
+        now = timezone.now()
+        self.pinned_notice = Notice.objects.create(
+            title="置顶的消息",
+            content="正文。",
+            scope=Notice.INTERNAL,
+            is_pinned=True,
+            published_by=self.admin,
+            published_at=now - timedelta(minutes=2),
+        )
+        self.pinned_notice.visible_groups.add(self.group)
+        self.notice = Notice.objects.create(
+            title="普通的消息",
+            content="正文。",
+            scope=Notice.INTERNAL,
+            published_by=self.admin,
+            published_at=now - timedelta(minutes=1),
+        )
+        self.notice.visible_groups.add(self.group)
+        self.client.force_login(self.member)
+
+    def test_page_shows_the_five_columns_with_type_publisher_and_audience(self):
+        response = self.client.get(reverse("member_notices:internal_list"))
+        html = response.content.decode()
+
+        self.assertContains(response, "我的消息")
+        for header in ("类型", "标题", "发布人", "范围", "时间"):
+            self.assertIn(header, html)
+        self.assertContains(response, "内部通知")
+        self.assertContains(response, "通知管理员")
+        self.assertContains(response, "消息组")
+
+    def test_unread_rows_are_highlighted_and_counted(self):
+        response = self.client.get(reverse("member_notices:internal_list"))
+
+        self.assertEqual(response.content.decode().count('class="unread"'), 2)
+        self.assertContains(response, "2 条未读")
+
+    def test_reading_a_message_clears_its_unread_mark(self):
+        self.client.get(
+            reverse("member_notices:internal_detail", args=(self.notice.pk,))
+        )
+
+        response = self.client.get(reverse("member_notices:internal_list"))
+
+        self.assertEqual(response.content.decode().count('class="unread"'), 1)
+        self.assertContains(response, "1 条未读")
+        self.assertTrue(
+            NoticeRead.objects.filter(user=self.member, notice=self.notice).exists()
+        )
+
+    def test_opening_detail_twice_keeps_a_single_receipt(self):
+        url = reverse("member_notices:internal_detail", args=(self.notice.pk,))
+
+        self.client.get(url)
+        self.client.get(url)
+
+        self.assertEqual(
+            NoticeRead.objects.filter(user=self.member, notice=self.notice).count(),
+            1,
+        )
+
+    def test_mark_all_read_clears_everything_and_reports(self):
+        response = self.client.post(
+            reverse("member_notices:mark_all_read"), follow=True
+        )
+
+        self.assertContains(response, "已将全部消息标为已读。")
+        self.assertNotIn('class="unread"', response.content.decode())
+        self.assertEqual(unread_message_count(self.member), 0)
+
+    def test_mark_all_read_is_post_only(self):
+        response = self.client.get(reverse("member_notices:mark_all_read"))
+
+        self.assertEqual(response.status_code, 405)
+
+    def test_all_read_button_only_shows_while_something_is_unread(self):
+        with_unread = self.client.get(reverse("member_notices:internal_list"))
+        self.assertContains(with_unread, "全部已读")
+
+        mark_all_read(user=self.member)
+
+        without_unread = self.client.get(reverse("member_notices:internal_list"))
+        self.assertNotContains(without_unread, "全部已读")
+
+    def test_deleting_a_notice_removes_it_from_the_page(self):
+        self.notice.delete()
+
+        response = self.client.get(reverse("member_notices:internal_list"))
+
+        self.assertNotContains(response, "普通的消息")
+        self.assertContains(response, "1 条未读")
+
+    def test_pinned_message_sorts_first(self):
+        response = self.client.get(reverse("member_notices:internal_list"))
+        html = response.content.decode()
+
+        self.assertLess(html.index("置顶的消息"), html.index("普通的消息"))
+
+
 class NoticeAdminAcceptanceTests(TestCase):
     def setUp(self):
         self.admin = User.objects.create_superuser(

@@ -259,6 +259,11 @@ td .t { font-size: 13px; font-weight: 500; }
 td form { margin: 0; }
 .table-wrap table { min-width: 520px; }
 
+/* --- 我的消息：未读行整行加亮、标题加粗，行首一条蓝线 --- */
+.messages tr.unread td { background: var(--blue-tint); }
+.messages tr.unread td:first-child { box-shadow: inset 3px 0 0 var(--blue); }
+.messages tr.unread .t { font-weight: 600; }
+
 /* --- 表单 --- */
 .field { margin-bottom: 16px; }
 .field label, .field-label {
