@@ -3,6 +3,7 @@ from django.db import IntegrityError, transaction
 from django.utils.translation import gettext_lazy as _
 
 from core.audit import record_audit
+from core.storage import delete_stored_files
 
 from .models import Board, Comment, Post, PostImage
 from .permissions import (
@@ -86,11 +87,6 @@ def _store_post_images(*, post, uploads, saved_files):
                 image.image.storage.delete(image.image.name)
             raise
         saved_files.append((image.image.storage, image.image.name))
-
-
-def _delete_stored_files(files):
-    for storage, name in files:
-        storage.delete(name)
 
 
 def _sync_mentions(*, post, comment, actor):
@@ -183,7 +179,7 @@ def create_post(*, board_id, title, content, actor, images=(), request=None):
             _store_post_images(post=post, uploads=uploads, saved_files=saved_files)
             _sync_mentions(post=post, comment=None, actor=actor)
     except Exception:
-        _delete_stored_files(saved_files)
+        delete_stored_files(saved_files)
         raise
 
     record_audit(
@@ -247,10 +243,10 @@ def update_post(
             # 编辑后 @ 的人可能变了：新增的写消息、被去掉的删消息。
             _sync_mentions(post=post, comment=None, actor=actor)
     except Exception:
-        _delete_stored_files(saved_files)
+        delete_stored_files(saved_files)
         raise
 
-    _delete_stored_files(files_to_delete)
+    delete_stored_files(files_to_delete)
     record_audit(
         action="discussion.post.update",
         user=actor,
@@ -288,7 +284,7 @@ def delete_post(*, post_id, actor, request=None):
         )
         post.delete()
 
-    _delete_stored_files(
+    delete_stored_files(
         [(image.image.storage, image.image.name) for image in post_images]
     )
     return detail["board_id"]
