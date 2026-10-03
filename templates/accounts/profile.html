@@ -1,7 +1,11 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n static %}
 
 {% block title %}{% translate "个人信息" %} - {% translate "竞赛社团管理平台" %}{% endblock %}
+
+{% block extra_head %}
+    <script defer src="{% static 'js/gallery.js' %}"></script>
+{% endblock %}
 
 {% block content %}
 <div class="wrap">
@@ -134,13 +138,21 @@
         <div class="panel-body">
             <form method="post" action="{% url 'accounts:gallery_upload' %}" enctype="multipart/form-data" class="upload-row">
                 {% csrf_token %}
-                <label class="visually-hidden" for="{{ gallery_form.image.id_for_label }}">{{ gallery_form.image.label }}</label>
-                {{ gallery_form.image }}
+                <label class="visually-hidden" for="{{ gallery_form.images.id_for_label }}">{{ gallery_form.images.label }}</label>
+                {{ gallery_form.images }}
                 <button class="btn btn-primary" type="submit">{% translate "加入图册" %}</button>
             </form>
+            {# 已选文件的即时反馈（渐进增强，gallery.js）：整句由模板给出，单数与复数各一句 #}
+            {# （英文分得开 1 file / 2 files），脚本只把张数、合计大小与文件名填进 #}
+            {# {count}、{size} 占位符，不拼句子。 #}
+            <p class="help gallery-picked" data-gallery-picked hidden
+               data-picked-one="{% translate "已选 1 张，合计 {size} MB。" %}"
+               data-picked-many="{% translate "已选 {count} 张，合计 {size} MB。" %}"
+               data-oversize="{% blocktranslate with limit=gallery_image_max_mb %}超过 {{ limit }} MB，不会被加入：{% endblocktranslate %}"
+               data-max-bytes="{{ gallery_image_max_bytes }}"></p>
             <p class="help">
                 {% blocktranslate with per=gallery_image_max_mb total=gallery.limit_mb %}每张不超过 {{ per }} MB，图册合计不超过 {{ total }} MB。{% endblocktranslate %}
-                {% translate "上传后可逐张调整顺序与排布。" %}
+                {% translate "可一次选择多张；上传后可逐张调整顺序与排布。" %}
             </p>
 
             {% if gallery_images %}

@@ -48,7 +48,7 @@ class ProtectedUploadAccessTests(TestCase):
         self.profile = Profile.objects.get(user=self.owner)
         self.profile.avatar.save("我的头像.png", png_upload(), save=True)
         # GalleryImage.save() 里跑 full_clean()，没有图建不出来——所以先建行再存图，
-        # 与 add_gallery_image 服务层的顺序一致。
+        # 与 add_gallery_images 服务层的顺序一致。
         self.image = GalleryImage(profile=self.profile)
         self.image.image.save("我的照片.png", png_upload(), save=True)
 
