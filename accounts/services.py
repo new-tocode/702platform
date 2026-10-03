@@ -8,14 +8,19 @@
 一起处理，两件事得挨着做，而且不该让视图去碰存储层。
 """
 
+from dataclasses import dataclass
+
 from django.contrib.auth.models import Group
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Max, Sum
 from django.utils.translation import gettext_lazy as _
 
 from core.audit import record_audit
+from core.storage import delete_stored_files
 
 from .models import GALLERY_TOTAL_MAX_BYTES, GalleryImage, User
+from .validators import validate_gallery_image
 
 
 class GalleryError(Exception):
@@ -156,48 +161,106 @@ def clear_avatar(*, profile, actor, request=None):
     return True
 
 
-def add_gallery_image(*, profile, uploaded_file, actor, request=None):
-    """往图册末尾加一张图；超过整册上限时抛 :class:`GalleryError`。
+@dataclass(frozen=True)
+class GalleryBatchResult:
+    """一次批量上传的结果：谁进了图册、谁没进、为什么，以及加完后的用量。
 
-    上限是「合计」而不是单张，所以要先求和再落盘。求和前锁住账号那一行：
+    ``rejected`` 与 ``overflowed`` 刻意分开：格式问题（不是图片、单张超限）要
+    **逐张点名**，用户重选时才知道去掉哪几张；容量不足是同一件事发生了若干次，
+    合成一条「还有 N 张没放下」，一次选二十张时不会刷出二十条提示。
+    """
+
+    added: tuple = ()
+    #: ``(文件名, 原因)``，逐张。原因是可直接展示的译文。
+    rejected: tuple = ()
+    #: 因整册容量不足未加入的文件名。
+    overflowed: tuple = ()
+    #: 加完之后的合计用量，提示里的「已用 X MB」用它。
+    used_bytes: int = 0
+
+
+def add_gallery_images(*, profile, uploaded_files, actor, request=None):
+    """往图册末尾批量加图，返回 :class:`GalleryBatchResult`。
+
+    上限是「整册合计」而不是单张，所以要先求和再落盘；求和前锁住账号那一行：
     同一个人开两个标签页同时上传时，不加锁就会双双读到还没涨上去的用量、
     一起放行，合起来超限。锁加在账号上而不是个人资料上——配额是每人一份，
     口径与 ``GALLERY_TOTAL_MAX_BYTES`` 的名字一致。
+
+    与单张时代不同的是**逐张判去留**：不是图片或单张超限的、合计会越过整册
+    上限的，都跳过并记进结果，其余照加——一批里有几张不合格，不该拖累其余几张。
+    单张校验放在这里而不是表单的校验器上，正因为校验器一遇错就中断整批、报不出
+    「是哪几张」（见 ``accounts.forms.GalleryImageForm``）。
+
+    审计仍是**每张成功入库的图一条**，与 ``accounts.gallery.delete`` 一张一条
+    对称；被跳过的没有写操作，也就没有审计行。
     """
-    size = uploaded_file.size or 0
+    uploads = list(uploaded_files or ())
+    if not uploads:
+        raise GalleryError(_("请选择要上传的图片。"))
 
-    with transaction.atomic():
-        User.objects.select_for_update().get(pk=profile.user_id)
-        used = (
-            GalleryImage.objects.filter(profile=profile).aggregate(
-                total=Sum("file_size")
-            )["total"]
-            or 0
-        )
-        if used + size > GALLERY_TOTAL_MAX_BYTES:
-            raise GalleryError(
-                _("图册合计不能超过 %(limit)s MB，当前已用 %(used)s MB。")
-                % {
-                    "limit": GALLERY_TOTAL_MAX_BYTES // (1024 * 1024),
-                    "used": round(used / (1024 * 1024), 1),
-                }
+    added, rejected, overflowed = [], [], []
+    saved_files = []
+    try:
+        with transaction.atomic():
+            User.objects.select_for_update().get(pk=profile.user_id)
+            used = (
+                GalleryImage.objects.filter(profile=profile).aggregate(
+                    total=Sum("file_size")
+                )["total"]
+                or 0
             )
+            last = GalleryImage.objects.filter(profile=profile).aggregate(
+                last=Max("sort_order")
+            )["last"]
+            next_order = (last or 0) + 1
 
-        last = GalleryImage.objects.filter(profile=profile).aggregate(
-            last=Max("sort_order")
-        )["last"]
-        image = GalleryImage(profile=profile, sort_order=(last or 0) + 1)
-        image.image = uploaded_file
-        image.save()
+            for uploaded_file in uploads:
+                try:
+                    validate_gallery_image(uploaded_file)
+                except ValidationError as exc:
+                    rejected.append((uploaded_file.name, exc.messages[0]))
+                    continue
 
-        record_audit(
-            action="accounts.gallery.add",
-            user=actor,
-            target=profile,
-            detail={"image_id": image.pk, "size": image.file_size},
-            request=request,
-        )
-    return image
+                size = uploaded_file.size or 0
+                if used + size > GALLERY_TOTAL_MAX_BYTES:
+                    overflowed.append(uploaded_file.name)
+                    continue
+
+                image = GalleryImage(profile=profile, sort_order=next_order)
+                image.image = uploaded_file
+                try:
+                    image.save()
+                except Exception:
+                    # 这一张写了一半（文件可能已经落盘）：先清掉再往上抛，
+                    # 免得整个事务回滚之后，磁盘上留一份没人认领的文件。
+                    if image.image and image.image._committed:
+                        image.image.storage.delete(image.image.name)
+                    raise
+                saved_files.append((image.image.storage, image.image.name))
+
+                record_audit(
+                    action="accounts.gallery.add",
+                    user=actor,
+                    target=profile,
+                    detail={"image_id": image.pk, "size": image.file_size},
+                    request=request,
+                )
+                used += image.file_size
+                next_order += 1
+                added.append(image)
+    except Exception:
+        # 数据库回滚不会把已落盘的文件带回去，这里补上（与讨论区的多图帖子同一个
+        # 手法，辅助函数已收口到 ``core.storage``）。
+        delete_stored_files(saved_files)
+        raise
+
+    return GalleryBatchResult(
+        added=tuple(added),
+        rejected=tuple(rejected),
+        overflowed=tuple(overflowed),
+        used_bytes=used,
+    )
 
 
 def move_gallery_image(*, image, direction, actor, request=None):

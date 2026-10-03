@@ -360,6 +360,9 @@ input[type="file"] { font: inherit; font-size: 13px; color: var(--ink-2); }
 .upload-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 /* 文件框可以长，但不吃掉整行：按钮跟在它后面，不飘到版面的另一头 */
 .upload-row input[type="file"] { flex: 1 1 240px; max-width: 420px; min-width: 0; }
+/* 选完文件后的即时反馈（gallery.js）：选超单张上限时转成琥珀色，与页面上
+   其他「要留意」的提示同一个颜色。 */
+.gallery-picked.is-warning { color: var(--amber); }
 
 /* 每张图占几格由 layout 决定：普通一格、大图两格、整行铺满。
    栅格用 auto-fill，窄屏自己掉到两列。 */
