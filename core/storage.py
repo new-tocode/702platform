@@ -127,6 +127,17 @@ def neutral_upload_to(prefix):
     return NeutralUploadTo(prefix)
 
 
+def delete_stored_files(files):
+    """把一串 ``(storage, name)`` 删掉，用于事务回滚后的文件清理。
+
+    数据库回滚不会把已经落盘的文件带回去，所以「一个事务里连写多个文件」的写命令
+    要在异常时自己收拾：先把 ``(storage, name)`` 记下来，回滚后逐个删。帖子的多张
+    配图与个人图册的批量上传共用这一段（原先在 ``discussion.services`` 里私有）。
+    """
+    for storage, name in files:
+        storage.delete(name)
+
+
 def rehome(file_field, *, private):
     """把一个已存文件的落盘位置在公开/受保护两个根之间搬一次，返回新的相对路径。
 
