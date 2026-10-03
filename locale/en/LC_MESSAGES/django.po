@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 702platform\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-02 22:32+0800\n"
+"POT-Creation-Date: 2026-10-03 15:41+0800\n"
 "PO-Revision-Date: 2026-09-19 18:39\n"
 "Last-Translator: 702platform\n"
 "Language-Team: 702platform\n"
@@ -16,7 +16,7 @@ msgstr ""
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
 #: accounts/apps.py:19 templates/accounts/member_profile_readonly.html:4
-#: templates/accounts/profile.html:4 templates/accounts/profile.html:16
+#: templates/accounts/profile.html:4 templates/accounts/profile.html:20
 msgid "个人信息"
 msgstr "Profile"
 
@@ -58,36 +58,37 @@ msgstr ""
 msgid "登录已锁定"
 msgstr "Login locked"
 
-#: accounts/forms.py:162 accounts/models.py:83 accounts/validators.py:40
-#: templates/accounts/profile.html:53
+#: accounts/forms.py:164 accounts/models.py:83 accounts/validators.py:40
+#: templates/accounts/profile.html:57
 msgid "头像"
 msgstr "Avatar"
 
-#: accounts/forms.py:166 accounts/forms.py:178 core/uploads.py:107
+#: accounts/forms.py:168 accounts/forms.py:195 accounts/services.py:200
+#: core/uploads.py:107
 msgid "请选择要上传的图片。"
 msgstr "Please choose an image to upload."
 
-#: accounts/forms.py:174 accounts/models.py:158
+#: accounts/forms.py:186 accounts/models.py:158
 msgid "图像"
 msgstr "Image"
 
-#: accounts/forms.py:190
+#: accounts/forms.py:207
 msgid "当前密码"
 msgstr "Current password"
 
-#: accounts/forms.py:195
+#: accounts/forms.py:212
 msgid "新密码"
 msgstr "New password"
 
-#: accounts/forms.py:200
+#: accounts/forms.py:217
 msgid "确认新密码"
 msgstr "Confirm new password"
 
-#: accounts/forms.py:212
+#: accounts/forms.py:229
 msgid "当前密码不正确。"
 msgstr "The current password is incorrect."
 
-#: accounts/forms.py:220
+#: accounts/forms.py:237
 msgid "两次输入的新密码不一致。"
 msgstr "The two new passwords do not match."
 
@@ -194,13 +195,6 @@ msgstr "Super reviewer"
 msgid "用户组"
 msgstr "User groups"
 
-#: accounts/services.py:179
-#, python-format
-msgid "图册合计不能超过 %(limit)s MB，当前已用 %(used)s MB。"
-msgstr ""
-"Your gallery cannot exceed %(limit)s MB in total; %(used)s MB is already in "
-"use."
-
 #: accounts/validators.py:23 accounts/validators.py:32
 #, python-brace-format
 msgid "不超过 {limit} MB。"
@@ -218,44 +212,66 @@ msgstr "Password updated."
 msgid "个人信息已保存。"
 msgstr "Profile saved."
 
-#: accounts/views.py:329
-msgid "图像已加入图册。"
-msgstr "Image added to your gallery."
+#: accounts/views.py:327
+#, python-format
+msgid "1 张图像已加入图册。"
+msgid_plural "%(count)s 张图像已加入图册。"
+msgstr[0] "1 image added to your gallery."
+msgstr[1] "%(count)s images added to your gallery."
 
-#: accounts/views.py:340 accounts/views.py:361 projects/views.py:358
+#: accounts/views.py:335
+#, python-format
+msgid "%(name)s：%(reason)s"
+msgstr "%(name)s: %(reason)s"
+
+#: accounts/views.py:342
+#, python-format
+msgid ""
+"另有 1 张因图册容量不足未加入（已用 %(used)s / %(limit)s MB）：%(names)s"
+msgid_plural ""
+"另有 %(count)s 张因图册容量不足未加入（已用 %(used)s / %(limit)s MB）："
+"%(names)s"
+msgstr[0] ""
+"1 more image was not added because the gallery is full (using %(used)s / "
+"%(limit)s MB): %(names)s"
+msgstr[1] ""
+"%(count)s more images were not added because the gallery is full (using "
+"%(used)s / %(limit)s MB): %(names)s"
+
+#: accounts/views.py:374 accounts/views.py:395 projects/views.py:358
 #: projects/views.py:465
 msgid "未知操作"
 msgstr "Unknown action"
 
-#: accounts/views.py:345
+#: accounts/views.py:379
 msgid "顺序已调整。"
 msgstr "Order updated."
 
-#: accounts/views.py:349
+#: accounts/views.py:383
 msgid "已经是第一张了。"
 msgstr "That is already the first image."
 
-#: accounts/views.py:349
+#: accounts/views.py:383
 msgid "已经是最后一张了。"
 msgstr "That is already the last image."
 
-#: accounts/views.py:366
+#: accounts/views.py:400
 msgid "排布已更新。"
 msgstr "Layout updated."
 
-#: accounts/views.py:383
+#: accounts/views.py:417
 msgid "图像已删除。"
 msgstr "Image removed."
 
-#: accounts/views.py:406
+#: accounts/views.py:440
 msgid "头像已更新。"
 msgstr "Avatar updated."
 
-#: accounts/views.py:431
+#: accounts/views.py:465
 msgid "头像已删除。"
 msgstr "Avatar removed."
 
-#: accounts/views.py:433
+#: accounts/views.py:467
 msgid "当前没有头像。"
 msgstr "There is no avatar to delete."
 
@@ -485,7 +501,7 @@ msgstr "That file is not an image."
 msgid "中文名称"
 msgstr "Chinese name"
 
-#: discussion/forms.py:38 discussion/services.py:134
+#: discussion/forms.py:38 discussion/services.py:130
 msgid "已有同名板块。"
 msgstr "A board with that name already exists."
 
@@ -511,11 +527,11 @@ msgstr "Enter a post title."
 msgid "请输入帖子正文。"
 msgstr "Enter the post body."
 
-#: discussion/forms.py:83 discussion/services.py:70
+#: discussion/forms.py:83 discussion/services.py:71
 msgid "每篇帖子最多上传 3 张图片。"
 msgstr "A post can have at most 3 images."
 
-#: discussion/forms.py:92 discussion/services.py:237
+#: discussion/forms.py:92 discussion/services.py:233
 msgid "每篇帖子最多保留 3 张图片。"
 msgstr "A post can contain at most 3 images."
 
@@ -607,23 +623,23 @@ msgstr "Deleted by"
 msgid "社团空间评论"
 msgstr "Discussion comment"
 
-#: discussion/services.py:153 templates/discussion/space.html:85
+#: discussion/services.py:149 templates/discussion/space.html:85
 msgid "请先删除板块中的所有帖子，再删除板块。"
 msgstr "Delete all posts in this board before deleting the board."
 
-#: discussion/services.py:170 discussion/services.py:213
+#: discussion/services.py:166 discussion/services.py:209
 msgid "帖子标题和正文不能为空。"
 msgstr "A post title and body are required."
 
-#: discussion/services.py:218
+#: discussion/services.py:214
 msgid "所选图片无效。"
 msgstr "The selected images are invalid."
 
-#: discussion/services.py:234
+#: discussion/services.py:230
 msgid "所选图片不属于这篇帖子。"
 msgstr "The selected image does not belong to this post."
 
-#: discussion/services.py:364
+#: discussion/services.py:360
 msgid "评论内容不能为空。"
 msgstr "A comment cannot be empty."
 
@@ -1494,7 +1510,7 @@ msgstr "Hello, %(name)s."
 
 #: templates/accounts/member_home.html:20
 #: templates/accounts/member_profile_readonly.html:61
-#: templates/accounts/profile.html:105
+#: templates/accounts/profile.html:109
 msgid "当前身份"
 msgstr "Your role"
 
@@ -1665,12 +1681,12 @@ msgid "这位成员还没有填写个人资料。"
 msgstr "This member has not added any profile details yet."
 
 #: templates/accounts/member_profile_readonly.html:73
-#: templates/accounts/profile.html:120
+#: templates/accounts/profile.html:124
 msgid "暂无其他身份。"
 msgstr "No other roles."
 
 #: templates/accounts/member_profile_readonly.html:81
-#: templates/accounts/profile.html:129
+#: templates/accounts/profile.html:133
 msgid "个人图册"
 msgstr "Personal gallery"
 
@@ -1704,85 +1720,102 @@ msgstr "You stay signed in here; other devices will need to sign in again."
 msgid "保存新密码"
 msgstr "Save new password"
 
-#: templates/accounts/profile.html:17
+#: templates/accounts/profile.html:21
 msgid "维护姓名、学号、院系与联系方式。"
 msgstr "Keep your name, student ID, college and contact details up to date."
 
-#: templates/accounts/profile.html:43
+#: templates/accounts/profile.html:47
 msgid "保存信息"
 msgstr "Save profile"
 
-#: templates/accounts/profile.html:44
+#: templates/accounts/profile.html:48
 msgid "返回成员中心"
 msgstr "Back to member center"
 
-#: templates/accounts/profile.html:58
+#: templates/accounts/profile.html:62
 msgid "当前头像"
 msgstr "Current avatar"
 
-#: templates/accounts/profile.html:72
+#: templates/accounts/profile.html:76
 msgid "更换头像"
 msgstr "Change avatar"
 
-#: templates/accounts/profile.html:72
+#: templates/accounts/profile.html:76
 msgid "上传头像"
 msgstr "Upload avatar"
 
-#: templates/accounts/profile.html:80
+#: templates/accounts/profile.html:84
 msgid "删除头像"
 msgstr "Delete avatar"
 
-#: templates/accounts/profile.html:91
+#: templates/accounts/profile.html:95
 msgid "我的获奖"
 msgstr "My awards"
 
-#: templates/accounts/profile.html:95
+#: templates/accounts/profile.html:99
 #, python-format
 msgid "按姓名「%(name)s」到历年获奖里搜索。"
 msgstr "Search the awards page for “%(name)s”."
 
-#: templates/accounts/profile.html:96
+#: templates/accounts/profile.html:100
 msgid "查看我的获奖"
 msgstr "View my awards"
 
-#: templates/accounts/profile.html:98
+#: templates/accounts/profile.html:102
 msgid "先在上面填好姓名，才能按名字找到你的获奖记录。"
 msgstr ""
 "Fill in your name above first — that is what the awards search looks for."
 
-#: templates/accounts/profile.html:131
+#: templates/accounts/profile.html:135
 #, python-format
 msgid "%(counter)s 张 · %(used)s / %(limit)s MB"
 msgid_plural "%(counter)s 张 · %(used)s / %(limit)s MB"
 msgstr[0] "%(counter)s image · %(used)s / %(limit)s MB"
 msgstr[1] "%(counter)s images · %(used)s / %(limit)s MB"
 
-#: templates/accounts/profile.html:139
+#: templates/accounts/profile.html:143
 msgid "加入图册"
 msgstr "Add to gallery"
 
-#: templates/accounts/profile.html:142
+#: templates/accounts/profile.html:149
+#, python-brace-format
+msgid "已选 1 张，合计 {size} MB。"
+msgstr "1 file selected, {size} MB in total."
+
+#: templates/accounts/profile.html:150
+#, python-brace-format
+msgid "已选 {count} 张，合计 {size} MB。"
+msgstr "{count} files selected, {size} MB in total."
+
+#: templates/accounts/profile.html:151
+#, python-format
+msgid "超过 %(limit)s MB，不会被加入："
+msgstr "Over %(limit)s MB, not added: "
+
+#: templates/accounts/profile.html:154
 #, python-format
 msgid "每张不超过 %(per)s MB，图册合计不超过 %(total)s MB。"
 msgstr "Up to %(per)s MB each, %(total)s MB in total."
 
-#: templates/accounts/profile.html:143
-msgid "上传后可逐张调整顺序与排布。"
-msgstr "Once uploaded, you can set each image's order and layout."
+#: templates/accounts/profile.html:155
+msgid "可一次选择多张；上传后可逐张调整顺序与排布。"
+msgstr ""
+"You can pick several at once; after uploading, you can set each image's "
+"order and layout."
 
-#: templates/accounts/profile.html:158
+#: templates/accounts/profile.html:170
 msgid "上移"
 msgstr "Move up"
 
-#: templates/accounts/profile.html:159
+#: templates/accounts/profile.html:171
 msgid "下移"
 msgstr "Move down"
 
-#: templates/accounts/profile.html:169 templates/discussion/space.html:166
+#: templates/accounts/profile.html:181 templates/discussion/space.html:166
 msgid "删除"
 msgstr "Delete"
 
-#: templates/accounts/profile.html:176
+#: templates/accounts/profile.html:188
 msgid "图册还是空的，从上面选一张图开始。"
 msgstr "Your gallery is empty — start by choosing an image above."
 

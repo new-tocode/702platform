@@ -23,7 +23,7 @@
 │   ├── roles.py                      # 身份展示口径（管理员／联系人／成员／无组）
 │   ├── selectors.py                  # 只读：当前身份清单、图册用量
 │   ├── validators.py                 # 头像与图册图像的大小上限（校验本身在 core.uploads）
-│   ├── services.py                   # 资格的批量授予／撤销、头像与图册的写命令（唯一写入口，带审计）
+│   ├── services.py                   # 资格的批量授予／撤销、头像与图册的写命令（唯一写入口，带审计；图册可一次加多张）
 │   ├── forms.py / views.py / urls.py / admin.py   # admin 里还有用户列表的六个批量动作与四张名册
 │   ├── signals.py                    # Profile 自动创建、认证日志、登录时的待办提醒（初审/评审分开报数）
 │   └── tests.py
