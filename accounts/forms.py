@@ -9,13 +9,10 @@ from django.contrib.auth.forms import (
 )
 from django.utils.translation import gettext_lazy as _
 
+from core.forms import MultipleFileInput, MultipleImageField
+
 from .models import Profile, User
-from .validators import (
-    AVATAR_HELP_TEXT,
-    GALLERY_HELP_TEXT,
-    validate_avatar,
-    validate_gallery_image,
-)
+from .validators import AVATAR_HELP_TEXT, GALLERY_HELP_TEXT, validate_avatar
 
 
 class AdminUserCreationForm(UserCreationForm):
@@ -168,15 +165,30 @@ class AvatarForm(forms.Form):
 
 
 class GalleryImageForm(forms.Form):
-    """往个人图册里加一张图；排布与顺序上传后在页面上再调。"""
+    """往个人图册里加图，一次可以选多张；排布与顺序上传后在页面上再调。
 
-    image = forms.ImageField(
+    **类型与配额都不在这里判**：单张超限、不是图片、整批超出图册容量，都要
+    逐张报出文件名，而表单字段的校验器一遇错就中断整批（``MultipleImageField``
+    逐个 clean，第一个失败就抛），报不出「是哪几张」。这些判断因此归服务层
+    （``accounts.services.add_gallery_images``），它逐张检查并回报每张的去留。
+
+    字段写 ``required=False`` 不是「可以不选」：``MultipleImageField`` 对空值
+    直接返回空列表、不走父类的必填判定，写 ``True`` 也只是个不会生效的声明；
+    必填由下面的 ``clean_images`` 明说。
+    """
+
+    images = MultipleImageField(
         label=_("图像"),
-        widget=forms.FileInput(),
-        validators=[validate_gallery_image],
+        required=False,
+        widget=MultipleFileInput(attrs={"accept": "image/*"}),
         help_text=GALLERY_HELP_TEXT,
-        error_messages={"required": _("请选择要上传的图片。")},
     )
+
+    def clean_images(self):
+        uploads = self.cleaned_data["images"]
+        if not uploads:
+            raise forms.ValidationError(_("请选择要上传的图片。"))
+        return uploads
 
 
 class FirstPasswordChangeForm(SetPasswordForm):

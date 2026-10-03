@@ -152,13 +152,25 @@ class UploadChannelsRejectBombsAcceptanceTests(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn("avatar", form.errors)
 
-    def test_gallery_form_rejects_bomb(self):
-        from accounts.forms import GalleryImageForm
+    def test_gallery_batch_rejects_bomb(self):
+        """图册这条通道的图片校验在服务层逐张做（批量上传要逐张点名，
+        见 ``GalleryImageForm`` 的说明），炸弹图一样进不了图册、不落一行记录。"""
+        from accounts.models import GalleryImage
+        from accounts.services import add_gallery_images
 
-        form = GalleryImageForm(files={"image": self._bomb()})
+        result = add_gallery_images(
+            profile=self.user.profile,
+            uploaded_files=[self._bomb()],
+            actor=self.user,
+        )
 
-        self.assertFalse(form.is_valid())
-        self.assertIn("image", form.errors)
+        self.assertEqual(result.added, ())
+        self.assertEqual(
+            [name for name, _reason in result.rejected], ["bomb.png"]
+        )
+        self.assertFalse(
+            GalleryImage.objects.filter(profile=self.user.profile).exists()
+        )
 
     def test_post_form_rejects_bomb(self):
         from discussion.forms import PostForm

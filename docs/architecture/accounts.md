@@ -44,7 +44,7 @@ GalleryImage（个人图册里的一张图，随 Profile 级联删除）
 - 成员可修改 Profile 中的单一 `full_name` 姓名字段及其他个人资料、头像、个人图册与本人密码；管理员可在 Admin 中重置任意用户密码（Django 内置功能）。
 - 自定义 User 仍继承 Django `AbstractUser` 的底层 `first_name` / `last_name` 数据列，但它们不再出现在任何用户界面，也不作为业务姓名使用；历史数据会在迁移中合并到 `Profile.full_name`。
 - **个人信息页**（`/member/profile/`）左栏是资料表单、右栏是头像与只读的「当前身份」、下方整幅宽度是个人图册。表单的分行与宽窄由 `ProfileForm.field_rows`／`narrow_fields` 声明、`rows()` 装配，模板只按行逐格渲染——排布是这张表单自己的事，散进模板就得在那边按字段名做判断。
-- **上传件的写入口只有两个**：`accounts.services.set_avatar`／`clear_avatar` 与 `accounts.services.add_gallery_image`／`move_gallery_image`／`set_gallery_layout`／`delete_gallery_image`。换头像、删图都连磁盘上的文件一起处理（文件系统不在事务里，删除一律放在提交之后：出错顶多多留一个旧文件，不会出现「库里还指着、磁盘上没了」）。
-- **图册的 100 MB 是合计上限**，求和前先 `select_for_update` 锁住账号那一行：同一个人开两个标签页同时上传时，不加锁会双双读到还没涨上去的用量。单张 5 MB 与头像的 2 MB 走同一套图片校验（`core.uploads.validate_image_upload`），差别只是上限。
+- **上传件的写入口只有两个**：`accounts.services.set_avatar`／`clear_avatar` 与 `accounts.services.add_gallery_images`／`move_gallery_image`／`set_gallery_layout`／`delete_gallery_image`。换头像、删图都连磁盘上的文件一起处理（文件系统不在事务里，删除一律放在提交之后：出错顶多多留一个旧文件，不会出现「库里还指着、磁盘上没了」）；批量加图在事务里连写多张，中途出错回滚时要连已落盘的文件一起清（`core.storage.delete_stored_files`）。
+- **图册的 100 MB 是合计上限**，求和前先 `select_for_update` 锁住账号那一行：同一个人开两个标签页同时上传时，不加锁就会双双读到还没涨上去的用量、一起放行。上传可以一次选多张，一批里放不下的、不合格的**逐张跳过并在页面上点名**，其余照加——单张校验因此也落在服务层：表单字段的校验器一遇错就中断整批，报不出「是哪几张」。单张 5 MB 与头像的 2 MB 走同一套图片校验（`core.uploads.validate_image_upload`），差别只是上限；审计仍是一张图一条，与删除对称。
 - **「当前身份」只读**：全局身份问各应用 `permissions` 的判定，项目组联系人／成员带组名，来自 `projects.selectors`——后台那六张名册的排法在这里同样成立，没持有的身份不出现。清单末尾另有一条「用户组」，列出账号所属的 `auth.Group`（通知投递范围，见 [notices](notices.md)）——用户组不是身份、不进 `core.roles` 目录，列在这里只是让本人知道通知为什么投给自己。同一份装配（`accounts.selectors.member_identities`）本人页与成员资料页共用，两处的面板因此一致。
 - **强制改密流程**：首次登录后若 `must_change_password=True`，重定向到改密页；改密成功后置 `False`，之后才能访问其他成员功能。
