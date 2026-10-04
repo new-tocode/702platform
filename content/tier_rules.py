@@ -8,6 +8,8 @@
 * :func:`fold_tier_terms` —— 判重比较前的折叠。「省一等奖」与「东北赛区一等奖」折完
   是同一个串，判重的第一关（归一化后完全相同）就拦得住，不必指望相似度。
 * :func:`derive_tier` —— 从自由文本里推断层级，给数据迁移回填历史记录用。
+* :func:`drop_tier_terms` —— 折叠之后再把层级记号去掉，给重复清单分组用：赛事名里
+  写没写赛区，不该影响「这是不是同一场比赛」的判断。
 
 单独成模块、且不 import 模型，是为了让数据迁移能直接引它：迁移跑在模型的历史状态上，
 引运行期的应用代码是给自己埋雷；这里只有字符串规则，没有那层顾虑。
@@ -83,6 +85,19 @@ def fold_tier_terms(text):
     folded = _LONE_PROVINCE.sub(PROVINCIAL, folded)
     for pattern, mark in _ALIASES:
         folded = pattern.sub(mark, folded)
+    return folded
+
+
+def drop_tier_terms(text):
+    """折叠之后把层级记号也去掉，剩下的就是「说的是哪场比赛、哪批人」。
+
+    给重复清单分组用：「全国大学生物联网设计竞赛」与「…竞赛东北赛区」是同一场比赛的
+    两种写法，一个写了赛区、一个没写——判重那边靠相似度兜住（0.67），清单这边要的
+    是一个能把它们放进同一组的键。去掉记号比留着记号更接近这个意思。
+    """
+    folded = fold_tier_terms(text)
+    for mark in (NATIONAL, PROVINCIAL, SCHOOL):
+        folded = folded.replace(mark, "")
     return folded
 
 

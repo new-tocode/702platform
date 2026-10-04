@@ -1,14 +1,18 @@
 """Acceptance tests for public club content and media rendering."""
 
-from io import BytesIO
+import contextlib
+import importlib
+from io import BytesIO, StringIO
 from pathlib import Path
 import re
 import shutil
 import tempfile
 import time
 
+from django.apps import apps
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
+from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from django.utils.functional import Promise
@@ -935,6 +939,56 @@ class TierRulesTests(TestCase):
         )
 
 
+class AwardTierBackfillTests(TestCase):
+    """迁移 0006 的回填：认得出的写进去，认不出的留空并打印出来。
+
+    这条迁移只在部署时跑一次、跑完就不容易重来，所以连执行路径一起钉住（分类规则
+    本身由 `TierRulesTests` 逐条钉）。
+    """
+
+    def backfill(self):
+        module = importlib.import_module("content.migrations.0006_award_tier")
+        output = StringIO()
+        with contextlib.redirect_stdout(output):
+            module.backfill_tiers(apps, None)
+        return output.getvalue()
+
+    def test_it_writes_the_tier_it_can_read(self):
+        national = Award.objects.create(
+            title="数学建模一等奖",
+            competition="全国大学生数学建模竞赛",
+            year=2024,
+            level="国家级",
+            winners="张三",
+        )
+        provincial = Award.objects.create(
+            title="物联网设计一等奖",
+            competition="全国大学生物联网设计竞赛",
+            year=2025,
+            level="东北赛区一等奖",
+            winners="李四",
+        )
+        unknown = Award.objects.create(
+            title="某奖",
+            competition="某赛事",
+            year=2023,
+            level="一等奖",
+            winners="王五",
+        )
+
+        body = self.backfill()
+
+        national.refresh_from_db()
+        provincial.refresh_from_db()
+        unknown.refresh_from_db()
+        self.assertEqual(national.tier, tier_rules.NATIONAL)
+        self.assertEqual(provincial.tier, tier_rules.PROVINCIAL)
+        # 认不出的留空：判重对它「不比这一项」，等人工在后台补。
+        self.assertEqual(unknown.tier, "")
+        self.assertIn("认不出层级 1 条", body)
+        self.assertIn(f"#{unknown.pk}", body)
+
+
 class AwardSimilarityTests(TestCase):
     """判重：同年份、同赛事、同批获奖人、同层级才算同一条。
 
@@ -1105,6 +1159,77 @@ class AwardSimilarityTests(TestCase):
         # 上限给得很松——正常在十几毫秒；这条线是防「整表逐条比」的退化，
         # 不是性能指标。
         self.assertLess(elapsed, 0.5)
+
+
+class DuplicateAwardReportTests(TestCase):
+    """疑似重复清单只管报、不管改：留哪条要人判断（留谁的证书、谁的描述）。"""
+
+    def report(self):
+        out = StringIO()
+        call_command("report_duplicate_awards", stdout=out)
+        return out.getvalue()
+
+    def award(self, **overrides):
+        values = {
+            "title": "物联网设计一等奖",
+            "competition": "全国大学生物联网设计竞赛",
+            "year": 2025,
+            "tier": tier_rules.PROVINCIAL,
+            "level": "省一等奖",
+            "winners": "张三、李四",
+        }
+        values.update(overrides)
+        return Award.objects.create(**values)
+
+    def test_records_differing_only_in_wording_are_reported(self):
+        older = self.award(competition="全国大学生物联网设计竞赛省一等奖")
+        newer = self.award(
+            competition="全国大学生物联网设计竞赛东北赛区一等奖",
+            level="东北赛区一等奖",
+        )
+
+        body = self.report()
+
+        self.assertIn(f"#{older.pk}", body)
+        self.assertIn(f"#{newer.pk}", body)
+        self.assertIn("省级", body)
+        self.assertIn("1 组疑似重复", body)
+
+    def test_the_region_wording_inside_the_competition_does_not_split_a_group(self):
+        """赛事名里写没写赛区，不该影响「这是不是同一场比赛」。"""
+        self.award(competition="全国大学生物联网设计竞赛")
+        self.award(competition="全国大学生物联网设计竞赛东北赛区")
+
+        self.assertIn("1 组疑似重复", self.report())
+
+    def test_a_legacy_row_without_a_tier_is_grouped_too(self):
+        # 当年漏判留下的那两条，多半就是空层级的那批。
+        self.award(tier="", level="")
+        self.award(tier="", level="", title="物联网设计二等奖")
+
+        body = self.report()
+
+        self.assertIn("层级未填", body)
+        self.assertIn("2 条记录", body)
+
+    def test_other_tiers_teams_or_years_are_not_grouped(self):
+        self.award()
+        self.award(tier=tier_rules.NATIONAL, level="国家级一等奖")
+        self.award(winners="王五、赵六")
+        self.award(year=2024)
+
+        self.assertIn("没有发现疑似重复", self.report())
+
+    def test_the_report_changes_nothing(self):
+        self.award()
+        self.award(level="东北赛区一等奖")
+        before = list(Award.objects.values_list("pk", "title", "level", "tier"))
+
+        self.report()
+
+        self.assertEqual(
+            list(Award.objects.values_list("pk", "title", "level", "tier")), before
+        )
 
 
 class MemberAwardCreateTests(TestCase):

@@ -41,15 +41,16 @@
 
 ## 阶段（每阶段一个提交）
 
-1. **数据层**：`Award.tier` + 迁移（回填 + 打印认不出的清单）；`content/tier_rules.py`；
-   表单层级下拉、级别栏改「证书上的级别写法」；页面层级 chip；搜索按层级；后台
-   list_display / list_filter。
-2. **判重换轴**：`similarity.py` 身份改为年份 + 赛事 + 获奖人 + 层级（`level` 与 `title`
-   移出比较）；`services.create_award` 的锁与判重同步；表单错误文案点名层级；测试改写
-   （含「一等/二等奖同层级算同一条」这条口径变更）。
-3. **清理与收尾**：`report_duplicate_awards` 只读报告（同层级、同赛事、同批人的重复）；
-   译文与文档同步（`docs/architecture/content.md` 判重一节、`routes.md`）；全量测试 +
-   浏览器实测。
+1. **数据层** ✅ `115d886`：`Award.tier` + 迁移（回填 + 打印认不出的清单）；
+   `content/tier_rules.py`；表单层级下拉、级别栏改「证书上的级别写法」；页面层级 chip；
+   搜索按层级；后台 list_display / list_filter。
+2. **判重换轴** ✅ `b9423ad`：`similarity.py` 身份改为年份 + 赛事 + 获奖人 + 层级
+   （`level` 与 `title` 移出比较）；`services.create_award` 的锁与判重同步；表单错误
+   文案点名层级；测试改写（含「一等/二等奖同层级算同一条」这条口径变更）。
+3. **清理与收尾** ✅：`report_duplicate_awards` 只读报告（分组前把层级记号去掉，
+   「…竞赛」与「…竞赛东北赛区」归一组）；译文与文档同步（`docs/architecture/content.md`
+   判重一节、`routes.md`）；全量 655 条测试 + 浏览器实测（迁移回填在开发库上真跑过一遍，
+   中英两种界面各点过一遍，场景已并入本地回归脚本的 `awards`）。
 
 ## 验收对照
 
