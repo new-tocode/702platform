@@ -212,16 +212,25 @@ def award_create(request):
 
 
 def _duplicate_message(existing):
-    """把「已经有一条了」说清楚：是哪一条、谁拿的。"""
+    """把「已经有一条了」说清楚：是哪一条、哪个层级、谁拿的。
+
+    判重不看奖项名称了（见 similarity.py）：被拦下时，已有的那条奖名可能跟刚填的
+    不一样——层级得写进来，人才看得懂为什么拦的是这条。
+    """
     detail = existing.title
     if existing.winners:
         detail = _("%(title)s（获奖人：%(winners)s）") % {
             "title": existing.title,
             "winners": existing.winners,
         }
+    if existing.tier:
+        detail = _("%(detail)s，层级：%(tier)s") % {
+            "detail": detail,
+            "tier": existing.get_tier_display(),
+        }
     return _(
-        "已有相似的获奖记录：%(detail)s。同一条记录不必重复添加；"
-        "如果确实是另一条，请联系管理员在后台添加。"
+        "已有相似的获奖记录：%(detail)s。同一年、同一赛事、同一批获奖人下，"
+        "每个层级只需一条记录；如果确实是另一条，请联系管理员在后台添加。"
     ) % {"detail": detail}
 
 

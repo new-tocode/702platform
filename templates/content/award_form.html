@@ -14,7 +14,7 @@
         <div class="head-row">
             <div>
                 <h1>{% translate "添加获奖记录" %}</h1>
-                <div class="sub">{% translate "奖项、赛事、年份、级别与获奖人必填；指导老师与两类图片可稍后补充。提交后立即显示在历年获奖页面上。" %}</div>
+                <div class="sub">{% translate "奖项、赛事、年份、层级、级别写法与获奖人必填；指导老师与两类图片可稍后补充。提交后立即显示在历年获奖页面上。" %}</div>
             </div>
         </div>
     </div>
@@ -27,7 +27,7 @@
                 <div class="field">
                     <label for="{{ form.title.id_for_label }}">{{ form.title.label }}</label>
                     {{ form.title }}
-                    <p class="help">{% translate "如「数学建模一等奖」，写清奖名与等级。" %}</p>
+                    <p class="help">{% translate "如「数学建模一等奖」，写清奖名与名次。" %}</p>
                     {{ form.title.errors }}
                 </div>
                 <div class="field">
@@ -42,10 +42,17 @@
                         {{ form.year.errors }}
                     </div>
                     <div class="field">
-                        <label for="{{ form.level.id_for_label }}">{{ form.level.label }}</label>
-                        {{ form.level }}
-                        {{ form.level.errors }}
+                        <label for="{{ form.tier.id_for_label }}">{{ form.tier.label }}</label>
+                        {{ form.tier }}
+                        <p class="help">{% translate "证书上写「东北赛区一等奖」「黑龙江赛区一等奖」的，层级一律选「省级」。" %}</p>
+                        {{ form.tier.errors }}
                     </div>
+                </div>
+                <div class="field">
+                    <label for="{{ form.level.id_for_label }}">{{ form.level.label }}</label>
+                    {{ form.level }}
+                    <p class="help">{% translate "照证书上写，如「省一等奖」「东北赛区一等奖」。这一栏只作展示，不参与判重。" %}</p>
+                    {{ form.level.errors }}
                 </div>
                 <div class="field">
                     <label for="{{ form.winners.id_for_label }}">{{ form.winners.label }}</label>
