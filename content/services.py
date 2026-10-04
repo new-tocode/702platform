@@ -31,6 +31,7 @@ def create_award(
     title,
     competition,
     year,
+    tier="",
     level="",
     winners="",
     advisor="",
@@ -44,8 +45,8 @@ def create_award(
     判重与写入在同一个事务里，中间还夹一把咨询锁（advisory lock）：两个人同时
     提交同一条记录时，双方的判重都会在对方写入之前跑完，两条就一起进库了。
     要锁的那一行此刻还不存在，`select_for_update` 锁不住不存在的东西，所以锁的是
-    **这条记录的身份**（归一化之后的串），事务结束自动释放。哈希撞车只会让两个
-    不相干的记录排队，不影响正确性。
+    **这条记录的身份**（年份、层级与两个字段归一化之后的串），事务结束自动释放。
+    哈希撞车只会让两个不相干的记录排队，不影响正确性。
     """
     with connection.cursor() as cursor:
         cursor.execute(
@@ -53,8 +54,7 @@ def create_award(
             [
                 identity_key(
                     competition=competition,
-                    title=title,
-                    level=level,
+                    tier=tier,
                     year=year,
                     winners=winners,
                 )
@@ -62,7 +62,7 @@ def create_award(
         )
 
     existing = find_similar_award(
-        competition=competition, title=title, level=level, year=year, winners=winners
+        competition=competition, tier=tier, year=year, winners=winners
     )
     if existing is not None:
         logger.info(
@@ -79,6 +79,7 @@ def create_award(
         title=title,
         competition=competition,
         year=year,
+        tier=tier,
         level=level,
         winners=winners,
         advisor=advisor,

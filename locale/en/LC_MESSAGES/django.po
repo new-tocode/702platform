@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 702platform\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-03 15:41+0800\n"
+"POT-Creation-Date: 2026-10-04 12:06+0800\n"
 "PO-Revision-Date: 2026-09-19 18:39\n"
 "Last-Translator: 702platform\n"
 "Language-Team: 702platform\n"
@@ -58,37 +58,37 @@ msgstr ""
 msgid "登录已锁定"
 msgstr "Login locked"
 
-#: accounts/forms.py:164 accounts/models.py:83 accounts/validators.py:40
+#: accounts/forms.py:159 accounts/models.py:83 accounts/validators.py:40
 #: templates/accounts/profile.html:57
 msgid "头像"
 msgstr "Avatar"
 
-#: accounts/forms.py:168 accounts/forms.py:195 accounts/services.py:200
+#: accounts/forms.py:163 accounts/forms.py:190 accounts/services.py:200
 #: core/uploads.py:107
 msgid "请选择要上传的图片。"
 msgstr "Please choose an image to upload."
 
-#: accounts/forms.py:186 accounts/models.py:158
+#: accounts/forms.py:181 accounts/models.py:158
 msgid "图像"
 msgstr "Image"
 
-#: accounts/forms.py:207
+#: accounts/forms.py:202
 msgid "当前密码"
 msgstr "Current password"
 
-#: accounts/forms.py:212
+#: accounts/forms.py:207
 msgid "新密码"
 msgstr "New password"
 
-#: accounts/forms.py:217
+#: accounts/forms.py:212
 msgid "确认新密码"
 msgstr "Confirm new password"
 
-#: accounts/forms.py:229
+#: accounts/forms.py:224
 msgid "当前密码不正确。"
 msgstr "The current password is incorrect."
 
-#: accounts/forms.py:237
+#: accounts/forms.py:232
 msgid "两次输入的新密码不一致。"
 msgstr "The two new passwords do not match."
 
@@ -369,7 +369,7 @@ msgid "获奖证书_%(date)s.zip"
 msgstr "Award certificates_%(date)s.zip"
 
 #: content/forms.py:33 content/validators.py:33
-#: templates/content/awards.html:101
+#: templates/content/awards.html:104
 msgid "获奖证书"
 msgstr "Award certificates"
 
@@ -380,7 +380,7 @@ msgstr ""
 "Up to {limit} images, {mb} MB each; they can be downloaded as an archive."
 
 #: content/forms.py:44 content/validators.py:38
-#: templates/content/awards.html:102
+#: templates/content/awards.html:105
 msgid "参赛图片"
 msgstr "Competition photos"
 
@@ -389,75 +389,95 @@ msgstr "Competition photos"
 msgid "最多 {limit} 张，每张不超过 {mb} MB。"
 msgstr "Up to {limit} images, {mb} MB each."
 
-#: content/forms.py:62
+#: content/forms.py:63
 msgid "奖项名称"
 msgstr "Award name"
 
-#: content/forms.py:63 templates/content/awards.html:89
+#: content/forms.py:64 templates/content/awards.html:92
 msgid "赛事名称"
 msgstr "Competition"
 
-#: content/forms.py:64
+#: content/forms.py:65
 msgid "年份"
 msgstr "Year"
 
-#: content/forms.py:65 templates/content/awards.html:91
-msgid "获奖级别"
-msgstr "Award level"
+#: content/forms.py:66
+msgid "获奖层级"
+msgstr "Award tier"
 
-#: content/forms.py:66 templates/content/awards.html:98
+#: content/forms.py:67
+msgid "证书上的级别写法"
+msgstr "Level wording on the certificate"
+
+#: content/forms.py:68 templates/content/awards.html:101
 msgid "获奖人 / 团队"
 msgstr "Winners / team"
 
-#: content/forms.py:67 templates/content/awards.html:94
+#: content/forms.py:69 templates/content/awards.html:97
 #: templates/projects/group_detail.html:65
 #: templates/projects/group_list.html:48
 msgid "指导老师"
 msgstr "Advisors"
 
-#: content/forms.py:85
+#: content/forms.py:87
 #, python-format
 msgid "年份需在 %(earliest)s 到 %(latest)s 之间。"
 msgstr "The year must be between %(earliest)s and %(latest)s."
 
-#: content/forms.py:116
+#: content/forms.py:119
 #, python-format
 msgid "最多上传 %(limit)s 张，这次选了 %(count)s 张。"
 msgstr "Up to %(limit)s files — you selected %(count)s."
+
+#: content/models.py:39
+msgid "国家级"
+msgstr "National"
+
+#: content/models.py:40
+msgid "省级"
+msgstr "Provincial"
+
+#: content/models.py:41
+msgid "校级"
+msgstr "School"
 
 #: content/views.py:196
 msgid "获奖记录已添加。"
 msgstr "The award has been added."
 
-#: content/views.py:218
+#: content/views.py:222
 #, python-format
 msgid "%(title)s（获奖人：%(winners)s）"
 msgstr "%(title)s (winners: %(winners)s)"
 
-#: content/views.py:223
+#: content/views.py:227
+#, python-format
+msgid "%(detail)s，层级：%(tier)s"
+msgstr "%(detail)s — tier: %(tier)s"
+
+#: content/views.py:232
 #, python-format
 msgid ""
-"已有相似的获奖记录：%(detail)s。同一条记录不必重复添加；如果确实是另一条，请"
-"联系管理员在后台添加。"
-msgstr ""
-"A similar award already exists: %(detail)s. There is no need to add the same "
-"record twice; if it really is a different one, ask an administrator to add "
-"it in the admin site."
+"已有相似的获奖记录：%(detail)s。同一年、同一赛事、同一批获奖人下，每个层级只"
+"需一条记录；如果确实是另一条，请联系管理员在后台添加。"
+msgstr "A similar award already exists: %(detail)s. For the same competition, year a"
+"nd winners, only one record is needed per tier; if it really is a different "
+"one, ask an administrator to add it in the admin site."
 
-#: content/views.py:248
+#: content/views.py:257
 msgid "请先勾选要下载的获奖记录。"
 msgstr "Select the awards you want to download first."
 
-#: content/views.py:253
+#: content/views.py:262
 #, python-format
 msgid "一次最多打包 %(limit)s 条记录，请分批下载。"
 msgstr "At most %(limit)s records per archive — please download in batches."
 
-#: content/views.py:262
+#: content/views.py:271
 msgid "所选的记录里还没有上传获奖证书。"
 msgstr "The selected records have no award certificates yet."
 
-#: content/views.py:277
+#: content/views.py:286
 #, python-format
 msgid "有 %(count)s 个证书文件已不在服务器上，没有打进压缩包。"
 msgstr ""
@@ -2021,31 +2041,41 @@ msgstr "Add an award"
 
 #: templates/content/award_form.html:17
 msgid ""
-"奖项、赛事、年份、级别与获奖人必填；指导老师与两类图片可稍后补充。提交后立即"
-"显示在历年获奖页面上。"
-msgstr ""
-"The award, competition, year, level and winners are required; advisors and "
-"the two kinds of images can be added later. It appears on the awards page as "
-"soon as you submit."
+"奖项、赛事、年份、层级、级别写法与获奖人必填；指导老师与两类图片可稍后补充。"
+"提交后立即显示在历年获奖页面上。"
+msgstr "The award, competition, year, tier, level wording and winners are required; "
+"advisors and the two kinds of images can be added later. It appears on the a"
+"wards page as soon as you submit."
 
 #: templates/content/award_form.html:30
-msgid "如「数学建模一等奖」，写清奖名与等级。"
-msgstr ""
-"For example “First prize, mathematical modelling” — name the award and its "
-"level."
+msgid "如「数学建模一等奖」，写清奖名与名次。"
+msgstr "For example “First prize, mathematical modelling” — name the award and its r"
+"ank."
 
-#: templates/content/award_form.html:53
+#: templates/content/award_form.html:47
+msgid "证书上写「东北赛区一等奖」「黑龙江赛区一等奖」的，层级一律选「省级」。"
+msgstr "If the certificate says “First prize, Northeast Region” or “First prize, Hei"
+"longjiang Region”, choose “Provincial” as the tier."
+
+#: templates/content/award_form.html:54
+msgid ""
+"照证书上写，如「省一等奖」「东北赛区一等奖」。这一栏只作展示，不参与判重。"
+msgstr "Copy the wording from the certificate, e.g. “First prize, Provincial” or “Fi"
+"rst prize, Northeast Region”. It is shown as-is and does not affect duplicat"
+"e checking."
+
+#: templates/content/award_form.html:60
 msgid ""
 "多位获奖人用顿号分隔；这里填的名字，就是「我的获奖」按姓名搜索时匹配的名字。"
 msgstr ""
 "Separate multiple winners with a comma. The names you enter here are what "
 "“My awards” searches for."
 
-#: templates/content/award_form.html:74
+#: templates/content/award_form.html:81
 msgid "添加记录"
 msgstr "Add record"
 
-#: templates/content/award_form.html:75
+#: templates/content/award_form.html:82
 msgid "返回历年获奖"
 msgstr "Back to awards"
 
@@ -2057,8 +2087,8 @@ msgstr[0] "1 record"
 msgstr[1] "%(counter)s records"
 
 #: templates/content/awards.html:37
-msgid "搜索姓名、指导老师、赛事、级别或年份"
-msgstr "Search by name, advisor, competition, level or year"
+msgid "搜索姓名、指导老师、赛事、层级或年份"
+msgstr "Search by name, advisor, competition, tier or year"
 
 #: templates/content/awards.html:38
 msgid "搜索获奖记录"
@@ -2096,28 +2126,32 @@ msgstr[1] "%(counter)s selected"
 msgid "选择「%(title)s」"
 msgstr "Select “%(title)s”"
 
-#: templates/content/awards.html:109
+#: templates/content/awards.html:94
+msgid "证书上的写法"
+msgstr "Wording on the certificate"
+
+#: templates/content/awards.html:112
 #, python-format
 msgid "没有匹配「%(keyword)s」的获奖记录。"
 msgstr "No awards match “%(keyword)s”."
 
-#: templates/content/awards.html:111
+#: templates/content/awards.html:114
 msgid "暂时没有获奖记录。"
 msgstr "No awards yet."
 
-#: templates/content/awards.html:118
+#: templates/content/awards.html:121
 msgid "获奖记录分页"
 msgstr "Award pages"
 
-#: templates/content/awards.html:120 templates/discussion/space.html:192
+#: templates/content/awards.html:123 templates/discussion/space.html:192
 msgid "上一页"
 msgstr "Previous page"
 
-#: templates/content/awards.html:132 templates/discussion/space.html:196
+#: templates/content/awards.html:135 templates/discussion/space.html:196
 msgid "下一页"
 msgstr "Next page"
 
-#: templates/content/awards.html:136 templates/discussion/space.html:194
+#: templates/content/awards.html:139 templates/discussion/space.html:194
 #, python-format
 msgid "第 %(current)s / %(total)s 页"
 msgstr "Page %(current)s of %(total)s"
