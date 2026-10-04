@@ -1,9 +1,9 @@
-"""个人图册：上传、排序、排布、删除，以及「单张 5 MB、合计 100 MB」两条上限。"""
+"""个人图册：批量上传、排序、排布、删除，以及「单张 5 MB、合计 100 MB」两条上限。"""
 
 import hashlib
-import re
 import shutil
 from pathlib import Path
+from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -11,7 +11,8 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from core.models import AuditLog
-from ..models import GalleryImage
+
+from ..models import GALLERY_TOTAL_MAX_BYTES, GalleryImage
 from .factories import (
     TEST_MEDIA_ROOT,
     TEST_PRIVATE_MEDIA_ROOT,
@@ -24,9 +25,12 @@ User = get_user_model()
 
 
 @override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT, PRIVATE_MEDIA_ROOT=TEST_PRIVATE_MEDIA_ROOT)
-@override_settings(MEDIA_ROOT=TEST_MEDIA_ROOT, PRIVATE_MEDIA_ROOT=TEST_PRIVATE_MEDIA_ROOT)
 class PersonalGalleryAcceptanceTests(TestCase):
-    """个人图册：上传、排序、排布、删除，以及「单张 5 MB、合计 100 MB」两条上限。"""
+    """个人图册：批量上传、排序、排布、删除，以及「单张 5 MB、合计 100 MB」两条上限。
+
+    批量上传的语义是「能放下的先放」：一批里格式不合格或放不下的逐张跳过并点名，
+    其余照常入册——所以下面几处断言的是「进了几张、谁被点名」，不是整批的成败。
+    """
 
     @classmethod
     def tearDownClass(cls):
@@ -44,14 +48,30 @@ class PersonalGalleryAcceptanceTests(TestCase):
         self.client.force_login(self.user)
 
     def upload(self, name="photo.png", follow=False):
+        return self.upload_batch([png_upload(name)], follow=follow)
+
+    def upload_batch(self, files, follow=False):
         return self.client.post(
             reverse("accounts:gallery_upload"),
-            {"image": png_upload(name)},
+            {"images": files},
             follow=follow,
         )
 
     def images(self):
         return list(self.user.profile.gallery_images.all())
+
+    def stored_files(self):
+        """受保护目录里图册落盘的文件名，用于确认被拒的上传没有留下文件。"""
+        root = TEST_PRIVATE_MEDIA_ROOT / "gallery"
+        if not root.exists():
+            return []
+        return sorted(path.name for path in root.rglob("*") if path.is_file())
+
+    @staticmethod
+    def digest(upload):
+        payload = upload.read()
+        upload.seek(0)
+        return hashlib.sha256(payload).hexdigest()
 
     def test_uploading_an_image_stores_it_at_the_end_of_the_gallery(self):
         self.upload("first.png")
@@ -66,43 +86,120 @@ class PersonalGalleryAcceptanceTests(TestCase):
 
     def test_uploading_an_image_records_its_sha256(self):
         upload = png_upload("hashed.png")
-        payload = upload.read()
-        upload.seek(0)
+        expected = self.digest(upload)
 
-        self.client.post(reverse("accounts:gallery_upload"), {"image": upload})
+        self.upload_batch([upload])
 
+        self.assertEqual(self.images()[0].sha256, expected)
+
+    def test_a_batch_is_added_in_the_chosen_order(self):
+        """一次选三张：都进图册，顺序就是选择顺序，每张各记一条审计。"""
+        uploads = [
+            png_upload("one.png", size=(8, 8)),
+            png_upload("two.png", size=(9, 9)),
+            png_upload("three.png", size=(10, 10)),
+        ]
+        digests = [self.digest(upload) for upload in uploads]
+
+        response = self.upload_batch(uploads, follow=True)
+
+        self.assertContains(response, "3 张图像已加入图册。")
+        images = self.images()
+        self.assertEqual([image.sha256 for image in images], digests)
+        orders = [image.sort_order for image in images]
+        self.assertEqual(orders, sorted(orders), "sort_order 没有按选择顺序递增")
         self.assertEqual(
-            self.images()[0].sha256, hashlib.sha256(payload).hexdigest()
+            AuditLog.objects.filter(action="accounts.gallery.add").count(), 3
         )
 
-    def test_an_image_larger_than_five_megabytes_is_rejected(self):
-        response = self.client.post(
-            reverse("accounts:gallery_upload"),
-            {"image": oversized_png_upload(name="big.png", megabytes=6)},
+    def test_a_bad_file_is_named_and_the_rest_of_the_batch_still_lands(self):
+        """一批里有不合格的：点名跳过它，合格的那几张照常入册。"""
+        response = self.upload_batch(
+            [
+                png_upload("fine.png"),
+                oversized_png_upload(name="heavy.png", megabytes=6),
+                SimpleUploadedFile(
+                    "notes.txt", b"not an image", content_type="text/plain"
+                ),
+            ],
             follow=True,
         )
 
-        self.assertContains(response, "不能超过 5 MB")
-        self.assertEqual(self.images(), [])
+        self.assertContains(response, "1 张图像已加入图册。")
+        self.assertContains(response, "heavy.png：图册图像不能超过 5 MB。")
+        self.assertContains(response, "notes.txt：图册图像仅支持")
+        self.assertEqual(len(self.images()), 1)
 
-    def test_the_gallery_total_cap_is_enforced_on_upload(self):
+    def test_the_batch_keeps_what_fits_and_names_what_does_not(self):
+        """放不下的跳过、放得下的照加；跳过一张后仍会接着试后面的。"""
         kept = GalleryImage.objects.create(
             profile=self.user.profile, image=png_upload("kept.png")
         )
-        # 直接把已用量抬到 99 MB，不必真造一张那么大的图。
+        # 已用量抬到「小图放得下、大图放不下」：离上限只差 2 MB，
+        # 而下面两张真图的大小由各自的字节数决定（约 1 MB 与 3 MB）。
         GalleryImage.objects.filter(pk=kept.pk).update(
-            file_size=99 * 1024 * 1024
-        )
-        oversized = oversized_png_upload(name="filler.png", megabytes=3)
-
-        response = self.client.post(
-            reverse("accounts:gallery_upload"), {"image": oversized}, follow=True
+            file_size=GALLERY_TOTAL_MAX_BYTES - 2 * 1024 * 1024
         )
 
-        self.assertContains(response, "图册合计不能超过 100 MB")
-        self.assertEqual(len(self.images()), 1)
+        response = self.upload_batch(
+            [
+                oversized_png_upload(name="fits.png", megabytes=1),
+                oversized_png_upload(name="over.png", megabytes=3),
+                png_upload("fits-too.png"),
+            ],
+            follow=True,
+        )
+
+        self.assertContains(response, "2 张图像已加入图册。")
+        self.assertContains(response, "另有 1 张因图册容量不足未加入")
+        self.assertContains(response, "over.png")
+        # 三张 = 原有的 + fits + fits-too：跳过 over 之后仍试了第三张。
+        self.assertEqual(len(self.images()), 3)
+        self.assertNotContains(response, "fits-too.png：")
         self.assertTrue(
             Path(kept.image.path).exists(), "被拒的上传不该动到已有图像"
+        )
+
+    def test_a_batch_that_cannot_fit_at_all_adds_nothing(self):
+        kept = GalleryImage.objects.create(
+            profile=self.user.profile, image=png_upload("kept.png")
+        )
+        GalleryImage.objects.filter(pk=kept.pk).update(
+            file_size=GALLERY_TOTAL_MAX_BYTES
+        )
+
+        response = self.upload_batch(
+            [png_upload("first.png"), png_upload("second.png")], follow=True
+        )
+
+        self.assertContains(response, "另有 2 张因图册容量不足未加入")
+        self.assertEqual(len(self.images()), 1)
+
+    def test_uploading_without_picking_a_file_says_so(self):
+        response = self.upload_batch([], follow=True)
+
+        self.assertContains(response, "请选择要上传的图片。")
+        self.assertEqual(self.images(), [])
+
+    def test_a_failed_batch_rolls_back_and_cleans_up_the_stored_files(self):
+        """保存中途出错：数据库回滚，已经落盘的那几张也要跟着删掉。"""
+        before = self.stored_files()
+        real_save = GalleryImage.save
+        saved = []
+
+        def failing_second_save(instance, *args, **kwargs):
+            saved.append(instance)
+            if len(saved) == 2:
+                raise RuntimeError("磁盘满了")
+            return real_save(instance, *args, **kwargs)
+
+        with mock.patch.object(GalleryImage, "save", failing_second_save):
+            with self.assertRaises(RuntimeError):
+                self.upload_batch([png_upload("one.png"), png_upload("two.png")])
+
+        self.assertEqual(self.images(), [])
+        self.assertEqual(
+            self.stored_files(), before, "回滚之后不该留下没人认领的文件"
         )
 
     def test_moving_an_image_swaps_it_with_its_neighbour(self):
@@ -250,3 +347,15 @@ class PersonalGalleryAcceptanceTests(TestCase):
         self.assertContains(response, "1 张 · 0 / 100 MB")
         self.assertContains(response, 'class="gitem gitem-normal"')
         self.assertContains(response, "加入图册")
+
+    def test_the_file_input_lets_the_browser_pick_several_files(self):
+        """多选就落在 ``multiple`` 这一个属性上，由 ``MultipleFileInput`` 渲染。"""
+        response = self.client.get(reverse("accounts:profile"))
+
+        self.assertRegex(
+            response.content.decode(),
+            r'<input[^>]*name="images"[^>]*multiple',
+        )
+        # 即时反馈那句话与上限都挂在页面里，供 gallery.js 取用。
+        self.assertContains(response, "data-gallery-picked")
+        self.assertContains(response, 'data-max-bytes="5242880"')

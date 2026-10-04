@@ -11,7 +11,7 @@ from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
-from django.utils.translation import gettext as _
+from django.utils.translation import gettext as _, ngettext
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 from django.views.generic.edit import FormView
 
@@ -25,12 +25,12 @@ from .forms import (
     MemberPasswordChangeForm,
     ProfileForm,
 )
-from .models import GalleryImage, Profile
+from .models import GALLERY_TOTAL_MAX_BYTES, GalleryImage, Profile
 from .roles import describe_member
 from .selectors import gallery_usage, member_identities
 from .services import (
     GalleryError,
-    add_gallery_image,
+    add_gallery_images,
     clear_avatar,
     delete_gallery_image,
     move_gallery_image,
@@ -281,6 +281,9 @@ def profile(request):
             "gallery_images": profile_obj.gallery_images.all(),
             "gallery": gallery_usage(profile_obj),
             "gallery_image_max_mb": GALLERY_IMAGE_MAX_BYTES // (1024 * 1024),
+            # 前端标出「选超了」的文件用字节数：判据与服务端同一个常量，
+            # 换成 MB 相乘就多了一道可能对不上的换算。
+            "gallery_image_max_bytes": GALLERY_IMAGE_MAX_BYTES,
         },
     )
 
@@ -293,40 +296,71 @@ def _own_gallery_image(request, pk):
 @login_required
 @require_POST
 def gallery_upload(request):
-    """往图册里加一张图；能不能放下由服务层按合计用量决定。"""
+    """往图册里加图，一次可以选多张；每张的取留由服务层按合计用量决定。
+
+    结果分三截说：进了几张、哪几张没进（逐张点名，用户才知道重选时去掉谁）、
+    还有几张是因为整册放不下（合并成一条，免得二十张刷二十条提示）。
+    """
     profile_obj = _member_profile(request)
     form = GalleryImageForm(request.POST, request.FILES)
     if not form.is_valid():
-        for error in form.errors.get("image", []):
+        for error in form.errors.get("images", []):
             messages.error(request, error)
         return redirect("accounts:profile")
 
     try:
-        image = add_gallery_image(
+        result = add_gallery_images(
             profile=profile_obj,
-            uploaded_file=form.cleaned_data["image"],
+            uploaded_files=form.cleaned_data["images"],
             actor=request.user,
             request=request,
         )
     except GalleryError as exc:
         messages.error(request, str(exc))
-        logger.warning(
-            "profile.gallery.rejected username=%s uploaded=%s",
-            request.user.get_username(),
-            form.cleaned_data["image"].size,
-            extra={"request_id": getattr(request, "request_id", "-")},
-        )
         return redirect("accounts:profile")
 
+    if result.added:
+        count = len(result.added)
+        messages.success(
+            request,
+            ngettext(
+                "1 张图像已加入图册。",
+                "%(count)s 张图像已加入图册。",
+                count,
+            )
+            % {"count": count},
+        )
+    for name, reason in result.rejected:
+        messages.warning(
+            request, _("%(name)s：%(reason)s") % {"name": name, "reason": reason}
+        )
+    if result.overflowed:
+        count = len(result.overflowed)
+        messages.warning(
+            request,
+            ngettext(
+                "另有 1 张因图册容量不足未加入（已用 %(used)s / %(limit)s MB）：%(names)s",
+                "另有 %(count)s 张因图册容量不足未加入（已用 %(used)s / %(limit)s MB）：%(names)s",
+                count,
+            )
+            % {
+                "count": count,
+                "used": round(result.used_bytes / (1024 * 1024), 1),
+                "limit": GALLERY_TOTAL_MAX_BYTES // (1024 * 1024),
+                # 名字也要点名：用户得知道重选时去掉哪几张，与上面逐张报的格式
+                # 问题同一条口径。
+                "names": " · ".join(result.overflowed),
+            },
+        )
     logger.info(
-        "profile.gallery.add username=%s user_id=%s image_id=%s size=%s",
+        "profile.gallery.add username=%s user_id=%s added=%s rejected=%s overflowed=%s",
         request.user.get_username(),
         request.user.pk,
-        image.pk,
-        image.file_size,
+        len(result.added),
+        len(result.rejected),
+        len(result.overflowed),
         extra={"request_id": getattr(request, "request_id", "-")},
     )
-    messages.success(request, _("图像已加入图册。"))
     return redirect("accounts:profile")
 
 

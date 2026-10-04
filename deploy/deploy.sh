@@ -69,6 +69,33 @@ echo "==> 5/6 数据库迁移 + 静态文件 + 界面翻译"
 # 但日常部署走的是本脚本，这里不能省。
 mkdir -p protected_media
 
+# 历年获奖的判重要用 pg_trgm（content.0004_pg_trgm 会 CREATE EXTENSION）。它在多数
+# 发行版里是**单独的包**——PGDG 的 RPM 装在 postgresql<ver>-contrib 里，只装 server
+# 是没有的。缺了的话 migrate 会抛一大段 traceback（"extension pg_trgm is not
+# available"），看不出该怎么办；先探一下目录（pg_available_extensions 只读文件系统
+# 目录，不碰业务表），缺了就给可照做的安装命令。
+#
+# 退出码：0 = 可用；1 = 连上了库但没有这个扩展；其他 = 连库本身失败（不在这里多说，
+# 后头的 migrate 会给出真正的错误）。
+pg_trgm_status=0
+.venv/bin/python manage.py shell -c '
+from django.db import connection
+try:
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT 1 FROM pg_available_extensions WHERE name = %s", ["pg_trgm"])
+        available = cursor.fetchone() is not None
+except Exception:
+    raise SystemExit(2)
+raise SystemExit(0 if available else 1)
+' >/dev/null 2>&1 || pg_trgm_status=$?
+if [ "$pg_trgm_status" -eq 1 ]; then
+    echo "    数据库缺 pg_trgm 扩展（PostgreSQL 未装 contrib 包）：" >&2
+    echo "      RHEL 系（PGDG）: sudo dnf install -y postgresql<主版本>-contrib" >&2
+    echo "      Debian / Ubuntu: sudo apt install postgresql-contrib" >&2
+    echo "    装好后重跑本脚本即可，不需要重启 PostgreSQL。" >&2
+    exit 1
+fi
+
 .venv/bin/python manage.py migrate --noinput
 .venv/bin/python manage.py collectstatic --noinput
 # 界面英文的 .mo 是构建产物（不进版本库）：按这个 tag 里的 .po 现编，线上就永远
