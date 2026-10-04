@@ -19,6 +19,7 @@ from PIL import Image
 from core.models import AuditLog
 from media.models import MediaFile
 
+from . import tier_rules
 from .forms import AwardForm
 from .models import Award, ContentPage, HomeSlide, Showcase
 from .similarity import find_similar_award, normalize
@@ -406,6 +407,22 @@ class PublicContentAcceptanceTests(TestCase):
         about_body = self.client.get(reverse("content:about")).content.decode()
         self.assertIn("<figcaption>证书扫描件的说明</figcaption>", about_body)
 
+    def test_award_shows_its_tier_and_the_certificate_wording(self):
+        """层级挂在标题旁，证书上的写法照原样展示——「东北赛区一等奖」是省级那一档。"""
+        Award.objects.create(
+            title="物联网设计一等奖",
+            competition="全国大学生物联网设计竞赛",
+            year=2025,
+            tier=tier_rules.PROVINCIAL,
+            level="东北赛区一等奖",
+            winners="张三",
+        )
+
+        body = self.client.get(reverse("content:awards")).content.decode()
+
+        self.assertIn("省级", body)
+        self.assertIn("东北赛区一等奖", body)
+
     def test_award_without_advisor_or_media_renders(self):
         # 级别与获奖人现在必填，这里空着是照着「改必填之前录进来的老记录」写：
         # 模板对它们的判断因此不能拆。
@@ -507,6 +524,7 @@ class AwardSearchAndPagingTests(TestCase):
                 title="数学建模一等奖",
                 competition="全国大学生数学建模竞赛",
                 year=2024,
+                tier=tier_rules.NATIONAL,
                 level="国家级",
                 winners="张三、李四",
                 advisor="王老师",
@@ -515,6 +533,7 @@ class AwardSearchAndPagingTests(TestCase):
                 title="程序设计银奖",
                 competition="ICPC 区域赛",
                 year=2023,
+                tier=tier_rules.PROVINCIAL,
                 level="省级",
                 winners="Alice",
                 advisor="陈老师",
@@ -543,6 +562,34 @@ class AwardSearchAndPagingTests(TestCase):
                 for award in self.awards:
                     if award.title != expected:
                         self.assertNotIn(award.title, body)
+
+    def test_searching_a_tier_word_finds_records_by_their_tier(self):
+        """证书上写「东北赛区一等奖」的记录，搜「省级」也要找得到。"""
+        Award.objects.create(
+            title="物联网设计一等奖",
+            competition="全国大学生物联网设计竞赛",
+            year=2025,
+            tier=tier_rules.PROVINCIAL,
+            level="东北赛区一等奖",
+            winners="张三",
+        )
+
+        body = self.search("省级").content.decode()
+
+        self.assertIn("物联网设计一等奖", body)
+        # 另一条是国家级，不该被「省级」带出来。
+        self.assertNotIn("数学建模一等奖", body)
+
+    def test_searching_a_competition_name_does_not_pull_in_every_tier(self):
+        """「全国大学生数学建模竞赛」里有「全国」，但搜索不该变成「所有国家级」。
+
+        层级词只认整词命中（见 `selectors.TIER_KEYWORDS`）：按包含匹配的话，
+        搜一个赛事名就会把整个层级的人都叫出来。
+        """
+        body = self.search("全国大学生数学建模竞赛").content.decode()
+
+        self.assertIn("数学建模一等奖", body)
+        self.assertNotIn("程序设计银奖", body)
 
     def test_search_keeps_keyword_in_box_and_offers_clearing(self):
         body = self.search("张三").content.decode()
@@ -817,6 +864,77 @@ class CertificateArchiveTests(TestCase):
         self.assertNotIn(f'value="{without.pk}"', body)
 
 
+class TierRulesTests(TestCase):
+    """层级措辞的折叠与推断：证书上的写法千变万化，层级只有那几档。
+
+    这是判重「同一层级」那一半的文字基础，也是迁移回填历史记录用的规则——两处共用
+    同一个模块（见 content/tier_rules.py），所以在这里逐条钉住。
+    """
+
+    def fold(self, text):
+        return tier_rules.fold_tier_terms(tier_rules.normalize(text))
+
+    def test_provincial_spellings_fold_to_the_same_token(self):
+        wanted = self.fold("省一等奖")
+        for wording in (
+            "省级一等奖",
+            "省赛一等奖",
+            "东北赛区一等奖",
+            "黑龙江赛区一等奖",
+            "华北赛区一等奖",
+            "区域赛一等奖",
+        ):
+            with self.subTest(wording=wording):
+                self.assertEqual(self.fold(wording), wanted)
+
+    def test_the_rank_survives_the_fold(self):
+        # 折的是层级，不是名次：一等奖与二等奖仍分得开。
+        self.assertNotEqual(self.fold("省一等奖"), self.fold("省二等奖"))
+
+    def test_the_competition_name_is_not_eaten_by_the_fold(self):
+        """「全国…竞赛东北赛区」折完仍带着「竞赛」——地名之外的词一个字不动。
+
+        竞赛名与赛区写法写在同一个字段里时，两条记录要靠「归一化后完全相同」才拦得
+        住；折叠把「竞赛」卷进去，两边就折不成同一个串了。
+        """
+        self.assertEqual(
+            self.fold("全国大学生物联网设计竞赛东北赛区一等奖"),
+            self.fold("全国大学生物联网设计竞赛省一等奖"),
+        )
+
+    def test_derive_reads_the_wording_next_to_the_rank(self):
+        cases = {
+            "省一等奖": tier_rules.PROVINCIAL,
+            "东北赛区一等奖": tier_rules.PROVINCIAL,
+            "黑龙江赛区一等奖": tier_rules.PROVINCIAL,
+            "国家级一等奖": tier_rules.NATIONAL,
+            "全国一等奖": tier_rules.NATIONAL,
+            "国家级": tier_rules.NATIONAL,
+            "省级": tier_rules.PROVINCIAL,
+            "校级选拔赛一等奖": tier_rules.SCHOOL,
+            # 开头的「全国」是赛事名的一部分，说明层级的是紧挨名次的「东北赛区」。
+            "全国大学生物联网设计竞赛东北赛区一等奖": tier_rules.PROVINCIAL,
+            "全国大学生数学建模竞赛一等奖": tier_rules.NATIONAL,
+            # 认不出：奖名里没有层级词。
+            "数学建模一等奖": "",
+            "": "",
+        }
+        for text, expected in cases.items():
+            with self.subTest(text=text):
+                self.assertEqual(tier_rules.derive_tier(text), expected)
+
+    def test_derive_falls_back_to_the_next_text(self):
+        """level 认不出时看 title；level 说了话就不看 title。"""
+        self.assertEqual(
+            tier_rules.derive_tier("", "全国大学生数学建模竞赛一等奖"),
+            tier_rules.NATIONAL,
+        )
+        self.assertEqual(
+            tier_rules.derive_tier("省级", "全国大学生数学建模竞赛一等奖"),
+            tier_rules.PROVINCIAL,
+        )
+
+
 class AwardSimilarityTests(TestCase):
     """判重：同一奖项 + 同一批获奖人才算同一条；全半角、空格、错别字都不算差别。"""
 
@@ -965,6 +1083,7 @@ class MemberAwardCreateTests(TestCase):
             "title": "数学建模一等奖",
             "competition": "全国大学生数学建模竞赛",
             "year": "2024",
+            "tier": tier_rules.NATIONAL,
             "level": "国家级",
             "winners": "张三、李四",
             "advisor": "王建华",
@@ -1084,25 +1203,33 @@ class MemberAwardCreateTests(TestCase):
         self.assertIn("year", response.context["form"].errors)
         self.assertEqual(Award.objects.count(), 0)
 
-    def test_the_five_text_fields_are_all_required(self):
+    def test_the_six_text_fields_are_all_required(self):
         self.client.force_login(self.member)
 
         response = self.client.post(self.url, {})
 
         errors = response.context["form"].errors
-        for field in ("title", "competition", "year", "level", "winners"):
+        for field in ("title", "competition", "year", "tier", "level", "winners"):
             self.assertIn(field, errors)
         self.assertEqual(Award.objects.count(), 0)
 
-    def test_model_also_requires_level_and_winners(self):
+    def test_model_also_requires_tier_level_and_winners(self):
         """表单之外（脚本写入、后台）也拦得住：``blank=False`` 在模型上。"""
         award = Award(title="奖项", competition="赛事", year=2024)
 
         with self.assertRaises(ValidationError) as caught:
             award.full_clean()
 
+        self.assertIn("tier", caught.exception.message_dict)
         self.assertIn("level", caught.exception.message_dict)
         self.assertIn("winners", caught.exception.message_dict)
+
+    def test_the_chosen_tier_is_stored(self):
+        self.client.force_login(self.member)
+
+        self.client.post(self.url, self.payload(tier=tier_rules.PROVINCIAL))
+
+        self.assertEqual(Award.objects.get().tier, tier_rules.PROVINCIAL)
 
     def test_advisor_may_stay_empty(self):
         self.client.force_login(self.member)
@@ -1177,6 +1304,20 @@ class AwardFormTranslationTests(TestCase):
         self.assertEqual(
             plain, [], f"这些字段的标签不是惰性译文（多半是从模型 verbose_name 漏过来的）：{plain}"
         )
+
+    def test_tier_choices_are_lazy_translations(self):
+        """层级下拉的选项标签也要可译——模型上那份 choices 必须用惰性译文。"""
+        # 空选项（Django 的「---------」）不算，其余三个都必须是惰性译文。
+        choices = [
+            (value, label)
+            for value, label in AwardForm().fields["tier"].choices
+            if value
+        ]
+
+        self.assertEqual(len(choices), 3)
+        for value, label in choices:
+            with self.subTest(value=value):
+                self.assertIsInstance(label, Promise)
 
     def test_help_texts_are_formatted_lazily(self):
         form = AwardForm()

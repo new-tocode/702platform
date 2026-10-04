@@ -34,7 +34,7 @@
     <form class="award-toolbar" method="get" role="search">
         <div class="award-search">
             <input type="search" name="q" value="{{ keyword }}" autocomplete="off"
-                   placeholder="{% translate '搜索姓名、指导老师、赛事、级别或年份' %}"
+                   placeholder="{% translate '搜索姓名、指导老师、赛事、层级或年份' %}"
                    aria-label="{% translate '搜索获奖记录' %}">
             {% if per_page != per_page_options.0 %}
                 <input type="hidden" name="per_page" value="{{ per_page }}">
@@ -81,6 +81,9 @@
                                aria-label="{% blocktranslate with title=award.title %}选择「{{ title }}」{% endblocktranslate %}">
                     {% endif %}
                     <h2>{{ award.title }}</h2>
+                    {# 层级挂在标题旁边，是因为它才是「同一条奖」的判据：证书上写「东北赛区 #}
+                    {# 一等奖」还是「省一等奖」都在这一档里，翻列表时一眼看得出。 #}
+                    {% if award.tier %}<span class="chip chip-on">{{ award.get_tier_display }}</span>{% endif %}
                 </div>
                 <span class="count">{{ award.year }}</span>
             </div>
@@ -88,7 +91,7 @@
                 <dl class="dl">
                     <div><dt>{% translate "赛事名称" %}</dt><dd>{{ award.competition }}</dd></div>
                     {% if award.level %}
-                        <div><dt>{% translate "获奖级别" %}</dt><dd>{{ award.level }}</dd></div>
+                        <div><dt>{% translate "证书上的写法" %}</dt><dd>{{ award.level }}</dd></div>
                     {% endif %}
                     {% if award.advisor %}
                         <div><dt>{% translate "指导老师" %}</dt><dd>{{ award.advisor }}</dd></div>

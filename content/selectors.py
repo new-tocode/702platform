@@ -3,10 +3,26 @@
 from django.db.models import Q
 
 from .models import Award
+from .tier_rules import NATIONAL, PROVINCIAL, SCHOOL
 
 
 #: 搜索框扫过的文本字段。年份是整数列，单独处理。
 SEARCH_FIELDS = ("title", "competition", "level", "winners", "advisor")
+
+#: 整词命中这几个词时，连结构化层级一起找：页面上那条记录的 level 写的是「东北赛区
+#: 一等奖」，字面上并不含「省级」，光靠 icontains 找不到它。只认整词——「全国大学生
+#: 数学建模竞赛」里也含「全国」，按包含匹配就成了一次「所有国家级记录」的检索，
+#: 那不是搜索的人想要的。
+TIER_KEYWORDS = {
+    "国家级": NATIONAL,
+    "国赛": NATIONAL,
+    "国家": NATIONAL,
+    "省级": PROVINCIAL,
+    "省赛": PROVINCIAL,
+    "赛区": PROVINCIAL,
+    "校级": SCHOOL,
+    "校赛": SCHOOL,
+}
 
 
 def search_awards(*, query=""):
@@ -26,4 +42,7 @@ def search_awards(*, query=""):
     for field in SEARCH_FIELDS:
         condition |= Q(**{f"{field}__icontains": keyword})
     condition |= Q(year__icontains=keyword)
+    tier = TIER_KEYWORDS.get(keyword)
+    if tier:
+        condition |= Q(tier=tier)
     return awards.filter(condition)
