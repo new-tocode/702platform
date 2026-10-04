@@ -1,12 +1,21 @@
-"""获奖记录的判重：同一奖项 + 同一批获奖人才算同一条。
+"""获奖记录的判重：同一年、同一赛事、同一批获奖人、同一层级，就是同一条。
 
 不同获奖人各自记录同一场比赛的同一个奖，是两条记录——「我的获奖」按姓名搜索时
 每个人都要查得到自己那条，所以判重**不能**只看赛事与年份。
 
-比较因此是**逐字段**的，而不是给整串打一个总分。整串相似度会把「数学建模一等奖」
-和「数学建模二等奖」判成同一条：三十个字的串里差一个字，分数仍在 0.9 以上，而这两
-条恰恰必须分开。逐字段之后，「一等奖 / 二等奖」落在 title 这一个字段上，短串的三元
-组本来就少，差异立刻显出来（实测 0.455）。
+判重的身份是**结构化的**：年份 + 赛事 + 获奖人 + 层级。层级是 ``Award.tier`` 这个
+枚举，不是证书上的写法——「省一等奖」与「东北赛区一等奖」是同一层，措辞的差别不该
+让它们变成两条（这正是过去漏判的那一类）。奖项名称与级别写法因此不参与判重：它们是
+这条记录的说明，不是它的身份。
+
+由此定下一条口径：**同一层级下，同一年、同一赛事、同一批人只允许一条**。往年那种
+「数学建模一等奖」与「数学建模二等奖」各录一条的情况，现在算重复——一个队在同一年
+的同一场比赛里只会拿到一个名次；确实是另一条的（换个赛道之类），走后台那条放行的路
+（见 docs/architecture/content.md）。
+
+比较因此是**逐字段**的，而不是给整串打一个总分：整串相似度会被长字段稀释——赛事名
+几十个字、获奖人几个字，合在一起算，短字段上换个名字也未必跌到阈值以下。逐字段
+之后，每个字段跟自己的门槛比，短字段上的差别不会被长字段盖过去。
 
 **算法是 PostgreSQL 的 pg_trgm**，逐字段算三元组相似度。选它有三个理由：库里就
 有（不必引依赖、不必自己实现）；中文按字切三元组，不需要分词；短串上的表现接近
@@ -20,79 +29,72 @@ GIN 索引：那种索引只在「拿相似度当检索条件」时才有用，�
 
 两道关，先便宜后贵：
 
-1. **归一化后完全相同** —— NFKC 全角转半角、大小写压平、去掉空白与标点。空格、
-   全半角、中英文标点这些差别不算差别。多数重复（同一个人把同一条又填了一遍）
-   在这一关就拦下了，连相似度都不必算。
+1. **归一化后完全相同** —— NFKC 全角转半角、大小写压平、去掉空白与标点，再把层级
+   措辞折成统一记号（见 ``content.tier_rules``）。空格、全半角、中英文标点这些差别
+   不算差别；「省一等奖」与「东北赛区一等奖」折完也是同一个串。多数重复（同一个人
+   把同一条又填了一遍）在这一关就拦下了，连相似度都不必算。
 2. **逐字段相似度** —— 归一化之后仍可能差一个字（错别字、简写），交给 pg_trgm。
 
 第二关里有一条容易写反的规矩：**任何一侧没填，这一项就不比**。「没填」不等于
-「不一样」。新记录空着时按「不一样」处理，先加的那条填了级别、重复提交时留空就
+「不一样」。新记录空着时按「不一样」处理，先加的那条填了获奖人、重复提交时留空就
 绕过去了；老记录空着时按「不一样」处理，改必填之前录进来的那几条就永远拦不住重复。
-级别与获奖人现在是必填（``Award`` 上 ``blank=False``），前台填不出空值，这条规矩
-今天主要为历史数据留着——但只要库里的空值还在，它就得两边都管。
+层级同理：回填时认不出层级的老记录留的是空值，它不否决谁（「不确定」不该变成一次
+莫名的拒绝），但也不该被当成「另一个层级」。
 
 阈值是按实测定的，见 :data:`FIELD_THRESHOLDS`。
 """
 
 import logging
-import unicodedata
 
 from django.contrib.postgres.search import TrigramSimilarity
 from django.db.models import F, Q, Value
 
 from .models import Award
+from .tier_rules import fold_tier_terms, normalize
 
 
 logger = logging.getLogger(__name__)
 
 
 #: 逐字段的相似度门槛。实测：一字之差（建模竞赛 / 建模大赛）约 0.6，
-#: 「一等奖 / 二等奖」约 0.455，「张三、李四 / 张三、王五」这类换人约 0.5，
-#: 「国家级 / 省级」为 0。0.55 落在「该拦的（≥0.6）」与「不该拦的（≤0.5）」
-#: 中间，两边都留着余量。
+#: 「张三、李四 / 张三、王五」这类换人约 0.5。0.55 落在「该拦的（≥0.6）」与
+#: 「不该拦的（≤0.5）」中间，两边都留着余量。
 FIELD_THRESHOLDS = {
     "competition": 0.55,
-    "title": 0.55,
-    "level": 0.55,
     "winners": 0.55,
 }
 
-#: 参与判重的字段。年份不在其中：它是硬判据，只做筛选，不比相似度。
+#: 参与判重的字段。年份不在其中：它是硬判据，只做筛选，不比相似度。层级也不在：
+#: 它比的是相等，不是相似。
 _COMPARED_FIELDS = tuple(FIELD_THRESHOLDS)
 
 
-def normalize(text):
-    """把一段文字压成可比较的形状：全角转半角、大小写压平、去掉空白与标点。
+def field_shape(**fields):
+    """一条记录的「形状」：参与判重的字段各自归一化、折叠后拼起来，用来判完全相同。
 
-    NFKC 管全角字母数字与常见标点的统称（``ＡＢ`` → ``AB``、``，`` → ``,``），
-    但管不了中文异体字（``獎`` 仍是 ``獎``）——那类差别留给相似度那一关。
+    折叠见 :func:`tier_rules.fold_tier_terms`：它把层级措辞换成统一记号，证书上写
+    「省一等奖」还是「东北赛区一等奖」都落到同一个串——两份记录整串写进同一个字段
+    时，靠的就是这一关。
     """
-    folded = unicodedata.normalize("NFKC", text or "").casefold()
-    return "".join(
-        char
-        for char in folded
-        if not char.isspace() and not unicodedata.category(char).startswith("P")
+    return "\x1f".join(
+        fold_tier_terms(normalize(fields[name])) for name in _COMPARED_FIELDS
     )
 
 
-def field_shape(**fields):
-    """一条记录的「形状」：四个字段各自归一化后拼起来，用来判完全相同。"""
-    return "\x1f".join(normalize(fields[name]) for name in _COMPARED_FIELDS)
-
-
-def identity_key(*, competition, title, level, year, winners):
-    """判重用的身份串：年份 + 四个字段的形状。
+def identity_key(*, competition, tier, year, winners):
+    """判重用的身份串：年份 + 层级 + 两个字段的形状。
 
     判重拿它比，写入时也拿它加锁（见 ``content.services.create_award``）——两处
     必须是同一个串，否则锁住的不是正在比的那个东西。
     """
-    return f"{year}\x1f" + field_shape(
-        competition=competition, title=title, level=level, winners=winners
+    return (
+        f"{year}\x1f{tier}\x1f"
+        + field_shape(competition=competition, winners=winners)
     )
 
 
-def find_similar_award(*, competition, title, level, year, winners, exclude_pk=None):
-    """在同一年份的记录里找与新记录重复的那一条，没有就返回 ``None``。
+def find_similar_award(*, competition, year, winners, tier, exclude_pk=None):
+    """在同一年份、同一层级的记录里找与新记录重复的那一条，没有就返回 ``None``。
 
     ``exclude_pk`` 给编辑场景留的：改自己那条时，不该被自己挡住。
     """
@@ -100,32 +102,27 @@ def find_similar_award(*, competition, title, level, year, winners, exclude_pk=N
         # 没有年份就没有可筛的范围，也就没有「同一条」可言。表单本来也要求填年份。
         return None
 
-    values = {
-        "competition": competition,
-        "title": title,
-        "level": level,
-        "winners": winners,
-    }
+    values = {"competition": competition, "winners": winners}
     same_year = Award.objects.filter(year=year).order_by("-created_at", "-id")
     if exclude_pk:
         same_year = same_year.exclude(pk=exclude_pk)
+    if tier:
+        # 层级是身份的一部分：两边都知道、且不一样，就不是同一条。空值不否决——
+        # 「没填」不等于「不一样」，与其余字段同一条规矩（回填时认不出层级的
+        # 老记录留的就是空值）。
+        same_year = same_year.filter(Q(tier="") | Q(tier=tier))
 
-    # 第一关：归一化后一模一样。逐条比字符串，代价只有一次查询。
+    # 第一关：归一化、折叠后一模一样。逐条比字符串，代价只有一次查询。
     wanted = field_shape(**values)
     for other in same_year:
-        if field_shape(
-            competition=other.competition,
-            title=other.title,
-            level=other.level,
-            winners=other.winners,
-        ) == wanted:
+        if field_shape(competition=other.competition, winners=other.winners) == wanted:
             return other
 
     # 第二关：逐字段相似度，交给 pg_trgm。**任何一侧没填，这一项就不比**——「没填」
-    # 不等于「不一样」，当成不一样就等于给重复开一扇门（先加的那条填了级别、重复提交
-    # 时留空，就绕过去了）。两边都要照顾：新记录空着是一种，老记录空着是另一种，而
-    # 级别与获奖人改必填之前录进来的记录里确实有空着的，拿它跟新记录一比就永远不相等。
-    # 空串与空串的相似度是 0，所以这里不是「比出来相等」，是压根不比。
+    # 不等于「不一样」，当成不一样就等于给重复开一扇门（先加的那条填了获奖人、重复
+    # 提交时留空，就绕过去了）。两边都要照顾：新记录空着是一种，老记录空着是另一种，
+    # 拿它跟新记录一比就永远不相等。空串与空串的相似度是 0，所以这里不是「比出来
+    # 相等」，是压根不比。
     conditions = Q()
     scores = {}
     for field in _COMPARED_FIELDS:
@@ -138,8 +135,7 @@ def find_similar_award(*, competition, title, level, year, winners, exclude_pk=N
         )
 
     if not scores:
-        # 只有赛事与奖项是必填，真走到这里说明连它们都空着——第一关已经比过了，
-        # 没有可以算相似度的东西。
+        # 两个字段都空着——第一关已经比过了，没有可以算相似度的东西。
         return None
 
     return (

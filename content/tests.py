@@ -936,13 +936,18 @@ class TierRulesTests(TestCase):
 
 
 class AwardSimilarityTests(TestCase):
-    """判重：同一奖项 + 同一批获奖人才算同一条；全半角、空格、错别字都不算差别。"""
+    """判重：同年份、同赛事、同批获奖人、同层级才算同一条。
+
+    身份里没有奖项名称与级别写法——「省一等奖」与「东北赛区一等奖」是同一层，
+    措辞的差别不该让它们变成两条（这正是过去漏判的那一类）。
+    """
 
     def setUp(self):
         self.existing = Award.objects.create(
             title="数学建模一等奖",
             competition="全国大学生数学建模竞赛",
             year=2024,
+            tier=tier_rules.NATIONAL,
             level="国家级",
             winners="张三、李四",
             advisor="王建华",
@@ -951,8 +956,7 @@ class AwardSimilarityTests(TestCase):
     def find(self, **overrides):
         values = {
             "competition": "全国大学生数学建模竞赛",
-            "title": "数学建模一等奖",
-            "level": "国家级",
+            "tier": tier_rules.NATIONAL,
             "year": 2024,
             "winners": "张三、李四",
         }
@@ -982,8 +986,33 @@ class AwardSimilarityTests(TestCase):
         # 「竞赛」打成「竟赛」：归一化看不出来，靠相似度这一关。
         self.assertEqual(self.find(competition="全国大学生数学建模竟赛"), self.existing)
 
-    def test_a_different_prize_level_is_a_different_record(self):
-        self.assertIsNone(self.find(title="数学建模二等奖"))
+    def test_a_different_tier_is_a_different_record(self):
+        """省级与国家级各录一条，正是页面要的「每个奖最多两级」。"""
+        self.assertIsNone(self.find(tier=tier_rules.PROVINCIAL))
+
+    def test_the_provincial_spelling_does_not_make_a_second_record(self):
+        """报上来的那一例：整串写进赛事名，换个赛区写法仍是同一条。
+
+        pg_trgm 对这两个串只有 0.61（换一种写法还会更低），指望相似度是靠不住的；
+        折叠之后它们是同一个串，第一关就拦住了。
+        """
+        Award.objects.create(
+            title="物联网设计一等奖",
+            competition="全国大学生物联网设计竞赛省一等奖",
+            year=2025,
+            tier=tier_rules.PROVINCIAL,
+            level="省一等奖",
+            winners="张三、李四",
+        )
+
+        found = self.find(
+            competition="全国大学生物联网设计竞赛东北赛区一等奖",
+            tier=tier_rules.PROVINCIAL,
+            year=2025,
+        )
+
+        self.assertIsNotNone(found)
+        self.assertEqual(found.competition, "全国大学生物联网设计竞赛省一等奖")
 
     def test_a_different_team_is_a_different_record(self):
         self.assertIsNone(self.find(winners="王五、赵六"))
@@ -1000,7 +1029,7 @@ class AwardSimilarityTests(TestCase):
         self.assertIsNone(self.find(competition="中国机器人大赛"))
 
     def test_a_legacy_row_with_blank_fields_is_still_compared(self):
-        """级别与获奖人改必填之前录进来的记录，这里空的也算数。
+        """层级与获奖人改必填之前录进来的记录，这里空的也算数。
 
         （新记录填不出空值——表单不放行，见 `MemberAwardCreateTests`。）
         """
@@ -1010,23 +1039,39 @@ class AwardSimilarityTests(TestCase):
             year=2020,
         )
 
-        self.assertEqual(
-            self.find(competition="某赛事", title="老记录的奖项", level="", year=2020, winners=""),
-            award,
+        self.assertEqual(self.find(competition="某赛事", year=2020, winners=""), award)
+
+    def test_a_legacy_row_without_a_tier_does_not_veto(self):
+        """认不出层级的老记录留的是空值：「没填」不等于「另一个层级」。
+
+        它不否决谁——不确定不该变成一次莫名的拒绝。它也就拦不住谁，所以迁移把
+        认不出的记录打印出来，请人工在后台补。
+        """
+        legacy = Award.objects.create(
+            title="老记录的奖项",
+            competition="某赛事",
+            year=2020,
+            winners="甲队",
         )
-        # 一条填了级别、一条空着：仍当作同一条，而不是「不一样」。
-        self.assertEqual(self.find(competition="某赛事", title="老记录的奖项", level="省级", year=2020, winners=""), award)
+
+        self.assertEqual(
+            self.find(
+                competition="某赛事", tier=tier_rules.PROVINCIAL, year=2020, winners="甲队"
+            ),
+            legacy,
+        )
 
     def test_leaving_a_field_blank_does_not_slip_past(self):
-        """填了级别的那条在前，重复提交时级别留空——仍是同一条。
+        """填了获奖人的那条在前，重复提交时留空——仍是同一条。
 
         「没填」不等于「不一样」：按不一样处理的话，重复的人只要把这一项空着就能
-        绕过去。级别与获奖人现在必填，前台填不出空值，但判重不能只靠表单那一关
+        绕过去。赛事与获奖人现在必填，前台填不出空值，但判重不能只靠表单那一关
         兜着（脚本写入、历史数据都到得了这里）。
         """
-        self.assertEqual(self.find(level=""), self.existing)
         self.assertEqual(self.find(winners=""), self.existing)
-        self.assertEqual(self.find(level="", winners=""), self.existing)
+        self.assertEqual(self.find(competition=""), self.existing)
+        # 两边都空着就没什么可比的了：只剩年份与层级，那不构成「同一条」的证据。
+        self.assertIsNone(self.find(competition="", winners=""))
 
     def test_record_can_be_excluded_from_its_own_check(self):
         self.assertIsNone(self.find(exclude_pk=self.existing.pk))
@@ -1150,6 +1195,8 @@ class MemberAwardCreateTests(TestCase):
         self.assertEqual(len(errors), 1)
         self.assertIn("数学建模一等奖", errors[0])
         self.assertIn("张三、李四", errors[0])
+        # 判重不看奖名了：拦下的是哪一档，得在话里说明白。
+        self.assertIn("国家级", errors[0])
 
     def test_duplicate_through_a_typo_is_refused_too(self):
         Award.objects.create(**{**self.payload(), "year": 2024})
@@ -1161,6 +1208,72 @@ class MemberAwardCreateTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(Award.objects.count(), 1)
+
+    def test_a_second_record_in_the_same_tier_is_refused_whatever_it_is_called(self):
+        """同一层级下只留一条：奖名与级别写法不同，也还是同一条。
+
+        一个队在同一年的同一场比赛里只会拿到一个名次；确实是另一条的（换个赛道
+        之类），走后台那条放行的路。
+        """
+        Award.objects.create(**{**self.payload(), "year": 2024})
+        self.client.force_login(self.member)
+
+        response = self.client.post(
+            self.url,
+            self.payload(
+                title="数学建模二等奖",
+                competition="全国大学生数学建模竞赛（复赛）",
+                level="国家级二等奖",
+            ),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Award.objects.count(), 1)
+        self.assertEqual(len(response.context["form"].non_field_errors()), 1)
+
+    def test_the_same_provincial_award_under_another_wording_is_refused(self):
+        """报上来的那一例：先录「东北赛区一等奖」，再录「省一等奖」——同一条。"""
+        Award.objects.create(
+            **{
+                **self.payload(),
+                "title": "物联网设计一等奖",
+                "competition": "全国大学生物联网设计竞赛",
+                "tier": tier_rules.PROVINCIAL,
+                "level": "东北赛区一等奖",
+                "year": 2025,
+            }
+        )
+        self.client.force_login(self.member)
+
+        response = self.client.post(
+            self.url,
+            self.payload(
+                title="物联网设计一等奖",
+                competition="全国大学生物联网设计竞赛",
+                tier=tier_rules.PROVINCIAL,
+                level="省一等奖",
+                year="2025",
+            ),
+        )
+
+        self.assertEqual(Award.objects.count(), 1)
+        errors = response.context["form"].non_field_errors()
+        self.assertEqual(len(errors), 1)
+        self.assertIn("省级", errors[0])
+
+    def test_the_other_tier_may_record_the_same_award(self):
+        """省级与国家级各一条——「每个奖最多两级」说的就是这个。
+
+        两条记录唯一的差别就是层级：判重不能只看奖名与级别写法。
+        """
+        Award.objects.create(**{**self.payload(), "year": 2024})
+        self.client.force_login(self.member)
+
+        self.client.post(
+            self.url, self.payload(tier=tier_rules.PROVINCIAL), follow=True
+        )
+
+        self.assertEqual(Award.objects.count(), 2)
 
     def test_a_different_team_may_record_the_same_award(self):
         Award.objects.create(**{**self.payload(), "year": 2024})
