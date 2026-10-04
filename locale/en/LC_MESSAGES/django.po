@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 702platform\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-04 11:26+0800\n"
+"POT-Creation-Date: 2026-10-04 11:29+0800\n"
 "PO-Revision-Date: 2026-09-19 18:39\n"
 "Last-Translator: 702platform\n"
 "Language-Team: 702platform\n"
@@ -429,35 +429,40 @@ msgstr "School"
 msgid "获奖记录已添加。"
 msgstr "The award has been added."
 
-#: content/views.py:218
+#: content/views.py:222
 #, python-format
 msgid "%(title)s（获奖人：%(winners)s）"
 msgstr "%(title)s (winners: %(winners)s)"
 
-#: content/views.py:223
+#: content/views.py:227
+#, python-format
+msgid "%(detail)s，层级：%(tier)s"
+msgstr "%(detail)s — tier: %(tier)s"
+
+#: content/views.py:232
 #, python-format
 msgid ""
-"已有相似的获奖记录：%(detail)s。同一条记录不必重复添加；如果确实是另一条，请"
-"联系管理员在后台添加。"
+"已有相似的获奖记录：%(detail)s。同一年、同一赛事、同一批获奖人下，每个层级只"
+"需一条记录；如果确实是另一条，请联系管理员在后台添加。"
 msgstr ""
-"A similar award already exists: %(detail)s. There is no need to add the same "
-"record twice; if it really is a different one, ask an administrator to add "
-"it in the admin site."
+"A similar award already exists: %(detail)s. For the same competition, year "
+"and winners, only one record is needed per tier; if it really is a different "
+"one, ask an administrator to add it in the admin site."
 
-#: content/views.py:248
+#: content/views.py:257
 msgid "请先勾选要下载的获奖记录。"
 msgstr "Select the awards you want to download first."
 
-#: content/views.py:253
+#: content/views.py:262
 #, python-format
 msgid "一次最多打包 %(limit)s 条记录，请分批下载。"
 msgstr "At most %(limit)s records per archive — please download in batches."
 
-#: content/views.py:262
+#: content/views.py:271
 msgid "所选的记录里还没有上传获奖证书。"
 msgstr "The selected records have no award certificates yet."
 
-#: content/views.py:277
+#: content/views.py:286
 #, python-format
 msgid "有 %(count)s 个证书文件已不在服务器上，没有打进压缩包。"
 msgstr ""
