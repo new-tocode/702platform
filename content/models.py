@@ -3,8 +3,11 @@
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils.translation import gettext_lazy as _
 
 from media.models import MediaFile
+
+from . import tier_rules
 
 
 class ContentPage(models.Model):
@@ -29,14 +32,31 @@ class ContentPage(models.Model):
         return f"{self.title} ({self.slug})"
 
 
+#: 获奖层级。取值是存储码，标签是惰性的——后台与前台共用这一份，英文界面上不能
+#: 冒中文（与 `reviews.models.REVIEW_TYPE_CHOICES` 同一写法）。码值定义在
+#: `tier_rules`：那边的折叠与推断要用同一套码，两边必须是同一个来源。
+AWARD_TIER_CHOICES = (
+    (tier_rules.NATIONAL, _("国家级")),
+    (tier_rules.PROVINCIAL, _("省级")),
+    (tier_rules.SCHOOL, _("校级")),
+)
+
+
 class Award(models.Model):
     title = models.CharField("奖项名称", max_length=200)
     competition = models.CharField("赛事名称", max_length=200)
     year = models.PositiveIntegerField("年份")
-    # 级别与获奖人都是必填：它们各自撑着页面上的一个功能。级别是搜索与浏览时的
-    # 分辨依据；获奖人是「我的获奖」按姓名搜索、以及判重「同一批获奖人」的口径
-    # 所依附的那一项——空着，这两件事就都做不成了。指导老师仍然可空。
-    level = models.CharField("获奖级别", max_length=100)
+    # 层级是判重身份的一部分（见 content/similarity.py）：同一年、同一赛事、同一批
+    # 获奖人下，每个层级只允许一条记录——「省一等奖」与「东北赛区一等奖」是同一层，
+    # 不该录成两条。证书上的具体写法仍旧放进 level，只作展示与搜索。
+    #
+    # 老记录里可能有空值（回填时认不出层级的），判重按「没填就不比这一项」处理，
+    # 与其余字段同一条规矩；后台改一次就会被要求补上。
+    tier = models.CharField("获奖层级", max_length=20, choices=AWARD_TIER_CHOICES)
+    # 级别与获奖人都是必填：级别填证书上的原话，供展示与搜索（判重不看它，看的是
+    # 上面的 tier）；获奖人是「我的获奖」按姓名搜索所依附的那一项，空着那件事就做
+    # 不成。指导老师仍然可空。
+    level = models.CharField("证书上的级别写法", max_length=100)
     winners = models.TextField("获奖人/团队")
     advisor = models.CharField("指导老师", max_length=200, blank=True)
     # 附件按用途分成两类，因为它们后来的去处不同：证书要能勾选打包下载，参赛图
