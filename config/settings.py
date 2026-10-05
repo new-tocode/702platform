@@ -44,7 +44,6 @@ INSTALLED_APPS = [
     # 只为 PostgreSQL 自带的那些函数与查找（获奖判重用的 pg_trgm 相似度，
     # 见 content/similarity.py）：它不带模型、不带迁移，装上不改变别的行为。
     "django.contrib.postgres",
-    "rest_framework",
     "axes",
     "accounts.apps.AccountsConfig",
     "notices.apps.NoticesConfig",
@@ -60,6 +59,8 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # 紧跟 SecurityMiddleware：安全头越早挂上越好，后面任何视图返回的响应都带上。
+    "config.middleware.SecurityHeadersMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     # 中英双语：按地址上的 /en/ 前缀激活对应语言（i18n_patterns 必需）。
     # 必须排在 SessionMiddleware 之后、CommonMiddleware 之前（Django 的要求）。
@@ -250,6 +251,12 @@ DATA_UPLOAD_MAX_NUMBER_FIELDS = 2000               # 字段数上限，防畸形
 # 唯一的例外是纯 http 的部署，那种环境要在 env.sh 里显式改回 0，否则浏览器不会
 # 带上会话 Cookie，谁都登录不了。
 SESSION_COOKIE_HTTPONLY = True
+# 会话有效期。Django 默认两周且关掉浏览器也不失效——对一个装着实名信息与评审
+# 机密的站来说太长：笔记本合盖、手机借人、公共机房忘记登出，会话都还活着。
+# 3 天是「够用一天忘关也不至于出事」的折中；再加一条关浏览器即失效，把
+# 「共用电脑」这一类的暴露面直接去掉。用户会觉得需要重新登录更频繁，这是取舍。
+SESSION_COOKIE_AGE = 60 * 60 * 24 * 3
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 SESSION_COOKIE_SECURE = env_bool("DJANGO_SESSION_COOKIE_SECURE", True)
 CSRF_COOKIE_SECURE = env_bool("DJANGO_CSRF_COOKIE_SECURE", True)
 SECURE_CONTENT_TYPE_NOSNIFF = True

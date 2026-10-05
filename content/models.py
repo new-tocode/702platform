@@ -13,7 +13,7 @@ from . import tier_rules
 class ContentPage(models.Model):
     slug = models.SlugField("页面标识", unique=True, max_length=80)
     title = models.CharField("标题", max_length=200)
-    content = models.TextField("正文")
+    content = models.TextField("正文", max_length=20000)
     is_published = models.BooleanField("已发布", default=False)
     attachments = models.ManyToManyField(
         MediaFile,
@@ -57,7 +57,7 @@ class Award(models.Model):
     # 上面的 tier）；获奖人是「我的获奖」按姓名搜索所依附的那一项，空着那件事就做
     # 不成。指导老师仍然可空。
     level = models.CharField("证书上的级别写法", max_length=100)
-    winners = models.TextField("获奖人/团队")
+    winners = models.TextField("获奖人/团队", max_length=500)
     advisor = models.CharField("指导老师", max_length=200, blank=True)
     # 附件按用途分成两类，因为它们后来的去处不同：证书要能勾选打包下载，参赛图
     # 只在页面上看。原先只有一个 attachments，两者混在一起，下载时挑不出来。
@@ -95,7 +95,7 @@ class Showcase(models.Model):
         related_name="showcase_entries",
         verbose_name="成员",
     )
-    intro = models.TextField("简介文字", blank=True)
+    intro = models.TextField("简介文字", blank=True, max_length=1000)
     sort_order = models.IntegerField("排序", default=0)
     is_active = models.BooleanField("启用", default=True)
     photo = models.ForeignKey(
