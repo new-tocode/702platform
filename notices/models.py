@@ -19,7 +19,7 @@ class Notice(models.Model):
     )
 
     title = models.CharField("标题", max_length=200)
-    content = models.TextField("正文")
+    content = models.TextField("正文", max_length=20000)
     scope = models.CharField(
         "可见范围",
         max_length=16,

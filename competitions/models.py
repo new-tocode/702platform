@@ -9,7 +9,7 @@ from projects.models import ProjectGroup
 
 class Competition(models.Model):
     title = models.CharField("竞赛名称", max_length=200)
-    description = models.TextField("竞赛说明")
+    description = models.TextField("竞赛说明", max_length=5000)
     deadline = models.DateTimeField("报名截止时间")
     team_size = models.CharField(
         "组队人数要求",
