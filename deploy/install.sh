@@ -299,6 +299,13 @@ info "注册 systemd 服务与备份定时器"
 
 # server_name 使用「域名 + 公网IP」两项（env.sh 必填）
 NGINX_SERVER_NAME="$DEPLOY_DOMAIN $DEPLOY_PUBLIC_IP"
+# 证书续期要用到的两个路径。**必须在 RENDER 之前定下来**：单元文件里的
+# ExecStart 就用它们渲染，晚一步就会渲染成空路径。版本门禁与目录创建在后面的
+# 「证书续期」一节做，那里只是在已解析出的二进制上做判断。
+ACME_WEBROOT="${ACME_WEBROOT:-/var/www/certbot}"
+CERTBOT_BIN="${CERTBOT_BIN:-/opt/certbot/bin/certbot}"
+[[ -x "$CERTBOT_BIN" ]] || CERTBOT_BIN="$(command -v certbot 2>/dev/null || true)"
+
 RENDER=(
     -e "s|@@APP_DIR@@|$APP_DIR|g"
     -e "s|@@APP_USER@@|$DEPLOY_SYSTEM_USER|g"
@@ -312,6 +319,8 @@ RENDER=(
     -e "s|@@BACKUP_DIR@@|${DJANGO_BACKUP_DIR:-/var/backups/club702}|g"
     -e "s|@@VENV@@|$APP_DIR/.venv|g"
     -e "s|@@PG_SERVICE@@|${PG_SERVICE:-postgresql.service}|g"
+    -e "s|@@ACME_WEBROOT@@|$ACME_WEBROOT|g"
+    -e "s|@@CERTBOT_BIN@@|${CERTBOT_BIN:-/usr/bin/certbot}|g"
 )
 
 apply_template() {
@@ -369,26 +378,89 @@ else
     warn "未配置 SSL_CERT_PATH/SSL_KEY_PATH，仅监听 HTTP 80"
 fi
 
-# 证书续期：装了 certbot 就把它的续期定时器打开。
+# ---------- 证书续期 ----------
 #
-# 这一步原先谁都不管——install.sh 只把证书路径写进 Nginx，deploy.sh 只调 backup.sh，
-# 于是「证书会不会自动续」全靠部署的人记得手工 enable 一次。实测生产上就是漏的：
-# timer 处于 enabled 但 inactive（从没启动过），证书一天天逼近到期而没有任何提示。
-# 续期不是「装一次就可以忘掉」的配置，它得每周真的跑起来才算数。
+# 三件事：确认 certbot 的版本够用、把 ACME 挑战的 webroot 建出来、装上续期单元。
+# 这一段原先只做最后一件（而且只 enable 发行版那个 timer），于是「证书会不会自动续」
+# 全靠部署的人记得——实测生产上就是漏的，timer 处于 enabled 但 inactive。
 if [[ -n "${SSL_CERT_PATH:-}" && -n "${SSL_KEY_PATH:-}" ]]; then
-    if command -v certbot >/dev/null 2>&1; then
-        if systemctl list-unit-files certbot-renew.timer >/dev/null 2>&1; then
-            if systemctl enable --now certbot-renew.timer >/dev/null 2>&1; then
-                ok "certbot 续期定时器已启用（certbot-renew.timer）"
-            else
-                warn "certbot-renew.timer 启用失败，请手工执行：systemctl enable --now certbot-renew.timer"
-            fi
-        else
-            warn "未找到 certbot-renew.timer（certbot 版本较旧，或不是发行版包）"
-            warn "请自行安排续期，例如 cron：0 3 * * * certbot renew --quiet"
-        fi
+    # ACME_WEBROOT 与 CERTBOT_BIN 已在上面解析（那里要给 RENDER 用）。
+
+    # **版本门禁：≥ 5.3。** Let's Encrypt 从 2026-01 起签发 IP 地址证书，而 IP 证书
+    # 必须用 shortlived profile（6 天有效期）——`--ip-address` 是 certbot 5.3 才有的
+    # 参数（webroot 方式签要 5.4）。发行版仓库远远落后：Alibaba Cloud Linux 3 给的是
+    # 1.22，拿它去签只会得到一句「不认识的参数」。
+    #
+    # 这里是硬门禁而不是提醒：域名证书用老版本确实也能续，可一旦站点切到 IP 证书，
+    # 续期失败意味着几天内全站 HTTPS 断掉。那一天的代价远大于现在停一下。
+    #
+    # 新版 certbot 装不进系统 python（AL3 是 3.6，而 certbot 5.x 要 ≥3.9），所以走
+    # 独立 venv。用 pyenv 或任何 ≥3.9 的解释器建都行：
+    #   python3.12 -m venv /opt/certbot && /opt/certbot/bin/pip install certbot
+    if [[ -z "$CERTBOT_BIN" ]]; then
+        fail "未检测到 certbot，但已配置 SSL_CERT_PATH —— 本机无法自动续期"
+        echo "     推荐装到独立 venv（需要 Python ≥3.9，系统自带的 3.6 不够）：" >&2
+        echo "       <python3.9+> -m venv /opt/certbot" >&2
+        echo "       /opt/certbot/bin/pip install --upgrade pip certbot" >&2
+        echo "     装好后重跑本脚本即可。" >&2
+        exit 1
+    fi
+
+    CERTBOT_VERSION="$("$CERTBOT_BIN" --version 2>/dev/null | awk '{print $NF}' || true)"
+    cb_major="${CERTBOT_VERSION%%.*}"
+    cb_minor="${CERTBOT_VERSION#*.}"; cb_minor="${cb_minor%%.*}"
+    if [[ "$cb_major" =~ ^[0-9]+$ && "$cb_minor" =~ ^[0-9]+$ ]] \
+        && (( cb_major > 5 || (cb_major == 5 && cb_minor >= 3) )); then
+        ok "certbot $CERTBOT_VERSION（$CERTBOT_BIN）"
     else
-        warn "未检测到 certbot：$SSL_CERT_PATH 的续期需要你自行安排"
+        fail "certbot 版本不满足要求：${CERTBOT_VERSION:-无法识别}（$CERTBOT_BIN），需要 ≥ 5.3"
+        echo "     IP 地址证书必须用 shortlived profile，而 --ip-address 是 5.3 才有的参数；" >&2
+        echo "     发行版仓库里的版本（AL3 是 1.22）签不了，配了也没用。" >&2
+        echo "     升级（独立 venv，不进系统 python）：" >&2
+        echo "       <python3.9+> -m venv /opt/certbot" >&2
+        echo "       /opt/certbot/bin/pip install --upgrade pip certbot" >&2
+        echo "     若本机不负责续期（证书在别处签发与续期），请把 SSL_CERT_PATH 指向已有证书，" >&2
+        echo "     并自行安排续期——本脚本只保证「本机能续」这一条路是通的。" >&2
+        exit 1
+    fi
+
+    # ACME http-01 挑战的落点。certbot 往这里写验证文件，Nginx 直接回给对方
+    # （站点配置里的 location ^~ /.well-known/acme-challenge/ 指向它）。
+    if [[ ! -d "$ACME_WEBROOT" ]]; then
+        mkdir -p "$ACME_WEBROOT"
+        ok "已创建 ACME 挑战目录 $ACME_WEBROOT"
+    fi
+
+    # 续期单元用**我们自己的**，不用发行版的：后者的 ExecStart 写死 /usr/bin/certbot，
+    # 也就是上面刚判定为「太旧」的那个二进制，对 IP 证书续期必然失败。
+    apply_template "$APP_DIR/deploy/club702-certbot-renew.service" \
+        "/etc/systemd/system/club702-certbot-renew.service" 644
+    apply_template "$APP_DIR/deploy/club702-certbot-renew.timer" \
+        "/etc/systemd/system/club702-certbot-renew.timer" 644
+    systemctl daemon-reload
+    if systemctl enable --now club702-certbot-renew.timer >/dev/null 2>&1; then
+        ok "已启用 club702-certbot-renew.timer（一天两次；IP 证书只有 6 天有效期）"
+    else
+        warn "club702-certbot-renew.timer 启用失败，请手工执行："
+        warn "  systemctl enable --now club702-certbot-renew.timer"
+    fi
+
+    # 发行版那个 timer 若还在，会对同一批证书再续一次——用的是旧二进制，IP 证书必失败。
+    # 只提醒不动手：它可能还在负责同机上别的站点，停不停由人定。
+    if systemctl is-enabled --quiet certbot-renew.timer 2>/dev/null; then
+        warn "发行版自带的 certbot-renew.timer 仍在启用，它调用的是 $([ -x /usr/bin/certbot ] && echo /usr/bin/certbot || echo 旧版 certbot)"
+        warn "  新单元已覆盖 /etc/letsencrypt 下所有证书的续期，这个旧 timer 只会产生失败日志。"
+        warn "  确认没有别的用途后可以停掉：sudo systemctl disable --now certbot-renew.timer"
+    fi
+
+    # 还没签发证书时，把该敲的命令直接打出来——IP 证书的参数不直观，少一步都是坑。
+    if [[ ! -e "$SSL_CERT_PATH" ]]; then
+        warn "证书文件还不存在（$SSL_CERT_PATH）。首次签发（IP 证书）："
+        warn "  $CERTBOT_BIN certonly --preferred-profile shortlived \\"
+        warn "      --webroot --webroot-path $ACME_WEBROOT \\"
+        warn "      --ip-address <公网IP> --non-interactive --agree-tos -m <你的邮箱>"
+        warn "  签发后把 env.sh 的 SSL_CERT_PATH/SSL_KEY_PATH 指到"
+        warn "  /etc/letsencrypt/live/<公网IP>/{fullchain,privkey}.pem，再重跑本脚本。"
     fi
 fi
 if [[ -n "$NGINX_ENLINK" && ! -e "$NGINX_ENLINK" ]]; then

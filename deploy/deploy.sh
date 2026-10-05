@@ -194,6 +194,10 @@ if [[ -n "$NGINX_SITE_CONF" ]]; then
         || DRIFT+=("nginx 站点配置里没有对 /. 开头路径的拒绝规则")
     grep -qF 'X-Forwarded-For $remote_addr' "$NGINX_SITE_CONF" \
         || DRIFT+=("nginx 仍用 \$proxy_add_x_forwarded_for 转发来源 IP——应用侧 TRUST_FORWARDED_FOR 会因此不成立")
+    # ACME 挑战的落点。少了它，certbot 的 http-01 验证会落到 location / 被反代给
+    # Django 而 404，报错写成「验证文件取不到」，看着像网络问题。
+    grep -qF '/.well-known/acme-challenge/' "$NGINX_SITE_CONF" \
+        || DRIFT+=("nginx 站点配置里没有 ACME 挑战的 location（证书签发与续期会失败）")
     if [[ -r /etc/nginx/nginx.conf ]]; then
         grep -qF 'zone=club702_login' /etc/nginx/nginx.conf \
             || DRIFT+=("nginx.conf 里没有 limit_req_zone club702_login 的定义（站点配置引用了它）")
