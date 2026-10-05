@@ -42,6 +42,63 @@ if [[ -n "$DEPLOY_USER" ]] && [[ "$(id -u)" -eq 0 ]] && [[ "$(id -un)" != "$DEPL
 fi
 
 
+echo "==> 0/6 上线前预检：证书与备份"
+# 这两项都是「坏了不会让站点立刻出错、等发现时已经晚了」的那一类，而它们恰好都
+# 不在部署流程的覆盖范围内：
+#   * 证书到期 —— 所有人浏览器弹警告，而续期要走签发流程，不是几分钟能补的；
+#   * 备份停摆 —— 真需要恢复时才发现手里那份数据是几天前的。
+# 所以每次部署都把状态摊在眼前。**只警告、不中止**：这两件事都不是本次发布能修的，
+# 卡住发布只会让人学会绕过这道检查——旁边那道 check --deploy 门禁会跟着失去威信。
+#
+# 这条预检是补一个真实的坑：生产上备份定时器曾连续 5 天以 226/NAMESPACE 失败，
+# 而它没有任何告警，直到有人去翻 journal 才发现。定时器的失败不会自己冒出来，
+# 必须有人问它。
+
+# 证书还有多久到期。/etc/letsencrypt/live/ 是 700 root，部署用户通常读不到证书
+# 文件，所以读不到时改问本机 443 上的服务要——两条路都拿不到就跳过，不猜。
+CERT_END=""
+if command -v openssl >/dev/null 2>&1 && [[ -n "${SSL_CERT_PATH:-}" ]]; then
+    if [[ -r "${SSL_CERT_PATH:-/nonexistent}" ]]; then
+        CERT_END="$(openssl x509 -in "$SSL_CERT_PATH" -noout -enddate 2>/dev/null | cut -d= -f2 || true)"
+    else
+        CERT_END="$(echo \
+            | timeout 10 openssl s_client -connect 127.0.0.1:443 \
+                -servername "${DEPLOY_DOMAIN:-127.0.0.1}" 2>/dev/null \
+            | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2 || true)"
+    fi
+fi
+if [[ -n "$CERT_END" ]]; then
+    if [[ "$(date -d "$CERT_END" +%s 2>/dev/null || echo 0)" -gt "$(( $(date +%s) + 21 * 24 * 3600 ))" ]]; then
+        echo "    ✅ 证书 21 天内不会到期（到期：$CERT_END）"
+    else
+        echo "    ⚠️  证书将在 21 天内到期（到期：$CERT_END）" >&2
+        echo "       确认续期在跑：systemctl list-timers certbot-renew.timer --all" >&2
+        echo "                     sudo certbot renew --dry-run" >&2
+    fi
+fi
+
+# 备份：定时器上次运行的结果，以及最近一份产物有多老。
+BACKUP_DIR="${DJANGO_BACKUP_DIR:-$APP_DIR/backups}"
+BACKUP_RESULT="$(systemctl show club702-backup.service -p Result --value 2>/dev/null || true)"
+if [[ "$BACKUP_RESULT" == "exit-code" || "$BACKUP_RESULT" == "signal" || "$BACKUP_RESULT" == "core-dump" ]]; then
+    echo "    ⚠️  备份定时器上次运行失败（Result=$BACKUP_RESULT）" >&2
+    echo "       journalctl -u club702-backup -n 20" >&2
+fi
+if [[ -d "$BACKUP_DIR" ]]; then
+    NEWEST_TS="$(find "$BACKUP_DIR" -maxdepth 1 -name 'db-*.sql.gz' -printf '%T@\n' 2>/dev/null | sort -rn | head -1 || true)"
+    if [[ -z "$NEWEST_TS" ]]; then
+        echo "    ⚠️  $BACKUP_DIR 下没有任何数据库备份产物" >&2
+    else
+        AGE_HOURS=$(( ( $(date +%s) - ${NEWEST_TS%.*} ) / 3600 ))
+        if [[ "$AGE_HOURS" -gt 30 ]]; then
+            echo "    ⚠️  最近一份数据库备份在 ${AGE_HOURS} 小时前（定时器预期每 24 小时一份）" >&2
+            echo "       systemctl status club702-backup --no-pager" >&2
+        else
+            echo "    ✅ 最近一份数据库备份在 ${AGE_HOURS} 小时前"
+        fi
+    fi
+fi
+
 echo "==> 1/6 备份数据库和媒体（分别保留 ${DJANGO_BACKUP_RETAIN:-14} 份）"
 # 直接复用 backup.sh，不再在这里抄一遍 pg_dump 与 tar：两份实现迟早会漂移，而
 # 「发布前先备份」是回滚的前提，它出错没人会发现——直到真需要回滚的那一天。
