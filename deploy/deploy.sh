@@ -118,15 +118,39 @@ if ! systemctl is-active --quiet dnf-automatic.timer 2>/dev/null \
     && ! systemctl is-active --quiet unattended-upgrades 2>/dev/null; then
     BASELINE+=("没有自动安全更新（dnf-automatic / yum-cron / unattended-upgrades 均未运行）——系统包只能靠人工升级")
 fi
-if systemctl is-active --quiet fail2ban 2>/dev/null \
-    && ! systemctl is-active --quiet firewalld 2>/dev/null; then
-    for jail in /etc/fail2ban/jail.local /etc/fail2ban/jail.d/*.conf; do
-        [[ -r "$jail" ]] || continue
-        if grep -qE '^[[:space:]]*banaction[[:space:]]*=[[:space:]]*firewallcmd' "$jail"; then
-            BASELINE+=("fail2ban 在跑，但 banaction 是 firewallcmd-*（firewalld 没运行）——封禁动作落不了地")
-            break
-        fi
+# fail2ban 的 banaction 要取**真正生效**的那个值，不能「任意一个文件里出现过
+# firewallcmd 就报警」：配置是层层覆盖的（jail.conf < jail.d/*.conf 按字母序 <
+# jail.local），后面的盖前面的——而「换个封禁后端」的标准做法正是加一个排在后面的
+# 覆盖文件。只看有没有出现过，会把做对了的人一直报成错的。
+#
+# 只认 [DEFAULT] 段里的那条：jail.conf 在别的 jail 段里还有 `banaction =
+# %(banaction_allports)s` 这种引用，抓到它就会得出一个毫无意义的结论。
+effective_banaction() {
+    local file value=""
+    for file in /etc/fail2ban/jail.conf /etc/fail2ban/jail.d/*.conf /etc/fail2ban/jail.local; do
+        [[ -r "$file" ]] || continue
+        local found
+        found="$(awk '
+            /^\[/ { in_default = ($0 ~ /^\[DEFAULT\]/) ; next }
+            in_default && /^[[:space:]]*banaction[[:space:]]*=/ {
+                line = $0; sub(/^[^=]*=[[:space:]]*/, "", line); value = line
+            }
+            END { if (value != "") print value }
+        ' "$file" 2>/dev/null || true)"
+        [[ -n "$found" ]] && value="$found"
     done
+    printf '%s' "$value"
+}
+
+# 「装了、也设了开机自启，却没在跑」——封禁这件事此刻是空着的。这一条原先看不见：
+# 老的条件要求 fail2ban 在跑才检查它的配置，于是停掉它反而什么都不报。
+if [[ "$(systemctl is-enabled fail2ban 2>/dev/null || true)" == "enabled" ]] \
+    && ! systemctl is-active --quiet fail2ban 2>/dev/null; then
+    BASELINE+=("fail2ban 装了、也设了开机自启，但现在没在跑——封禁这件事此刻是空着的")
+elif systemctl is-active --quiet fail2ban 2>/dev/null \
+    && ! systemctl is-active --quiet firewalld 2>/dev/null \
+    && [[ "$(effective_banaction)" == firewallcmd* ]]; then
+    BASELINE+=("fail2ban 在跑，但 banaction 是 firewallcmd-*（firewalld 没运行）——封禁动作落不了地")
 fi
 if [[ "${#BASELINE[@]}" -gt 0 ]]; then
     echo "    ⚠️  服务器基线（只提醒，脚本不改系统）：" >&2
