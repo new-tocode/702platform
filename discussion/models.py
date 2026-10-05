@@ -64,6 +64,12 @@ class Post(models.Model):
                 fields=("board", "-is_pinned", "-created_at", "-id"),
                 name="discussion_post_feed_idx",
             ),
+            # 发言限速要按「某人最近一分钟发了多少条」计数（见 services），
+            # 这条索引让那个计数不必扫全表。
+            models.Index(
+                fields=("author", "created_at"),
+                name="discussion_post_rate_idx",
+            ),
         ]
 
     def __str__(self):
@@ -167,6 +173,11 @@ class Comment(models.Model):
             models.Index(
                 fields=("post", "created_at"),
                 name="discussion_comment_post_idx",
+            ),
+            # 同 Post：发言限速的计数走这条。
+            models.Index(
+                fields=("author", "created_at"),
+                name="discussion_comment_rate_idx",
             ),
         ]
 

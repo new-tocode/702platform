@@ -42,6 +42,172 @@ if [[ -n "$DEPLOY_USER" ]] && [[ "$(id -u)" -eq 0 ]] && [[ "$(id -un)" != "$DEPL
 fi
 
 
+echo "==> 0/6 上线前预检：证书与备份"
+# 这两项都是「坏了不会让站点立刻出错、等发现时已经晚了」的那一类，而它们恰好都
+# 不在部署流程的覆盖范围内：
+#   * 证书到期 —— 所有人浏览器弹警告，而续期要走签发流程，不是几分钟能补的；
+#   * 备份停摆 —— 真需要恢复时才发现手里那份数据是几天前的。
+# 所以每次部署都把状态摊在眼前。**只警告、不中止**：这两件事都不是本次发布能修的，
+# 卡住发布只会让人学会绕过这道检查——旁边那道 check --deploy 门禁会跟着失去威信。
+#
+# 这条预检是补一个真实的坑：生产上备份定时器曾连续 5 天以 226/NAMESPACE 失败，
+# 而它没有任何告警，直到有人去翻 journal 才发现。定时器的失败不会自己冒出来，
+# 必须有人问它。
+
+# 证书还有多久到期。/etc/letsencrypt/live/ 是 700 root，部署用户通常读不到证书
+# 文件，所以读不到时改问本机 443 上的服务要——两条路都拿不到就跳过，不猜。
+CERT_END=""
+if command -v openssl >/dev/null 2>&1 && [[ -n "${SSL_CERT_PATH:-}" ]]; then
+    if [[ -r "${SSL_CERT_PATH:-/nonexistent}" ]]; then
+        CERT_END="$(openssl x509 -in "$SSL_CERT_PATH" -noout -enddate 2>/dev/null | cut -d= -f2 || true)"
+    else
+        CERT_END="$(echo \
+            | timeout 10 openssl s_client -connect 127.0.0.1:443 \
+                -servername "${DEPLOY_DOMAIN:-127.0.0.1}" 2>/dev/null \
+            | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2 || true)"
+    fi
+fi
+if [[ -n "$CERT_END" ]]; then
+    if [[ "$(date -d "$CERT_END" +%s 2>/dev/null || echo 0)" -gt "$(( $(date +%s) + 21 * 24 * 3600 ))" ]]; then
+        echo "    ✅ 证书 21 天内不会到期（到期：$CERT_END）"
+    else
+        echo "    ⚠️  证书将在 21 天内到期（到期：$CERT_END）" >&2
+        echo "       确认续期在跑：systemctl list-timers certbot-renew.timer --all" >&2
+        echo "                     sudo certbot renew --dry-run" >&2
+    fi
+fi
+
+# 备份：定时器上次运行的结果，以及最近一份产物有多老。
+BACKUP_DIR="${DJANGO_BACKUP_DIR:-$APP_DIR/backups}"
+BACKUP_RESULT="$(systemctl show club702-backup.service -p Result --value 2>/dev/null || true)"
+if [[ "$BACKUP_RESULT" == "exit-code" || "$BACKUP_RESULT" == "signal" || "$BACKUP_RESULT" == "core-dump" ]]; then
+    echo "    ⚠️  备份定时器上次运行失败（Result=$BACKUP_RESULT）" >&2
+    echo "       journalctl -u club702-backup -n 20" >&2
+fi
+if [[ -d "$BACKUP_DIR" ]]; then
+    NEWEST_TS="$(find "$BACKUP_DIR" -maxdepth 1 -name 'db-*.sql.gz' -printf '%T@\n' 2>/dev/null | sort -rn | head -1 || true)"
+    if [[ -z "$NEWEST_TS" ]]; then
+        echo "    ⚠️  $BACKUP_DIR 下没有任何数据库备份产物" >&2
+    else
+        AGE_HOURS=$(( ( $(date +%s) - ${NEWEST_TS%.*} ) / 3600 ))
+        if [[ "$AGE_HOURS" -gt 30 ]]; then
+            echo "    ⚠️  最近一份数据库备份在 ${AGE_HOURS} 小时前（定时器预期每 24 小时一份）" >&2
+            echo "       systemctl status club702-backup --no-pager" >&2
+        else
+            echo "    ✅ 最近一份数据库备份在 ${AGE_HOURS} 小时前"
+        fi
+    fi
+fi
+
+# ---- 服务器基线提醒（只报告，不改系统）----
+# 这三项都属于「以为有、其实没有」：防火墙没启用、没有自动安全更新、fail2ban 的
+# 封禁动作指向一个没在运行的防火墙。它们平时不报错，只在真出事那天被发现，
+# 所以每次部署都报一遍——**修好之后这几行会自己消失**，不会变成长期噪音。
+#
+# 只提醒不动手，是刻意的：装防火墙、开自动更新、换 banaction 改的是整台机器的
+# 状态（同机上还有别人的站点），那该由人决定，不该由一次应用发布顺手做掉。
+BASELINE=()
+if ! systemctl is-active --quiet firewalld 2>/dev/null \
+    && ! systemctl is-active --quiet nftables 2>/dev/null \
+    && ! systemctl is-active --quiet ufw 2>/dev/null; then
+    BASELINE+=("主机没有启用的防火墙（firewalld / nftables / ufw 均未运行）——网络边界只剩云安全组")
+fi
+if ! systemctl is-active --quiet dnf-automatic.timer 2>/dev/null \
+    && ! systemctl is-active --quiet dnf-automatic-install.timer 2>/dev/null \
+    && ! systemctl is-active --quiet yum-cron 2>/dev/null \
+    && ! systemctl is-active --quiet unattended-upgrades 2>/dev/null; then
+    BASELINE+=("没有自动安全更新（dnf-automatic / yum-cron / unattended-upgrades 均未运行）——系统包只能靠人工升级")
+fi
+if systemctl is-active --quiet fail2ban 2>/dev/null \
+    && ! systemctl is-active --quiet firewalld 2>/dev/null; then
+    for jail in /etc/fail2ban/jail.local /etc/fail2ban/jail.d/*.conf; do
+        [[ -r "$jail" ]] || continue
+        if grep -qE '^[[:space:]]*banaction[[:space:]]*=[[:space:]]*firewallcmd' "$jail"; then
+            BASELINE+=("fail2ban 在跑，但 banaction 是 firewallcmd-*（firewalld 没运行）——封禁动作落不了地")
+            break
+        fi
+    done
+fi
+if [[ "${#BASELINE[@]}" -gt 0 ]]; then
+    echo "    ⚠️  服务器基线（只提醒，脚本不改系统）：" >&2
+    for item in "${BASELINE[@]}"; do
+        echo "        - $item" >&2
+    done
+fi
+
+# ---- 配置漂移：/etc 下的东西还是不是仓库模板渲染后的样子 ----
+# 这一类我们踩过两次：备份的 systemd 单元与 nginx 配置在仓库里都改好了，线上却是
+# 几个月前那版——那两样都归 install.sh 装，而 install.sh 是一次性脚本；日常部署
+# 走的是本脚本，它以降权用户运行（见上面那段 exec sudo -u），碰不了 /etc。
+# 于是「修好了」只发生在仓库里，线上一点没变，而且没有任何东西会说出来。
+#
+# 本脚本改不了 /etc，但**读得到**，所以把不一致摊出来。修法是重跑一次 install.sh
+# ——它是幂等的，也不会覆盖 env.sh（只校验）。
+DRIFT=()
+
+# PostgreSQL 的单元名随发行版与版本而变，与 install.sh 同一套探测逻辑。
+PG_SERVICE_DETECTED="$(systemctl list-unit-files --type=service --no-pager 2>/dev/null \
+    | awk '/^postgresql\.service[[:space:]]/ {deb=$1} /^postgresql-[0-9]+\.service[[:space:]]/ {if (!ver) ver=$1} END {print (deb ? deb : ver)}' || true)"
+PG_SERVICE_DETECTED="${PG_SERVICE_DETECTED:-postgresql.service}"
+
+RENDER=(
+    -e "s|@@APP_DIR@@|$APP_DIR|g"
+    -e "s|@@APP_USER@@|${DEPLOY_SYSTEM_USER:-}|g"
+    -e "s|@@APP_HOST@@|$APP_HOST|g"
+    -e "s|@@APP_PORT@@|$APP_PORT|g"
+    -e "s|@@VENV@@|$APP_DIR/.venv|g"
+    -e "s|@@BACKUP_DIR@@|${DJANGO_BACKUP_DIR:-/var/backups/club702}|g"
+    -e "s|@@BACKUP_SCHEDULE@@|${DJANGO_BACKUP_SCHEDULE:-daily}|g"
+    -e "s|@@PG_SERVICE@@|$PG_SERVICE_DETECTED|g"
+)
+
+# 去掉注释、空行与行首行尾空白再比：只改了一句注释就长期报警的话，这道检查很快
+# 会被无视——而它要拦的恰恰是「模板改了、线上没跟上」这种真差异。
+_normalize_unit() {   # 从标准输入读
+    grep -vE '^[[:space:]]*(#|$)' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'
+}
+
+unit_drift() {  # unit_drift <模板> <线上文件> <说明>
+    local template="$1" deployed="$2" label="$3"
+    [[ -r "$deployed" ]] || return 0     # 读不到就不猜（可能不是本机装的）
+    if ! diff -q \
+        <(sed "${RENDER[@]}" "$template" | _normalize_unit) \
+        <(_normalize_unit < "$deployed") >/dev/null 2>&1; then
+        DRIFT+=("$label")
+    fi
+}
+unit_drift "$APP_DIR/deploy/club702.service" /etc/systemd/system/club702.service "应用单元 club702.service"
+unit_drift "$APP_DIR/deploy/club702-backup.service" /etc/systemd/system/club702-backup.service "备份单元 club702-backup.service"
+unit_drift "$APP_DIR/deploy/club702-backup.timer" /etc/systemd/system/club702-backup.timer "备份定时器 club702-backup.timer"
+
+# nginx 不做整份 diff：install.sh 渲染之后还要按「有没有证书」删掉 HTTPS 段的标记
+# 行，整份比对必然长期误报。改成直接断言那几条加固在不在线上文件里——这样报出来
+# 的每一条都是真的缺东西。
+NGINX_SITE_CONF=""
+for candidate in /etc/nginx/conf.d/club702.conf /etc/nginx/sites-enabled/club702; do
+    if [[ -r "$candidate" ]]; then NGINX_SITE_CONF="$candidate"; break; fi
+done
+if [[ -n "$NGINX_SITE_CONF" ]]; then
+    grep -qF 'limit_req zone=club702_login' "$NGINX_SITE_CONF" \
+        || DRIFT+=("nginx 站点配置里没有登录限流（limit_req）")
+    grep -qF 'location ~ /\.(?!well-known)' "$NGINX_SITE_CONF" \
+        || DRIFT+=("nginx 站点配置里没有对 /. 开头路径的拒绝规则")
+    grep -qF 'X-Forwarded-For $remote_addr' "$NGINX_SITE_CONF" \
+        || DRIFT+=("nginx 仍用 \$proxy_add_x_forwarded_for 转发来源 IP——应用侧 TRUST_FORWARDED_FOR 会因此不成立")
+    if [[ -r /etc/nginx/nginx.conf ]]; then
+        grep -qF 'zone=club702_login' /etc/nginx/nginx.conf \
+            || DRIFT+=("nginx.conf 里没有 limit_req_zone club702_login 的定义（站点配置引用了它）")
+    fi
+fi
+
+if [[ "${#DRIFT[@]}" -gt 0 ]]; then
+    echo "    ⚠️  /etc 下的配置与仓库模板不一致（本脚本改不了，要重跑 install.sh）：" >&2
+    for item in "${DRIFT[@]}"; do
+        echo "        - $item" >&2
+    done
+    echo "        sudo $APP_DIR/deploy/install.sh    # 幂等；不会覆盖 env.sh" >&2
+fi
+
 echo "==> 1/6 备份数据库和媒体（分别保留 ${DJANGO_BACKUP_RETAIN:-14} 份）"
 # 直接复用 backup.sh，不再在这里抄一遍 pg_dump 与 tar：两份实现迟早会漂移，而
 # 「发布前先备份」是回滚的前提，它出错没人会发现——直到真需要回滚的那一天。
