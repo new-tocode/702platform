@@ -1,5 +1,8 @@
+from datetime import timedelta
+
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from core.audit import record_audit
@@ -23,6 +26,16 @@ from .validators import (
     clean_chinese_board_name,
     validate_post_image,
 )
+
+
+#: 发言频率上限：**发帖与评论合计**，每 60 秒不超过这么多条。
+#:
+#: 45 对正常讨论很宽松（一个人一分钟敲不出 45 条有内容的回复），但足以让脚本化
+#: 的刷屏失去意义。这里挡的主要不是帖子本身，而是 @提及——帖子与评论里提到谁，
+#: 就会给谁写一条站内消息（见 ``notices.services.sync_mention_messages``），
+#: 那是站内唯一能主动向任意成员投递内容的通道，没有上限时最容易被拿来刷人。
+SPEAKING_RATE_LIMIT = 45
+SPEAKING_RATE_WINDOW = timedelta(seconds=60)
 
 
 class DiscussionError(Exception):
@@ -75,6 +88,34 @@ def _validated_images(images):
         except ValidationError as exc:
             raise DiscussionError(exc.messages[0]) from exc
     return uploads
+
+
+def _recent_speech_count(actor, since):
+    """这个人在窗口内已经发了多少条（帖子 + 评论）。
+
+    评论用 ``all_objects``：**已软删除的也算**。否则「发满、删掉、再发」就是一个
+    免费的绕过口子，而删掉的内容本来也还在库里。
+    """
+    return Post.objects.filter(
+        author=actor, created_at__gte=since
+    ).count() + Comment.all_objects.filter(
+        author=actor, created_at__gte=since
+    ).count()
+
+
+def _enforce_speaking_rate(actor):
+    """发言太密就拒绝，把上限写进报错文案里。
+
+    检查与写入之间没有加锁：两个并发请求可能同时通过，多出一两条。这里不为
+    严格不超付代价——限速要挡的是脚本化刷屏（每分钟几十上百条），为此在每一条
+    发言上串行化得不偿失。真正需要严格不超的地方（库存、评审席位）另有行锁。
+    """
+    since = timezone.now() - SPEAKING_RATE_WINDOW
+    if _recent_speech_count(actor, since) >= SPEAKING_RATE_LIMIT:
+        raise DiscussionError(
+            _("发言过于频繁：每分钟最多 %(limit)d 条（发帖与评论合计），请稍后再试。")
+            % {"limit": SPEAKING_RATE_LIMIT}
+        )
 
 
 def _store_post_images(*, post, uploads, saved_files):
@@ -160,6 +201,7 @@ def delete_board(*, board_id, actor, request=None):
 def create_post(*, board_id, title, content, actor, images=(), request=None):
     if not can_create_post(actor):
         raise PermissionDenied
+    _enforce_speaking_rate(actor)
     title = title.strip()
     content = content.strip()
     if not title or not content:
@@ -355,6 +397,7 @@ def delete_comment(*, comment_id, actor, request=None):
 def create_comment(*, post_id, content, actor, request=None):
     if not can_comment(actor):
         raise PermissionDenied
+    _enforce_speaking_rate(actor)
     content = content.strip()
     if not content:
         raise DiscussionError(_("评论内容不能为空。"))
