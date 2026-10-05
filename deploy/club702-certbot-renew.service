@@ -1,0 +1,17 @@
+[Unit]
+Description=702platform 证书续期（Let's Encrypt 的 IP 证书只有 6 天有效期）
+After=network.target
+
+[Service]
+Type=oneshot
+# 用哪个 certbot 由 install.sh 渲染时决定（env.sh 的 CERTBOT_BIN）。
+#
+# **为什么不用发行版自带的 certbot-renew.service**：那个单元的 ExecStart 写死了
+# /usr/bin/certbot，而 Alibaba Cloud Linux 3 装的是 1.22（EPEL）——它不认识
+# `--preferred-profile shortlived`，也签不了 IP 证书。IP 证书必须走 shortlived
+# profile（这是 Let's Encrypt 对 IP 证书的硬性要求），所以续期必须由新版 certbot 做。
+#
+# `renew` 不带 --cert-name：它会把 /etc/letsencrypt 下所有证书一起续，包括同机上
+# 别的站点。--deploy-hook 只在真的续到了新证书时才跑（reload 而不是 restart：
+# 证书是原子替换的，reload 足够，也不会掐断正在进行的请求）。
+ExecStart=@@CERTBOT_BIN@@ renew --quiet --non-interactive --deploy-hook "systemctl reload nginx"
