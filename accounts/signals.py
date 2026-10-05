@@ -50,10 +50,12 @@ def log_user_login(sender, request, user, **kwargs):
 @receiver(user_login_failed)
 def log_user_login_failed(sender, credentials, request, **kwargs):
     # Never log the supplied password or any credential value besides username.
+    from core.audit import get_client_ip
+
     logger.warning(
         "auth.login.failure username=%s path=%s remote=%s",
         credentials.get("username", "-"),
         getattr(request, "path", "-") if request else "-",
-        request.META.get("REMOTE_ADDR", "-") if request else "-",
+        (get_client_ip(request) or "-") if request else "-",
         extra={"request_id": getattr(request, "request_id", "-") if request else "-"},
     )
