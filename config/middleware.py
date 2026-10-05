@@ -28,13 +28,17 @@ class RequestLoggingMiddleware:
         request_started = time.perf_counter()
         request._request_started_at = request_started
         user_label = self._user_label(request)
+        # 与审计日志同一个口径（core.audit.get_client_ip）：反代下 REMOTE_ADDR
+        # 恒为 127.0.0.1，直接用它会让每一行访问日志的来源都失去意义。
+        from core.audit import get_client_ip
+
         logger.info(
             "request.start method=%s path=%s query=%s user=%s remote=%s",
             request.method,
             request.path,
             request.META.get("QUERY_STRING", ""),
             user_label,
-            request.META.get("REMOTE_ADDR", "-"),
+            get_client_ip(request) or "-",
             extra={"request_id": request.request_id},
         )
 
