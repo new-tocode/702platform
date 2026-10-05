@@ -12,7 +12,7 @@ class Equipment(models.Model):
     category = models.CharField("分类", max_length=100, blank=True)
     total_count = models.PositiveIntegerField("总量", default=1)
     available_count = models.PositiveIntegerField("可借数量", default=1)
-    description = models.TextField("说明", blank=True)
+    description = models.TextField("说明", blank=True, max_length=2000)
     is_active = models.BooleanField("启用", default=True)
     created_at = models.DateTimeField("创建时间", auto_now_add=True)
     updated_at = models.DateTimeField("更新时间", auto_now=True)

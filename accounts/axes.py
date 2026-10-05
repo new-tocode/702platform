@@ -58,7 +58,7 @@ def lockout_response(request, original_response=None, credentials=None):
 
     # 局部导入：accounts.axes 在 settings 加载期就可能被 import_string 解析，
     # 那时模型层未必已经就绪。
-    from core.audit import record_audit
+    from core.audit import get_client_ip, record_audit
 
     record_audit(
         action="accounts.login.lockout",
@@ -69,7 +69,7 @@ def lockout_response(request, original_response=None, credentials=None):
         "auth.login.lockout username=%s path=%s remote=%s",
         username or "-",
         getattr(request, "path", "-"),
-        request.META.get("REMOTE_ADDR", "-"),
+        get_client_ip(request) or "-",
         extra={"request_id": getattr(request, "request_id", "-")},
     )
 

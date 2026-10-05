@@ -1,9 +1,9 @@
 """操作入口注册表与审计日志：入口按权限过滤，审计只读。"""
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
-from ..audit import record_audit
+from ..audit import get_client_ip, record_audit
 from ..models import AuditLog
 from ..registry import (
     get_entries_for_user,
@@ -145,6 +145,47 @@ class OperationRegistryAcceptanceTests(TestCase):
         # for the next test in this process.
         unregister_entry("test.first")
         unregister_entry("test.second")
+
+
+class ClientIpResolutionTests(TestCase):
+    """取来源 IP 的口径：默认不信转发头，配了可信代理才信，且只信最后一段。
+
+    这一格关系两件事：审计日志里「是谁」能不能回答，以及 axes 的按 IP 锁定会不会
+    把全站算成同一个人。默认值必须站在「不信」那一侧——客户端可以随便发
+    X-Forwarded-For，没配代理的部署不该被它牵着走。
+    """
+
+    def setUp(self):
+        self.factory = RequestFactory()
+
+    def _request(self, *, remote_addr="127.0.0.1", forwarded=None):
+        extra = {"REMOTE_ADDR": remote_addr}
+        if forwarded is not None:
+            extra["HTTP_X_FORWARDED_FOR"] = forwarded
+        return self.factory.get("/", **extra)
+
+    def test_without_the_switch_the_header_is_ignored(self):
+        request = self._request(forwarded="1.2.3.4")
+        self.assertEqual(get_client_ip(request), "127.0.0.1")
+
+    @override_settings(TRUST_FORWARDED_FOR=True)
+    def test_with_the_switch_the_header_is_used(self):
+        request = self._request(forwarded="203.0.113.9")
+        self.assertEqual(get_client_ip(request), "203.0.113.9")
+
+    @override_settings(TRUST_FORWARDED_FOR=True)
+    def test_the_last_hop_wins_so_a_client_cannot_spoof_the_front(self):
+        # 客户端自己塞的 1.2.3.4 落在前面，nginx 追加/覆写的对端地址在最后。
+        request = self._request(forwarded="1.2.3.4, 203.0.113.9")
+        self.assertEqual(get_client_ip(request), "203.0.113.9")
+
+    @override_settings(TRUST_FORWARDED_FOR=True)
+    def test_empty_header_falls_back_to_remote_addr(self):
+        request = self._request(forwarded="")
+        self.assertEqual(get_client_ip(request), "127.0.0.1")
+
+    def test_no_request_is_none(self):
+        self.assertIsNone(get_client_ip(None))
 
 
 class AuditLogAcceptanceTests(TestCase):

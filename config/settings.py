@@ -44,7 +44,6 @@ INSTALLED_APPS = [
     # 只为 PostgreSQL 自带的那些函数与查找（获奖判重用的 pg_trgm 相似度，
     # 见 content/similarity.py）：它不带模型、不带迁移，装上不改变别的行为。
     "django.contrib.postgres",
-    "rest_framework",
     "axes",
     "accounts.apps.AccountsConfig",
     "notices.apps.NoticesConfig",
@@ -60,6 +59,8 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # 紧跟 SecurityMiddleware：安全头越早挂上越好，后面任何视图返回的响应都带上。
+    "config.middleware.SecurityHeadersMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     # 中英双语：按地址上的 /en/ 前缀激活对应语言（i18n_patterns 必需）。
     # 必须排在 SessionMiddleware 之后、CommonMiddleware 之前（Django 的要求）。
@@ -135,6 +136,11 @@ AUTHENTICATION_BACKENDS = [
 # 一个数，不能按维度分别设），所以这里取的是「挡得住暴力、又不至于误伤」的折中。
 AXES_FAILURE_LIMIT = 10
 AXES_LOCKOUT_PARAMETERS = [["username"], ["ip_address"]]
+# 「这个请求从哪来」不能各算各的：axes 默认不认识反向代理，只读 REMOTE_ADDR，
+# 而在 nginx 反代下它恒为 127.0.0.1——于是「按 IP 锁定」退化成全站共用一个桶，
+# 10 次失败锁死所有人，分布式爆破反而完全不计。指向全站统一的取 IP 口径，
+# 它会在 TRUST_FORWARDED_FOR 打开时读 nginx 覆写过的 X-Forwarded-For。
+AXES_CLIENT_IP_CALLABLE = "core.audit.get_client_ip"
 # 30 分钟后自动恢复，不需要管理员日常介入；确实需要提前放行时走后台。
 AXES_COOLOFF_TIME = 0.5  # 小时
 # 成功登录清空该账号的失败计数，但**不清 IP 那一格**——否则一个已经知道口令的
@@ -245,6 +251,12 @@ DATA_UPLOAD_MAX_NUMBER_FIELDS = 2000               # 字段数上限，防畸形
 # 唯一的例外是纯 http 的部署，那种环境要在 env.sh 里显式改回 0，否则浏览器不会
 # 带上会话 Cookie，谁都登录不了。
 SESSION_COOKIE_HTTPONLY = True
+# 会话有效期。Django 默认两周且关掉浏览器也不失效——对一个装着实名信息与评审
+# 机密的站来说太长：笔记本合盖、手机借人、公共机房忘记登出，会话都还活着。
+# 3 天是「够用一天忘关也不至于出事」的折中；再加一条关浏览器即失效，把
+# 「共用电脑」这一类的暴露面直接去掉。用户会觉得需要重新登录更频繁，这是取舍。
+SESSION_COOKIE_AGE = 60 * 60 * 24 * 3
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 SESSION_COOKIE_SECURE = env_bool("DJANGO_SESSION_COOKIE_SECURE", True)
 CSRF_COOKIE_SECURE = env_bool("DJANGO_CSRF_COOKIE_SECURE", True)
 SECURE_CONTENT_TYPE_NOSNIFF = True
@@ -285,6 +297,16 @@ SILENCED_SYSTEM_CHECKS = [
 # X-Forwarded-Proto itself.
 if env_bool("DJANGO_PROXY_SSL_HEADER", False):
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# 反向代理下的真实来源 IP（见 core/audit.get_client_ip）。
+#
+# 与上面那条是两件事：那条管「这个请求算不算 https」，这条管「这个请求从哪来」。
+# 两个都要求 nginx 覆写对应的头，所以两个开关一起打开才成立。
+#
+# **只在 nginx 会用 $remote_addr 覆写 X-Forwarded-For 时才开**。开着而 nginx 没
+# 覆写，等于让客户端自己声明来源 IP；关着而 nginx 在反代，则所有请求都记成
+# 127.0.0.1，且 axes 的 IP 维度会把全站算成同一个人。
+TRUST_FORWARDED_FOR = env_bool("DJANGO_TRUST_FORWARDED_FOR", False)
 
 CSRF_TRUSTED_ORIGINS = [
     origin.strip()

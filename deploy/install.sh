@@ -368,6 +368,29 @@ else
     sed -i '/^[[:space:]]*@@HTTPS_BLOCK_START@@[[:space:]]*$/,/^[[:space:]]*@@HTTPS_BLOCK_END@@[[:space:]]*$/d' "$NGINX_CONF"
     warn "未配置 SSL_CERT_PATH/SSL_KEY_PATH，仅监听 HTTP 80"
 fi
+
+# 证书续期：装了 certbot 就把它的续期定时器打开。
+#
+# 这一步原先谁都不管——install.sh 只把证书路径写进 Nginx，deploy.sh 只调 backup.sh，
+# 于是「证书会不会自动续」全靠部署的人记得手工 enable 一次。实测生产上就是漏的：
+# timer 处于 enabled 但 inactive（从没启动过），证书一天天逼近到期而没有任何提示。
+# 续期不是「装一次就可以忘掉」的配置，它得每周真的跑起来才算数。
+if [[ -n "${SSL_CERT_PATH:-}" && -n "${SSL_KEY_PATH:-}" ]]; then
+    if command -v certbot >/dev/null 2>&1; then
+        if systemctl list-unit-files certbot-renew.timer >/dev/null 2>&1; then
+            if systemctl enable --now certbot-renew.timer >/dev/null 2>&1; then
+                ok "certbot 续期定时器已启用（certbot-renew.timer）"
+            else
+                warn "certbot-renew.timer 启用失败，请手工执行：systemctl enable --now certbot-renew.timer"
+            fi
+        else
+            warn "未找到 certbot-renew.timer（certbot 版本较旧，或不是发行版包）"
+            warn "请自行安排续期，例如 cron：0 3 * * * certbot renew --quiet"
+        fi
+    else
+        warn "未检测到 certbot：$SSL_CERT_PATH 的续期需要你自行安排"
+    fi
+fi
 if [[ -n "$NGINX_ENLINK" && ! -e "$NGINX_ENLINK" ]]; then
     ln -s "$NGINX_CONF" "$NGINX_ENLINK"
 fi
