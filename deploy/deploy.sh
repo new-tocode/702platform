@@ -198,6 +198,13 @@ if [[ -n "$NGINX_SITE_CONF" ]]; then
     # Django 而 404，报错写成「验证文件取不到」，看着像网络问题。
     grep -qF '/.well-known/acme-challenge/' "$NGINX_SITE_CONF" \
         || DRIFT+=("nginx 站点配置里没有 ACME 挑战的 location（证书签发与续期会失败）")
+    # 443 必须是 default_server。访问 https://<IP> 时浏览器不发 SNI，nginx 只能回落到
+    # 该端口的默认 server——没声明时是同机配置顺序里的第一个，往往不是本平台，于是
+    # IP 证书签得再对也用不上：客户端拿到别人的证书，浏览器照样报错。
+    if grep -qF 'listen 443' "$NGINX_SITE_CONF"; then
+        grep -qF 'listen 443 ssl default_server' "$NGINX_SITE_CONF" \
+            || DRIFT+=("nginx 的 443 没有声明 default_server——按 IP 访问会拿到别的站点的证书")
+    fi
     if [[ -r /etc/nginx/nginx.conf ]]; then
         grep -qF 'zone=club702_login' /etc/nginx/nginx.conf \
             || DRIFT+=("nginx.conf 里没有 limit_req_zone club702_login 的定义（站点配置引用了它）")
