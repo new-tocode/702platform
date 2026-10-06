@@ -1,7 +1,11 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n static %}
 
 {% block title %}{{ competition.title }}{% if is_edit %}{% translate "修改报名" %}{% else %}{% translate "报名" %}{% endif %} - {% translate "竞赛社团管理平台" %}{% endblock %}
+
+{% block extra_head %}
+    <script defer src="{% static 'js/registration.js' %}"></script>
+{% endblock %}
 
 {% block content %}
 <div class="wrap">
@@ -29,7 +33,13 @@
             {% endif %}
 
             <h2 class="form-heading">{% if is_edit %}{% translate "修改报名" %}{% else %}{% translate "登记报名" %}{% endif %}</h2>
-            <form method="post">
+            {# 元素 id 交给脚本用 data 属性带走：表单字段的 id 带前缀，脚本不该去猜。 #}
+            <form method="post"
+                  data-registration-form
+                  data-group-map="member-group-map"
+                  data-group-field="{{ form.group.id_for_label }}"
+                  data-members-field="{{ form.members.id_for_label }}"
+                  data-leader-field="{{ form.team_leader.id_for_label }}">
                 {% csrf_token %}
                 {{ form.non_field_errors }}
 
@@ -81,32 +91,4 @@
 </div>
 
 {{ member_group_map|json_script:"member-group-map" }}
-<script>
-(function () {
-    const mapElement = document.getElementById("member-group-map");
-    const groupSelect = document.getElementById("{{ form.group.id_for_label }}");
-    const membersSelect = document.getElementById("{{ form.members.id_for_label }}");
-    const leaderSelect = document.getElementById("{{ form.team_leader.id_for_label }}");
-    if (!mapElement || !groupSelect || !membersSelect || !leaderSelect) return;
-
-    const memberGroups = JSON.parse(mapElement.textContent);
-
-    function filterSelect(select) {
-        Array.from(select.options).forEach(function (option) {
-            const groups = memberGroups[option.value] || [];
-            const visible = !groupSelect.value || groups.includes(groupSelect.value);
-            option.hidden = !visible;
-            if (!visible && option.selected) option.selected = false;
-        });
-    }
-
-    function filterAll() {
-        filterSelect(membersSelect);
-        filterSelect(leaderSelect);
-    }
-
-    groupSelect.addEventListener("change", filterAll);
-    filterAll();
-})();
-</script>
 {% endblock %}
