@@ -30,7 +30,9 @@ source env.local.sh
 | 权限、整体结构 | `docs/architecture/permissions.md`、`overview.md`（绝大多数「这个功能谁能用」的答案在这里） |
 | 环境、分层约定、FAQ | `docs/development.md` |
 | 部署、回滚、备份 | `docs/deploy.md` |
-| 要在真实页面上验证改动、截图、端到端走一遍 | `run-local` skill（本机 `.claude/skills/run-local/`，因含演示账号口令而不进版本库） |
+| 要在真实页面上验证改动、截图、端到端走一遍 | `run-local` skill——本机在 `.claude/skills/run-local/`，**不进版本库**（目录里写着本地演示账号的口令） |
+
+`run-local` 干的事，以及重建它所需的最小信息：**起本地服务，再用真实浏览器（Playwright，已随项目 venv 装好）登录、点击、断言、截图**——用来在页面上验证改动，而不只是读代码；里面还有现成的截图脚本、多角色流程模板与一份回归场景集（各入口权限、报名、一整轮评审、后台身份管理、长帖折叠）。要点四条：`source env.local.sh` 后以 `runserver 127.0.0.1:8021 --noreload` 后台起服务、探活后用完 `pkill`；一个角色一个 `browser.new_context()`；Playwright 开 `reduced_motion="reduce"`（页面有入场动画，否则截到一半发灰）；断言用 locator 计数，别用「页面上不出现某个词」（flash 提示里常带同一个名字）。演示账号与口令是本地造的、不入库，克隆后自己造一批即可（从 `createsuperuser` 起步）。
 
 ## 分层约定
 
