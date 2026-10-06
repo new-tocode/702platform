@@ -45,17 +45,33 @@ class RunningTestsDetectionTests(SimpleTestCase):
 class SecurityHeadersTests(TestCase):
     """安全响应头真的发出去了——中间件挂在 settings 里才作数。"""
 
-    def test_csp_is_report_only_and_locks_the_important_sources(self):
+    def test_csp_is_enforced_and_locks_the_important_sources(self):
         response = self.client.get(reverse("accounts:home"))
 
-        policy = response.headers.get("Content-Security-Policy-Report-Only")
+        policy = response.headers.get("Content-Security-Policy")
         self.assertIsNotNone(policy, "CSP 没发出去：中间件是不是没挂进 MIDDLEWARE？")
 
-        # 报告模式：浏览器不拦任何东西，只报告。名字里带 Report-Only 才算数——
-        # 少了它就是从「观察」变成「拦截」，页面会静默失效。
-        self.assertNotIn("Content-Security-Policy", response.headers)
+        # 强制模式：不再带 Report-Only 那个后缀，浏览器会真的拦下来。
+        self.assertNotIn("Content-Security-Policy-Report-Only", response.headers)
 
         self.assertIn("default-src 'self'", policy)
+        self.assertIn("frame-ancestors 'none'", policy)
+        self.assertIn("object-src 'none'", policy)
+        # 前台**不能**出现 unsafe-inline：有了它，这条 CSP 对 XSS 基本就白设了。
+        # 全站的资源都自托管，没有理由放行内联。
+        self.assertNotIn("unsafe-inline", policy)
+
+    def test_admin_gets_a_relaxed_policy(self):
+        """后台单独放宽——Django admin 的模板自带内联脚本与内联样式，收不掉。
+
+        这一条不是「后台可以随便」，而是把放宽**限定在后台**：前台的策略仍然
+        不含 unsafe-inline（上一个用例钉着它）。
+        """
+        response = self.client.get("/admin/login/")
+
+        policy = response.headers.get("Content-Security-Policy", "")
+        self.assertIn("'unsafe-inline'", policy)
+        # 放宽的只有那两处，别的一条都没松。
         self.assertIn("frame-ancestors 'none'", policy)
         self.assertIn("object-src 'none'", policy)
 
@@ -70,11 +86,9 @@ class SecurityHeadersTests(TestCase):
     def test_headers_do_not_override_what_a_view_already_set(self):
         """视图自己发过的头不被覆盖：setdefault 而不是赋值。"""
         response = self.client.get(reverse("accounts:home"))
-        response["Content-Security-Policy-Report-Only"] = "default-src 'none'"
+        response["Content-Security-Policy"] = "default-src 'none'"
 
         middleware = SecurityHeadersMiddleware(lambda request: response)
         result = middleware(response.wsgi_request)
 
-        self.assertEqual(
-            result["Content-Security-Policy-Report-Only"], "default-src 'none'"
-        )
+        self.assertEqual(result["Content-Security-Policy"], "default-src 'none'")

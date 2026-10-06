@@ -229,6 +229,10 @@ if [[ -n "$NGINX_SITE_CONF" ]]; then
         grep -qF 'listen 443 ssl default_server' "$NGINX_SITE_CONF" \
             || DRIFT+=("nginx 的 443 没有声明 default_server——按 IP 访问会拿到别的站点的证书")
     fi
+    # 版本号。nginx 默认是 on，所以少了这条就是「正在对外报版本」——这类加固最容易
+    # 只改模板不改线上，而它的表现只是响应头多几个字符，谁也不会注意到。
+    grep -qF 'server_tokens off' "$NGINX_SITE_CONF" \
+        || DRIFT+=("nginx 站点配置里没有 server_tokens off（响应仍在报 nginx 版本号）")
     if [[ -r /etc/nginx/nginx.conf ]]; then
         grep -qF 'zone=club702_login' /etc/nginx/nginx.conf \
             || DRIFT+=("nginx.conf 里没有 limit_req_zone club702_login 的定义（站点配置引用了它）")
