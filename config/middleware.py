@@ -83,24 +83,24 @@ class SecurityHeadersMiddleware:
     ``SecurityMiddleware`` 已经负责 nosniff、Referrer-Policy 与 X-Frame-Options，
     这里只管它不管的两条：
 
-    * **CSP**——只以 ``Report-Only`` 发出：浏览器**不会**拦任何东西，只在控制台
-      报出「这条策略会拦下什么」。用它是为了在真正启用前把该修的先修掉，因为
-      CSP 拦错的表现是页面静默失效（按钮没反应、样式没加载），比报错难查得多。
+    * **CSP（强制）**——先前只以 ``Report-Only`` 发出，用来在真拦之前摸清「会拦下
+      什么」。现在切到强制。切之前该修的都修了：全站唯一一处内联 ``<script>``
+      （竞赛报名页的成员过滤）已挪进 ``static/js/registration.js``，元素 id 改由
+      data 属性传递；全站没有内联事件处理器、没有内联 ``style=``、没有外部资源。
 
-      策略按**目标状态**写（``script-src 'self'``，不含 ``'unsafe-inline'``），
-      所以现在只会有两类报告，都是真的该处理的：
+      唯一被放宽的是 ``/admin/``：Django admin 的模板自带内联脚本与内联样式，
+      那是框架自己的模板，收不掉。后台是「只有 staff 能进、代码全是我们自己的」
+      的面，所以单独给它 ``'unsafe-inline'``——比让后台静默失效强，也比为了它把
+      整站放宽要好。
 
-      1. ``templates/competitions/register.html`` 里那处内联 ``<script>``——
-         把它挪进 ``static/js/`` 之后本站就没有内联脚本了（全站无内联事件
-         处理器、无内联样式）；
-      2. ``/admin/`` 后台自带内联脚本与样式——将来切强制时给后台单独放宽，
-         或让后台维持报告模式。
-
-      报出的其它条目才是意外，值得逐条看。
+      **强制 CSP 拦错的表现是页面静默失效**（按钮没反应、样式没加载、下拉框不过滤），
+      比报错难查得多。所以今后每收紧一条指令，都要先在真实浏览器里把相关页面点一遍，
+      而不是靠读代码判断「应该没问题」。
     * **Permissions-Policy**——关掉本站用不到的浏览器特性。作用是缩小被第三方
       脚本（或浏览器内中间人）滥用的面：这个站不需要摄像头、麦克风、定位与支付。
     """
 
+    #: 前台策略。全站资源都自托管（没有 CDN、没有外链字体），所以每条都收到 'self'。
     CSP = "; ".join(
         [
             "default-src 'self'",
@@ -115,6 +115,27 @@ class SecurityHeadersMiddleware:
             "font-src 'self'",
         ]
     )
+
+    #: 后台策略：与前台只差两处 ``'unsafe-inline'``。Django admin 的模板里有内联
+    #: 脚本（如 change form 的 prepopulate、actions 的确认框）与内联样式，用前台的
+    #: 策略会把后台拦成半残——而那种坏法是静默的。
+    ADMIN_CSP = "; ".join(
+        [
+            "default-src 'self'",
+            "base-uri 'self'",
+            "form-action 'self'",
+            "frame-ancestors 'none'",
+            "object-src 'none'",
+            "img-src 'self' data:",
+            "style-src 'self' 'unsafe-inline'",
+            "script-src 'self' 'unsafe-inline'",
+            "connect-src 'self'",
+            "font-src 'self'",
+        ]
+    )
+
+    ADMIN_PREFIX = "/admin/"
+
     PERMISSIONS_POLICY = "geolocation=(), camera=(), microphone=(), payment=(), usb=()"
 
     def __init__(self, get_response):
@@ -122,8 +143,13 @@ class SecurityHeadersMiddleware:
 
     def __call__(self, request):
         response = self.get_response(request)
+        policy = (
+            self.ADMIN_CSP
+            if request.path.startswith(self.ADMIN_PREFIX)
+            else self.CSP
+        )
         # setdefault：视图或下游中间件若已经自己发过，就不要覆盖它。
-        response.setdefault("Content-Security-Policy-Report-Only", self.CSP)
+        response.setdefault("Content-Security-Policy", policy)
         response.setdefault("Permissions-Policy", self.PERMISSIONS_POLICY)
         return response
 
