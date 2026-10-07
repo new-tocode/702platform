@@ -31,8 +31,8 @@
 
     {# 搜索与每页条数写在同一个 GET 表单里：提交搜索时把 per_page 一并带上， #}
     {# 否则搜一次就被打回默认条数。 #}
-    <form class="award-toolbar" method="get" role="search">
-        <div class="award-search">
+    <form class="list-toolbar" method="get" role="search">
+        <div class="list-search">
             <input type="search" name="q" value="{{ keyword }}" autocomplete="off"
                    placeholder="{% translate '搜索姓名、指导老师、赛事、层级或年份' %}"
                    aria-label="{% translate '搜索获奖记录' %}">
@@ -43,7 +43,7 @@
             {% if keyword %}<a class="btn" href="{% querystring q=None page=None %}">{% translate "清除" %}</a>{% endif %}
         </div>
         {% if total > per_page_options.0 %}
-            <div class="award-perpage">
+            <div class="list-aside">
                 <span class="muted">{% translate "每页" %}</span>
                 {% for size in per_page_options %}
                     <a class="chip{% if size == per_page %} chip-on{% endif %}"

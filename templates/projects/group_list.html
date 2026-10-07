@@ -29,6 +29,28 @@
         </div>
     </div>
 
+    {# 搜索与「我的项目组」写在同一个 GET 表单里：提交搜索时把筛选一并带上， #}
+    {# 否则搜一次就被打回「全部项目组」。 #}
+    <form class="list-toolbar" method="get" role="search">
+        <div class="list-search">
+            <input type="search" name="q" value="{{ keyword }}" autocomplete="off"
+                   placeholder="{% translate '搜索组名、联系人、成员或指导老师' %}"
+                   aria-label="{% translate '搜索项目组' %}">
+            {% if mine_only %}<input type="hidden" name="mine" value="1">{% endif %}
+            <button class="btn btn-primary" type="submit">{% translate "搜索" %}</button>
+            {% if keyword %}<a class="btn" href="{% querystring q=None %}">{% translate "清除" %}</a>{% endif %}
+        </div>
+        {# 切换按钮只改 mine 这一个参数，q 由 querystring 标签原样带过去。 #}
+        <div class="list-aside">
+            {% if mine_only %}
+                <a class="btn btn-sm btn-primary" href="{% querystring mine=None %}"
+                   aria-current="true">{% translate "我的项目组" %}</a>
+            {% else %}
+                <a class="btn btn-sm" href="{% querystring mine=1 %}">{% translate "我的项目组" %}</a>
+            {% endif %}
+        </div>
+    </form>
+
     {% for row in group_rows %}
         <div class="panel reveal">
             <div class="panel-head">
@@ -79,7 +101,13 @@
             </div>
         </div>
     {% empty %}
-        <div class="empty">{% translate "暂时没有项目组。" %}</div>
+        {% if keyword %}
+            <div class="empty">{% translate "没有匹配的项目组。" %}</div>
+        {% elif mine_only %}
+            <div class="empty">{% translate "你还没有加入任何项目组。" %}</div>
+        {% else %}
+            <div class="empty">{% translate "暂时没有项目组。" %}</div>
+        {% endif %}
     {% endfor %}
 </div>
 {% endblock %}
