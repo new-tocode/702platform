@@ -639,17 +639,18 @@ td .empty, .panel-body.tight .empty {
   border: 0; background: transparent; padding: 20px 18px;
 }
 
-/* --- 历年获奖：搜索与每页条数 --- */
-.award-toolbar {
+/* --- 列表工具栏：搜索与右侧筛选（历年获奖、项目组共用同一条排布） --- */
+.list-toolbar {
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
   gap: 12px; margin: 0 0 18px;
 }
-.award-search { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.list-search { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 /* 表单的元素选择器给输入框统一写了 width:100%，在横向排布里会把按钮挤到下一行。
    这里的选择器更具体：宽度回到 320px，窄屏按 flex 收缩，但不跟着拉伸。 */
-.award-search input[type="search"] { flex: 0 1 auto; width: 320px; max-width: 100%; }
+.list-search input[type="search"] { flex: 0 1 auto; width: 320px; max-width: 100%; }
 /* margin-left:auto 让它在换行后也贴在右边缘，而不是掉到下一行的行首。 */
-.award-perpage { display: flex; align-items: center; gap: 6px; font-size: 12px; margin-left: auto; }
+.list-aside { display: flex; align-items: center; gap: 6px; font-size: 12px; margin-left: auto; }
+.list-aside a { text-decoration: none; }
 
 /* --- 历年获奖：勾选打包下载 --- */
 .award-bulkbar {
@@ -662,7 +663,6 @@ td .empty, .panel-body.tight .empty {
 .award-heading { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .award-heading h2 { min-width: 0; overflow-wrap: anywhere; }
 .award-heading input[type="checkbox"] { flex: none; margin: 0; width: 16px; height: 16px; }
-.award-perpage a { text-decoration: none; }
 .award-pageinfo { margin-top: 10px; text-align: center; font-size: 12px; }
 
 /* --- 社团空间：成员索引与板块滑轨 --- */

@@ -29,6 +29,17 @@
         </div>
     </div>
 
+    {# 一个搜索框扫过组名与三种姓名（联系人、成员、指导老师），排布与获奖页同一套。 #}
+    <form class="list-toolbar" method="get" role="search">
+        <div class="list-search">
+            <input type="search" name="q" value="{{ keyword }}" autocomplete="off"
+                   placeholder="{% translate '搜索组名、联系人、成员或指导老师' %}"
+                   aria-label="{% translate '搜索项目组' %}">
+            <button class="btn btn-primary" type="submit">{% translate "搜索" %}</button>
+            {% if keyword %}<a class="btn" href="{% querystring q=None %}">{% translate "清除" %}</a>{% endif %}
+        </div>
+    </form>
+
     {% for row in group_rows %}
         <div class="panel reveal">
             <div class="panel-head">
@@ -79,7 +90,11 @@
             </div>
         </div>
     {% empty %}
-        <div class="empty">{% translate "暂时没有项目组。" %}</div>
+        {% if keyword %}
+            <div class="empty">{% translate "没有匹配的项目组。" %}</div>
+        {% else %}
+            <div class="empty">{% translate "暂时没有项目组。" %}</div>
+        {% endif %}
     {% endfor %}
 </div>
 {% endblock %}

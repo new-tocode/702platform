@@ -34,6 +34,7 @@ from .permissions import (
     manageable_group_ids,
     member_group_ids,
 )
+from .selectors import search_groups
 from .services import (
     GroupCreateRequestError,
     GroupManagementError,
@@ -84,9 +85,12 @@ def _submit_message(submission):
 def group_list(request):
     from reviews.models import ProjectSubmission
 
+    keyword = request.GET.get("q", "").strip()
+    # 先搜索、后 annotate：搜索跨 members/advisors 过滤会 JOIN 出重复行，
+    # 排在聚合之前才不会把 member_count 放大（见 selectors.search_groups）。
+    groups = search_groups(groups_visible_to(request.user), query=keyword)
     groups = (
-        groups_visible_to(request.user)
-        .select_related("leader__profile")
+        groups.select_related("leader__profile")
         .prefetch_related("members__profile")
         .prefetch_related("advisors")
         .prefetch_related(
@@ -129,15 +133,20 @@ def group_list(request):
         status=GroupCreateRequest.PENDING,
     ).first()
     logger.info(
-        "project_group.list.view count=%s user=%s",
+        "project_group.list.view count=%s query=%s user=%s",
         len(group_rows),
+        keyword,
         request.user.get_username(),
         extra={"request_id": getattr(request, "request_id", "-")},
     )
     return render(
         request,
         "projects/group_list.html",
-        {"group_rows": group_rows, "my_create_request": my_create_request},
+        {
+            "group_rows": group_rows,
+            "keyword": keyword,
+            "my_create_request": my_create_request,
+        },
     )
 
 

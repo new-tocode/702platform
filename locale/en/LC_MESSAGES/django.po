@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 702platform\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-05 14:10+0800\n"
+"POT-Creation-Date: 2026-10-07 20:16+0800\n"
 "PO-Revision-Date: 2026-09-19 18:39\n"
 "Last-Translator: 702platform\n"
 "Language-Team: 702platform\n"
@@ -104,7 +104,7 @@ msgstr "Student ID"
 #: accounts/models.py:99 projects/forms.py:98
 #: templates/accounts/member_profile_readonly.html:44
 #: templates/projects/group_detail.html:64
-#: templates/projects/group_list.html:45
+#: templates/projects/group_list.html:56
 msgid "学院"
 msgstr "College"
 
@@ -159,7 +159,7 @@ msgstr "Administrator"
 #: accounts/roles.py:16 accounts/selectors.py:67
 #: templates/projects/group_detail.html:35
 #: templates/projects/group_detail.html:86
-#: templates/projects/group_list.html:42
+#: templates/projects/group_list.html:53
 #: templates/projects/group_manage.html:108
 msgid "项目组联系人"
 msgstr "Group contact"
@@ -238,8 +238,8 @@ msgstr[1] ""
 "%(count)s more images were not added because the gallery is full (using "
 "%(used)s / %(limit)s MB): %(names)s"
 
-#: accounts/views.py:374 accounts/views.py:395 projects/views.py:358
-#: projects/views.py:465
+#: accounts/views.py:374 accounts/views.py:395 projects/views.py:367
+#: projects/views.py:474
 msgid "未知操作"
 msgstr "Unknown action"
 
@@ -301,7 +301,7 @@ msgid "只能选择所选项目组中的成员。"
 msgstr "Only members of the selected project group can be chosen."
 
 #: competitions/forms.py:26 templates/competitions/list.html:51
-#: templates/competitions/register.html:74
+#: templates/competitions/register.html:84
 msgid "竞赛组长"
 msgstr "Team leader"
 
@@ -327,11 +327,11 @@ msgstr "You cannot register this project group."
 msgid "该项目组已经登记过这场竞赛，不能重复报名。"
 msgstr "This project group is already registered for this competition."
 
-#: competitions/forms.py:92 competitions/forms.py:113
+#: competitions/forms.py:92 competitions/forms.py:120
 msgid "参赛成员必须属于所选项目组。"
 msgstr "Team members must belong to the selected project group."
 
-#: competitions/forms.py:94 competitions/forms.py:115
+#: competitions/forms.py:94 competitions/forms.py:122
 msgid "竞赛组长必须属于所选项目组。"
 msgstr "The team leader must belong to the selected project group."
 
@@ -415,7 +415,7 @@ msgstr "Winners / team"
 
 #: content/forms.py:69 templates/content/awards.html:97
 #: templates/projects/group_detail.html:65
-#: templates/projects/group_list.html:48
+#: templates/projects/group_list.html:59
 msgid "指导老师"
 msgstr "Advisors"
 
@@ -698,7 +698,7 @@ msgstr "Post updated."
 msgid "编辑帖子"
 msgstr "Edit post"
 
-#: discussion/views.py:191 templates/competitions/register.html:63
+#: discussion/views.py:191 templates/competitions/register.html:73
 msgid "保存修改"
 msgstr "Save changes"
 
@@ -967,7 +967,7 @@ msgstr "A group can have at most %(max)s advisors."
 msgid "请先登录。"
 msgstr "Please sign in first."
 
-#: projects/services.py:68 projects/views.py:263
+#: projects/services.py:68 projects/views.py:272
 msgid "你已经是该项目组成员。"
 msgstr "You are already a member of this project group."
 
@@ -1015,7 +1015,7 @@ msgstr "A proposal must be a doc, docx or pdf file."
 msgid "项目书不能超过 %(limit)s MB。"
 msgstr "The proposal cannot exceed %(limit)s MB."
 
-#: projects/views.py:71
+#: projects/views.py:72
 #, python-format
 msgid ""
 "已提交第 %(round)s 轮评审（%(type)s），等待初审人初审；初审通过后将随机分配 "
@@ -1030,22 +1030,22 @@ msgstr[1] ""
 "Round %(round)s submitted for review (%(type)s). A preliminary reviewer "
 "looks at it first; once it passes, %(count)s reviewers are drawn at random."
 
-#: projects/views.py:199
+#: projects/views.py:208
 msgid "项目书已上传/更新。"
 msgstr "Proposal uploaded/updated."
 
-#: projects/views.py:246
+#: projects/views.py:255
 msgid "该项目组尚未上传项目书。"
 msgstr "This project group has not uploaded a proposal yet."
 
-#: projects/views.py:280
+#: projects/views.py:289
 #, python-format
 msgid "已提交加入「%(name)s」的申请，请等待联系人审核。"
 msgstr ""
 "Application to join “%(name)s” submitted; please wait for the contact to "
 "review it."
 
-#: projects/views.py:315
+#: projects/views.py:324
 msgid ""
 "已提交创建项目组的申请，等待管理员审核；任一管理员同意后项目组即刻建立，你成"
 "为项目组联系人。"
@@ -1054,39 +1054,39 @@ msgstr ""
 "will review it; the group is created as soon as one approves, and you become "
 "its contact."
 
-#: projects/views.py:347
+#: projects/views.py:356
 #, python-format
 msgid "已通过创建申请，项目组「%(name)s」已建立并出现在项目组列表中。"
 msgstr ""
 "Creation approved: project group “%(name)s” has been created and now appears "
 "in the group list."
 
-#: projects/views.py:356
+#: projects/views.py:365
 #, python-format
 msgid "已拒绝创建「%(name)s」的申请。"
 msgstr "The application to create “%(name)s” was rejected."
 
-#: projects/views.py:391
+#: projects/views.py:400
 msgid "学院与指导老师已更新。"
 msgstr "College and advisors updated."
 
-#: projects/views.py:402
+#: projects/views.py:411
 msgid "项目组介绍已更新。"
 msgstr "Group description updated."
 
-#: projects/views.py:413
+#: projects/views.py:422
 msgid "已转让项目组联系人。"
 msgstr "Group contact transferred."
 
-#: projects/views.py:456
+#: projects/views.py:465
 msgid "已通过该入组申请。"
 msgstr "The join application was approved."
 
-#: projects/views.py:463
+#: projects/views.py:472
 msgid "已拒绝该入组申请。"
 msgstr "The join application was rejected."
 
-#: projects/views.py:485
+#: projects/views.py:494
 #, python-format
 msgid "已将 %(name)s 移出项目组。"
 msgstr "%(name)s has been removed from the project group."
@@ -1693,7 +1693,7 @@ msgstr "Member Profile"
 #: templates/discussion/space.html:31 templates/projects/group_detail.html:39
 #: templates/projects/group_detail.html:72
 #: templates/projects/group_detail.html:88
-#: templates/projects/group_list.html:43
+#: templates/projects/group_list.html:54
 #: templates/projects/group_manage.html:94
 #: templates/projects/group_manage.html:110
 msgid "成员"
@@ -1971,7 +1971,7 @@ msgid "暂时没有竞赛信息。"
 msgstr "No competitions yet."
 
 #: templates/competitions/register.html:4
-#: templates/competitions/register.html:31
+#: templates/competitions/register.html:35
 msgid "修改报名"
 msgstr "Edit registration"
 
@@ -1979,53 +1979,53 @@ msgstr "Edit registration"
 msgid "报名"
 msgstr "Register"
 
-#: templates/competitions/register.html:18
+#: templates/competitions/register.html:22
 #, python-format
 msgid "报名截止 %(deadline)s"
 msgstr "Registration closes %(deadline)s"
 
-#: templates/competitions/register.html:19
+#: templates/competitions/register.html:23
 #, python-format
 msgid "人数要求 %(size)s"
 msgstr "Team size %(size)s"
 
-#: templates/competitions/register.html:31
+#: templates/competitions/register.html:35
 msgid "登记报名"
 msgstr "Register"
 
-#: templates/competitions/register.html:63
+#: templates/competitions/register.html:73
 msgid "提交报名登记"
 msgstr "Submit registration"
 
-#: templates/competitions/register.html:64
+#: templates/competitions/register.html:74
 msgid "返回竞赛列表"
 msgstr "Back to competitions"
 
-#: templates/competitions/register.html:70
+#: templates/competitions/register.html:80
 msgid "填报说明"
 msgstr "How to fill this in"
 
-#: templates/competitions/register.html:73
+#: templates/competitions/register.html:83
 msgid "可选参赛成员"
 msgstr "Team members"
 
-#: templates/competitions/register.html:73
+#: templates/competitions/register.html:83
 msgid "所选项目组的成员"
 msgstr "Members of the selected group"
 
-#: templates/competitions/register.html:74
+#: templates/competitions/register.html:84
 msgid "须在参赛成员内"
 msgstr "Must be one of the team members"
 
-#: templates/competitions/register.html:75
+#: templates/competitions/register.html:85
 msgid "报名范围"
 msgstr "Which groups"
 
-#: templates/competitions/register.html:75
+#: templates/competitions/register.html:85
 msgid "仅限自己的项目组"
 msgstr "Only groups you manage"
 
-#: templates/competitions/register.html:77
+#: templates/competitions/register.html:87
 msgid "切换项目组后，参赛成员与竞赛组长候选会自动过滤为该组成员。"
 msgstr ""
 "After switching project groups, the member and team-leader choices are "
@@ -2107,10 +2107,11 @@ msgid "搜索获奖记录"
 msgstr "Search awards"
 
 #: templates/content/awards.html:42 templates/discussion/space.html:38
+#: templates/projects/group_list.html:38
 msgid "搜索"
 msgstr "Search"
 
-#: templates/content/awards.html:43
+#: templates/content/awards.html:43 templates/projects/group_list.html:39
 msgid "清除"
 msgstr "Clear"
 
@@ -2592,7 +2593,7 @@ msgstr[0] "Contact %(contact)s · 1 member"
 msgstr[1] "Contact %(contact)s · %(counter)s members"
 
 #: templates/projects/group_detail.html:27
-#: templates/projects/group_list.html:70
+#: templates/projects/group_list.html:81
 msgid "管理项目组"
 msgstr "Manage group"
 
@@ -2834,38 +2835,50 @@ msgstr[1] ""
 msgid "创建申请审核中"
 msgstr "Creation request under review"
 
-#: templates/projects/group_list.html:43
+#: templates/projects/group_list.html:36
+msgid "搜索组名、联系人、成员或指导老师"
+msgstr "Search by group name, contact, member or advisor"
+
+#: templates/projects/group_list.html:37
+msgid "搜索项目组"
+msgstr "Search project groups"
+
+#: templates/projects/group_list.html:54
 #, python-format
 msgid "1 人"
 msgid_plural "%(counter)s 人"
 msgstr[0] "1 member"
 msgstr[1] "%(counter)s members"
 
-#: templates/projects/group_list.html:56
+#: templates/projects/group_list.html:67
 msgid "成员名单"
 msgstr "Member list"
 
-#: templates/projects/group_list.html:61
+#: templates/projects/group_list.html:72
 msgid "暂无成员"
 msgstr "No members"
 
-#: templates/projects/group_list.html:67
+#: templates/projects/group_list.html:78
 msgid "查看详情"
 msgstr "View details"
 
-#: templates/projects/group_list.html:72
+#: templates/projects/group_list.html:83
 msgid "已加入"
 msgstr "Joined"
 
-#: templates/projects/group_list.html:74
+#: templates/projects/group_list.html:85
 msgid "申请审核中"
 msgstr "Application under review"
 
-#: templates/projects/group_list.html:76
+#: templates/projects/group_list.html:87
 msgid "申请加入"
 msgstr "Apply to join"
 
-#: templates/projects/group_list.html:82
+#: templates/projects/group_list.html:94
+msgid "没有匹配的项目组。"
+msgstr "No project groups match your search."
+
+#: templates/projects/group_list.html:96
 msgid "暂时没有项目组。"
 msgstr "No project groups yet."
 
