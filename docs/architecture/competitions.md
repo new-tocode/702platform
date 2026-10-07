@@ -33,6 +33,6 @@ CompetitionRegistration
 - 管理员发布竞赛信息；项目组联系人只能为自己负责的项目组登记报名，管理员可以为任意项目组登记（对象级权限校验，见 [permissions.md](permissions.md)）。
 - 报名成员只能从所选项目组成员中选择；竞赛组长必须从所选参赛成员中指定（可为联系人本人）。
 - 同一项目组对同一竞赛只能登记一次，由 `(competition, group)` 唯一约束保证。
-- 报名必须在 `is_open=True` 且未超过 `deadline` 时提交。
-- 报名后，联系人可在竞赛页修改报名信息或放弃报名（截止前）。
+- 报名必须在 `is_open=True` 且未超过 `deadline` 时提交；报名后联系人在竞赛页修改或放弃，也走同一个 `Competition.is_registration_open`。截止之后联系人在前台什么也改不了，包括删掉自己的记录——否则平台记录会与已报给主办方的名单对不上。
+- **截止时间只约束前台**（`views.py` 的三个入口与 `forms.CompetitionRegistrationForm`）。后台不受它限制：`deadline` 可填任意时间（含已过去的），报名可在任何时候补录、修改、删除——**把项目组加进已截止的竞赛，后台是唯一入口**，`AdminDeadlineOverrideAcceptanceTests` 钉住这一侧；谁若在 admin 表单里补上与前台一致的截止校验，就堵掉了补录这条路。
 - 无审批流：登记即生效。

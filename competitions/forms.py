@@ -98,6 +98,13 @@ class CompetitionRegistrationForm(forms.Form):
 
 
 class CompetitionRegistrationAdminForm(forms.ModelForm):
+    """后台登记表单：刻意不校验报名截止时间。
+
+    已截止的竞赛要补录项目组，后台是唯一入口（前台三个入口都受截止时间约束），
+    所以这里连 `is_registration_open` 都不看——只有成员必须属于项目组这类与时间
+    无关的约束留在这里。
+    """
+
     class Meta:
         model = CompetitionRegistration
         fields = "__all__"

@@ -50,6 +50,16 @@ class CompetitionAdmin(admin.ModelAdmin):
     date_hierarchy = "deadline"
     ordering = ("-is_open", "deadline", "-published_at", "-id")
 
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        formfield = super().formfield_for_dbfield(db_field, request, **kwargs)
+        if db_field.name == "deadline" and formfield is not None:
+            # 后台文案不进 .po（admin 不在双语范围），与列表里的中文说明一致。
+            formfield.help_text = (
+                "可填任意时间，包括已经过去的：截止时间只约束前台的报名入口，"
+                "过后仍可在后台补录项目组。"
+            )
+        return formfield
+
     @admin.display(description="报名状态")
     def registration_status(self, obj):
         return "开放" if obj.is_registration_open else "已关闭/截止"
@@ -92,6 +102,15 @@ class CompetitionRegistrationAdmin(admin.ModelAdmin):
     list_select_related = ("competition", "group", "registered_by")
     readonly_fields = ("registered_by", "created_at", "updated_at")
     ordering = ("-created_at", "-id")
+
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        formfield = super().formfield_for_dbfield(db_field, request, **kwargs)
+        if db_field.name == "competition" and formfield is not None:
+            formfield.help_text = (
+                "报名已截止的竞赛也可以在这里补录、修改或删除；"
+                "前台的报名入口只在截止前开放。"
+            )
+        return formfield
 
     @admin.display(description="参赛人数")
     def member_count(self, obj):

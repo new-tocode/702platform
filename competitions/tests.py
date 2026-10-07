@@ -444,3 +444,106 @@ class RegistrationDeadlineAcceptanceTests(TestCase):
         self.assertFalse(
             CompetitionRegistration.objects.filter(pk=self.registration.pk).exists()
         )
+
+
+class AdminDeadlineOverrideAcceptanceTests(TestCase):
+    """截止时间只约束前台；后台是补录与纠错的唯一入口。
+
+    `deadline` 可以填任意时间（含已经过去的）；已截止的竞赛要加项目组，只能在
+    后台加。前台的三个入口（报名、修改、放弃）由上面两个测试类钉住，这里钉后台
+    两条。后台这条最容易被误伤：谁在 admin 表单里顺手加上与前台一致的截止校验，
+    都不会有测试变红，要等到真需要补录时才发现。
+    """
+
+    def setUp(self):
+        self.admin = User.objects.create_superuser(
+            username="deadline-admin",
+            password="Admin-Password-123!",
+        )
+        self.leader = User.objects.create_user(
+            username="override-leader",
+            password="Leader-Password-123!",
+        )
+        self.leader.must_change_password = False
+        self.leader.save(update_fields=["must_change_password"])
+        self.group = ProjectGroup.objects.create(name="补录项目组", leader=self.leader)
+        self.group.members.add(self.leader)
+        self.expired = Competition.objects.create(
+            title="已截止的竞赛",
+            description="说明",
+            deadline=timezone.now() - timedelta(days=3),
+            published_by=self.admin,
+        )
+        self.client.force_login(self.admin)
+
+    def test_admin_can_publish_competition_with_past_deadline(self):
+        response = self.client.post(
+            reverse("admin:competitions_competition_add"),
+            {
+                "title": "补录的历史竞赛",
+                "description": "说明",
+                "deadline_0": "2020-01-01",
+                "deadline_1": "12:00:00",
+                "team_size": "",
+                "is_open": "on",
+                "_save": "保存",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        competition = Competition.objects.get(title="补录的历史竞赛")
+        self.assertEqual(competition.published_by, self.admin)
+        self.assertFalse(
+            competition.is_registration_open,
+            "过去的截止时间应当照常保存，只是前台不再开放报名",
+        )
+
+    def test_admin_can_register_group_into_expired_competition(self):
+        response = self.client.post(
+            reverse("admin:competitions_competitionregistration_add"),
+            {
+                "competition": self.expired.pk,
+                "group": self.group.pk,
+                "team_leader": self.leader.pk,
+                "members": [self.leader.pk],
+                "remark": "截止后补录。",
+                "_save": "保存",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        registration = CompetitionRegistration.objects.get(competition=self.expired)
+        self.assertEqual(registration.group, self.group)
+        self.assertEqual(registration.registered_by, self.admin)
+        self.assertEqual(
+            set(registration.members.values_list("pk", flat=True)),
+            {self.leader.pk},
+        )
+
+    def test_admin_can_edit_registration_after_the_deadline(self):
+        registration = CompetitionRegistration.objects.create(
+            competition=self.expired,
+            group=self.group,
+            registered_by=self.leader,
+            team_leader=self.leader,
+        )
+        registration.members.set([self.leader])
+
+        response = self.client.post(
+            reverse(
+                "admin:competitions_competitionregistration_change",
+                args=(registration.pk,),
+            ),
+            {
+                "competition": self.expired.pk,
+                "group": self.group.pk,
+                "team_leader": self.leader.pk,
+                "members": [self.leader.pk],
+                "remark": "截止后改的备注。",
+                "_save": "保存",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        registration.refresh_from_db()
+        self.assertEqual(registration.remark, "截止后改的备注。")
