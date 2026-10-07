@@ -49,7 +49,7 @@
 | `/member/profile/gallery/<id>/layout/` | 改一张图的排布（POST，`layout=normal|wide|full`） | 同上 |
 | `/member/profile/gallery/<id>/delete/` | 从图册删除一张图，连同文件（POST） | 同上 |
 | `/member/password/` | 修改密码 | 本人 |
-| `/member/projects/` | 项目组列表：无组员看全部可申请，组员看自己的组，联系人看全部；页首有「申请创建项目组」入口 | 登录 |
+| `/member/projects/` | 项目组列表：无组员看全部可申请，组员看自己的组，联系人看全部；`?q=` 按组名/联系人/成员/指导老师搜，`?mine=1` 只看自己参与的组；页首有「申请创建项目组」入口 | 登录 |
 | `/member/projects/create/` | 申请创建项目组（名称与描述必填，申请人即项目组联系人） | 登录 |
 | `/member/projects/create/requests/<req>/<action>/` | 同意/拒绝创建项目组申请（POST，按钮在「评审」页）；任一管理员同意即通过，处理完跳回「评审」页 | 管理员 |
 | `/member/projects/<id>/apply/` | 申请加入项目组 | 登录且非该组成员 |
