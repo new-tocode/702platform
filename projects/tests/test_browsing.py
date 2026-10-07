@@ -1,4 +1,6 @@
-"""列表与详情：谁看得到哪个组、详情页显示什么。"""
+"""列表与详情：谁看得到哪个组、详情页显示什么，以及列表页的搜索与筛选。"""
+
+from urllib.parse import urlencode
 
 from django.contrib.auth import get_user_model
 from django.urls import reverse
@@ -147,3 +149,57 @@ class GroupListSearchTests(ProjectViewTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["group_rows"], [])
         self.assertContains(response, "没有匹配的项目组。")
+
+
+class GroupListMineFilterTests(ProjectViewTestCase):
+    """「我的项目组」：把自己作为联系人/组员的组收成一张更短的列表。"""
+
+    def _page(self, user, **params):
+        self.client.force_login(user)
+        response = self.client.get(reverse("projects:group_list"), params)
+        self.assertEqual(response.status_code, 200)
+        return response, [row["group"].name for row in response.context["group_rows"]]
+
+    def test_contact_sees_only_own_groups(self):
+        """联系人平时看得到全部组，切到「我的项目组」后只剩自己参与的那些。"""
+        _, names = self._page(self.leader, mine="1")
+
+        self.assertEqual(names, ["机器人组"])
+
+    def test_admin_sees_only_own_groups(self):
+        """管理员同理：「我的」问的是我参与的组，不是我能管的全部组。"""
+        self.group.members.add(self.admin)
+
+        _, names = self._page(self.admin, mine="1")
+
+        self.assertEqual(names, ["机器人组"])
+
+    def test_user_without_group_sees_hint(self):
+        response, names = self._page(self.no_group_user, mine="1")
+
+        self.assertEqual(names, [])
+        self.assertContains(response, "你还没有加入任何项目组。")
+
+    def test_filter_combines_with_keyword(self):
+        """两个参数各管各的：在「我的」范围里再按关键字收一遍。"""
+        _, names = self._page(self.leader, mine="1", q="算法")
+
+        self.assertEqual(names, [])
+
+    def test_search_form_keeps_filter(self):
+        """提交搜索时 mine 要跟着走，否则搜一次筛选就被打回全部。"""
+        response, _ = self._page(self.leader, mine="1")
+
+        self.assertContains(response, 'name="mine" value="1"')
+
+    def test_toggle_link_keeps_keyword(self):
+        """从「我的项目组」切回全部时，搜索框里的词不该被丢掉。"""
+        response, _ = self._page(self.leader, mine="1", q="机器人")
+
+        self.assertContains(response, 'href="?%s"' % urlencode({"q": "机器人"}))
+
+    def test_clear_link_keeps_filter(self):
+        """「清除」只清搜索词，不顺手把「我的项目组」也关掉。"""
+        response, _ = self._page(self.leader, mine="1", q="机器人")
+
+        self.assertContains(response, 'href="?mine=1"')
