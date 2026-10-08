@@ -386,10 +386,12 @@ fi
 if [[ -n "${SSL_CERT_PATH:-}" && -n "${SSL_KEY_PATH:-}" ]]; then
     # ACME_WEBROOT 与 CERTBOT_BIN 已在上面解析（那里要给 RENDER 用）。
 
-    # **版本门禁：≥ 5.3。** Let's Encrypt 从 2026-01 起签发 IP 地址证书，而 IP 证书
-    # 必须用 shortlived profile（6 天有效期）——`--ip-address` 是 certbot 5.3 才有的
-    # 参数（webroot 方式签要 5.4）。发行版仓库远远落后：Alibaba Cloud Linux 3 给的是
-    # 1.22，拿它去签只会得到一句「不认识的参数」。
+    # **版本门禁：≥ 5.4。** Let's Encrypt 从 2026-01 起签发 IP 地址证书，而 IP 证书
+    # 必须用 shortlived profile（6 天有效期）。`--ip-address` 是 certbot 5.3 才有的
+    # 参数，但**webroot 方式还要 5.4**——本机的签发与续期都走 webroot，所以门槛按 5.4
+    # 卡：写 5.3 会让「5.3 就够了」听起来成立，而本脚本自己打出来的那条签发命令却会
+    # 失败。发行版仓库远远落后：Alibaba Cloud Linux 3 给的是 1.22，拿它去签只会得到
+    # 一句「不认识的参数」。
     #
     # 这里是硬门禁而不是提醒：域名证书用老版本确实也能续，可一旦站点切到 IP 证书，
     # 续期失败意味着几天内全站 HTTPS 断掉。那一天的代价远大于现在停一下。
@@ -410,11 +412,12 @@ if [[ -n "${SSL_CERT_PATH:-}" && -n "${SSL_KEY_PATH:-}" ]]; then
     cb_major="${CERTBOT_VERSION%%.*}"
     cb_minor="${CERTBOT_VERSION#*.}"; cb_minor="${cb_minor%%.*}"
     if [[ "$cb_major" =~ ^[0-9]+$ && "$cb_minor" =~ ^[0-9]+$ ]] \
-        && (( cb_major > 5 || (cb_major == 5 && cb_minor >= 3) )); then
+        && (( cb_major > 5 || (cb_major == 5 && cb_minor >= 4) )); then
         ok "certbot $CERTBOT_VERSION（$CERTBOT_BIN）"
     else
-        fail "certbot 版本不满足要求：${CERTBOT_VERSION:-无法识别}（$CERTBOT_BIN），需要 ≥ 5.3"
-        echo "     IP 地址证书必须用 shortlived profile，而 --ip-address 是 5.3 才有的参数；" >&2
+        fail "certbot 版本不满足要求：${CERTBOT_VERSION:-无法识别}（$CERTBOT_BIN），需要 ≥ 5.4"
+        echo "     IP 地址证书必须用 shortlived profile；--ip-address 是 5.3 才有的参数，" >&2
+        echo "     而 webroot 方式（本机的签发与续期都走它）要 5.4。" >&2
         echo "     发行版仓库里的版本（AL3 是 1.22）签不了，配了也没用。" >&2
         echo "     升级（独立 venv，不进系统 python）：" >&2
         echo "       <python3.9+> -m venv /opt/certbot" >&2
