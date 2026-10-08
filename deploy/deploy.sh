@@ -72,8 +72,18 @@ if [[ -n "$CERT_END" ]]; then
         echo "    ✅ 证书 21 天内不会到期（到期：$CERT_END）"
     else
         echo "    ⚠️  证书将在 21 天内到期（到期：$CERT_END）" >&2
-        echo "       确认续期在跑：systemctl list-timers certbot-renew.timer --all" >&2
-        echo "                     sudo certbot renew --dry-run" >&2
+        # 这两条提示必须指名道姓，两个名字都不能按「发行版的习惯」写：
+        #   * 续期单元是本仓库自己装的 club702-certbot-renew.timer（见 install.sh）。
+        #     发行版的 certbot-renew.timer 在本机不存在，查它只会得到「0 timers
+        #     listed」，让人误判成「续期没安排」——而真正该查的那个可能好好的。
+        #   * certbot 得写全路径，别写裸 `certbot`。本机有两个：发行版仓库那个
+        #     （Alibaba Cloud Linux 3 是 1.22，在 /usr/bin）认不出 IP 证书，renew 只会
+        #     报「At least one of domains or ipaddrs parameter need to be not empty」，
+        #     是个查不出所以然的假故障；真正在续期的是 CERTBOT_BIN 那个 5.x。
+        # 2026-10-08 有人照着旧提示跑了一遍裸 certbot，为这个假故障查了半天——提示
+        # 之所以要写全，是因为它出现在「证书快到期」的紧张时刻，此时最容易照抄。
+        echo "       确认续期在跑：systemctl list-timers club702-certbot-renew.timer --all" >&2
+        echo "                     sudo ${CERTBOT_BIN:-/opt/certbot/bin/certbot} renew --dry-run" >&2
     fi
 fi
 
