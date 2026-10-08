@@ -113,12 +113,11 @@ sudo ./deploy/install.sh
 
 ### 2.5 HTTPS
 
-```bash
-sudo apt install certbot python3-certbot-nginx
-sudo certbot --nginx -d club.example.com
-```
+证书走 Let's Encrypt 的 **IP 地址证书**（2026-01 起签发，不需要域名、也不需要备案），
+由独立 venv 里的 certbot 签发与续期。签发命令见 `deploy/env.template` 里
+`SSL_CERT_PATH` 上方的注释；`install.sh` 发现还没签证书时，会把同一条打出来。
 
-#### 现状：证书是借来的（2026-09-25 实地核对）
+#### 相关事实（2026-09-25 实地核对）
 
 生产实测（实例 `<实例ID>`，用户 `<部署用户>`）：
 
@@ -127,19 +126,44 @@ sudo certbot --nginx -d club.example.com
 | 应用目录 | `/home/<部署用户>/applications/702platform` |
 | Nginx 站点配置 | `/etc/nginx/conf.d/club702.conf`（Alibaba Cloud Linux 3，conf.d 布局） |
 | `server_name` | `<域名> <公网IP>` |
-| `ssl_certificate` | `/etc/letsencrypt/live/<证书域名>/fullchain.pem` ← **别的站点** |
+| `ssl_certificate` | `/etc/letsencrypt/live/<公网IP>/fullchain.pem`（本平台自己的 IP 证书；2026-10-05 之前是别家域名的，那一行已按现状更新） |
 | 监听 | 80 与 443 **都在提供完整服务**（80 不是跳转） |
 | 成员访问 | 全走 `https://<IP>`；经确认**没有人用 http** |
 
-三条必须记住的结论：
+#### 证书与续期
 
-- **HSTS 绝对不要开。** 证书是 `<证书域名>` 的，而站点跑在 `<域名>` 与 IP 上
-  ——域名不匹配，浏览器本来就会警告。HSTS 一旦生效，浏览器会在有效期内**拒绝一切
-  非 https 访问且用户无法绕过**；等这张借来的证书被收回，站点就锁死了，只能换域名
-  或让每个用户去清 HSTS 缓存。`DJANGO_SECURE_HSTS_SECONDS` 保持 0。
-- **不做整站跳 https。** `server_name` 含 IP，硬跳会把 `https://<IP>` 改写成那个
-  不属于本平台的域名。`DJANGO_SECURE_SSL_REDIRECT` 保持 0。
-- **Cookie 的 Secure 要显式打开，且生产 `env.sh` 里现在是关的。**
+| 项 | 值 |
+|---|---|
+| 证书 | IP 地址证书，走 shortlived profile——**只有几天有效期**，不是 90 天 |
+| 续期单元 | `club702-certbot-renew.timer`，一天两次。短周期证书下这是硬需求而不是奢侈：certbot 在剩余不足寿命 1/3（几天寿命即约 2 天）时才动手续，一天两次意味着到期前有 4 次左右尝试机会，单次抖动不至于把证书放过期 |
+| certbot | `env.sh` 的 `CERTBOT_BIN`（`/opt/certbot/bin/certbot`）；`install.sh` 用它渲染续期单元，并要求 ≥ 5.4（`--ip-address` 是 5.3 引入的，webroot 方式要 5.4） |
+| 验收 | `systemctl list-timers club702-certbot-renew.timer --all`、`sudo /opt/certbot/bin/certbot renew --dry-run` |
+
+**手动碰证书时最容易踩的坑：这台机器上有两个 certbot。** 发行版仓库那个
+（`/usr/bin/certbot`，Alibaba Cloud Linux 3 是 1.22）认不出 IP 证书，`renew` 会报：
+
+```
+Failed to renew certificate <公网IP> with error: At least one of domains or ipaddrs parameter need to be not empty
+```
+
+**这是假故障**——它解析出的标识符列表是空的，而真正负责续期的那个（`CERTBOT_BIN`，≥ 5.4）
+一切正常。分辨方法：输出里 `Simulating renewal of an existing certificate for` 后面**空着**
+就是跑错了二进制，对的版本会把那个 IP 打印出来。所以这类命令一律写全路径。另有两条容易误读的
+输出：到 `acme-staging-v02.api.letsencrypt.org` 的 `ReadTimeout` 是网络抖动（`--dry-run` 走
+staging），重试即可；`certbot reconfigure` 说 `No changes were made to the renewal
+configuration.` 是「配置已经就是这样」——它是在 staging 试续**成功之后**才说这句，不是失败。
+
+#### 当年：证书是借来的（2026-09-25；2026-10-05 已换成本平台自己的 IP 证书）
+
+当时站点跑在一张别家域名的证书上，由此定下三条结论。现在这样读：
+
+- **HSTS 保持 0**，但理由换了：证书现在就是本平台自己的，问题不再是「域名不匹配」，
+  而是短周期证书只有几天寿命——续期连续失败几天，长窗口的 HSTS 就会把成员锁在门外，
+  且用户无法绕过。要开见末尾「拿到自己的证书之后」第 4 步，先给 60 秒。
+- **整站跳 https 仍没做**：这已经是需求问题而不是证书问题（成员本来就全走 https）。
+  要做见同一条的第 3 步；**动手前先确认 `server_name`**——IP 证书覆盖不了域名，
+  站点若还留着一个域名入口，硬跳会把它跳到一张不匹配的证书上。
+- **Cookie 的 `Secure` 要显式打开**，这条与证书无关，见下一节的 env.sh 四项。
 
 关于最后一条，有个容易搞错的地方值得写清楚：`SESSION_COOKIE_SECURE` 是**直接决定**
 Cookie 上带不带 `Secure` 属性的（Django 里就是 `secure=settings.SESSION_COOKIE_SECURE`），
@@ -199,9 +223,10 @@ Forbidden (Origin checking failed - https://<公网IP> does not match any truste
 #### 拿到自己的证书之后
 
 1. 先只把证书换成本平台自己的（`SSL_CERT_PATH` / `SSL_KEY_PATH`），确认 HTTPS 正常。
-2. `env.sh` 里加受信来源：
+2. `env.sh` 里加受信来源（写成员实际访问的那个入口，IP 证书就是 `https://<公网IP>`；
+   站点若还有域名入口，把域名那条也写上）：
    ```bash
-   DJANGO_CSRF_TRUSTED_ORIGINS=https://<本平台域名>
+   DJANGO_CSRF_TRUSTED_ORIGINS=https://<公网IP>
    ```
 3. 确认全站没有 http 访问需求后，再开整站跳转：
    ```bash
@@ -486,7 +511,7 @@ tar -xzf backup-media-<时间戳>.tar.gz -C <应用目录>
 |---|---|
 | 应用日志 | `journalctl -u club702 -f`；应用内部日志 `logs/django.log` |
 | 服务状态 | `systemctl status club702` |
-| 证书续期 | certbot 自动（`systemctl list-timers | grep certbot` 验证） |
+| 证书续期 | `club702-certbot-renew.timer` 一天两次；验证用 `systemctl list-timers club702-certbot-renew.timer --all` 与 `sudo /opt/certbot/bin/certbot renew --dry-run`（**必须写全路径**——PATH 里的 `certbot` 是发行版的旧版，会给一个查不出所以然的假故障） |
 | 拨测 | 外部访问 `https://<域名>/` |
 | 磁盘 | 关注 `mediafiles/`（视频单个 ≤500MB）、`backups/`、`logs/` |
 
