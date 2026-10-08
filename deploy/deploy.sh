@@ -54,24 +54,51 @@ echo "==> 0/6 上线前预检：证书与备份"
 # 而它没有任何告警，直到有人去翻 journal 才发现。定时器的失败不会自己冒出来，
 # 必须有人问它。
 
-# 证书还有多久到期。/etc/letsencrypt/live/ 是 700 root，部署用户通常读不到证书
-# 文件，所以读不到时改问本机 443 上的服务要——两条路都拿不到就跳过，不猜。
+# 证书的起止时间（起止都要：阈值按寿命的 1/3 算，见下）。/etc/letsencrypt/live/ 是
+# 700 root，部署用户通常读不到证书文件，所以读不到时改问本机 443 上的服务要——
+# 两条路都拿不到就跳过，不猜。
+CERT_BEGIN=""
 CERT_END=""
 if command -v openssl >/dev/null 2>&1 && [[ -n "${SSL_CERT_PATH:-}" ]]; then
     if [[ -r "${SSL_CERT_PATH:-/nonexistent}" ]]; then
-        CERT_END="$(openssl x509 -in "$SSL_CERT_PATH" -noout -enddate 2>/dev/null | cut -d= -f2 || true)"
+        CERT_DATES="$(openssl x509 -in "$SSL_CERT_PATH" -noout -startdate -enddate 2>/dev/null || true)"
     else
-        CERT_END="$(echo \
+        CERT_DATES="$(echo \
             | timeout 10 openssl s_client -connect 127.0.0.1:443 \
                 -servername "${DEPLOY_DOMAIN:-127.0.0.1}" 2>/dev/null \
-            | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2 || true)"
+            | openssl x509 -noout -startdate -enddate 2>/dev/null || true)"
     fi
+    CERT_BEGIN="$(printf '%s\n' "$CERT_DATES" | sed -n 's/^notBefore=//p')"
+    CERT_END="$(printf '%s\n' "$CERT_DATES" | sed -n 's/^notAfter=//p')"
 fi
 if [[ -n "$CERT_END" ]]; then
-    if [[ "$(date -d "$CERT_END" +%s 2>/dev/null || echo 0)" -gt "$(( $(date +%s) + 21 * 24 * 3600 ))" ]]; then
-        echo "    ✅ 证书 21 天内不会到期（到期：$CERT_END）"
+    # 阈值是**寿命的 1/3**，与 certbot 自己的续期窗口一致（它就是在寿命剩 1/3 时才
+    # 动手续），不再是固定的 21 天。固定天数在这里两头都不对：IP 证书只有 6 天寿命，
+    # 「21 天内到期」于是永远为真——那个 ✅ 分支从来不出现，警告退化成每次部署都打的
+    # 噪音；而 90 天的证书剩 20 天确实该看一眼，1/3 一样照得到。读不出签发时间就退回
+    # 21 天（旧口径，宁可多报）。
+    NOW_TS="$(date +%s)"
+    END_TS="$(date -d "$CERT_END" +%s 2>/dev/null || echo 0)"
+    # 先判空再交给 date：`date -d ""` **不报错**，它返回的是「现在」——空串混进去
+    # 会让「算不出寿命就退回 21 天」这条兜底悄悄失效，转而按「END − 现在」编出一个
+    # 看起来合理的窗口（实测：只有 notAfter 时它会得出 1 天）。
+    if [[ -n "$CERT_BEGIN" ]]; then
+        BEGIN_TS="$(date -d "$CERT_BEGIN" +%s 2>/dev/null || echo 0)"
     else
-        echo "    ⚠️  证书将在 21 天内到期（到期：$CERT_END）" >&2
+        BEGIN_TS=0
+    fi
+    if [[ "$BEGIN_TS" -gt 0 && "$END_TS" -gt "$BEGIN_TS" ]]; then
+        WINDOW=$(( (END_TS - BEGIN_TS) / 3 ))
+        # 向下取整：宁可把窗口说小一点，也别报出一个比真实窗口大的天数。
+        WINDOW_TEXT="$(( WINDOW / 86400 )) 天"
+    else
+        WINDOW=$(( 21 * 24 * 3600 ))
+        WINDOW_TEXT="21 天"
+    fi
+    if [[ "$END_TS" -gt "$(( NOW_TS + WINDOW ))" ]]; then
+        echo "    ✅ 证书还没到续期窗口（剩余不足 ${WINDOW_TEXT}才告警；到期：$CERT_END）"
+    else
+        echo "    ⚠️  证书已进入续期窗口（剩余不足 $WINDOW_TEXT；到期：$CERT_END）" >&2
         # 这两条提示必须指名道姓，两个名字都不能按「发行版的习惯」写：
         #   * 续期单元是本仓库自己装的 club702-certbot-renew.timer（见 install.sh）。
         #     发行版的 certbot-renew.timer 在本机不存在，查它只会得到「0 timers
