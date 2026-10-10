@@ -92,7 +92,7 @@
 |---|---|
 | 文件大小 | 文档与界面一律写 **MB**，代码按 `1024 × 1024` 字节算（`media/validators.py`、`accounts/validators.py` 等），也就是通常说的 MiB。**不要再引入 MiB 的写法**，否则同一个上限会出现两个数字 |
 | 时间 | 存储与显示统一 `Asia/Shanghai`（`DJANGO_TIME_ZONE`）；时间窗的结束点一律当开区间读 |
-| 文本长度 | 成员可自由填写的长文本都有上限，清单见 [development.md](development.md) §3.3（`core.tests.UserSuppliedTextLimitAcceptanceTests` 逐项核对） |
+| 文本长度 | 成员可自由填写的长文本都有上限，清单见 [development.md](development.md) §3.3（`core.tests.test_upload_validation.UserSuppliedTextLimitAcceptanceTests` 逐项核对） |
 | 主键 | 一律数据库自增整数；地址里的 `<id>` 就是这个值 |
 
 ## 缩写

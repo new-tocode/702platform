@@ -55,7 +55,7 @@ source env.local.sh
 
 ## 容易踩的坑
 
-- **上传件分两类**：公开配图落 `mediafiles/`（Nginx 直出）；项目书、批注版、头像、图册等受保护件落 `protected_media/`（刻意不在 `mediafiles/` 之下），落盘名换成 uuid，取件一律经视图做权限判定。新增上传模型先想清属于哪类；模板里**不要写 `{{ field.url }}`**（存储刻意让它抛异常），用 `{{ field|file_url }}`。
+- **上传件分两类**：公开配图落 `mediafiles/`（Nginx 直出）；项目书、批注版、头像、图册等受保护件落 `protected_media/`（刻意不在 `mediafiles/` 之下），落盘名换成 uuid，取件一律经视图做权限判定。新增上传模型先想清属于哪类；模板里**不要写 `{{ field.url }}`**（受保护件的 `url()` 返回空串，字段为空时还会直接抛 `ValueError`），用 `{{ field|file_url }}`。
 - **i18n**：前台文案一律 `gettext`；不拼接句子（用 `%(name)s` 占位）；惰性译文不要在模块／类体里插值（那会在导入时定型，用 `format_lazy`）；给成员用的 `ModelForm` 要在 `Meta.labels` 写一遍标签（模型的 `verbose_name` 不进 `.po`）。改完文案跑 `makemessages -l en --no-obsolete` 填 `.po`，兜底测试会抓漏译。
 - **样式只在 `static/css/app.css`**：模板不写行内样式、不写内联 `<script>`，页面脚本放 `static/js/`。
 - **`reviews` 是状态机**：状态变更一律经 `reviews/lifecycle.py` 的 `transition()`（唯一写入点），页面上下文走 `panels.py`，判定走 `permissions.py`。

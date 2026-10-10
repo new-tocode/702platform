@@ -292,9 +292,10 @@ uuid（见 `core/storage.py`），因为原文件名会带人名、组名，而�
 | `projects:group_proposal_download` | 项目书 | `can_view_group` |
 | `reviews:annotated` / `reviews:archive_download` | 批注版 / 归档版 | `can_view_group` |
 
-模板里**不要**写 `{{ field.url }}`：受保护文件的存储刻意让 `url()` 抛异常（防的是
-Python 代码里拼地址）。模板要的是「有就渲染成链接、没有就渲染成文本」，用
-`{{ field|file_url }}`（见 `core/templatetags/file_urls.py`），取不到时给空串。
+模板里**不要**写 `{{ field.url }}`：受保护件的存储（`core/storage.py` 的 `PrivateStorage`）
+对它返回空串，而字段为空时它会直接抛 `ValueError`——两种都不是模板想要的。模板要的是
+「有就渲染成链接、没有就渲染成文本」，用 `{{ field|file_url }}`
+（见 `core/templatetags/file_urls.py`），取不到时给空串。
 
 **备份要覆盖两个目录**：`mediafiles/`（公开配图）与 `protected_media/`（项目书、
 批注版、头像、图册）。后者刻意不在前者之下，只打包 `mediafiles/` 会把受保护文件
@@ -305,7 +306,7 @@ Python 代码里拼地址）。模板要的是「有就渲染成链接、没有�
 请假事由 500、借用备注 1000）。没有上限的文本字段是一条廉价的写入放大路径——
 一次请求就能塞进很大的内容，把库撑大、把后台列表与页面渲染拖慢。表单与模型两边
 都写：表单先给出友好报错，模型兜住后台表单与脚本写入。核心用例
-`core.tests.UserSuppliedTextLimitAcceptanceTests` 会逐项核对这张口径表。
+`core.tests.test_upload_validation.UserSuppliedTextLimitAcceptanceTests` 会逐项核对这张口径表。
 
 管理员才能写的正文（通知正文、公开内容页、竞赛说明等）不设上限——它们的威胁面
 小得多，而正文本来就可能是长内容。
