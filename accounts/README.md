@@ -261,8 +261,10 @@
 - **`must_change_password=True` 连 `/admin/` 也进不去**：中间件的白名单只有改密页与登出页。
   给一个还带着初始密码的账号勾 `is_staff`，它在改密之前打不开后台。
 - **删账号会被审计的只追加触发器挡下**：账号自己名下有审计行时，删他要先把那些行的
-  `user` 置空（外键是 `SET_NULL`），而那是一次 `UPDATE` —— 数据库直接拒绝，后台点删除会以
-  `DatabaseError` 收场（一条审计行都没有的账号照常删得掉）。**账号退场的口径是停用**
+  `user` 置空（外键是 `SET_NULL`），而那是一次 `UPDATE` —— 数据库直接拒绝。后台点删除的
+  结果是 **500**（抛的是 `ProgrammingError` 而不是 `IntegrityError`，admin 里接
+  `ProtectedError` / `RestrictedError` 的分支接不住它，页面不会给出人话）；一条审计行都
+  没有的账号照常删得掉。**账号退场的口径是停用**
   （后台取消 `is_active`，见 §3 的 `is_active` 一行），真要删见 [`docs/deploy.md`](../docs/deploy.md) §5.3 的逃生口。
 - **`first_name` / `last_name` 仍在表上**：不再出现在任何界面与表单，历史数据由迁移
   `0004_copy_legacy_names` 合并进 `Profile.full_name`；不要把这两个字段重新接进业务。

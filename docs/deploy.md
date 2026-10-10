@@ -573,29 +573,36 @@ tar -xzf backup-media-<时间戳>.tar.gz -C <应用目录>
 
 ### 5.3 审计日志：改不动是数据库在守，以及它的逃生口
 
-审计表 `core_auditlog` 上挂着行级触发器 `core_auditlog_append_only`（迁移 `core.0003`）：任何 `UPDATE` / `DELETE` 命中即 `RAISE EXCEPTION`，语句回滚，应用侧看到 `DatabaseError`。这是**有意挡住正常路径的**——数据修复脚本、`queryset.update()`、数据库客户端都改不动留痕，别看到报错就去把它摘掉。
+审计表 `core_auditlog` 上挂着行级触发器 `core_auditlog_append_only`（迁移 `core.0003`）：任何 `UPDATE` / `DELETE` 命中即 `RAISE EXCEPTION`，语句回滚，应用侧看到 `DatabaseError`。这是**有意挡住正常路径的**——数据修复脚本、`queryset.update()`、数据库客户端都改不动留痕里的**某一行**，别看到报错就去把它摘掉。
 
 两个真实的副作用，先知道再遇到：
 
-- **删账号会被挡**：`AuditLog.user` 是 `SET_NULL`，删用户前要先把他名下的审计行置空（一次 `UPDATE`）→ **有审计行的账号删不掉**，一条都没有的账号照常删得掉。账号退场的正常口径是**停用**（后台取消 `is_active`），不是删除。
+- **删账号会被挡**：`AuditLog.user` 是 `SET_NULL`，删用户前要先把他名下的审计行置空（一次 `UPDATE`）→ **有审计行的账号删不掉**，一条都没有的账号照常删得掉。在后台点删除的**页面结果是 500**（`ProgrammingError` 不是 `IntegrityError`，admin 接不住），日志里是 `Internal Server Error: /admin/accounts/user/<id>/delete/`。账号退场的正常口径是**停用**（后台取消 `is_active`），不是删除。
 - **归档审计日志**（按年份清理旧行）也不能直接 `DELETE`，得走下面的逃生口。
 
 **逃生口**（两条，都不改代码、不改迁移）：
 
 ```sql
--- 甲：临时摘掉触发器（要表属主，即应用账号；只影响这一张表）
+-- 甲之一：临时摘掉触发器（要表属主，即应用账号；只影响这一张表）
 ALTER TABLE core_auditlog DISABLE TRIGGER core_auditlog_append_only;
---   ……做完要做的清理/归档，立刻装回去，装回去之前这段时间没有任何保护
-ALTER TABLE core_auditlog ENABLE TRIGGER core_auditlog_append_only;
+```
 
+……做完要做的清理/归档，**立刻装回去**——装回去之前这段时间这张表没有任何保护：
+
+```sql
+-- 甲之二：装回去
+ALTER TABLE core_auditlog ENABLE TRIGGER core_auditlog_append_only;
+```
+
+```sql
 -- 乙：superuser 会话里关掉本会话的触发器执行（不动表定义，作用域限于这个连接）
 SET session_replication_role = replica;
 --   ……同一个连接里做完，退出即失效
 ```
 
-甲要给表加 `ACCESS EXCLUSIVE` 锁——站点在用的话会短暂阻塞对审计表的读写，挑低峰做。**做完读回确认**：`\d core_auditlog` 里 `Triggers` 一栏应重新出现该触发器。
+甲的两条**别整块复制**（那样等于摘下来又立刻装上，中间什么都没做）；它要给表加 `ACCESS EXCLUSIVE` 锁——站点在用的话会短暂阻塞对审计表的读写，挑低峰做。**做完读回确认**：`\d core_auditlog` 里 `Triggers` 一栏应重新出现该触发器。
 
-**能挡住的与挡不住的**：挡的是行级 `UPDATE` / `DELETE`（含 ORM 与脚本）。**挡不住**整表级的动作——`TRUNCATE`（`manage.py flush` 走的就是它）、`DROP TABLE`、从备份整库恢复，以及上面两条逃生口。也就是说：留痕不会被某段代码或某个人悄悄改掉一行，但「把库整个换掉」这种级别的操作，任何应用层护栏都拦不住，靠的是备份与权限。
+**能挡住的与挡不住的**：挡的是行级 `UPDATE` / `DELETE`（含 ORM 与脚本）。**挡不住**整表级与 DDL 级的动作——`TRUNCATE`（`manage.py flush` 走的就是它）、`DROP TABLE`、从备份整库恢复、`ALTER TABLE`（删列、改类型：值没了而触发器一声不吭），以及上面两条逃生口。也就是说：留痕不会被某段代码或某个人悄悄改掉一行，但「把库整个换掉」这种级别的操作，任何应用层护栏都拦不住，靠的是备份与权限。
 
 ## 6. 常见问题
 
