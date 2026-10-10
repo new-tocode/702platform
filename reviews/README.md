@@ -1,8 +1,8 @@
 # reviews 模块
 
-> 项目书同行评审：一轮送审先过**初审关卡**，通过后按送审类型随机抽齐评审人，全员通过才算通过，通过轮的批注版项目书归档；另有请假、改派与超级评审一票敲定。它不做身份授予（归 `accounts`）、不存项目书本体（在 `ProjectGroup.proposal`，归 `projects`）、不写用户可见通知（归 `notices`）、不判项目组可见性的项目组侧（归 `projects.permissions`）。`projects`、`accounts`、`notices` 与操作入口注册表都在用它。
+> 项目书同行评审：一轮送审先过**初审关卡**，通过后按送审类型随机抽齐评审人，全员通过才算通过，通过轮的批注版项目书归档；另有接单开关、改派与超级评审一票敲定。它不做身份授予（归 `accounts`）、不存项目书本体（在 `ProjectGroup.proposal`，归 `projects`）、不写用户可见通知（归 `notices`）、不判项目组可见性的项目组侧（归 `projects.permissions`）。`projects`、`accounts`、`notices` 与操作入口注册表都在用它。
 
-**什么时候看**：改送审与轮次状态、初审关卡、抽签与配额、结论汇总与归档、请假、改派、超级评审，或动评审队列页、项目组详情页的评审区块、`ProjectSubmission`／`ReviewTask`／`ArchivedProposal`／`ReviewerLeave` 的时候。术语口径以 [../docs/glossary.md](../docs/glossary.md) 为准。
+**什么时候看**：改送审与轮次状态、初审关卡、抽签与配额、结论汇总与归档、接单开关、改派、超级评审，或动评审队列页、项目组详情页的评审区块、`ProjectSubmission`／`ReviewTask`／`ArchivedProposal` 的时候。术语口径以 [../docs/glossary.md](../docs/glossary.md) 为准。
 
 ---
 
@@ -14,9 +14,9 @@
 - 两道关的任务：每轮 1 条初审 + 按配额 N 条评审，抽签、改派、超级评审释放（`ReviewTask`）。
 - 结论：两道关共用 `approve`／`revise`；初审通过才抽评审人，评审**全员通过**才通过，任一「需修改」即打回。
 - 归档：通过轮次上「已完成且通过」的批注版复制为 `ArchivedProposal`。
-- 请假：`ReviewerLeave` 窗口，以及它在抽签与改派候选中的排除。
+- 接单开关：`User.receives_preliminary_tasks` / `receives_review_tasks` 两个字段，以及它们在抽签与改派候选中的排除（模型的字段住在 `accounts`，写入口只有本模块的 `services.set_reviewer_availability`，见 §4）。
 - 超级评审一票敲定（含初审中的轮次）。
-- 页面：评审队列 `reviews:queue`（管理员处理建组申请的待办也在此）、项目组详情页的评审区块、成员中心的请假面板、批注版与归档件的取件。
+- 页面：评审队列 `reviews:queue`（管理员处理建组申请的待办也在此）、项目组详情页的评审区块、成员中心的接单开关面板（`panels.member_home_context`）、批注版与归档件的取件。
 - 资格判定：`is_reviewer`／`is_preliminary_reviewer`／`is_super_reviewer`／`qualifies_for_stage`。
 
 **明确不做**
@@ -35,7 +35,7 @@
 
 **依赖方向**：`reviews → projects` 在模块加载期就成立（`models.py` 的 `ProjectGroup` 外键、`views.py` 的 `can_view_group`）；`notices` 在加载期被 reviews 依赖（`services.py`）。**反向依赖只有一条是加载期的**：`accounts/admin.py` 在模块级 `from reviews import lifecycle`（两个资格名册要取 `STAGE_*` 常量）；其余都在函数体内（`projects.permissions.can_view_group` → `reviews.permissions.has_review_claim`，`projects.views.group_detail` → `reviews.panels`，`accounts.views.member_home` → `reviews.panels`）。再加反向的模块级 import 之前，先确认不会成环。
 
-**下游消费者**：`projects`（送审入口、详情页评审区块、可见性一支）、`accounts`（成员中心请假面板、身份清单、后台名册的「手上待办」列）、`notices`（`Message.submission` 外键、任务消息与结果消息的取数）、`core.registry`（`ReviewsConfig.ready()` 注册 `reviews:queue` 入口）。
+**下游消费者**：`projects`（送审入口、详情页评审区块、可见性一支）、`accounts`（成员中心的接单开关面板、身份清单、后台名册的「手上待办」列、用户列表的「接单状态」列与两个批量动作）、`notices`（`Message.submission` 外键、任务消息与结果消息的取数）、`core.registry`（`ReviewsConfig.ready()` 注册 `reviews:queue` 入口）。
 
 ## 2. 关键接口与失败模式
 
@@ -48,9 +48,9 @@
 | `services._settle_submission` | 汇总本轮结论并在通过时归档（**私有**，由 `submit_verdict` 在父行锁内调用） | 调用方必须已持有 `ProjectSubmission` 行锁 | 不抛；非 `pending` 或有 `pending` 任务时原样返回（因此可被重试、幂等） |
 | `services.override_review` | 超级评审一票敲定 | `override_blocker()` 返回 `None`；`decision` 合法 | `ReviewError("无法行使超级评审权：%(reason)s。")` |
 | `services.reassign_task` | 把待处理任务原地换人（Admin 与服务唯一入口） | 任务 `pending`；轮次未走过这一关；新人不等于旧人、不是提交人/本组成员；新人未持有本轮任何任务；人在 `eligible_holders` 里；**后台入口另要求调用者真的持有该模型的修改权限**（见 §5） | `ReviewError`，文案按阶段取自 `lifecycle.STAGES[stage]`（`swap_not_pending`／`swap_phase`／`swap_holds` 等） |
-| `services.set_reviewer_leave` | 登记或调整本人/他人的未结束窗口 | `may_receive_tasks(reviewer)`（超级评审不接任务，不在此列）；`ends_at > starts_at` 且 `ends_at` 在未来 | `ReviewError`：无资格／时间不合法 |
-| `services.clear_reviewer_leave` | 取消未结束窗口 | 至少有一个未结束窗口 | `ReviewError("当前没有可取消的请假。")` |
-| `draw.eligible_holders` / `ensure_pool` / `draw_tasks` | 「谁可以接手这一关」的唯一实现；候选不足即拒（附请假人数） | 传 `submission` 时排除本轮**两道关**的全部持有人 | `ensure_pool` 抛 `ReviewError`（「可用的%(role)s不足 N 人（另有 M 人请假）…」） |
+| `services.set_reviewer_availability` | 开关某一道关的接单状态（本人或管理员代做），返回是否真的改了 | `stage` 在 `lifecycle.STAGES` 里；`reviewer` 持有该关资格；**关闭时手上没有该关的未完成任务**；取值与现状相同 → no-op（不留审计） | `ReviewError`：不认识的环节／无该关资格／「手上还有 N 件未完成的…任务，交掉或改派走之后才能关闭。」 |
+| `services.set_availability_for_users` | 后台批量动作的入口：替一批人开关两道关，返回 `(改动人数, 被挡下人数)` | 同上一行，逐人逐关调用它 | 不抛：被挡下的人计入第二个返回值（动作据此给一句汇总） |
+| `draw.eligible_holders` / `ensure_pool` / `draw_tasks` | 「谁可以接手这一关」的唯一实现；候选不足即拒（附这一关关掉开关的人数） | 传 `submission` 时排除本轮**两道关**的全部持有人；**关掉本关开关的人也在排除之列**（另一关不受影响） | `ensure_pool` 抛 `ReviewError`（「可用的%(role)s不足 N 人（另有 M 人已关闭接收新任务）…」） |
 
 判定与只读（不写库、不抛给用户的异常）：
 
@@ -58,10 +58,9 @@
 |---|---|---|
 | `selectors.override_blocker` | 超级评审不能敲定这一轮的**原因**，可以时返回 `None` | 不抛；队列页据此标注、详情页据此决定是否给表单、服务据此拒绝 |
 | `selectors.can_override_review` | `override_blocker(...) is None` 的布尔包装 | 不抛 |
-| `selectors.pending_task_summary` / `PendingTasks` | 「手上还有多少活」的唯一口径（按阶段计数，只算 `pending`，**不扣请假**） | 不抛；当前没有生产调用点，见 §6 |
-| `selectors.open_leave_for` | 某人还没结束的请假窗口（没有则 `None`） | 不抛 |
+| `selectors.pending_task_summary` / `PendingTasks` | 「手上还有多少活」的唯一口径（按阶段计数，只算 `pending`，**与接单开关无关**——关掉开关不等于手上的任务不算了） | 不抛；调用方是成员中心的开关面板（把「还有几件没交」摆在开关旁边，见 §4） |
 | `permissions.can_open_queue` | 「评审」入口与队列页门槛：三种资格任意一种**或管理员** | 纯布尔 |
-| `permissions.has_review_qualification` / `qualifies_for_stage` / `may_receive_tasks` / `has_review_claim` | 资格与「凭评审身份能否看这一组」 | 纯布尔 |
+| `permissions.has_review_qualification` / `qualifies_for_stage` / `may_receive_tasks` / `has_review_claim` | 资格、有没有接单状态可开关（成员中心开关面板的门槛）、凭评审身份能否看这一组 | 纯布尔 |
 
 视图与 URL（`config/urls.py` 挂在 `member/reviews/` 下，英文加 `/en/` 前缀）：
 
@@ -70,10 +69,10 @@
 | `reviews:queue` → `views.review_queue` | 队列页（GET） | `can_open_queue` | 未登录 302 到登录页；无资格 **403** |
 | `reviews:complete` / `reviews:preliminary_complete` → `views.complete_task` | 交卷（POST）。两条路由指向同一视图：用哪套门槛与表单**不由路由决定，而由任务自己的 `stage` 决定** | 该关资格；`task.reviewer_id == request.user.pk` | GET **405**；无资格或不是本人 **403**；任务不存在 **404**；领域拒绝 → 302 + flash |
 | `reviews:override` → `views.override_submission` | 一票敲定（POST） | `is_super_reviewer` | GET **405**；非超级评审 **403**；领域拒绝 → 302 + flash |
-| `reviews:set_leave` / `reviews:cancel_leave` | 本人请假登记/取消（POST） | `has_review_qualification`（门槛较宽） | GET **405**；无资格 **403**；服务层再按 `may_receive_tasks` 拒绝（超级评审不接任务）→ 302 + flash |
+| `reviews:set_availability` | 开关**本人**某一道关的接单状态（POST：`stage` + `receives`） | `has_review_qualification`（门槛较宽） | GET **405**；无资格 **403**；`stage` 不在阶段表里 **404**；服务层再按资格与「手上还有未完成任务」拒绝（超级评审不接任务：他不持有这两道关的资格）→ 302 + flash |
 | `reviews:annotated` / `reviews:archive_download` | 批注版／归档件取件（GET） | 已登录；`projects.permissions.can_view_group` | 未登录 302；不可见 **403**；任务没有批注版 **404**；文件不在盘上 **404**（`serve_file` 接住，不是 500） |
 
-拒绝的两种形态是刻意分开的：**门槛类**（谁有资格、任务是不是你的、方法对不对）走 `core.permissions.require`／`PermissionDenied`，是 403；**业务类**（轮次已过站、池子不够、请假时间不合法）由服务层抛 `ReviewError`，视图翻成 flash 后重定向——浏览器拿到的是 302，不是 4xx。
+拒绝的两种形态是刻意分开的：**门槛类**（谁有资格、任务是不是你的、方法对不对）走 `core.permissions.require`／`PermissionDenied`，是 403；**业务类**（轮次已过站、池子不够、手上还有未完成任务）由服务层抛 `ReviewError`，视图翻成 flash 后重定向——浏览器拿到的是 302，不是 4xx。
 
 ## 3. 状态与不变量
 
@@ -106,14 +105,17 @@
 
 `group`／`submission`／`source_task` 全是 `PROTECT`（已归档的轮次删不掉），`file` 落在 `protected_media` 的 `review_archives` 下。一行对应「实际传了批注版且结论为通过」的任务：只写文字的人不产生行，原项目书从不复制进来。行在轮次转 `approved` 时一次写成，之后不可变。
 
-### ReviewerLeave（评审人请假）
+### 接单开关（字段住在 `accounts`，规则住在这里）
+
+两个布尔字段 `User.receives_preliminary_tasks` / `receives_review_tasks`（默认开），
+没有独立模型——它描述的是人的状态，不是一件有生命周期的事，所以**没有时间、没有
+事由、没有「到点恢复」**：
 
 | 字段 | 说明 |
 |---|---|
-| `reviewer` | `PROTECT`；请假**不修改** `User.is_reviewer`／`is_preliminary_reviewer`，只是抽签时跳过 |
-| `starts_at` / `ends_at` | 窗口；`ends_at` 是**开区间端点**（该时刻即视为在岗）。恢复靠时间自己走完——**没有定时任务、没有要回滚的状态** |
-| `reason` / `created_by` | 事由；首次登记人（本人自助为自己，管理员代登记为该管理员） |
-| `state` / `state_label` | 现算的三种状态：未开始／请假中／已结束（没有存储字段） |
+| `receives_preliminary_tasks` / `receives_review_tasks` | 两道关各一个，**互不影响**：关掉评审不影响被抽为初审人。**开关不是资格**——`is_reviewer` / `is_preliminary_reviewer` 一个字都不动（资格是管理员授予的「能不能做」，开关是本人在的「现在做不做」） |
+| 谁会被排除 | 抽签、容量预检与改派候选都排除「本关开关关着」的人（`draw._eligible_pool`）；别人手上一张卡都不会因此变动 |
+| 唯一的写入口 | `services.set_reviewer_availability`（成员中心给自己开；后台动作替别人开）。**不能直接改字段**：那条「手上还有未完成的任务时关不掉」的规则只在这里 |
 
 ### 不变量
 
@@ -121,7 +123,7 @@
 - 三条唯一约束：`ProjectSubmission` 的 `(group, round)`；`ReviewTask` 的 `(submission, reviewer)`（**一人一轮一席**）与 `(submission) WHERE stage='preliminary'`（每轮恰好一条初审；**允许零条**——升级前的老轮次没有）。
 - `ReviewTask` 上另有 CHECK `override_is_review_stage_only`（`is_override=False OR stage='review'`）。
 - `ArchivedProposal` 上 `source_task` 唯一——归档幂等的依据。
-- `ReviewerLeave` 上 CHECK `ends_at > starts_at`；「一人同时至多一个未结束窗口」**不是数据库约束**（PostgreSQL 索引谓词必须 immutable，`now()` 不是），规则住在 `services.set_reviewer_leave`。
+- **接单开关没有数据库约束**：「手上还有未完成的任务时关不掉」只在 `services.set_reviewer_availability` 里判——`queryset.update()`、后台改字段都能绕过（这也是它不做成表单字段的原因）。代价是这条规则不是硬约束，收益是它不需要任何触发器或定时任务。
 - **`RELEASED` 是终态**：不再计入待办、不能再提交（`submit_verdict` 对非 `pending` 一律拒绝），但行保留——名单上仍看得出曾请过谁。
 - **`REVIEWER_QUOTA` 是配额的唯一判定点**：竞赛立项／省赛／国赛 3 人，大创中期／结题 2 人，大创立项 1 人。加一个 `REVIEW_TYPE_CHOICES` 选项必须同时在配额表里加一行，否则 `required_reviewers` 会悄悄回退到 2（`ReviewTypeQuotaTests.test_every_choice_has_a_quota` 盯着这条）。
 - 送审类型是**平台内标签**，刻意不与 `competitions.Competition` 建外键。
@@ -136,7 +138,8 @@
 | 这道关的措辞、要哪个资格、停在哪个状态、审计 action 叫什么 | `lifecycle.STAGES` 的一条 `StageRules` |
 | 本轮还在进行吗 / 这一关现在轮得到吗 | `OPEN_STATUSES` / `lifecycle.stage_is_open()` |
 | 本轮需要几名评审人 | `REVIEWER_QUOTA` + `ProjectSubmission.required_reviewers` |
-| 谁可以接手这一关的任务 | `draw._eligible_pool()`（`eligible_holders()` 是它的公开入口） |
+| 谁可以接手这一关的任务 | `draw._eligible_pool()`（`eligible_holders()` 是它的公开入口；资格与接单开关都从 `lifecycle.STAGES` 取） |
+| 我这一关现在收不收新任务 / 能不能关 | `User.receives_*_tasks` 字段 / `services.set_reviewer_availability()` |
 | 这个超级评审能不能敲定这一轮 | `selectors.override_blocker()` |
 | 本轮的初审任务是哪条 | `models.preliminary_task_of()`（现查，**不用 `submission.tasks` 的缓存**——那一行会被改派、交卷、释放） |
 | 某人的待办数字，以及它的措辞（`parts`／`headline`） | `selectors.PendingTasks` / `pending_task_summary()` |
@@ -149,8 +152,8 @@
 2. 服务先拒两种情况：类型不在 `REVIEWER_QUOTA`、`group.proposal` 为空。
 3. 进入事务，**先锁 `ProjectGroup` 行**。为什么：不锁的话两次并发提交会同时通过「没有未结束轮次」的检查，又各自算出同一个轮次号，撞上 `(group, round)` 唯一约束——把 500 留给用户。
 4. 查未结束轮次，有则拒（提示是第几轮）。
-5. 抽 1 名初审人（候选不足即拒）。
-6. **容量预检**：评审池（排除刚抽到的初审人）必须够 `REVIEWER_QUOTA[review_type]` 人。预检是「不开出一轮谁也推进不了的送审」的那道闸——真开出来，联系人被单轮次约束挡着、初审人也通不过，只能等管理员或超级评审来收场。抽人本身仍留到初审通过时。
+5. 抽 1 名初审人（候选不足即拒；**关掉初审开关的人不在池子里**）。
+6. **容量预检**：评审池（排除刚抽到的初审人，且排除**关掉评审开关的人**）必须够 `REVIEWER_QUOTA[review_type]` 人。预检是「不开出一轮谁也推进不了的送审」的那道闸——真开出来，联系人被单轮次约束挡着、初审人也通不过，只能等管理员或超级评审来收场。抽人本身仍留到初审通过时。
 7. 轮次号 = 当前最大轮次 + 1；建 `ProjectSubmission`（默认 `preliminary_pending`）与 1 条初审 `ReviewTask`。
 8. 写「待初审」消息（`notices_services.notify_preliminary_task`，**在事务内**——回滚时消息一起消失）。
 9. 出事务后写审计 `reviews.submission.create` 与日志。
@@ -188,6 +191,13 @@
 25. `reassign_task`：锁父行 → 锁任务行（**与交卷同一锁序**）→ 任务 `pending` 且轮次未走过这一关 → 依次拒绝：同一个人、提交人、本组成员、已持有本轮任一任务、不在 `eligible_holders` 里 → 原地改 `reviewer`（不删行、不重新判结论、不触碰归档）→ 消息从旧持有人撤走、给新持有人写一条。
 26. 这是评审人／初审人失联或事后发现利益冲突时**唯一**的补救路径；没有它，该轮会永久停在「初审中」或「评审中」。结论一旦落下就不再允许换人——换人等于把结论、意见与批注文件记到别人名下。
 
+### 接单开关
+
+24. 成员中心的开关面板（`reviews:set_availability` POST，`stage` + `receives`）或后台用户列表的两个批量动作 → `set_reviewer_availability`。
+25. 服务先判：环节认识吗、这个人有这一关的资格吗、**关闭时手上还有没有未完成的任务**（有 → `ReviewError`，把件数写进提示）；取值与现状相同直接返回 `False`（no-op、不留审计）。
+26. 事务内 `select_for_update` 锁住那个账号行再写字段——两个人（本人与代做的管理员）同时点，后一个看到的就是前一个的结果，不会互相覆盖成相反的取值。
+27. 提交后写审计 `reviews.availability.open` / `.close`（`detail` 记 `stage` 与关闭时的 `pending_tasks`）。**不碰任何任务行**：已经派出去的卡照旧在本人手上，这一条只影响之后的抽签与改派候选。
+
 **事务边界**：状态迁移、任务创建/改派、消息、归档都在同一个 `transaction.atomic()` 里；审计在事务**提交之后**写，所以回滚不会留下假审计。
 
 ## 5. 错误处理与诊断
@@ -202,11 +212,12 @@
 | `reviews.preliminary.complete` / `reviews.assignment.complete` | 初审／评审交卷（`StageRules.submit_action`，字符串沿用合并前的值） |
 | `reviews.preliminary.reassign` / `reviews.assignment.reassign` | 改派（`StageRules.reassign_action`） |
 | `reviews.submission.override` | 超级评审一票敲定 |
-| `reviews.leave.set` / `reviews.leave.clear` | 经服务的请假登记／取消 |
-| `reviews.leave.admin_save` | 后台直接新增／修改请假 |
+| `reviews.availability.open` / `reviews.availability.close` | 开关接单状态（`detail` 记 `stage` 与关闭时的 `pending_tasks`）。**旧的两条 `reviews.leave.set` / `reviews.leave.clear` 与 `reviews.leave.admin_save` 是历史动作，不再产生新行** |
 | `reviews.submission.delete` | 后台删整轮（`target=None`，标识全在 `detail` 里——对象已经不在了） |
 
 **权限拒绝是日志事件不是审计**：`core.permissions.require(request, predicate, event, **fields)` 在拒绝时记一条 warning 再抛 `PermissionDenied`。本模块用到的 event：`reviews.permission.denied`（附 `reason=no_queue_access`／`no_preliminary_qualification`／`not_super_reviewer`）、`reviews.download.denied`（附 `group_id`、`what=annotated|archived`）。**一处例外**：`views.complete_task` 判「这不是分配给你的任务」时直接 `raise PermissionDenied`，**不留日志**——排查「谁在被拒」时这一支是静默的，别以为所有 403 都经 `require`。另有几处 info 日志：`reviews.queue.view`、`reviews.annotated.download`、`reviews.archive.download`、`reviews.proposal.archive`；服务层日志统一带 `extra={"request_id": ...}`。
+
+**接单开关的措辞**：页面上说的是「接收中／已关闭」与「暂停接收／恢复接收」，代码里叫 availability（`services.set_reviewer_availability`）；**别再写「请假」**——那套窗口（起止时间、事由、到点恢复、后台改时间）已经整体删掉，只有历史审计行里还留着 `reviews.leave.*`。
 
 **`override_blocker()` 的「返回原因」写法**：它返回**不能行使的具体原因**（`None` 表示可以），而不是布尔。队列页拿它给不可行使的轮次标注「不可行使 · 你是本轮的提交人」、详情页拿它决定给不给表单、服务层拿它拼拒绝话术——一处判定，三处不各写一份。原因按顺序是：没有超级评审资格／本轮已经出过结论／你是本轮的提交人／你是本项目组成员／你在本轮已有任务（初审的提示语按「待提交」与「已交」分成两句）。这个写法值得照抄到别处：**判定函数把「为什么不行」带回来，界面才解释得清楚**。
 
@@ -226,7 +237,7 @@
 
 **为什么删除的单位是「整轮」**：Django 的级联检查会拿被级联的任务去问任务自己的 admin，所以 `ProjectSubmissionAdmin.get_deleted_objects` 必须豁免「任务不能增删」那两项权限，否则连整轮也删不掉；反过来，真让人删掉单条任务，会**悄悄改变该轮所需的评审人数**（名单少一个人，汇总就等不到他）。
 
-**诊断入口**：一个轮次的全貌在项目组详情页（初审一行、超级评审一行、其余按 `评审人 N` 编号），任务与轮次的原始记录在 Admin 的「项目评审」三屏 + 请假一屏；「这一票为什么不能投」在队列页的标注里。
+**诊断入口**：一个轮次的全貌在项目组详情页（初审一行、超级评审一行、其余按 `评审人 N` 编号），任务与轮次的原始记录在 Admin 的「项目评审」三屏（接单开关不在这里，见用户列表）；「这一票为什么不能投」在队列页的标注里。
 
 ## 6. 测试要点与已知限制
 
@@ -238,8 +249,8 @@
 | `tests/test_preliminary.py` | 初审关卡：一对一、与评审共用结论取值、通过才抽人（并排除初审人自己）、打回不抽人、池子在提交后缩水时整次回滚、审计、页面上的匿名与打回指向初审意见、改派初审 |
 | `tests/test_verdicts.py` | 汇总规则（全员通过／任一需修改）、汇总与调用方无关、批注版与归档（只归档上传者、指纹一致、幂等、需修改不归档）、两个下载入口的权限 |
 | `tests/test_review_pages.py` | 谁能看到什么：队列 403、详情页匿名、初审只占一行且编号只数评审任务、表单 `multipart`、完整链路走视图、管理员队列里的建组申请待办 |
-| `tests/test_reassignment.py` | 改派规则（已交／已判／同一人／提交人／成员／已持有任务／无资格／停用／请假逐一拒）与后台形态（只读账号不能改派、单条任务不能删） |
-| `tests/test_leave.py` | 请假窗口：未开始不排除、过期自动恢复、两种抽取都生效、请假人数提示只算有资格的人、重复登记改同一个窗口、表单与后台 |
+| `tests/test_reassignment.py` | 改派规则（已交／已判／同一人／提交人／成员／已持有任务／无资格／停用／**关掉接单开关**逐一拒）与后台形态（只读账号不能改派、单条任务不能删） |
+| `tests/test_availability.py` | 接单开关：关掉不被抽中、**两道关互不影响**、重开立刻恢复、候选不足的提示只算这一关关掉的人、改派候选排除、**手上有未完成任务时关不掉（含件数）**、交掉后可关、同值设置是 no-op、审计、视图 403/405/404 与 flash、成员中心面板、后台状态列与批量动作（含被挡下的汇总） |
 | `tests/test_super_reviewer.py` | 一票敲定：不许被普通评审人的「需修改」顶回、释放等待中的任务、初审中也能敲、三种利益冲突、`override_blocker` 的每种原因、队列页标注与表单显隐 |
 | `tests/test_reminders.py` | 消息的去向（notices 侧的口径）：分配时写、交掉/释放/改派时撤、结论给联系人；登录 flash 与成员中心待办卡片已撤 |
 | `tests/test_admin_rounds.py` | 删整轮（连带两道关）与「单条任务不能删」两条相反的规则同时成立；归档过的轮次删不掉 |
@@ -252,9 +263,9 @@
 - **评审名额完全由送审类型决定**：没有「本轮临时加人／减人」的入口（`ReviewTaskAdmin` 禁止新增），改派只能换人、不能补席位。
 - **没有「拒绝任务」这个动作**：评审人失联只能由管理员改派或超级评审收场。
 - **一票敲定通过时的归档只收「已完成且通过」的批注版**：此前判过「需修改」的普通评审人即便上传了批注版，也不进归档（`_archive_annotated_proposals` 的过滤条件就是 `completed` + `approve`）。（本文早先版本与旧集中篇写的「会一并收走此前普通评审人已上传的批注版」比代码宽，均已按代码更正。）
-- **`ReviewerLeaveAdmin` 不经过 `set_reviewer_leave`**：后台可以直接新增/编辑请假，于是「一人至多一个未结束窗口」「有评审资格」「`ends_at` 在未来」这三条都不生效，只剩数据库 CHECK（`ends_at > starts_at`）兜底；`list_editable` 改时间同样只补一条 `reviews.leave.admin_save` 审计。
-- **「一人一个未结束窗口」不是数据库约束**：规则只在服务层，靠 `select_for_update` 锁住已有的未结束窗口来收窄竞态；这个人本来就没有窗口时（并发首次登记）两边都锁不到行，理论上可以留下两个重叠窗口。影响有限——抽签排除按「任一窗口命中即排除」，面板只显示最近的那个。
+- **接单开关在自动表单里是直接写字段，不经过服务**：`UserAdmin` 的「权限」分组不列这两个字段（列了就等于开出一条绕开「手上有未完成任务不能关」的路）；后台只能走两个批量动作与用户列表的只读状态列，脚本与 `queryset.update()` 同样绕得过——它不是数据库约束，见 §3。
+- **开关只挡新任务，不动已有任务**：关掉之后手上那几张卡照旧要交（`pending_task_summary` 也不算它）；这正是「有未完成任务时关不掉」那条规则存在的意义之一。
+- **删账号会带走开关状态**：开关就是 `User` 上的字段，没有独立留痕；审计里能查到谁在什么时候开关过（`reviews.availability.open` / `.close`）。
 - **升级前留下的老轮次**：`review_type` 为空（回退 2 人）且**可能没有初审任务**（唯一约束允许零条），所以 `preliminary_task_of()` 的调用方都要处理 `None`，模板也要能少渲染一行；这两样都无法补填。
-- **`pending_task_summary()` 目前没有生产调用点**：登录提醒与成员中心待办卡片已撤，队列页的数字改用 `queue_context` 分档后的长度。它仍是「待办数字」的口径定义处，但文档里「队列页仍用它报数」的说法已经过期。
 - **批注文件的正文/属性不做检查**：平台只保证文件名与下载头不含身份，文件内容里自带姓名只能靠上传时的提示（「请勿在文件属性中保留可识别个人身份的信息」）。
 - **详情页的「评审人 N」是位置编号**：按 `ReviewTask.Meta.ordering` 下的遍历顺序给号，超级评审那一票也占一个序号位置，所以它不是稳定标识，只是「这一轮的第几份意见」。

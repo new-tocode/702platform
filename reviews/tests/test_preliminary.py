@@ -21,7 +21,6 @@ from ..models import (
     ArchivedProposal,
     ReviewTask,
     ProjectSubmission,
-    ReviewerLeave,
     preliminary_task_of,
 )
 from ..services import (
@@ -541,16 +540,12 @@ class PreliminaryReviewTests(ReviewTestCase):
                 actor=self.admin,
             )
 
-    def test_a_preliminary_reviewer_on_leave_cannot_be_swapped_in(self):
+    def test_a_preliminary_reviewer_who_closed_the_switch_cannot_be_swapped_in(self):
         submission = self._open_round()
         preliminary = preliminary_task_of(submission)
         other = make_preliminary_reviewer("preliminary-spare")
-        now = timezone.now()
-        ReviewerLeave.objects.create(
-            reviewer=other,
-            starts_at=now - timedelta(days=1),
-            ends_at=now + timedelta(days=7),
-        )
+        other.receives_preliminary_tasks = False
+        other.save(update_fields=["receives_preliminary_tasks"])
 
         with self.assertRaises(ReviewError):
             reassign_task(

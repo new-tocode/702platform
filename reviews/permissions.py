@@ -78,9 +78,11 @@ def can_open_queue(user):
 
 
 def may_receive_tasks(user):
-    """会收到任务的那两种资格——请假面板与请假服务的门槛。
+    """会收到任务的那两种资格——「有没有接单状态可开关」的判据。
 
-    超级评审不接任务，也就没有「请假不收任务」这回事。
+    成员中心的接单开关面板问的就是它：超级评审不接任务，也就没有可开关的东西。
+    注意它问的是**资格**，不是开关当前的开合（那是 ``User.receives_*_tasks``
+    字段本身，见 :func:`reviews.draw.receives_for`）。
     """
     return any(qualifies_for_stage(user, stage) for stage in lifecycle.STAGES)
 

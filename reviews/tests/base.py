@@ -26,7 +26,7 @@ from ..services import (
 #: 两评审人的轮次类型：历史断言（双通过、抽两人）都建立在它上面。
 TWO_REVIEWER_TYPE = REVIEW_TYPE_INNOVATION_MIDTERM
 
-#: 单评审人的轮次类型。候选人数少的时候抽签才有了确定结果，所以请假、提醒这两
+#: 单评审人的轮次类型。候选人数少的时候抽签才有了确定结果，所以接单开关、提醒这两
 #: 类用例用它——它们的断言是「恰好抽到谁」。
 ONE_REVIEWER_TYPE = REVIEW_TYPE_INNOVATION_START
 

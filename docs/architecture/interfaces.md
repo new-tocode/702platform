@@ -81,7 +81,7 @@
 | `/member/projects/<id>/` | | 项目组详情：学院与指导老师、成员、项目书、批注版归档、初审与评审状态及历史 | staff / 该组成员 / 本轮初审人 / 被分配评审人 / **该组有进行中轮次时的超级评审**（几支**取并集**，见 [projects.md](projects.md)） |
 | `/member/projects/<id>/proposal/` | | 下载当前项目书 | 同上（越权 403，**无日志**） |
 | `/member/reviews/` | | 我的评审队列（初审与评审各三档；超级评审另有「全部进行中」；管理员另有「创建项目组申请」） | 初审人 / 评审人 / 超级评审 / 管理员 |
-| `/member/reviews/leave/` `/leave/cancel/` | POST | 登记 / 修改 / 取消本人「初审／评审请假」 | 初审人 / 评审人 |
+| `/member/reviews/availability/` | POST | 开关本人某一类任务的接收（`stage` + `receives`） | 初审人 / 评审人 |
 | `/member/reviews/preliminary/<id>/complete/` 与 `/member/reviews/<id>/complete/` | POST | 提交结论（两条路径是**同一个视图**，按任务的 `stage` 选门槛与表单；两条都保留以保住历史链接） | 该任务的初审人 / 评审人 |
 | `/member/reviews/override/<id>/` | POST | 超级评审对进行中的轮次直接通过或打回 | 超级评审 |
 | `/member/reviews/<id>/annotated/`、`/archive/<id>/download/` | | 下载批注版 / 归档版项目书 | 同项目组详情页的门槛 |
@@ -110,7 +110,7 @@
   六张名册都是只读的（`core.admin.RoleRosterAdmin`），顶上有一句「这个身份从哪来」。分组的顺序必须与 `core.roles` 的 `sort_order` 一致。
 - **用户组（`auth.Group`）的成员直接在组页增删**：这个「组」只用于内部通知的投递范围，既不是项目组，也不是身份名册。组页的「组内用户」是一个穿梭框，保存走 `accounts.services.set_group_members`（整份覆盖、与现状比对后只动真正变了的人、锁组行、真变更才留审计）。
 - 账号后台的「权限」区可以逐个发放三种评审资格；**批量**发放走用户列表页的六个动作（授予／撤销 × 三种资格），写入经 `accounts.services.set_qualification`。**没有**「批量授予管理员资格」。
-- 评审记录以只读留痕为主，四处例外：请假的两个时间可列表直改、待处理且该轮未判结论的评审/初审任务可改派、**整轮送审可删**（已归档的除外）。写操作都经服务层或留审计。
+- 评审记录以只读留痕为主，三处例外：待处理且该轮未判结论的评审/初审任务可改派、**整轮送审可删**（已归档的除外）、接单开关可改（它不是评审记录，是 `User` 上的两个字段，走用户列表的批量动作）。写操作都经服务层或留审计。
 
 ---
 
@@ -130,7 +130,7 @@
 | projects | `can_use_equipment` / `can_decide_group_create_requests` | 设备借用门槛；谁能处理建组申请 |
 | projects | `contact_group_ids` / `member_group_ids` / `manageable_group_ids` / `groups_visible_to` | 列表与收件范围的四个集合口径 |
 | reviews | `is_reviewer` / `is_preliminary_reviewer` / `is_super_reviewer` | 三种资格 |
-| reviews | `qualifies_for_stage` / `may_receive_tasks` / `has_review_qualification` / `has_review_claim` | 按阶段取资格、能否接新任务（请假不算）、任一资格、凭任务看某个组 |
+| reviews | `qualifies_for_stage` / `may_receive_tasks` / `has_review_qualification` / `has_review_claim` | 按阶段取资格、有没有接单状态可开关（超级评审不接任务）、任一资格、凭任务看某个组 |
 | reviews | `can_open_queue` | 「评审」入口与队列页：三种资格任一**或管理员** |
 | notices | `public_visible_notices` / `member_visible_notices` | 通知可见性的单点（列表、详情、未读计数共用） |
 | discussion | `is_member` / `can_view_space` / `can_create_post` / `can_comment` / `can_edit_post` / `can_delete_post` / `can_delete_comment` / `can_pin_post` | 成员与作者／管理员的分层（`is_member` 被 `content` 在加载期依赖） |
@@ -150,7 +150,7 @@
 | projects | `sync_group_membership` / `remove_group_member` / `transfer_contact` / `update_group_info` / `update_group_description` | 成员与组信息维护 |
 | reviews | `submit_for_review` / `submit_verdict` | 开一轮送审；交一张任务卡（两道关共用） |
 | reviews | `override_review` / `reassign_task` | 一票敲定；改派（唯一补救路径） |
-| reviews | `set_reviewer_leave` / `clear_reviewer_leave` | 请假窗口的登记与取消 |
+| reviews | `set_reviewer_availability` / `set_availability_for_users` | 开关某一道关的接单状态（后者是后台批量动作的入口） |
 | notices | `notify_*` / `clear_review_task_messages` / `sync_mention_messages` / `clear_mention_messages` | 事件消息的写入与撤回（**别的模块只调用，不自己写表**） |
 | notices | `mark_read` / `mark_message_read` / `mark_all_read` | 已读回执与全部已读 |
 | content | `create_award` | 前台加获奖记录（判重在这里） |
@@ -164,7 +164,7 @@
 |---|---|---|
 | accounts | `member_identities` / `gallery_usage` | 「当前身份」清单；图册用量 |
 | projects | `groups_led_by` / `groups_of_member` / `search_groups` / `annotate_member_count` | 按人取组；按关键字搜组（会 JOIN `members`/`advisors`，结尾 `distinct`）；给查询集加 `member_count`——**真实**成员数，子查询，不随搜索过滤变小 |
-| reviews | `override_blocker` / `can_override_review` / `pending_task_summary` / `open_leave_for` | 一票敲定能不能行使（返回**原因**）；待办数字；未结束的请假 |
+| reviews | `override_blocker` / `can_override_review` / `pending_task_summary` | 一票敲定能不能行使（返回**原因**）；待办数字（成员中心的开关面板在用它） |
 | notices | `message_rows` / `unread_message_count` / `message_target_url` | 消息行的现取现算（标题/链接/说明不落库） |
 | content | `search_awards` | 获奖搜索（一个关键字扫五个字段 + 年份） |
 | discussion | `board_list` / `posts_for_board` / `page_of_post` / `member_directory` | 板块、帖子流与**全站唯一**的「这条帖子在第几页」 |

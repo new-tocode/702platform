@@ -26,7 +26,7 @@
 | 登录锁定的响应与审计 | `axes.py` |
 | 上传件的上限与文案 | `validators.py` |
 | 账号生命周期信号：`Profile` 自动创建、登录成功／失败日志 | `signals.py` |
-| 后台：建号（姓名必填）、重置密码、用户与用户组编辑、四张只读名册与六个批量动作 | `admin.py` |
+| 后台：建号（姓名必填）、重置密码、用户与用户组编辑、四张只读名册、资格授予／撤销的六个批量动作与接单开关的两个批量动作、「接单状态」列表列 | `admin.py` |
 | 操作入口与四种全局身份的登记 | `apps.py` |
 
 **明确不做**——划出去的事，各自落在哪：
@@ -35,6 +35,7 @@
 |---|---|
 | 「谁能做什么」的判定 | **本 app 没有 `permissions.py`**：管理员问 `core.permissions.is_admin`，项目组联系人／成员问 `projects.permissions`，评审资格问 `reviews.permissions`（`accounts.selectors` 只在函数体内局部 import 后者） |
 | 评审资格怎么用（抽人、门槛、待办） | `reviews`；`accounts` 只存 `is_reviewer` / `is_preliminary_reviewer` / `is_super_reviewer` 三个字段，并提供后台批量写入口 |
+| 接单开关的**规则**（能不能关、关了谁被排除） | `reviews`：字段住在 `User`（`receives_preliminary_tasks` / `receives_review_tasks`），但写入口只有 `reviews.services.set_reviewer_availability`（后台动作在 `accounts/admin.py`，函数体内 import） |
 | 强制改密的**拦截** | `config.middleware.ForcePasswordChangeMiddleware`：白名单只有 `accounts:password_change` 与 `accounts:logout`，`accounts` 只提供改密页和这个字段 |
 | 登录失败计数、锁定判定、冷却时长 | django-axes + `config/settings.py` 的 `AXES_*`；`accounts.axes` 只把锁定响应换成站内中文页并写审计 |
 | 项目书、批注版、归档版、帖子图的取件 | `projects.views` / `reviews.views` / `discussion.views`；`accounts.file_views` 只管头像与图册 |
@@ -84,6 +85,7 @@
 |---|---|
 | `must_change_password` | 默认 `True`；为真时中间件把人限制在改密页与登出两条路上。`UserManager.create_superuser` 覆写为 `False`（否则 `createsuperuser` 建的管理员一登录就被关进改密页）。本人改密成功由 `PasswordChangeView` 关掉；管理员重置密码（`AdminPasswordChangeForm`）重新打开 |
 | `is_reviewer` / `is_preliminary_reviewer` / `is_super_reviewer` | 判定不在这里（`reviews.permissions`）；这里是它们的**存储**与后台**批量**写入口。三个字段相互独立：超级评审不隐含评审资格 |
+| `receives_preliminary_tasks` / `receives_review_tasks` | 接单开关（默认开）：关掉就不再被抽中、不进改派候选，**资格一个字都不动**。规则与写入口都在 `reviews`（`services.set_reviewer_availability`）；**刻意不进后台编辑表单**——那会绕开「手上有未完成任务时关不掉」。后台只能走用户列表的两个批量动作，列表另有「接单状态」一列 |
 | `is_staff` / `is_superuser` / `is_active` | Django 原有字段；「谁算管理员」一律问 `core.permissions.is_admin`，不写 `user.is_staff` |
 | `groups` | `auth.Group` 成员关系，只给内部通知当投递范围，**不是身份**、不进 `core.roles` 目录 |
 
@@ -241,7 +243,7 @@
 | `test_gallery.py` | 一批里逐张去留、点名报出；合计上限；中途失败回滚并清掉已落盘文件；顺序／排布／删除；别人的图 404；未知参数 404；登录 + POST |
 | `test_protected_uploads.py` | 头像与图册落在受保护根、落盘名不含用户信息、存储不给 URL；登录可取、匿名 302；无头像 404 而不是 500 |
 | `test_identity_panels.py` | 身份清单只列实际持有的、按目录顺序、对象身份带组名、空条目不出现；末条「用户组」；`describe_member` 五类；平台概览只给管理员与联系人 |
-| `test_role_roster.py` | 名册只列持有者；六个批量动作授予／撤销；**没有批量授予管理员**；只读观察者提交不了动作；服务层拒绝白名单外的 flag |
+| `test_role_roster.py` | 名册只列持有者；六个批量动作授予／撤销；**没有批量授予管理员**；只读观察者提交不了动作；服务层拒绝白名单外的 flag。接单开关的两个批量动作与状态列由 `reviews.tests.test_availability` 覆盖（它们调的是评审那个 app 的服务） |
 | `test_group_membership.py` | 穿梭框可增删、可清空、可建组时带人；重复保存不变；改名不动名单；锁保证后一次保存读到前一次的结果 |
 
 ### 已知限制 / 当前不支持

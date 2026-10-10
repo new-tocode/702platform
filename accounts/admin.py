@@ -75,6 +75,61 @@ def _qualification_action(*, flag, label, value):
     return action
 
 
+def _availability_action(*, receives):
+    """造一个「暂停／恢复接收新任务」的批量动作（两道关一起）。
+
+    与资格动作是两回事：这里改的是**本人意愿**（``receives_*_tasks``），资格照旧。
+    动作走 ``reviews.services.set_availability_for_users``——它逐人逐环节调用服务，
+    「手上还有未完成的任务就关不掉」那条规则因此对管理员同样成立，被挡下的人单独
+    报出来，而不是悄悄放过。
+
+    ``permissions=["change"]`` 的理由与资格动作相同：这是唯一的 HTTP 门槛。
+    """
+
+    @admin.action(
+        permissions=["change"],
+        description="恢复接收新任务" if receives else "暂停接收新任务",
+    )
+    def action(modeladmin, request, queryset):
+        # 局部 import：把「加载期反向依赖 reviews」限制在既有的那一处（模块级只
+        # 取 ``reviews.lifecycle`` 的阶段名）。这里要的是写服务，函数体内引一次
+        # 就够，也不必让 accounts 在导入期牵出 reviews 的整条依赖链。
+        from reviews.services import set_availability_for_users
+
+        changed, blocked = set_availability_for_users(
+            users=queryset,
+            receives=receives,
+            actor=request.user,
+            request=request,
+        )
+        verb = "恢复" if receives else "暂停"
+        if changed:
+            modeladmin.message_user(
+                request,
+                f"已{verb}接收新任务：{changed} 人。",
+                messages.SUCCESS,
+            )
+        if blocked:
+            # 逐人逐环节的规则：被挡下的都是手上还有未完成任务的人。
+            modeladmin.message_user(
+                request,
+                f"{blocked} 人手上还有未完成的任务，未{verb}；"
+                "先让他们交掉或改派走，再操作一次。",
+                messages.WARNING,
+            )
+        if not changed and not blocked:
+            modeladmin.message_user(
+                request,
+                "所选账号的接单状态没有变化（没有评审／初审资格，或本来就是该状态）。",
+                messages.WARNING,
+            )
+
+    action.__name__ = (
+        "open_availability" if receives else "close_availability"
+    )
+    return action
+
+
 @admin.register(Profile)
 class ProfileAdmin(admin.ModelAdmin):
     # sha256 是 editable=False 的自动字段，不进表单——要在这里列出来才看得到。
@@ -165,6 +220,7 @@ class UserAdmin(ProfileNameMixin, DjangoUserAdmin):
         "is_reviewer",
         "is_preliminary_reviewer",
         "is_super_reviewer",
+        "availability_label",
         "is_active",
     )
     list_filter = (
@@ -186,7 +242,23 @@ class UserAdmin(ProfileNameMixin, DjangoUserAdmin):
         _qualification_action(flag="is_preliminary_reviewer", label="初审", value=False),
         _qualification_action(flag="is_super_reviewer", label="超级评审", value=True),
         _qualification_action(flag="is_super_reviewer", label="超级评审", value=False),
+        _availability_action(receives=False),
+        _availability_action(receives=True),
     )
+
+    @admin.display(description="接单状态")
+    def availability_label(self, obj):
+        """这个人现在收不收新任务——两道关各一档，都收时留空（那是常态）。
+
+        只读的一列（开关动作在批量动作里，写入口只有 reviews 的服务一个）：后台
+        需要一个能一眼看出「谁关了」的地方，而不是逐人点进编辑页。
+        """
+        closed = [
+            label
+            for label, field in (("初审", "receives_preliminary_tasks"), ("评审", "receives_review_tasks"))
+            if not getattr(obj, field)
+        ]
+        return "、".join(f"已关闭{label}" for label in closed)
 
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
