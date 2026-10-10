@@ -163,7 +163,7 @@
 | 模块 | 函数 | 一句话 |
 |---|---|---|
 | accounts | `member_identities` / `gallery_usage` | 「当前身份」清单；图册用量 |
-| projects | `groups_led_by` / `groups_of_member` / `search_groups` | 按人取组；按关键字搜组（**排在 `annotate` 之前**） |
+| projects | `groups_led_by` / `groups_of_member` / `search_groups` / `annotate_member_count` | 按人取组；按关键字搜组（会 JOIN `members`/`advisors`，结尾 `distinct`）；给查询集加 `member_count`——**真实**成员数，子查询，不随搜索过滤变小 |
 | reviews | `override_blocker` / `can_override_review` / `pending_task_summary` / `open_leave_for` | 一票敲定能不能行使（返回**原因**）；待办数字；未结束的请假 |
 | notices | `message_rows` / `unread_message_count` / `message_target_url` | 消息行的现取现算（标题/链接/说明不落库） |
 | content | `search_awards` | 获奖搜索（一个关键字扫五个字段 + 年份） |

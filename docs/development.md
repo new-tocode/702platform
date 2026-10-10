@@ -466,7 +466,7 @@ source env.local.sh
 |---|---|
 | `projects/selectors.py` | `search_groups(groups, *, query="")`：跨 `members` / `advisors` 两个一对多关系过滤，结尾 `distinct()` 收回重复行 |
 | `projects/permissions.py` | `member_group_ids(user)`：把「我参与的组」收在一处，视图不来拼 |
-| `projects/views.py` | `group_list`：`search_groups` 收窄 → `?mine=1` 按 id 集合再收窄 → `annotate(member_count=Count("members", distinct=True))`。**顺序在这里有讲究，但方向和直觉相反**：`WHERE` 与聚合落在同一条 member join 上时，过滤会把参与聚合的行一起筛掉——搜「高」（只命中 1 名成员）时卡片写「成员 1 人」，而下面列着 5 个人。`distinct=True` 防的是另一处 `advisors` join 带来的重复行，防不了这个（这是一处**已知的口径问题**，见 [architecture/projects.md](architecture/projects.md)） |
+| `projects/views.py` | `group_list`：`search_groups` 收窄 → `?mine=1` 按 id 集合再收窄 → `annotate_member_count(...)` 数人数。**数人不能用 `Count("members")`**：`search_groups` 已经 JOIN 了 `members`，聚合落在那条**被过滤过的** join 上时，过滤会把参与聚合的行一起筛掉——搜「高」（只命中 1 名成员）时卡片写「成员 1 人」，而下面列着 5 个人。`annotate_member_count` 用子查询数与过滤各走一条 join，卡片数字恒等于名单长度（见 [architecture/projects.md](architecture/projects.md)） |
 | `templates/projects/group_list.html` | 搜索框与「我的项目组」写在**同一个 GET 表单**里：提交搜索时用 hidden 把筛选带上，切筛选时用 `{% querystring %}` 把关键字带上 |
 | `projects/tests/test_browsing.py` | 两个测试类：`GroupListSearchTests`（按组名／联系人／成员／指导老师／账号名各搜一次、不越可见范围、空白关键字、无结果空状态）、`GroupListMineFilterTests`（联系人、管理员、无组员各看到什么，筛选与关键字互相保留） |
 
@@ -475,10 +475,12 @@ source env.local.sh
 钉的是姓名回退（`full_name` 为空时用账号名）。写用例时问一句：**改坏哪一行会让它变红？**
 答不上来的是装饰，不是测试。
 
-这一段里正好有个**反面教材**：`test_search_lists_each_group_once` 想钉的是 `search_groups`
-结尾的 `distinct()`，但视图随后无条件 `annotate(...)`，`GROUP BY` 主键已经把重复行收回一行
-了——实测去掉 `distinct()` 后，过滤出的 10 行经 `annotate` 仍是 3 行（每组一行），测试照样绿。
-断言落在了别人顺手兜住的副作用上，看着像覆盖，其实没有判别力。
+这一段里有个现成的例子：`test_search_lists_each_group_once` 钉的是 `search_groups` 结尾的
+`distinct()`——去掉 `distinct()` 它就红（同一组被 JOIN 出两行）。**它曾经没有这个判别力**：
+那时视图随后无条件 `annotate(member_count=Count("members"))`，`GROUP BY` 主键顺手把重复行
+收回了一行，断言其实落在别人的副作用上；改成子查询数人之后外层没有 `GROUP BY` 了，去重
+只剩 `distinct()` 一处，测试才真正钉住它。所以用例写完后要问一句：**改坏哪一行会让它变红？**
+答不上来的是装饰，不是测试——而且答案会随后续改动变化，别一直信旧答案。
 
 **4. 文档跟着改**：口径变了改 `docs/architecture/projects.md`；新文案进模板后要跑
 `.po` 那一套（见 §3.4）；若新增了成员入口，去 `core.registry` 登记。
