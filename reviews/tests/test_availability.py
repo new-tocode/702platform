@@ -349,6 +349,18 @@ class ReviewerAvailabilityTests(ReviewTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, "接单状态")
 
+    def test_member_home_hides_the_panel_from_a_super_reviewer_only(self):
+        """超级评审不接任务，没有可开关的东西——他有「评审」入口，但没有这一块。"""
+        from .factories import make_super_reviewer
+
+        boss = make_super_reviewer("availability-boss")
+        self.client.force_login(boss)
+
+        response = self.client.get(reverse("accounts:member_home"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "接单状态")
+
     def test_the_switch_panel_sits_below_the_operation_entries(self):
         self.client.force_login(self.reviewer)
 
