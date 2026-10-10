@@ -15,11 +15,11 @@
 - **前台三件事共用同一个判定**：报名、修改、放弃同受 `is_registration_open` 约束。`services.save_registration` **自己不查截止**（查询单在表单与视图那一侧）；新增前台写入口必须自带这道校验，否则口径会分叉。
 - **报名权限委托项目组侧**：`competitions.permissions.can_register_group` 是 `projects.permissions.can_manage_group` 的薄封装（对象级：联系人只管自己的组）；`context_processors` 决定报名入口显不显示——与视图门槛同源。
 - **送审类型与竞赛没有外键**：评审的 `review_type`（竞赛立项／省赛／国赛……）是平台内标签，刻意不与 `Competition` 关联，两边各管各的。
-- **跨模块标识符**：唯一约束名 `unique_competition_group_registration`、操作入口注册表 key `competitions.registration`（被 `core/tests/test_registry_and_audit.py` 钉住）、五个审计 action 字符串——都是对外承诺，改之前先搜引用。
+- **跨模块标识符**：唯一约束名 `unique_competition_group_registration`、操作入口注册表 key `competitions.registration`（被 `core/tests/test_registry_and_audit.py` 钉住）、七个审计 action 字符串（`competitions.create`／`.update` 与报名相关的五个）——都是对外承诺，改之前先搜引用。**截止判定还有一处重复表达**：`core.stats` 的平台概览另写了同一条查询条件。
 
 ## 由来
 
 - **为什么没有审批流**：登记即生效。加审批要引入状态机与待办，而这件事没有争议性（见 [overview.md](overview.md) §1.1）。
 - **为什么外键全是 `PROTECT`**：报名记录是报给主办方的档案，删账号或删已报名的项目组应当被挡下、由人先处理。**代码如此，但没有文档说明这是当初的决定还是顺带**——要放宽时先想清档案要不要留。
-- **时间口径的一处不一致（如实记下）**：判定式是 `now() <= deadline`，**闭端**——截止那一刻仍可报名；而 [glossary.md](../glossary.md) 的「单位与格式约定」写着「时间窗的结束点一律当开区间读」（那条说的是评审请假窗口 `ends_at`）。两处口径不同，改时间比较前先确认是哪一种。
+- **时间端点是闭端**：判定式 `now() <= deadline`——截止那一刻仍可报名。这评审请假窗口的 `ends_at`（开区间）**方向不同**，术语表已把这条差异记在「单位与格式约定」里；写时间比较前先确认你要的是哪一种。
 - **后台表单不校验「竞赛组长在参赛成员内」**：那条校验只在前台表单里，后台刻意留宽（与截止一样，是补录路径的一部分）。别顺手「补齐」，先想清是否故意。

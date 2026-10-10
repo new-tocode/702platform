@@ -105,7 +105,7 @@ app 的 README，向下落点靠代码坐标。
 | 分层与依赖方向 | 要加代码的人：这一处该写在哪一层 | [development.md](../development.md) §1.2、本文 §8 | 各 app 的 `models` / `permissions` / `services` / `selectors` / `views` |
 | 数据模型 | 要改表的人 | 各 app 的 `README.md`（详细设计） | `*/models.py` |
 | 权限与角色 | 被问「这个功能谁能用」 | [permissions.md](permissions.md) | `*/permissions.py`、`core/permissions.py`、`notices/visibility.py` |
-| 接口与路由 | 找地址、加页面的人 | [routes.md](routes.md) | `*/urls.py`、`*/views.py` |
+| 接口与路由 | 找地址、加页面的人 | [interfaces.md](interfaces.md) 的 A 节（HTTP 契约）与 B 节（跨应用函数） | `*/urls.py`、`*/views.py` |
 | 关键流程与时序 | 想快速理解一个功能怎么走完 | [flows.md](flows.md) | 各 app 的 `services.py` |
 | 状态与并发 | 改评审规则的人 | [reviews.md](reviews.md)、[core.md](core.md) | `reviews/lifecycle.py`、各 `services.py` 的行锁 |
 | 安全 | 做安全相关改动的人 | [security.md](security.md) | `core/uploads.py`、`core/storage.py`、`config/middleware.py` |
@@ -160,7 +160,7 @@ app 的 README，向下落点靠代码坐标。
 ```
 
 - **渲染策略**：服务端渲染。公开页、成员界面、管理后台均由 Django 模板渲染；表单提交走整页跳转。页面脚本只有渐进增强那六个（见 §6），且集中在 `static/js/`——模板里不写内联的**可执行**脚本（`|json_script` 渲染出的 `application/json` 数据块不算，它不执行）。
-- **当前没有 API 层**：对外只有页面路由（见 [routes.md](routes.md)），没有任何 serializer／viewset／APIView。曾把 DRF 作为「面向未来的 API」空装着，已按「不留不用的依赖」移除；真要开放 API（小程序 / App / 对接校园系统），先引入依赖，再把接口登记进接口规格。
+- **当前没有 API 层**：对外只有页面路由（契约见 [interfaces.md](interfaces.md) A 节），没有任何 serializer／viewset／APIView。曾把 DRF 作为「面向未来的 API」空装着，已按「不留不用的依赖」移除；真要开放 API（小程序 / App / 对接校园系统），先引入依赖，再把接口登记进 interfaces.md 的 B 节。
 - **数据来源唯一**：权限判断一律在视图层完成，模板只做展示层的隐藏/显示（双层防护，见 [security.md](security.md)）。
 
 ---

@@ -22,4 +22,4 @@
 - **评论为什么是软删除**：一条有人回过的评论硬删掉，「删过」这件事就无从追查。所以只写 `deleted_at`／`deleted_by`，默认经理 `objects` 挡掉已删的、`all_objects` 看全貌；删帖仍用 `_base_manager` 级联带走软删评论。改回硬删或改经理定义会同时打掉限速计数、重删幂等与消息撤回。
 - **为什么限速不加锁**：讨论区的发言限速是防滥用而不是防资损，多一次少一次无所谓——所以它刻意不进事务、不锁行（对比：图片上限与删板块都锁）。
 - **渲染与文档的一处漂移（如实记下）**：`Comment` 的模型注释与 `notices.services.clear_mention_messages` 的 docstring 都提到「已删除的评论在界面上让位给一行说明」，但模板遍历的是默认经理、那句话在全库 grep 不到——**按现状读：删除后整条消失，计数与 `#comment-N` 锚点一起没**。改注释还是改模板，得先定哪个是对的。
-- **审计的事务边界不统一**：`create_board`／`delete_board`／`delete_post`／`delete_comment` 的审计在事务内，`create_post`／`update_post`／`set_post_pinned`／`create_comment` 在提交之后。代码与文档都没说这是有意还是遗留——新增写操作时**跟着相邻的那一个走**，别自作主张。
+- **审计的事务边界不统一**：三条删除（`delete_board`／`delete_post`／`delete_comment`）的审计在事务内，五个写入（`create_board`／`create_post`／`update_post`／`set_post_pinned`／`create_comment`）在提交之后。代码与文档都没说这是有意还是遗留——新增写操作时**跟着相邻的那一个走**，别自作主张。

@@ -13,7 +13,7 @@
 
 - **`render_markdown` 是共享面**：`content/templatetags/rendering.py` 的白名单同时管着讨论区帖子与公告详情——改它等于同时改那两处的 XSS 面。
 - **判重的身份串同时是锁的键**：`similarity.identity_key` 既是「比什么」（年份 + 层级 + 赛事 + 获奖人，逐字段比），也是 `pg_advisory_xact_lock` 锁的对象。改 `_COMPARED_FIELDS` / `normalize` / `fold_tier_terms` 任一项，会同时改变「比的是谁」与「锁的是谁」，两处必须一起动。它不落库、没有唯一约束，只有 `services.create_award` 一条路把守。
-- **获奖页的写入口有两个，口径刻意不同**：前台（`views.award_create` → `services.create_award`）**判重**，后台（`awardAdmin`）**不判**——「确实是另一条」（换个赛道之类）的例外正是从后台放行。**后台不判重是刻意留的后门，不是漏掉的检查。**
+- **获奖页的写入口有两个，口径刻意不同**：前台（`views.award_create` → `services.create_award`）**判重**，后台（`AwardAdmin`）**不判**——「确实是另一条」（换个赛道之类）的例外正是从后台放行。**后台不判重是刻意留的后门，不是漏掉的检查。**
 - **成员可写**：历年获奖是唯一允许登录成员在前台新增记录的公开栏目，判据是 `content.permissions.can_manage_awards`。
 - **平台概览数字不在公开页**：在册成员／项目组／开放竞赛／在借设备由 `core.stats` 提供给成员中心，且只对管理员与项目组联系人呈现——公开首页不展示这些内部规模数据。
 - **本模块不登记操作入口**：`content/apps.py` 没有 `ready()`，成员中心的入口卡片里没有它。

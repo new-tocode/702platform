@@ -69,7 +69,7 @@
 |---|---|
 | 分层约定 | `models` / `permissions` / `services` / `selectors` / `forms` / `views` / `panels` / `admin` 各自放什么，见 [development.md](development.md) 的 §1.2 |
 | 判定点 | 「谁能做什么」的唯一实现处（`permissions.py`，或 `notices/visibility.py` 这类单点模块）。视图、模板、`panels` 都来问它，不各写一份会漂移的副本 |
-| 视图门槛 | `core.permissions.require(request, predicate, event, **fields)`：取对象 → 判定 → 不通过就**记一条警告日志**（`event` 是日志前缀）并抛 `PermissionDenied`（403）。它**不写审计**——审计只记成功的写操作 |
+| 视图门槛 | `core.permissions.require(request, predicate, event, **fields)`：判定 → 不通过就**记一条警告日志**（`event` 是日志前缀）并抛 `PermissionDenied`（403）。它**不写审计**（审计记的是写操作与登录锁定这类安全事件，被拒绝的请求不在其中） |
 | 操作入口注册表 | `core/registry.py`。成员中心的入口卡片由注册表按登录／改密／权限／自定义条件过滤后生成 |
 | 身份目录 | `core/roles.py`。登记「有哪些身份、各自叫什么、从哪来」；判定仍归各应用 `permissions`，授予仍归 `services`，目录不重复这两件事 |
 | 领域异常 | 服务层抛出的业务错误（如 `ReviewError`），由视图翻译成 `messages` 文案；服务层不写用户可见文案 |

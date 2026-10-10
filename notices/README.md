@@ -93,7 +93,7 @@
 | `visible_groups` | `auth.Group` 的 M2M，只对 `internal` 生效；用户组是**通知的投递范围，不是身份**（见 `docs/architecture/accounts.md`） |
 | `is_pinned` | 排序与「置顶」标记；`Meta.ordering = ("-is_pinned", "-published_at", "-id")` |
 | `published_by` | `on_delete=PROTECT`：**发过公告的账号删不掉**；后台新增时被 `save_model` 强制写成 `request.user`，编辑不改 |
-| `published_at` | 默认 `timezone.now`；后台可改——它既排序，也决定这条公告何时出现在首页的最新几条里 |
+| `published_at` | 默认 `timezone.now`（新建时由模型默认填）；**后台只读**（`NoticeAdmin.readonly_fields`），编辑不改。它既排序，也决定这条公告何时出现在首页的最新几条里 |
 | `attachments` | `media.MediaFile`（公开件）；`templates/includes/media.html` 直接写 `{{ media.file.url }}`——**附件本身没有可见性判定** |
 | 索引 | `(scope, -published_at)` 与 `(scope, -is_pinned, -published_at)` 两条，服务可见集合的查询 |
 
@@ -103,7 +103,7 @@
 |---|---|
 | `user` / `notice` | 双 `CASCADE`：删账号或删通知，回执一起走，不留孤儿 |
 | `read_at` | 只在新建时写一次 |
-| `UniqueConstraint("user", "notice")`（`unique_notice_read_per_user`） | 已读是「有这一行」，`get_or_create` 是唯一的写入口 |
+| `UniqueConstraint("user", "notice")`（`unique_notice_read_per_user`） | 已读是「有这一行」。**两条写路径**：单条进详情走 `mark_read`（`get_or_create`，幂等）；「全部已读」走 `mark_all_read`（`bulk_create(..., ignore_conflicts=True)`，靠唯一约束去重） |
 
 ### Message（事件型消息，一行一个收件人）
 
@@ -216,10 +216,11 @@
 `selectors` 那条 warning 不带（取数层拿不到 request）。
 
 **注意级别**：`config/settings.py` 的 `LOGGING["loggers"]` 里**没有 `notices` 这一节**
-（`accounts` / `projects` / `reviews` / `core` 等都是显式的 DEBUG 级）。于是 notices 的 `logger.info`
-只传给根 logger，`DEBUG=False` 下根 logger 默认 WARNING——这些 info 不落 `logs/django.log`，
-只有 `notice.messages.unknown_kind` 那条 warning 会落。要让通知模块的 info 进日志，得在 settings
-里补一段 logger（配置改动，不是这个模块能自决的）。
+（`accounts` / `projects` / `reviews` / `core` 等都是显式的 DEBUG 级），根 logger 也没有配 handler。
+实测：`notices.views` / `notices.selectors` 的生效级别是 **WARNING**、`handlers = []`，
+**与 `DEBUG` 取值无关**（`DEBUG=True` 时同样如此）。所以 `logger.info` 不会落 `logs/django.log`；
+warning 只经 `lastResort`（stderr）出现，**同样不进文件**。要让通知模块的日志进文件，得在 settings
+里补一段 logger（配置改动，不是这个模块能自决的）。缺 logger 的是 notices／content／media／discussion 四个。
 
 **刻意不报错**：
 

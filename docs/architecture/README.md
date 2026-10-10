@@ -31,7 +31,7 @@
 | 文档 | 内容 |
 |---|---|
 | [security.md](security.md) | 安全设计要点（完整的安全审查报告含生产标识，不入版本库） |
-| [routes.md](routes.md) | 全部页面与地址 |
+| [interfaces.md](interfaces.md) | **接口规格**：A 节 HTTP 契约（全部页面与地址、方法、门槛、失败形态）、B 节跨应用公开函数、C 节数据模型与迁移 |
 | [flows.md](flows.md) | 九条关键流程的端到端走法 |
 | [roadmap.md](roadmap.md) | 已落地能力与可选扩展 |
 

@@ -101,7 +101,7 @@
 |---|---|
 | `board` | `on_delete=PROTECT`：有帖子的板块删不掉（模型层这道保护与服务层的 `BoardNotEmpty` 是双保险） |
 | `author` | `on_delete=PROTECT` |
-| `title` / `content` | 200 / 20000；上限另有 `core.tests.test_upload_validation` 的清单钉住，改动要一起改 |
+| `title` / `content` | 200 / 20000。**清单只钉了 `Post.content` 与 `Comment.content`**（`core.tests.test_upload_validation` 的上限表），`title` 的 200 不在其中——改它不会触发兜底测试 |
 | `is_pinned` | 排序第一关键字（`("-is_pinned", "-created_at", "-pk")`）；只有管理员能动 |
 | 两条索引 | `discussion_post_feed_idx` 供列表；`discussion_post_rate_idx`（`author`, `created_at`）专供限速计数，不扫全表 |
 
@@ -219,7 +219,7 @@
 |---|---|
 | 未登录访问任何 discussion 视图 | 302 到 `accounts:login`（带 `next`） |
 | 登录但 `must_change_password=True` | 302 回改密页——比视图更早，是 `config.middleware.ForcePasswordChangeMiddleware` 挡的 |
-| 已登录但未通过 `is_member`（如 `is_active=False`） | 403（`core.permissions.require` 抛 `PermissionDenied`） |
+| 已登录但未通过 `is_member` | 403（`core.permissions.require` 抛 `PermissionDenied`）——**页面上基本到不了这一支**：`is_active=False` 的账号会被 Django 判成匿名（302），首次改密未完成的被中间件先拦（302）。它实际是服务层与测试可达的防御性判定 |
 | 编辑别人的帖子 | 403（视图先记 `discussion.post.edit.denied` 再抛） |
 | 删别人的帖子／评论，或非管理员置顶任何帖子 | 403 + 对应的 `.denied` 日志 |
 | 非超级管理员建／删板块 | 403 |
@@ -239,9 +239,9 @@
 | `discussion.post.pin` / `discussion.post.unpin` | 置顶／取消置顶 |
 | `discussion.comment.create` / `discussion.comment.delete` | 发评论／软删评论（删除记 `is_author`） |
 
-**审计的事务边界不统一**：`create_board`、`delete_board`、`delete_post`、`delete_comment` 的审计写在事务内；
-`create_post`、`update_post`、`set_post_pinned`、`create_comment` 写在事务提交之后。后半类若审计写失败，
-数据已经落库而没有留痕——这是现状，不是设计声明，改动时别当它是有意为之。
+**审计的事务边界不统一**：`delete_board`、`delete_post`、`delete_comment` 的审计写在**事务内**；
+`create_board`、`create_post`、`update_post`、`set_post_pinned`、`create_comment` 写在**事务提交之后**。
+后半类若审计写失败，数据已经落库而没有留痕——这是现状，不是设计声明，改动时别当它是有意为之。
 
 **日志**：视图层用 `logging.getLogger(__name__)`（`discussion.views`），事件名
 `discussion.post.edit.denied` / `discussion.post.delete.denied` / `discussion.comment.delete.denied`；
@@ -302,5 +302,6 @@
   `Content-Digest` / `X-Checksum-SHA256`（那套是给项目书、批注版、归档版的）。
 - **正文渲染的安全边界不在本 app**：帖子正文经 `content.templatetags.rendering.render_markdown` 处理
   （去 `script` / `style` + bleach 白名单），评论只做 `linebreaksbr`。允许哪些标签由 `content` 决定。
-- **帖子图的文件名与日期目录由 `core.storage` 决定**：`validators.post_image_upload_to` 是历史迁移
-  （`0004` / `0006`）引用的旧口径，**新上传不走它**，不要把它接回模型。
+- **帖子图的文件名与日期目录由 `core.storage` 决定**：`validators.post_image_upload_to` 是**已被换掉**的旧口径
+  （迁移 `0004` 引它，`0006` 换成 `core.storage.NeutralUploadTo("discussion")`），只留给历史迁移引用，
+  **新上传不走它**，不要把它接回模型。

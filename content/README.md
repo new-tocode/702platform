@@ -44,7 +44,7 @@
 | 「我的获奖」入口 | `accounts`：个人信息页链到 `content:awards?q=<姓名>`，匹配的是 `Award.winners` 的自由文本 |
 | 顶部导航的高亮 | `core/context_processors.py` 把 `content:*` 的 URL 名映射成 `nav_section` |
 | 后台删除的审计 | 不做：四个 `ModelAdmin` 只覆写 `save_model`，删行不留痕（见 §6） |
-| 跨模块的口径与由来（谁能用、地址总表） | `docs/architecture/permissions.md`、`routes.md`；本文件只讲本模块 |
+| 跨模块的口径与由来（谁能用、地址总表） | `docs/architecture/permissions.md`、`docs/architecture/interfaces.md`；本文件只讲本模块 |
 
 **依赖方向**
 
@@ -69,7 +69,7 @@
 | `views.page_detail`（`/pages/<slug>/`） | 按 slug 渲染任意已发布页 | slug 命中且 `is_published=True` | 其余一律 404（`get_object_or_404`） |
 | `views.page_index`（`/pages/`） | 已发布页清单，**排除 `slug="about"`**（它有固定入口，再列一次会指向两个地址） | 无 | 无异常；空清单给空态 |
 | `views.awards`（`/awards/`） | 单关键字搜索 + 分页 | 无 | `per_page` 不在 `PER_PAGE_OPTIONS`（10／20／40）→ **静默回落** `DEFAULT_PER_PAGE`；`page` 越界由 `paginator.get_page` 收敛；无命中给「没有匹配」而不是空态 |
-| `views.award_create`（`/awards/new/`） | 成员在前台添加一条获奖记录 | `@login_required` + `require(..., "content.awards.create.denied", action="create")` | 匿名 → **302** 到登录页；已登录但非成员（含 `must_change_password=True`）→ **403**；判重命中 → **页面重渲染**并把已有那条写进 non-field error（不是 4xx）；年份越界 / 必填缺失 / 图片不合格 → 表单错误 |
+| `views.award_create`（`/awards/new/`） | 成员在前台添加一条获奖记录 | `@login_required` + `require(..., "content.awards.create.denied", action="create")` | 匿名 → **302** 到登录页；`must_change_password=True` → **302** 回改密页（中间件比视图更早）；已登录但 `can_manage_awards` 为假 → **403**（当前只有服务层/测试能构造出这种账号，见 §6）；判重命中 → **页面重渲染**并把已有那条写进 non-field error（不是 4xx）；年份越界 / 必填缺失 / 图片不合格 → 表单错误 |
 | `views.award_certificates`（`/awards/certificates.zip`） | 把勾选记录的证书打成一个 zip 发回 | `@login_required` + `@require_POST` + `require(..., "content.awards.certificates.denied", action="download")` | GET → **405**；匿名 → 302；未勾选 / 一条证书都没有 / 超过 `MAX_ARCHIVE_AWARDS` → `messages.error` + 302 回列表；非数字与伪造 id 静默丢弃；盘上缺文件跳过并计入 `archive.missing` |
 | `services.create_award` | 前台写获奖记录的**唯一**入口（后台走 `admin.py`，两条路平行） | 调用方已过权限门槛；`year` 非空 | 判重命中 → `DuplicateAward(existing)`；并发提交同一身份时 `pg_advisory_xact_lock` 把两者排成队，后一个在锁后重跑判重、因此看得见前一个刚写的行；锁随事务结束自动释放 |
 | `similarity.find_similar_award` | 在同一年份（同层级）里找出与新记录重复的那一条 | `year` 必须非空 | `year` 为空 → `None`（没有可筛范围，也就没有「同一条」）；只读，不抛异常；`exclude_pk` 给编辑场景留的 |
@@ -144,9 +144,11 @@
   「顺手给后台也加上判重」的改动都会关掉这条唯一的例外通道。
 - **判重只有代码一条路，数据库没有唯一约束**：身份串不落库、没有 `UniqueConstraint`；
   `create_award` 之外（后台保存、脚本、`QuerySet.update`）都能造出重复记录。
-- **层级规则的唯一真相源是 `Award.tier`**：`tier_rules` 只被两处消费——判重比较前的
-  折叠（`fold_tier_terms`），以及迁移 `0006` 从自由文本回填 `tier`（`derive_tier`）。
-  回填只跑一次：规则日后调整，**已跑过迁移的库不受影响**，只有新建库的回填结果会变。
+- **层级规则的唯一真相源是 `Award.tier`；改 `tier_rules` 要连带检查的调用点**：
+  判重比较前的折叠（`similarity.fold_tier_terms` / `normalize`）、迁移 `0006` 从自由文本回填
+  `tier`（`derive_tier`），以及只读命令 `report_duplicate_awards`（`drop_tier_terms` / `normalize`）
+  ——改了折叠规则，那条命令报出的重复组会跟着变。回填只跑一次：规则日后调整，
+  **已跑过迁移的库不受影响**，只有新建库的回填结果会变。
   `tier_rules` 不 import 模型，正是为了让迁移能在历史状态上引它。
 - **`tier` / `level` / `winners` 必填只是校验层**：迁移 `0005` 改的是 `blank`（表单校验），
   两列本来就是 NOT NULL（允许空串），历史行里空着的仍在。模板里的
@@ -226,7 +228,8 @@
 | 情形 | 表现 |
 |---|---|
 | 匿名访问 `/awards/new/`、`/awards/certificates.zip` | 302 到登录页（带 `next`） |
-| 已登录但非成员（含首次改密未完成）访问这两个入口 | **403**，`core.permissions.require` 先记一条 WARNING |
+| 已登录但首次改密未完成，访问这两个入口 | **302** 回改密页——`ForcePasswordChangeMiddleware` 比视图里的门槛更早 |
+| 已登录但 `can_manage_awards` 为假（如已停用或被撤销资格） | **403**，`core.permissions.require` 先记一条 WARNING |
 | 对 `/awards/certificates.zip` 发 GET | 405（`@require_POST`） |
 | 未发布或不存在的内容页 | 404 |
 | 不存在或未发布的 `/about/` | **空态，不是 404**——顶栏固定入口不该在内容没录时直接报错 |
@@ -246,7 +249,7 @@
 | `content.home_slide.create` / `.update` | `HomeSlideAdmin.save_model` |
 | `content.showcase.create` / `.update` | `ShowcaseAdmin.save_model` |
 
-**日志**：`logging.getLogger(__name__)`，全部带 `extra={"request_id": ...}`。
+**日志**：`logging.getLogger(__name__)`，带 `extra={"request_id": ...}`——**一处例外**：`archives.py` 的 `content.awards.archive.missing` 那条 warning 在视图之外（拿不到 request），没有 `extra`。
 事件名分两类——`content.*`（`content.page.view`、`content.page_index.view`、`content.about.view`、
 `content.awards.view`、`content.showcase.view`、`content.awards.create.success` / `.failure`、
 `content.award.create.duplicate` / `.success`、`content.awards.certificates.download`、
@@ -300,8 +303,9 @@
 - **content 的 INFO 日志目前落不到盘**：settings 的 `LOGGING["loggers"]` 里没有 `content`
   项也没有 `root` 项（见 §5 的提示）。这是配置现状，不代表「日志写错了」。
 - **`certificates` 限图片只在校验层**：`limit_choices_to` 只约束后台表单的可选项；
-  用 ORM 直接 `award.certificates.add(<视频>)` 能加进去，打包时那段视频会被整个读进内存
-  再写进 zip——`archives.py` 的取舍（不压缩、写临时文件）防的是体积与内存，不是这一条。
+  用 ORM 直接 `award.certificates.add(<视频>)` 能加进去，打包时那段视频会被**分块（1 MiB）抄进
+  临时文件再写进 zip**——`archives.py` 是流式的，不会把它整个读进内存；真正的代价是临时文件
+  长大（占磁盘）。这条限制的意义是「压缩包里不该出现大视频」，不是内存保护。
 - **`HomeSlide` 的图片类型只有 `clean()` 把关**：没有 `save()` 覆写，也没有数据库约束，
   `objects.create()` 可以塞一段视频进去；后台表单会走到 `clean()`。
 - **前台只收图片**：`AwardForm` 两个字段都是 `MultipleImageField`（`accept="image/*"`），
