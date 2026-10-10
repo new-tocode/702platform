@@ -164,8 +164,9 @@ class ProjectMemberAdmin(ProfileNameMixin, RoleRosterAdmin):
 class GroupCreateRequestAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
     """Oversight list for project-group creation applications.
 
-    Requests are decided from the member-facing project-group page (any one
-    administrator settles it), so the backend keeps this list read-only.
+    Requests are decided from the **review queue** (``reviews:queue``, where any
+    one administrator settles it — the view redirects back there), so the
+    backend keeps this list read-only and offers no decision buttons.
     """
 
     list_display = (

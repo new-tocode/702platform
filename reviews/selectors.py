@@ -70,8 +70,13 @@ class PendingTasks(NamedTuple):
 def pending_task_summary(reviewer):
     """这个账号手上还没交的任务，按阶段计数——一次查询。
 
-    The single place that answers "how much is waiting for me": the post-login
-    nudge, the member-centre card and the queue page all come through here.
+    The single place that answers "how much is waiting for me" and names the
+    parts. **It currently has no production caller**: the post-login nudge and
+    the member-centre card were withdrawn (reminders live in 「我的消息」 now),
+    and the queue page counts its own buckets. Keep it as the definition of the
+    figure — but if you are about to write ``# noqa`` because it looks unused,
+    read this first.
+
     Leave is deliberately not applied — taking leave does not excuse the tasks a
     reviewer already holds.
     """

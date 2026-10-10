@@ -33,7 +33,7 @@
 | 项目组可见性的项目组侧（staff／成员） | `projects.permissions.can_view_group`；评审只提供 `has_review_claim` 这一支 |
 | 项目书本体的下载 | `projects.views.group_proposal_download` |
 
-**依赖方向**：`reviews → projects` 在模块加载期就成立（`models.py` 的 `ProjectGroup` 外键、`views.py` 的 `can_view_group`）；`notices` 在加载期被 reviews 依赖（`services.py`）。反向只在函数体内局部 import（`projects.permissions.can_view_group` → `reviews.permissions.has_review_claim`，`projects.views.group_detail` → `reviews.panels`，`accounts.views.member_home` → `reviews.panels`），别把 `reviews` 挪进 `projects`／`accounts` 的模块级 import 链。
+**依赖方向**：`reviews → projects` 在模块加载期就成立（`models.py` 的 `ProjectGroup` 外键、`views.py` 的 `can_view_group`）；`notices` 在加载期被 reviews 依赖（`services.py`）。**反向依赖只有一条是加载期的**：`accounts/admin.py` 在模块级 `from reviews import lifecycle`（两个资格名册要取 `STAGE_*` 常量）；其余都在函数体内（`projects.permissions.can_view_group` → `reviews.permissions.has_review_claim`，`projects.views.group_detail` → `reviews.panels`，`accounts.views.member_home` → `reviews.panels`）。再加反向的模块级 import 之前，先确认不会成环。
 
 **下游消费者**：`projects`（送审入口、详情页评审区块、可见性一支）、`accounts`（成员中心请假面板、身份清单、后台名册的「手上待办」列）、`notices`（`Message.submission` 外键、任务消息与结果消息的取数）、`core.registry`（`ReviewsConfig.ready()` 注册 `reviews:queue` 入口）。
 
@@ -173,6 +173,8 @@
 
 **为什么并发审结必须锁父行**：汇总要读本轮**其他**任务。只锁自己那条任务，两个同时交卷的人会各自看到对方仍是 `pending`，双双返回、谁都汇总不了，轮次永久卡在「评审中」。
 
+**打回之后页面指路哪一份意见**：`needs_revision` 的轮次在详情页区分两种来路——走完评审被打回 → 指路「评审意见」；**初审直接打回**（本轮从未分配评审人）→ 指路「初审意见」，不让项目组去找不存在的评审意见。
+
 ### 超级评审一票敲定
 
 21. 队列页或详情页 → `reviews:override` POST → `override_review`。
@@ -203,7 +205,7 @@
 | `reviews.leave.admin_save` | 后台直接新增／修改请假 |
 | `reviews.submission.delete` | 后台删整轮（`target=None`，标识全在 `detail` 里——对象已经不在了） |
 
-**权限拒绝是日志事件不是审计**：`core.permissions.require(request, predicate, event, **fields)` 在拒绝时记一条 warning 再抛 `PermissionDenied`。本模块用到的 event：`reviews.permission.denied`（附 `reason=no_queue_access`／`no_preliminary_qualification`／`not_super_reviewer`）、`reviews.download.denied`（附 `group_id`、`what=annotated|archived`）。另有几处 info 日志：`reviews.queue.view`、`reviews.annotated.download`、`reviews.archive.download`、`reviews.proposal.archive`；服务层日志统一带 `extra={"request_id": ...}`。
+**权限拒绝是日志事件不是审计**：`core.permissions.require(request, predicate, event, **fields)` 在拒绝时记一条 warning 再抛 `PermissionDenied`。本模块用到的 event：`reviews.permission.denied`（附 `reason=no_queue_access`／`no_preliminary_qualification`／`not_super_reviewer`）、`reviews.download.denied`（附 `group_id`、`what=annotated|archived`）。**一处例外**：`views.complete_task` 判「这不是分配给你的任务」时直接 `raise PermissionDenied`，**不留日志**——排查「谁在被拒」时这一支是静默的，别以为所有 403 都经 `require`。另有几处 info 日志：`reviews.queue.view`、`reviews.annotated.download`、`reviews.archive.download`、`reviews.proposal.archive`；服务层日志统一带 `extra={"request_id": ...}`。
 
 **`override_blocker()` 的「返回原因」写法**：它返回**不能行使的具体原因**（`None` 表示可以），而不是布尔。队列页拿它给不可行使的轮次标注「不可行使 · 你是本轮的提交人」、详情页拿它决定给不给表单、服务层拿它拼拒绝话术——一处判定，三处不各写一份。原因按顺序是：没有超级评审资格／本轮已经出过结论／你是本轮的提交人／你是本项目组成员／你在本轮已有任务（初审的提示语按「待提交」与「已交」分成两句）。这个写法值得照抄到别处：**判定函数把「为什么不行」带回来，界面才解释得清楚**。
 
@@ -216,6 +218,8 @@
 | 页面 | 模板只渲染「初审」「评审人 N」「超级评审」；账号只在服务端可见（`ReviewTaskAdmin` 的 `reviewer` 列、审计与运行日志）——日志里 `reviewer=` 记的是账号，页面从不出现 |
 
 取件一律经视图（`FileResponse` 由 `core.downloads.serve_file` 生成），不走 Nginx——`protected_media` 刻意不在 `mediafiles/` 之下，没有任何 HTTP 路径能直接取到。批注版与归档件随 `Content-Digest` 与 `X-Checksum-SHA256` 送出（`ReviewTask.digest_field`／`ArchivedProposal.digest_field` 由 `core.hashing.FileDigestMixin` 维护）；归档件是源任务那份的副本，**两份指纹相同**——对不上就说明归档之后被动过。
+
+**为什么删除的单位是「整轮」**：Django 的级联检查会拿被级联的任务去问任务自己的 admin，所以 `ProjectSubmissionAdmin.get_deleted_objects` 必须豁免「任务不能增删」那两项权限，否则连整轮也删不掉；反过来，真让人删掉单条任务，会**悄悄改变该轮所需的评审人数**（名单少一个人，汇总就等不到他）。
 
 **诊断入口**：一个轮次的全貌在项目组详情页（初审一行、超级评审一行、其余按 `评审人 N` 编号），任务与轮次的原始记录在 Admin 的「项目评审」三屏 + 请假一屏；「这一票为什么不能投」在队列页的标注里。
 

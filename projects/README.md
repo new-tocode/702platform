@@ -139,7 +139,7 @@
 | `GroupCreateRequestError` | `apply_to_create_group`、`approve/reject_create_request` | `group_create_request` / `group_create_decide`：同上 |
 | `GroupManagementError` | `remove_group_member`、`transfer_contact`、`update_group_info` | `group_manage` / `group_member_remove`：同上 |
 
-- 门槛拒绝一律 **403**，样板收在 `core.permissions.require(request, predicate, event, **fields)`：`_require_group_manager` 的 `event="project_group.permission.denied"`（附 `group_id`）；`group_create_decide` 自己 `raise PermissionDenied`，先记 `project_group.create.decide.denied`。
+- 门槛拒绝一律 **403**，样板收在 `core.permissions.require(request, predicate, event, **fields)`：`_require_group_manager` 的 `event="project_group.permission.denied"`（附 `group_id`）；`group_detail` 与 `group_create_decide` 自己 `raise PermissionDenied`，但都先记一条 warning（`project_group.detail.denied` / `project_group.create.decide.denied`）。**一处例外**：`group_proposal_download` 的越权是**裸抛、不留日志**——排查「谁在试取项目书」时这一支是静默的。
 - **404 用于「对象不存在／不属于当前上下文」**：组不存在、入组申请不属于该组、`action` 不是 `approve`/`reject`、组没有项目书。
 - 审计 action（一旦发布不再改，见 `docs/glossary.md` 的「审计 action」）：
   - 申请：`projects.join.apply` / `projects.join.approve` / `projects.join.reject`、`projects.group.create.apply` / `projects.group.create.approve` / `projects.group.create.reject`。

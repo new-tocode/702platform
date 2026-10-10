@@ -16,7 +16,7 @@
 - **消息的写入与撤回归 `notices`**（`notify_preliminary_task` / `notify_review_task` / `clear_review_task_messages` / `notify_review_result`），reviews 只调用；任务消息跟着任务生命周期走，历史归评审页。
 - **资格判定归本模块**：`projects` 与 `accounts` 需要问「他是不是评审人」时，在**函数体内**局部 import `reviews.permissions`——依赖方向单向，`reviews` 不反向被加载期牵连。
 - **状态口径只能问 `lifecycle`**：`OPEN_STATUSES` / `stage_is_open()` / `transition()` 是唯一判据；别处改写 `status == "pending"` 会漏掉「初审中」。
-- **匿名口径落在三处**：页面（只写「初审／评审人 N／超级评审」）、落盘名（uuid）、下载头（中性文件名）。任何一处漏掉，都能从存储层或页面反向认出评审人——而匿名是评审人敢说真话的前提。
+- **匿名口径落在三处**（页面／落盘名／下载头）——落实方式与改动注意见 [`reviews/README.md`](../../reviews/README.md) §5。任何一处漏掉，都能从存储层或页面反向认出评审人，而匿名是评审人敢说真话的前提。
 - **建组申请的待办摆在本模块的队列页**，但模型与处理都归 `projects`（`reviews.panels` 只负责摆上去）。
 
 ## 由来

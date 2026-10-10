@@ -4,7 +4,7 @@
 > 头像与图册的受保护取件，以及后台的四张全局身份名册。
 > **它不判「谁能做什么」**（本 app 没有 `permissions.py`），也不管项目组与评审的业务规则——
 > 资格、联系人、组员各自的判定都在别的 app。
-> 所有业务 app 的用户外键都指向它，它是依赖图的根，不反向依赖任何人。
+> 所有业务 app 的用户外键都指向它，它是依赖图的根——**只有一处例外**：`accounts/admin.py` 在模块级 `from reviews import lifecycle`（两个资格名册要取 `STAGE_*` 常量），所以「不反向依赖」这句话是有例外的，见 §1 的依赖方向。
 
 **什么时候看**：改账号字段、改登录／改密流程、动个人信息页、碰头像与图册、
 改资格的批量授予入口，或者要给 `User` 加一个布尔字段时。
@@ -44,8 +44,11 @@
 
 **上游依赖**：`django.contrib.auth`、`core.permissions` / `core.audit` / `core.registry` /
 `core.roles` / `core.storage` / `core.uploads` / `core.hashing` / `core.downloads` / `core.stats`。
-跨 app 的 import 一律在函数体内（`projects.selectors`、`projects.permissions`、
+跨 app 的 import 基本都在函数体内（`projects.selectors`、`projects.permissions`、
 `reviews.permissions`、`reviews.panels`、`notices.panels`、`content.models`），加载期不牵连它们。
+**已知的一处例外**：`admin.py` 在模块级 `from reviews import lifecycle`（两个资格名册要用
+`lifecycle.STAGE_*` 取阶段名）。今天不成环（`reviews/lifecycle.py` 不 import accounts），
+但这是本 app 唯一一条加载期反向依赖——要动它先确认这一点。
 
 **下游消费者**：`config.settings.AUTH_USER_MODEL` 指向 `accounts.User`；`projects` / `reviews` /
 `discussion` / `notices` / `competitions` / `equipment` / `content` / `media` / `core` 的模型
@@ -61,7 +64,7 @@
 | 入口 | 语义 | 前置条件 | 失败模式 |
 |---|---|---|---|
 | `services.set_qualification` | 批量授予／撤销一项资格，返回真正变化的账号数 | `flag ∈ QUALIFICATION_FLAGS`（三个评审资格） | 白名单外的 flag（如 `is_superuser`、`is_active`）→ `ValueError`；取值已相同的人被跳过，重复提交幂等且**不留审计**；HTTP 门槛只在 `@admin.action(permissions=["change"])` 上，漏声明则只挂 `view_user` 的只读观察者也能提交 |
-| `services.set_group_members` | 把组员整份设成 `members`（覆盖，非增量），返回 `(added, removed)` | `group` 已存在 | 名单没变 → `((), ())` 且不写审计、不写库；两个管理员同时保存由 `Group.objects.select_for_update()` 串行化，后提交者读到的是前一次的结果 |
+| `services.set_group_members` | 把组员整份设成 `members`（覆盖，非增量），返回 `(added, removed)` | `group` 已存在 | 名单没变 → `((), ())` 且不写审计、不写库；`Group.objects.select_for_update()` 把并发保存串行化，后提交者读到的是前一次的结果（**用例是两次串行调用，真并发没有用例**） |
 | `services.set_avatar` / `clear_avatar` | 换／删头像，连磁盘上的旧文件一起处理 | **`profile` 必须是数据库里取出来的那一份**，不是被表单改过的实例 | 实例若已经被表单改过，`profile.avatar.name` 读到的就是新图，旧文件会变成「删新文件」；本来没头像时 `clear_avatar` 返回 `False`（视图给 warning，不是异常） |
 | `services.add_gallery_images` | 批量加图，返回 `GalleryBatchResult(added, rejected, overflowed, used_bytes)` | 至少选了一个文件 | 一个都没选 → `GalleryError`（视图翻成 `messages.error`）；单张不合格进 `rejected`、合计超 `GALLERY_TOTAL_MAX_BYTES` 进 `overflowed`，其余照加；中途异常 → 事务回滚 + `core.storage.delete_stored_files` 清掉已落盘的新文件 |
 | `services.move_gallery_image` / `set_gallery_layout` / `delete_gallery_image` | 调顺序／改排布／删一张（连文件） | `direction ∈ {up, down}`；`layout ∈ LAYOUT_CHOICES` | 参数越界 → `ValueError`（编程错误；视图先自行判定，页面上的非法值一律 404）；已在头／尾 → 返回 `False`；排布没变 → 直接返回，不写审计 |
@@ -116,9 +119,11 @@
   不存第二处数据，所以不存在「名册与字段分叉」这种状态。
 - **每个账号必有一份 `Profile`**：`post_save` 信号在 `created` 时补（`raw` 加载夹具时跳过）；
   建号早于该信号的历史账号由 `views._member_profile` 的 `get_or_create` 当场补齐并记日志。
-- **审计跟写操作同事务**：`set_qualification`、`set_group_members`、`set_avatar`、
-  `clear_avatar`、`gallery.add`、`gallery.delete` 的审计行与数据写在同一个 `atomic` 里。
-  `move_gallery_image` 只有重排在事务里、`set_gallery_layout` 完全不开事务——它们各只动一列。
+- **审计的事务边界**（改之前先看清是哪一种，别按「一律」记）：`set_avatar`、`clear_avatar`、
+  `gallery.add`、`gallery.delete` 的审计行与数据写在**同一个 `atomic` 里**；而
+  **`set_qualification` 与 `set_group_members` 的审计在事务提交之后写**（数据先落、审计后写——
+  两步之间进程挂掉会留下「资格改了但审计里没有」，这是既有行为，与 `projects`／`reviews`
+  的口径一致）。`move_gallery_image` 只有重排在事务里、`set_gallery_layout` 完全不开事务——它们各只动一列。
 - **文件系统不在事务里**：所有文件删除放在提交之后（失败顶多多留一个旧文件，不会出现
   「库里还指着、盘上没了」）；批量加图相反，中途失败要清掉这次已经落盘的新文件。
 - **审计 action 字符串一旦发布就不再改**：`accounts.qualification.*` 等清单见 §5。
@@ -248,8 +253,8 @@
 - **图册顺序的调整没有行锁**：`move_gallery_image` 只有事务、不锁账号行，同一账号两个标签页
   同时上移／下移时，后提交者按自己读到的顺序整段重排，可能覆盖前一次调整。
   配额那条路有锁，顺序这条路没有。
-- **批量资格的写没有行锁**（与 `add_gallery_images` 的账号行锁不同）：两个管理员同时提交时
-  以最后提交的为准。
+- **批量资格的写没有行锁**（与 `add_gallery_images` 的账号行锁不同）：设计上以最后提交的为准，
+  **没有并发用例**。
 - **头像与图册的 `sha256` 存库但不随响应发**：`file_views` 不传该参数，所以图片类没有
   `Content-Digest` / `X-Checksum-SHA256`——这是刻意的（图片不在页面上展示校验值）。
 - **本人改不了自己的 `username` 与 `email`**：`ProfileForm` 不在其列，改这些要进后台。
