@@ -84,7 +84,7 @@ Django 原生支持「组级」权限，**对象级**需自定义；本项目把
 - `can_decide_group_create_requests(user)`：`is_staff` —— 谁能处理创建项目组申请。申请送到管理员的「评审」页，评审侧局部 import 本函数决定给不给看那份待办，视图门槛与页面装配同源。
 - `can_use_equipment(user)`：`is_staff` 或 `is_project_member(user)` —— 设备借用门槛。
 - `groups_visible_to(user)`：staff/联系人→全部；有组→自己的组；无组→全部（申请模式）。
-- `can_view_borrow(borrow, user)`：借用记录本人可见，管理员可见全部。
+- **借用记录的可见范围不是判定函数**：本人只看自己的、管理员看全部——这是在查询里收窄的，没有对应的 `permissions` 函数（`equipment` 整个 app 都没有 `permissions.py`）。
 - **项目组报名权限**：`competitions.permissions.can_register_group` 委托 `can_manage_group`；报名成员与竞赛组长都必须属于所选项目组，且竞赛组长必须是参赛成员之一。
 - **通知可见性**：`notices/visibility.py` 的 `member_visible_notices(user)` 单点判定 —— `internal` 走 `visible_groups`，`contacts` 走 `is_project_contact(user)`；列表与详情共用，未命中返回 404。
 - **社团空间权限**：`discussion/permissions.py` 集中成员、作者、管理员和超级管理员判定；写操作在服务层再次校验。只有帖子作者可修改自己的帖子，管理员可删任意帖子并置顶；评论的删除口径与帖子对称（作者删自己的、管理员删任意），帖子作者对别人在自己帖子下的评论**没有**删除权。超级管理员才可在前端创建/删除空板块。

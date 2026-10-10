@@ -66,4 +66,4 @@ Cookie 的 `Secure` 标志代码默认开启（站点全程 https）；只有纯
 
 上传件分两类存放：媒体库配图这类**公开**内容在 `mediafiles/`（Nginx 的 `/media/` 直出）；项目书、批注版、头像、图册这类**受保护**内容在 `protected_media/`，不在 `/media/` 之下，取文件一律经视图做权限判定，落盘名统一换成 uuid。备份脚本同时打包两个目录。详见 [`docs/deploy.md`](docs/deploy.md) 的「受保护上传件的目录迁移」一节。
 
-每个上传件在落盘时算一份 **SHA-256** 存进记录（项目书、批注版、归档版、头像、图册、帖子图、媒体库共七个字段）。项目书、批注版、归档版的下载入口旁折叠展示这串校验值，下载响应上另带 `Content-Digest`（RFC 9530）与 `X-Checksum-SHA256`（十六进制，与 `sha256sum` 的输出一致）两个头——评审依据是文件，而文件在传递途中被换掉不该无声无息。详见 [`docs/architecture/core.md`](docs/architecture/core.md#上传件的-sha-256)。
+每个上传件在落盘时算一份 **SHA-256** 存进记录（项目书、批注版、归档版、头像、图册、帖子图、媒体库共七个字段）。项目书、批注版、归档版的下载入口旁折叠展示这串校验值，下载响应上另带 `Content-Digest`（RFC 9530）与 `X-Checksum-SHA256`（十六进制，与 `sha256sum` 的输出一致）两个头——评审依据是文件，而文件在传递途中被换掉不该无声无息。详见 [`core/README.md`](core/README.md) 与 [`docs/architecture/core.md`](docs/architecture/core.md)。

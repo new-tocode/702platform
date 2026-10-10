@@ -55,7 +55,7 @@ config 是 app 名字最集中的一处：新增一个前台 app，要在 `confi
 | `config.middleware.RequestLoggingMiddleware` | 每个请求生成 12 位 `request_id`，记 `request.start` / `request.end` / `request.exception`，把 id 塞进响应头 `X-Request-ID` | 必须排在 `AuthenticationMiddleware` 之后（start 行里才有用户名） | 异常路径上只补一条 `request.exception` 就**重新抛出**，不吞异常——500 仍走 Django 的常规路径（`django.request` 记 ERROR） |
 | `config.middleware.SecurityHeadersMiddleware` | 补 `Content-Security-Policy` 与 `Permissions-Policy`；`/admin/` 用放宽版（两处 `'unsafe-inline'`） | 挂在 `MIDDLEWARE` 里 | 漏挂＝测试红；**CSP 收紧写坏的表现是页面静默失效**（按钮没反应、样式没加载），没有报错可查；用 `setdefault` 写入，视图自己发过就不覆盖 |
 | `config.middleware.ForcePasswordChangeMiddleware` | `must_change_password=True` 的用户，除改密页与登出页外一律 302 回改密页（带 `next`） | 用 `process_view`，要求 `request.user` 已解析 | 白名单按 **`request.path` 精确比对**，所以连 `/admin/` 也不放行；未匹配的 URL 走不到它（404 先发生，不会把人重定向到一个不存在的页面） |
-| `config.urls.urlpatterns` | `/admin/` 一条 + 前台全部路由包在 `i18n_patterns` 里；`DEBUG=True` 时额外挂 `MEDIA_ROOT` | 双语要求 `LocaleMiddleware` 在链上 | 新增 app 忘了加进 include 列表＝那组页面没有英文版（`reverse` 仍能解析，不会报错，只是 `/en/` 下访问不到）；受保护根**刻意不挂**，本地也取不到直链 |
+| `config.urls.urlpatterns` | `/admin/` 一条 + 前台全部路由包在 `i18n_patterns` 里；`DEBUG=True` 时额外挂 `MEDIA_ROOT` | 双语要求 `LocaleMiddleware` 在链上 | 新增 app 有两种写错法：**漏了 include** → URL 根本没注册（`reverse` 报 `NoReverseMatch`，一访问就炸）；**include 了但写在 `i18n_patterns` 之外** → 页面能开、`reverse` 也解析得动，只是没有 `/en/` 版——这一种不报错，只能靠 `/en/` 下点一遍发现。受保护根**刻意不挂**，本地也取不到直链 |
 | `config.admin._install_role_section(admin.site)` | 覆写 `AdminSite.get_app_list`，把六张名册提成置顶的「身份管理」分组 | **靠 `config/urls.py` 顶部 `from config import admin as platform_admin` 的副作用导入**才执行——`config` 不在 `INSTALLED_APPS` 里，Django 不会替它自动加载 | 删掉那行 import＝后台标题与分组静默回到 Django 默认，没有任何报错；`ROSTER_MODELS` 里的模型改名后不报错，只是悄悄落回它自己的 app 分组（没有测试盯着这两处） |
 | `config.logging.RequestContextFormatter` | 给没有 `request_id` 的记录补 `-`，让启动、迁移日志也能套同一套格式 | 用于 `detailed` 格式串 | 不补的话格式串里的 `{request_id}` 取值失败，`logging` 会把整条记录丢掉并在 stderr 打一段 `--- Logging error ---` |
 | `config.wsgi.application` / `config.asgi.application` | 标准服务器入口，默认 `DJANGO_SETTINGS_MODULE=config.settings` | — | 生产只用 WSGI（systemd 跑 `gunicorn config.wsgi:application`）；ASGI 入口在仓库里，但没有任何部署形态用它 |
@@ -138,8 +138,10 @@ config 是 app 名字最集中的一处：新增一个前台 app，要在 `confi
 
 ### 启动时序
 
-1. **导入 `config.settings`**：读环境变量 → 执行 `SECRET_KEY` 守卫 → `LOG_DIR.mkdir(parents=True, exist_ok=True)`
-   建出 `logs/` → `LOGGING` 生效。这些副作用都发生在模块导入期，所以「环境变量写错」以**进程起不来**的形式暴露。
+1. **导入 `config.settings`**：读环境变量 → `LOG_DIR.mkdir(parents=True, exist_ok=True)` 建出 `logs/`
+   → 定义 `LOGGING` → **最后**才执行 `SECRET_KEY` 守卫。这些副作用都发生在模块导入期，所以
+   「环境变量写错」以**进程起不来**的形式暴露；顺带一个可观察的细节：`DEBUG=False` 且密钥还是
+   源码默认值时，进程是**在 `logs/` 已经建出来之后**才抛 `ImproperlyConfigured` 的。
 2. **首次加载 `ROOT_URLCONF`**：`config/urls.py` 顶部的 `from config import admin` 顺手把后台标题与
    「身份管理」分组装上。URLconf 是惰性加载的，所以这发生在第一个请求（或第一次 `check`）时，不在启动那一刻。
 3. 请求按上表穿过中间件链。

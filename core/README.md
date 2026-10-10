@@ -54,10 +54,11 @@
 |---|---|
 | 所有业务 app | `core.permissions`（`is_admin` / `require`）与 `core.audit.record_audit` |
 | 各 `AppConfig.ready()` | `core.registry.register_entry`；`accounts` 与 `projects` 另在那里登记 `core.roles` |
-| 带上传件的 app（`accounts` / `projects` / `reviews` / `discussion` / `media` / `content`） | `core.uploads` / `core.storage` / `core.hashing` / `core.downloads` |
+| 带**受保护件**的 app（`accounts` / `projects` / `reviews` / `discussion`） | `core.uploads` / `core.storage` / `core.hashing` / `core.downloads` 四个一起用 |
+| `media`（公开件） | 只用 `core.uploads` 的图片校验与 `core.hashing` 的指纹——它不落受保护根、也没有取件视图 |
 | `accounts` | `core.admin` 的共用件、`core.stats`、`core.forms`；`accounts.views` 是 `platform_overview` 的唯一调用点 |
-| `projects` / `reviews` / `discussion` / `content` | `core.forms` 的多文件字段、`core.admin` 的 mixin |
-| 模板 | 到处 `{% load files file_urls %}` 取 `file_url` / `basename` / `file_ext`；`templates/base.html` 用 `language_url` 与 `nav_section` |
+| `discussion` / `content` | `core.forms` 的多文件字段；`core.admin` 的 mixin |
+| 模板 | 三处 `{% load files file_urls %}`：文件控件的「当前文件」区块、`projects/group_detail.html`、`projects/group_manage.html` 取 `file_url` / `basename` / `file_ext`；`templates/base.html` 用 `language_url` 与 `nav_section` |
 
 ---
 
@@ -68,7 +69,7 @@
 | 入口 | 语义 | 前置条件 | 失败模式 |
 |---|---|---|---|
 | `is_admin(user)` | 平台管理员：`is_staff` 或 `is_superuser` | 允许传 `None` / `AnonymousUser` | 不抛；三者皆假时返回 `False`。**别在别处再写 `user.is_staff`** |
-| `require(request, predicate, event, **fields)` | 视图门槛：`predicate` 为假时记一条 warning 再抛 `PermissionDenied` | `predicate` 是**已求值的布尔值**（不是函数，调用方先算好，如 `can_manage_group(request.user, group)`） | 抛 `PermissionDenied` → 页面 403；warning 的格式是 `"%s username=%s%s path=%s"`，`fields` 按 `key=value` 追加在用户名之后，带 `extra={"request_id": ...}`（缺省 `"-"`）；**不写审计**（审计只记成功的写操作）；通过时返回 `None`，不要拿它当布尔用 |
+| `require(request, predicate, event, **fields)` | 视图门槛：`predicate` 为假时记一条 warning 再抛 `PermissionDenied` | `predicate` 是**已求值的布尔值**（不是函数，调用方先算好，如 `can_manage_group(request.user, group)`） | 抛 `PermissionDenied` → 页面 403；warning 的格式是 `"%s username=%s%s path=%s"`，`fields` 按 `key=value` 追加在用户名之后，带 `extra={"request_id": ...}`（缺省 `"-"`）；**不写审计**（审计记的是写操作与登录锁定这类安全事件，被拒绝的视图请求不在其中）；通过时返回 `None`，不要拿它当布尔用 |
 
 **审计与来源 IP**（`audit.py`）：
 
@@ -108,7 +109,7 @@
 
 | 入口 | 语义 | 前置条件 | 失败模式 |
 |---|---|---|---|
-| `sha256_of(file_obj)` | 分块算已打开文件的 SHA-256，返回小写十六进制 | 调用方负责把指针放在想算的起点 | 从当前位置往后读，不改变指针（复位是调用方的事）；分块是为了不把 500 MB 的视频整份读进内存 |
+| `sha256_of(file_obj)` | 分块算已打开文件的 SHA-256，返回小写十六进制 | 调用方负责把指针放在想算的起点 | 从当前位置**读到末尾**（指针自然被推到末尾，它自己不复位——要接着读就由调用方 `seek(0)`）；分块是为了不把 500 MB 的视频整份读进内存 |
 | `FileDigestMixin.save()` | 每次保存让 `sha256` 跟上文件；子类声明 `digest_field` | 子类**必须**声明 `digest_field` | 没声明 → `ImproperlyConfigured`（刻意的：宁可当场炸，也不要指纹静默失效）；`save(update_fields=[…])` 带了文件列 → 把 `sha256` 并进写入列表；**没带文件列 → 不动指纹**；文件不在盘上 → 记 `file_digest.missing` warning、返回空串，**保存照常成功** |
 
 **存储**（`storage.py`）：
@@ -174,8 +175,8 @@
 - **`digest_field` 只认一个文件字段**：平台上每个模型都只有一个；真有第二个时再把字段名变成参数。
 - **三种情形三种算法**（`_file_sha256`）：**刚上传、还没落盘**（`_committed` 为假）读的就是上传流，不必等落盘再读一遍；**已落盘且已有指纹**沿用（改一句简介不该重读 20 MB 的项目书）；**已落盘、指纹为空**（迁移前的老数据）从存储补算一次，此后一直沿用。
 - **算完必须把上传流拨回开头**，否则紧接着的落盘会存下一个空文件。
-- **`save(update_fields=[…])` 的两条规则**：带了文件列 → `sha256` 会被并进写入列表（换头像走的正是 `save(update_fields=["avatar", "updated_at"])`，不并进去就永远写不进去）；**没带**文件列 → 完全不动指纹（Django 不会落盘那个新文件，照内存里的内容重算就会与库里的文件对不上）。
-- 指纹**按存储里的字节算、与文件名无关**：落盘名已是 uuid，上传者填的原始名字平台根本不保存，指纹因此是文件唯一的身份。
+- **`save(update_fields=[…])` 的两条规则**：带了文件列 → 算出的指纹**与现值不同**时会把它并进写入列表（换头像走的正是 `save(update_fields=["avatar", "updated_at"])`，不并进去就永远写不进去）；**没带**文件列 → 完全不动指纹（Django 不会落盘那个新文件，照内存里的内容重算就会与库里的文件对不上）。指纹没变就别硬塞——有一条用例专门钉这个。
+- 指纹**按存储里的字节算、与文件名无关**：受保护件的落盘名已换成 uuid（原文件名不保存），公开件（媒体库）则保留原文件名——两种情况下指纹都只认字节，所以换名、改名都不影响它。指纹因此是文件内容的身份，不是路径的身份。
 
 ### 存储的两类根
 
@@ -260,7 +261,8 @@
 | `role_registry.register` | 身份登记（DEBUG） |
 | `file_digest.missing` | 库里指着、盘上没了 |
 | `file_digest.invalid` / `file_digest.unexpected_length` | 指纹头发不出去 |
-| `private_media.missing` / `.already_there` / `.moved` | `rehome` 与受保护件搬迁迁移 |
+| `private_media.already_there` / `.moved` / `.missing` | 只有 `rehome`（`core/storage.py`）会发这三条 |
+| `private_media.rehome`（汇总）与迁移自带的 `private_media.missing` | `core/migrations/0002_rehome_protected_uploads.py`——搬迁迁移**另写了一份冻结实现**，所以它发的 `missing` 与上面那条同名但字段不同，且它**不发** `.moved` / `.already_there` |
 
 **刻意不报错**：重复登记同一个 `key` 的入口或身份 → 覆盖，不报错；
 坏入口（`visible_when` 抛异常、`url_name` 反解不出）→ 隐藏/跳过，一个坏入口不带垮整页；

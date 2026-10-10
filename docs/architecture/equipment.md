@@ -13,7 +13,7 @@
 
 - **借用的门槛在项目组侧**：`projects.permissions.can_use_equipment`（staff 或任一项目组成员）；本模块**没有 `permissions.py`**，只在自己那几张视图里调它。
 - **归还刻意比借用宽**：归还只要求登录 + 是本人的记录（管理员可代还），**不查项目组归属**——被移出组的人仍要能还掉手里的设备，否则权限就把人锁死了。`is_active=False` 的设备同理必须还能还。
-- **可见范围不是判定函数，而是在查询里收窄**：本人只看自己的借用记录，管理员看全部。（`docs/architecture/permissions.md` 里曾把这个口径写成一个函数名 `can_view_borrow`——**代码里没有这个函数**，以本段为准。）
+- **可见范围不是判定函数，而是在查询里收窄**：本人只看自己的借用记录，管理员看全部——没有对应的 `permissions` 函数（[permissions.md](permissions.md) 已按此更正）。
 - **后台代还的门槛是模型权限**：`permissions=["change_equipmentborrow"]`，不是 `is_admin`——那个 admin 类的 `has_change_permission` 被覆写成 `is_admin`，动作声明必须跟着它，否则只挂 `view_equipmentborrow` 的只读账号就能改别人的借还、把库存加回去。
 
 ## 由来

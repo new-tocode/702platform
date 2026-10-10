@@ -36,7 +36,7 @@
 | 删除借用记录 | `EquipmentBorrowAdmin.has_delete_permission` 恒为 `False`——删掉一条在借记录会让库存凭空少一件 |
 
 **没有的模块**：没有 `permissions.py`、`selectors.py`、`panels.py`。
-借用记录的可见范围**不是判定函数**（别按 `can_view_borrow` 这类名字去找），而是在查询里收窄：
+借用记录的可见范围**不是判定函数**（本 app 没有 `permissions.py`，也没有 `can_view_borrow` 这个函数——[permissions.md](../docs/architecture/permissions.md) 曾误列它，已更正），而是在查询里收窄：
 `views.borrow_list` 按 `borrower` 过滤，`views.borrow_return` 在 `get_object_or_404` 里带 `borrower`。
 上游是 `core`（`permissions`／`audit`／`registry`／`stats`）与 `projects.permissions`；
 `projects` 侧只在文档里把本模块列为下游，代码上不反向依赖。
@@ -87,8 +87,10 @@
   （纵深防御）；但**已借出的记录仍可归还**，`return_borrow` 不看 `is_active`。
 - **外键一律 `PROTECT`**：`EquipmentBorrow.equipment` / `.borrower` 都是，所以有借用记录的设备删不掉
   （哪怕全部已归还），有借用记录的账号也删不掉。退役设备走 `is_active=False`。
-- **只有 `services.py` 的两个函数能改 `available_count`**：直接改字段（尤其绕过 `save()` 的
-  `QuerySet.update()`）会让库存与借用记录脱节。新增写入口必须走这两个服务函数。
+- **借与还的增量只能走 `services.py` 的两个函数**：直接改字段（尤其绕过 `save()` 的
+  `QuerySet.update()`）会让库存与借用记录脱节，新增写入口要接在这两个函数上。
+  **例外**：后台表单能直改 `available_count`（那是给人修台账用的，见 §6），
+  所以「这一列只被服务层写」这句话不成立——`return_borrow` 的回补守卫正是为它准备的。
 - **回补是有条件的**（见 §4）。
 - **审计 action 一旦发布不再改**，清单见 §5。
 
@@ -125,7 +127,10 @@
 5. 成功：审计 `equipment.return` → `messages.success` → 302；`BorrowAlreadyReturned` → `messages.warning` + 302。
 
 **重复归还为什么不重复回补**：状态复查在**行锁内、且在改任何东西之前**；第二次调用读到的是已 `returned`
-的那一行，直接抛异常，`available_count` 一个字节都不动。行锁（不是设备锁）才是那条串行点。
+的那一行，直接抛异常，`available_count` 一个字节都不动。串行点是那行借用记录上的锁。
+**注意实际锁的范围**：取借用记录那句是 `select_for_update().select_related("equipment")`，
+不带 `of=` 的 `FOR UPDATE` 在 PostgreSQL 下**连设备行一起锁**——副作用是「同一台设备的不同借用记录
+并发归还时会互相等」，以及它与只锁设备行的 `create_borrow` 共享同一把设备锁（不成环，但别把它当纯粹的借用行锁看）。
 
 **后台代归还**（`mark_returned`）：对选中的每条 pk **逐条**调同一个 `return_borrow`（每条各自一个事务），
 成功写审计 `equipment.return.admin`，已归还的只累加计数，最后分别报 success / warning。
@@ -205,7 +210,7 @@
 - **「不早于今天」只在表单里**：模型只校验 `planned_return_date >= borrow_date`。新增非表单写入口要自己带这道校验。
 - **没有逾期概念**：过了 `planned_return_date` 不改状态、不提醒、也不挡归还。
 - **管理员不能替成员登记借用**：后台 `has_add_permission` 为 `False`，前台借用人恒为 `request.user`；只有归还可以代做。
-- **后台批量归还只作用于勾选的那几条**：列表页一次只列一页，没有「全选全部筛选结果」的通道。
+- **后台批量归还可能作用于「全部筛选结果」**：Django admin 自带跨页全选——勾一条之后会出现「全选 N 项」，点它提交的 `select_across=1` 会让动作拿到**整个筛选结果集**（`ModelAdmin` 里 `if not select_across` 才会按 pk 过滤）。所以「我只还了这一页」是错觉：动这个动作前先看清筛选条件与那个链接的提示。
 - **`available_count` 会被人工改**：后台表单能把可借数调大（只要求 `可借 + 在借 <= 总量`），此后
   「总量 − 可借数」就不等于在借数了。`return_borrow` 的 `available_count < total_count` 守卫因此宁可跳过回补；
   代价是那次归还不会增加可借数，只留一条 `equipment.return.inventory_invariant`（见 §4）。

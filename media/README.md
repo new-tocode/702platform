@@ -64,7 +64,7 @@
 | `kind` | `image` / `video` 二选一：决定走哪套校验，也是引用方 `limit_choices_to` 的筛选依据 |
 | `caption` | ≤255、可空；后台列表与 `__str__` 用它，页面拿它当 `alt`／说明 |
 | `uploader` | FK `User`，`PROTECT`，`related_name="uploaded_media"`；后台只读 |
-| `file_size` | `editable=False`；每次 `save()` 都从 `self.file.size` 重写，永远等于盘上那份的大小 |
+| `file_size` | `editable=False`；每次 `save()` 都从 `self.file.size` 重写（**盘上文件被手工删掉时，这一步会直接抛 `FileNotFoundError`**，保存失败而不是留下一个旧数字） |
 | `sha256` | 来自 `FileDigestMixin`，`editable=False`；每次 `save()` 让指纹跟上文件 |
 | `created_at` | `auto_now_add`；`Meta.ordering` 是 `("-created_at", "-id")` |
 
@@ -174,6 +174,8 @@
 - **媒体库不判权限**：能上传的只有后台账号（Django 的 `is_staff` + 模型权限），前台唯一的
   写入口是成员添加获奖时收图（`content.services._store_images`）。**别把需要判权限的文件
   放进来**——`/media/` 直出没有任何权限判定。
-- **本期不做视频转码／多码率**：要求上传即 MP4（H.264）或 WebM，由 Nginx 静态直出并支持
-  Range 拖动播放；视频量大了以后再引入 ffmpeg 转码或对象存储。这也是「统一媒体库」的
-  用意之一——公开页、通知、风采引用的是同一份文件，将来切对象存储只改一处存储配置。
+- **本期不做视频转码／多码率**：校验只认扩展名与文件头魔数（MP4 查 `ftyp`、WebM 查 EBML），
+  **编解码格式本身不校验**——HEVC 封进 MP4 一样能过，浏览器放不放得出来平台不管。所以要
+  传 MP4（H.264）或 WebM 是**约定**，不是强制。由 Nginx 静态直出并支持 Range 拖动播放；
+  视频量大了以后再引入 ffmpeg 转码或对象存储。
+- **「统一媒体库」的用意**：公开页、通知、风采引用同一份文件，将来切对象存储只改一处存储配置。
