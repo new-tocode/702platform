@@ -56,4 +56,6 @@ GroupCreateRequest（创建项目组申请）
   - 通过后按申请内容建立正式 `ProjectGroup`（指导老师从申请的三列槽位转成 `ProjectAdvisor` 行）并出现在项目组列表中；拒绝则申请人可修改后重交。
   - 创建申请**后台只读留痕**；**处理入口只在管理员的「评审」页**——管理员不需要评审资格，`reviews.permissions.can_open_queue` 为此把 `is_staff` 也放行，「谁算管理员」的口径仍取自 `projects.permissions.can_decide_group_create_requests` 这一处。
 - 学院与指导老师在同一张表单上维护：指导老师固定三行输入框，空槽位表示没有这一位，保存时按槽位顺序补齐（`projects.services.update_group_info`），因此不会撞上槽位唯一约束。学院与指导老师在项目组详情页与项目组列表页都对外展示。
-- **列表页的搜索与「我的项目组」**：搜索是一个关键字扫组名与三种姓名（联系人、成员、指导老师），姓名同时认 `Profile.full_name` 与 `username`——后者是 `full_name` 为空时页面回退显示的名字。过滤跨 `members` / `advisors` 两个一对多关系，`selectors.search_groups` 结尾用 `distinct` 收回重复行，调用方还必须把它排在 `annotate` **之前**，否则 `member_count` 的分母跟着 join 放大。「我的项目组」（`?mine=1`）按 `permissions.member_group_ids` 收窄：联系人一定在成员名单里，所以成员那一侧就是「联系人 ∪ 组员」。两者都只在 `groups_visible_to` 给定的可见范围内进行——搜索不越过可见性。
+- **列表页的搜索与「我的项目组」**：搜索是一个关键字扫组名与三种姓名（联系人、成员、指导老师），姓名同时认 `Profile.full_name` 与 `username`——后者是 `full_name` 为空时页面回退显示的名字。过滤跨 `members` / `advisors` 两个一对多关系，`selectors.search_groups` 结尾用 `distinct` 收回重复行。
+
+**已知的口径问题（未修）**：搜索的 `WHERE` 与 `member_count` 的聚合落在同一条 member join 上，过滤会把参与聚合的行一起筛掉——搜「高」只命中一名成员时，卡片写「成员 1 人」而下面的名单列着 5 人；`distinct=True` 防的是 `advisors` 那处 join 的重复行，防不了这个。要显示真实人数，得让聚合不受过滤影响（子查询，或 `annotate` 早于过滤）。改动前先想清楚卡片上的数字**应该**是哪一个。「我的项目组」（`?mine=1`）按 `permissions.member_group_ids` 收窄：联系人一定在成员名单里，所以成员那一侧就是「联系人 ∪ 组员」。两者都只在 `groups_visible_to` 给定的可见范围内进行——搜索不越过可见性。

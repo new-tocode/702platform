@@ -1,6 +1,6 @@
 # 开发指南
 
-面向继续开发本项目的开发者：目录结构、环境配置、常用命令、测试与验收口径、日志调试和常见问题。命令默认在项目根目录执行。
+面向继续开发本项目的开发者：目录结构、环境配置、常用命令、注释怎么写、新增一个功能走一遍、测试与验收口径、日志调试和常见问题。命令默认在项目根目录执行。
 
 > 设计/数据模型/权限等**架构说明**见 [`architecture/`](architecture/README.md)；**部署**见 [`deploy.md`](deploy.md)；**四份文档的分工**见 [`docs/README.md`](README.md)。
 
@@ -143,6 +143,29 @@
 - **文案的层次**：用户可见文案归模板与 `panels`；服务层抛领域异常，由视图翻译成 `messages`。前台文案一律 `gettext`，改完要跑 `.po` 兜底测试（见 §3.4）；后台不在双语范围内，它的文案写中文原样、不进 `.po`。
 - **审计**：写操作经 `core.audit.record_audit` 留痕。action 字符串一旦发布就不再改，历史记录要保持连续。
 
+### 1.3 注释怎么写
+
+代码里的注释是**中文自由式**，但只服务一条原则：**写代码看不出来的东西**——为什么这么
+做、边界在哪、什么时候会失败。签名里读得出来的（参数名、返回什么）不写；「先取对象、
+再校验」这种把代码念一遍的也不写。
+
+| 位置 | 写什么 |
+|---|---|
+| 模块 docstring | 这个模块负责什么、**为什么把它单独拆出来**。如 `core/permissions.py` 讲「为什么 `is_admin` 收敛到这里」、`reviews/lifecycle.py` 讲状态机为什么只有一个写入点 |
+| 公开函数 | 语义、前置条件、**失败模式**：抛哪个领域异常、视图会把它翻译成什么；拒绝时是 403 还是 404（不泄漏对象是否存在） |
+| 行内注释 | 只有一种：**为什么非得这么写**。反直觉的写法、必须维持的顺序、看起来多余却不能删的那一行 |
+
+**失败模式是当前最缺的一条。** 读代码时最费劲的不是「它做了什么」，而是「什么情况下它会
+拒绝我、以什么形式拒绝」。服务层抛领域异常（`reviews/exceptions.py` 的 `ReviewError` 这类）、
+视图翻成 `messages` 或 403/404——新写服务函数时把这条写进 docstring。
+
+几条具体的：
+
+- **并发与锁要写明**：函数靠行锁保证正确性时（`select_for_update`），docstring 里写清**锁的是哪一行、为什么非锁不可**（例：个人图册的 100 MB 合计上限，求和前要先锁账号行，否则两个标签页会双双读到还没涨上去的用量）。这是最容易在重构时被当作冗余删掉的一行。
+- **不写会过期的数字**：条数、行数、耗时写在提交信息或 PR 里，不写进注释。见 [docs/README.md](README.md) 的「文档里不写什么」。
+- **交叉引用用 Sphinx 式**（`:func:` / `:class:` / `:data:`），与既有代码一致；项目不接文档生成器，它只是给人跳转用的。
+- **不复述模型字段**：字段含义写在 `models.py` 的定义处，注释里再来一遍就会漂移。
+
 ## 2. 依赖
 
 `requirements.txt`：
@@ -150,7 +173,6 @@
 | 依赖 | 作用 |
 |---|---|
 | `Django>=5.2,<5.3` | Web 框架、ORM、认证、Session、Admin、迁移、模板、测试 |
-| `djangorestframework>=3.17.2,<3.18` | 为后续 API 预留：只装在 `INSTALLED_APPS` 里，当前没有任何 serializer／viewset／APIView |
 | `bleach>=6.2,<7` | 富文本 HTML 白名单过滤 |
 | `markdown>=3.8,<4` | Markdown 渲染 |
 | `Pillow>=12.3,<13` | 校验上传图片真实格式，并挡住解压炸弹（12.x 修掉 11.3.0 的 35 个已知漏洞） |
@@ -363,7 +385,7 @@ help_text=format_lazy(_("最多 {limit} 张。"), limit=IMAGE_LIMIT)   # 花括�
 
 - 社团空间路由在 `/member/space/`（板块路径为 `/member/space/boards/<id>/`），仅活跃且已完成首次改密的登录账号可用；所有写操作在视图与 `discussion.services` 再次校验，不能依赖模板隐藏按钮。
 - 平台管理员问 `core.permissions.is_admin()`；只有 `is_superuser=True` 可在前端创建/删除板块。板块需填写中文名和英文名，两者视作原样用户内容；置顶帖排在普通帖前，各自按发布时间倒序；帖子正文与评论不翻译。
-- 板块有帖子时模型外键保护与服务层行锁共同阻止删除；新帖写入也锁板块行，避免和删除并发绕过空板块条件。每帖最多 3 张 JPG/JPEG/PNG/WebP/GIF 图片、单张 ≤3 MiB；增删图片及删除帖子会清理对应文件，删帖也会级联删除评论。
+- 板块有帖子时模型外键保护与服务层行锁共同阻止删除；新帖写入也锁板块行，避免和删除并发绕过空板块条件。每帖最多 3 张 JPG/JPEG/PNG/WebP/GIF 图片、单张 ≤3 MB；增删图片及删除帖子会清理对应文件，删帖也会级联删除评论。
 - 帖子图片以随机文件名落盘，页面一律走 `/member/space/images/<id>/` 取图（`discussion.views.post_image`，同样是成员门槛）——`MEDIA` 是公开目录，直接把路径写进模板等于把帖子内容漏给游客。`upload_to` 是函数时 Django 原样采用返回值、不做 strftime，日期目录要在函数里自己算。
 - 评论删除与帖子同一口径：作者或管理员（`discussion.permissions.can_delete_comment`），入口是每条评论头部的 `.link-danger` 小字，确认提示复用 `static/js/discussion.js` 的 `data-confirm`。删除是软删（`deleted_at`／`deleted_by`），页面不再显示、评论计数跟着降，但行与内容都留着；重复删除是空操作，只写一条审计。
 - 成员目录只查 `is_active=True` 账号，姓名搜索只匹配 `Profile.full_name`；空姓名或头像回退到账户名首字。`/member/profile/<id>/` 是只读资料页，公开头像、姓名/账号名、学院、专业、特长、简介、身份、个人图册、手机号和其他联系方式，不显示学号或邮箱；成员资料内容原样呈现。帖子下的评论区以左侧色线和缩进与正文区分。
@@ -409,7 +431,7 @@ source env.local.sh
 | `projects` | 联系人由 `leader` 计算；「项目组成员」名册一行看出某人在哪些组、在各组里是联系人还是成员，且没有直接加人的入口；无组员看全部可申请、组员只看自己的组、联系人看全部并管理自己的组；申请→审核入组；拒绝后可重申；申请创建项目组（任一管理员在「评审」页同意即建组，其余管理员的待办随之消失）；移除成员；联系人转让后原联系人保留为成员；改组介绍与学院/指导老师（指导老师每组至多 3 位，空槽位不占位并自动补齐；上限在数据库层由槽位唯一约束 + CHECK 兜住，服务层另有一道）；非联系人管理页 403 |
 | `competitions` | 竞赛列表所有登录成员可见；仅项目组联系人报名（限自己的组）；参赛成员与竞赛组长须属该组且组长在参赛成员内；重复报名/截止校验；报名修改与放弃；跨组越权拒绝 |
 | `equipment` | 借用限项目组成员（入口隐藏 + 视图 403）；库存事务 + 行锁不超借；仅见本人记录；归还回补、重复归还不重复回补；管理员代还；被移出组后仍可归还 |
-| `discussion` | 游客与首次改密账号不可访问；作者仅改/删自己的帖与评论，管理员可删他人帖/评论与置顶，仅超级管理员可建/删空板块；评论软删除后不再出现在页面与计数里但仍留在库中；中英文板块名必填、板块条可横向滑动；成员目录按姓名过滤、只读资料字段白名单；每帖 3 张、单张 3 MiB 图片上限与文件清理；英文界面翻译完整但用户内容原样 |
+| `discussion` | 游客与首次改密账号不可访问；作者仅改/删自己的帖与评论，管理员可删他人帖/评论与置顶，仅超级管理员可建/删空板块；评论软删除后不再出现在页面与计数里但仍留在库中；中英文板块名必填、板块条可横向滑动；成员目录按姓名过滤、只读资料字段白名单；每帖 3 张、单张 3 MB 图片上限与文件清理；英文界面翻译完整但用户内容原样 |
 | `reviews` | 任务是一张表（`ReviewTask`，`stage` 区分初审／评审）；状态机与两道关的口径收敛在 `lifecycle.py`（改状态一律经 `transition()`）；页面上下文由 `panels.py` 统一装配；评审判定在 `permissions.py`。**这一块的规则细节见 [架构文档的 reviews 一篇](architecture/reviews.md)**——这里只列验收要看住的几件事：初审先于评审且每轮恰好一条初审任务、抽人排除请假者与本轮初审人、初审通过时评审人不够则整次回滚、同一项目组同时只能有一个未结束的轮次、「一人一轮一席」等三条约束在数据库层、超级评审一票敲定会释放等待中的任务、改派只对「待处理且该轮未判结论」开放且要真的持有模型修改权限、初审人与评审人一律匿名（页面、文件名、下载头都不带身份） |
 | `core` | 操作入口注册表按登录/改密/权限/自定义条件过滤；审计只读；Admin 标题定制；上传件的通用校验（含图片那份共用实现）；界面翻译兜底（源码标了翻译的文案都在 `.po` 里、译文非空、占位符一致） |
 
@@ -422,7 +444,49 @@ source env.local.sh
 
 评估某项改动是否合格：先补齐迁移并让 `check`、`makemigrations --check`、`test` 全过；测试通过后再提交。
 
-## 6. 日志与调试
+## 6. 新增一个功能：拿一个真实功能走一遍
+
+以 v1.3.0 的「项目组列表：搜索 + 我的项目组」（`projects`）为例，从口径到提交的完整落点。
+它不算最小的例子，但把「跨表查询、可见性收窄、GET 表单、测试怎么挑」都碰了一遍——
+照着走一遍，就知道新功能该落在哪几个文件里。
+
+**1. 先定口径，再写代码。** 这个功能有三条口径必须在动手前问清楚：
+
+- 搜索能越过可见性吗？——不能。`groups_visible_to` 给定的范围是**前提**，搜索是在它之内收窄。
+- 「我的项目组」包含哪些？——`member_group_ids`：联系人一定在成员名单里（`ProjectGroup.save` 保证），所以成员那一侧就是「联系人 ∪ 组员」。
+- 关键字认哪些名字？——组名 + 联系人／成员／指导老师三种姓名；姓名同时认 `Profile.full_name` 与 `username`（后者是 `full_name` 为空时页面回退显示的名字）。
+
+问答都落在 [architecture/projects.md](architecture/projects.md) 与 [glossary.md](glossary.md) 里；
+新概念先在术语表里定名。
+
+**2. 改哪几个文件**（顺序就是依赖方向）：
+
+| 文件 | 改什么 |
+|---|---|
+| `projects/selectors.py` | `search_groups(groups, *, query="")`：跨 `members` / `advisors` 两个一对多关系过滤，结尾 `distinct()` 收回重复行 |
+| `projects/permissions.py` | `member_group_ids(user)`：把「我参与的组」收在一处，视图不来拼 |
+| `projects/views.py` | `group_list`：`search_groups` 收窄 → `?mine=1` 按 id 集合再收窄 → `annotate(member_count=Count("members", distinct=True))`。**顺序在这里有讲究，但方向和直觉相反**：`WHERE` 与聚合落在同一条 member join 上时，过滤会把参与聚合的行一起筛掉——搜「高」（只命中 1 名成员）时卡片写「成员 1 人」，而下面列着 5 个人。`distinct=True` 防的是另一处 `advisors` join 带来的重复行，防不了这个（这是一处**已知的口径问题**，见 [architecture/projects.md](architecture/projects.md)） |
+| `templates/projects/group_list.html` | 搜索框与「我的项目组」写在**同一个 GET 表单**里：提交搜索时用 hidden 把筛选带上，切筛选时用 `{% querystring %}` 把关键字带上 |
+| `projects/tests/test_browsing.py` | 两个测试类：`GroupListSearchTests`（按组名／联系人／成员／指导老师／账号名各搜一次、不越可见范围、空白关键字、无结果空状态）、`GroupListMineFilterTests`（联系人、管理员、无组员各看到什么，筛选与关键字互相保留） |
+
+**3. 测试要挑有判别力的。** `test_search_stays_inside_visible_scope` 钉的是「搜索不越过
+可见性」——去掉 `groups_visible_to` 那层就会红；`test_search_falls_back_to_username`
+钉的是姓名回退（`full_name` 为空时用账号名）。写用例时问一句：**改坏哪一行会让它变红？**
+答不上来的是装饰，不是测试。
+
+这一段里正好有个**反面教材**：`test_search_lists_each_group_once` 想钉的是 `search_groups`
+结尾的 `distinct()`，但视图随后无条件 `annotate(...)`，`GROUP BY` 主键已经把重复行收回一行
+了——实测去掉 `distinct()` 后，过滤出的 10 行经 `annotate` 仍是 3 行（每组一行），测试照样绿。
+断言落在了别人顺手兜住的副作用上，看着像覆盖，其实没有判别力。
+
+**4. 文档跟着改**：口径变了改 `docs/architecture/projects.md`；新文案进模板后要跑
+`.po` 那一套（见 §3.4）；若新增了成员入口，去 `core.registry` 登记。
+
+**5. 提交**：`compileall` → `check` → `makemigrations --check --dry-run` → `test` 全过再提交，
+提交信息讲清**为什么这么改**并附测试结果（见 §9）。跨多个模块的改造先切分支、写一份可勾选的
+`TASKS.md`（被 `.gitignore` 忽略，做完删掉），每个阶段一个提交。
+
+## 7. 日志与调试
 
 - 日志文件 `logs/django.log`，`RotatingFileHandler`，单文件 10MB、保留 5 份、UTF-8，同时输出终端与文件。
 - 每个请求生成 12 位 `request_id`，响应头 `X-Request-ID` 与日志一致，用于串联一次请求：
@@ -436,7 +500,7 @@ source env.local.sh
 - 排查顺序：记下响应头 `X-Request-ID` → 在日志中搜索该 ID → 看 `request.start`/`request.end` 的状态与耗时 → 如有 `request.exception` 读紧随的 traceback。
 - 安全：不要把密码、完整 POST body 或 Cookie 写入日志；登录失败只记录用户名。
 
-## 7. 常见问题
+## 8. 常见问题
 
 | 现象 | 处理 |
 |---|---|
@@ -450,6 +514,6 @@ source env.local.sh
 | `check --deploy` 有安全警告 | 开发环境预期；生产完成 HTTPS 后配置环境变量再跑，勿用 `SILENCED_SYSTEM_CHECKS` 掩盖 |
 | CSRF 失败 | 表单含 `{% csrf_token %}`；HTTPS 下 `DJANGO_CSRF_COOKIE_SECURE=1`；反代勿丢 `Origin`/`Referer`/Cookie |
 
-## 8. 变更与提交
+## 9. 变更与提交
 
 改动模型、配置或认证流程后按序执行：`compileall` → `check` → `makemigrations` → `migrate` → `test`。全部通过后再提交；迁移文件必须与模型代码一起提交。

@@ -23,7 +23,7 @@ Post（帖子）
 
 PostImage（帖子图片）
   - post          FK(Post, CASCADE)
-  - image         图片（JPG/JPEG/PNG/WebP/GIF，单张 ≤3 MiB，每帖最多 3 张）
+  - image         图片（JPG/JPEG/PNG/WebP/GIF，单张 ≤3 MB，每帖最多 3 张）
   - sha256        image 的 SHA-256 指纹（上传时自动算，见 [core.md](core.md)）
   - file_size / created_at
 
