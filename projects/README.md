@@ -160,7 +160,7 @@
 | 文件 | 钉住 |
 |---|---|
 | `tests/base.py` | 共享夹具 `ProjectViewTestCase`：管理员／联系人／组员／无组者／另一个联系人 + 两个组；把 `PRIVATE_MEDIA_ROOT` 指到临时目录，真上传的用例不再往仓库的 `protected_media/` 里留孤儿文件 |
-| `tests/test_browsing.py` | `GroupBrowsingViewTests`（联系人自动入组；**任何登录身份都看到全部组**；非本组的卡片上有申请入口——管理员也有；联系人看到管理链接；匿名跳登录；详情从项目书文件名取扩展名；学院与指导老师两页都显示；没指导老师时用占位符）、`GroupListSearchTests`（关键字扫组名与联系人／成员／指导老师姓名、`username` 兜底、`distinct` 不重复出组、搜索不越 `groups_visible_to` 给的范围（把范围换成单组来验）、空关键字、无命中空态、**只命中一名成员时卡片人数仍是全组人数**）、`GroupListMineFilterTests`（`?mine=1` 三种身份的结果，与关键字及链接参数共存） |
+| `tests/test_browsing.py` | `GroupBrowsingViewTests`（联系人自动入组；**任何登录身份都看到全部组**；非本组的卡片上有申请入口——管理员也有；联系人看到管理链接；匿名跳登录；详情从项目书文件名取扩展名；学院与指导老师两页都显示；没指导老师时用占位符；卡片上的评审状态 chip 有轮次才出）、`GroupListSearchTests`（关键字扫组名与联系人／成员／指导老师姓名、`username` 兜底、`distinct` 不重复出组、搜索不越 `groups_visible_to` 给的范围（把范围换成单组来验）、空关键字、无命中空态、**只命中一名成员时卡片人数仍是全组人数**）、`GroupListMineFilterTests`（`?mine=1` 三种身份的结果，与关键字及链接参数共存） |
 | `tests/test_membership.py` | 申请→通过写进 `members`；重复待审申请只留一条；被拒后可重申；联系人可移除成员；**联系人不可被移除** |
 | `tests/test_contact_transfer.py` | 转让后原联系人仍是普通成员 |
 | `tests/test_group_management.py` | 管理页只对联系人／管理员开（其他人 403）；后台建组时联系人留在成员里；管理页各区块渲染得出来；上传项目书落 `sha256` 且完整渲染；**清空槽位后名字收拢、不留空洞**；上限从服务层也无法突破 |
@@ -172,7 +172,7 @@
 
 - **可以同时向多个组各留一条待审申请**：唯一约束只按 `(组, 人)`，一个人手里同时压着三份「申请审核中」是允许的（页面在卡片上标状态，联系人也各自只看自己的组）。
 - **`group_apply` 不判可见范围，是有意的**：列表已经列全部组，直接访问 `/member/projects/<id>/apply/` 与从列表点进来是同一件事；那里唯一的门槛是「还不是该组的成员」。改动之前这两处口径不一致（列表按「有没有组」分档、申请却不设限），现在统一成「都能看、都能申请」。
-- **列表卡片上的评审状态 chip 是一个死条件（未修）**：模板写的是 `{% if row.status %}`，而视图给的行字典里是 `status_label` / `status_tone`，没有 `status` 这个键——所以「初审中／评审中」这个 chip 从来不渲染。这是评审重构时改的键名漏改了模板（不是本轮的可见范围改动引入的）。**修之前先定一件事**：列表现在对全体登录成员可见，修好之后每个人都会看到每个组的评审状态——那是不是想要的？定了再动。
+- **卡片上的评审状态是「最近一轮」的**：`status_label` / `status_tone` 取该组最新一轮的状态（没有轮次就不出 chip）。**这是有意给全体成员看的**——列表本来就列着每个组的简介、成员名单与指导老师，评审进度不再算额外暴露；详情页那份完整历史仍按 `can_view_group` 收着。
 - **列表卡片的详情链接与详情页门槛不是同一个函数**：`group_list` 里的 `can_view` 判的是「管理员或本组成员」，不是 `can_view_group`；评审人凭任务能打开详情页，但列表不会因此多出链接。
 - **「联系人恒为成员」没有数据库约束**：只靠 `ProjectGroup.save()` 与后台 `sync_group_membership()` 两处补偿。`QuerySet.update()`、直接 `members.remove(leader)`、或任何跳过 `save()` 的写入都会破坏它。
 - **提高指导老师上限要动迁移**：`GroupCreateRequest.advisor_1..3` 是三个固定列，`GroupCreateRequestForm` / `GroupInfoForm` 也各自显式声明三个字段；常量之外这些地方都要跟着改。

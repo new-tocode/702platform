@@ -55,7 +55,8 @@
         <div class="panel reveal">
             <div class="panel-head">
                 <h2>{{ row.group.name }}</h2>
-                {% if row.status %}
+                {# 最近一轮的状态；没有轮次时 status_label 是空串，不渲染。 #}
+                {% if row.status_label %}
                     <span class="chip chip-{{ row.status_tone }}">{{ row.status_label }}</span>
                 {% endif %}
             </div>

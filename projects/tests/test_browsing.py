@@ -61,6 +61,31 @@ class GroupBrowsingViewTests(ProjectViewTestCase):
                     )
                     self.assertContains(response, "已加入")
 
+    def test_card_shows_the_latest_round_status(self):
+        """卡片上的 chip 是最近一轮的状态（`status_label` / `status_tone`）。
+
+        模板曾经判的是 `row.status`（视图不给这个键），于是这个 chip 从来不渲染——
+        键名对不上不会有任何报错，所以这里同时钉住「有轮次就出 chip」与
+        「没轮次不出」。
+        """
+        from reviews.models import ProjectSubmission
+
+        self.client.force_login(self.member)
+
+        blank = self.client.get(reverse("projects:group_list"))
+        self.assertNotContains(blank, "初审中")  # 没有轮次：一个状态都不出
+
+        ProjectSubmission.objects.create(
+            group=self.group,
+            round=1,
+            review_type="innovation_start",
+            submitted_by=self.leader,
+        )
+
+        response = self.client.get(reverse("projects:group_list"))
+        self.assertContains(response, "初审中")
+        self.assertContains(response, "chip-on")  # 语气色跟着状态走
+
     def test_user_without_group_sees_all_groups_to_apply(self):
         self.client.force_login(self.no_group_user)
 
