@@ -180,6 +180,7 @@
 | 字段 | 谁在读 | 承诺 |
 |---|---|---|
 | `User.is_reviewer` / `is_preliminary_reviewer` / `is_super_reviewer` / `must_change_password` | `reviews.permissions`、中间件 | 资格是用户属性、相互独立；资格**判定**在 `reviews`，这里只存 |
+| `User.receives_preliminary_tasks` / `receives_review_tasks` | `reviews.draw`（抽人与改派候选）、`accounts/admin.py`（状态列与批量动作） | 接单开关（默认开）：**不是资格**，关掉不撤资格、不动已有任务；写入口只有 `reviews.services.set_reviewer_availability`（含批量版），别直接写字段 |
 | `ProjectGroup.leader` / `.members` | `reviews`、`competitions`、`equipment`、`notices`、`core.stats` | 联系人的唯一真相源；联系人恒为成员（**靠代码保证，没有数据库约束**） |
 | `ProjectGroup.proposal` | `reviews`（各轮次共用同一份） | 项目书只存这一份，评审侧不复制 |
 | `Notice.scope` / `visible_groups` | `notices.visibility`、成员侧过滤 | 三个取值；`internal` 才需要用户组 |
