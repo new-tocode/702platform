@@ -261,6 +261,26 @@ curl -i http://127.0.0.1:8000/                            # 直连，期望 200 
 
 再按业务流程走一遍：公开首页 → 管理员建成员账号 → 成员首次登录强制改密 → 内部通知按组可见 → 项目组/联系人竞赛报名 → 设备借还 → `/admin/core/auditlog/` 只读审计。
 
+### 2.7 配置的优先级与「生效值」
+
+本项目**没有配置文件层，也没有命令行开关**——一切配置只有两个来源，后者覆盖前者：
+
+1. **代码默认值**：`config/settings.py` 里 `os.environ.get("DJANGO_…", <默认>)` 的第二个参数。
+2. **环境变量**：本地是 `env.local.sh`，生产是 `env.sh`（systemd 单元用 `EnvironmentFile` 读它）。
+
+所以「改了代码默认值却不生效」几乎总是因为 **`env.sh` 里显式写着旧值**——它优先。改动安全开关（Cookie、HSTS、SSL 跳转）时特别容易踩：代码默认值调了，线上文件里的那一行还在。
+
+看当前生效值（不打印密钥）：
+
+```bash
+set -a; source env.sh; set +a
+.venv/bin/python -c "import os
+for k in ('DJANGO_DEBUG','DJANGO_ALLOWED_HOSTS','DJANGO_SESSION_COOKIE_SECURE','DJANGO_CSRF_COOKIE_SECURE','DJANGO_PROXY_SSL_HEADER','DJANGO_SECURE_SSL_REDIRECT','DJANGO_SECURE_HSTS_SECONDS','DJANGO_CSRF_TRUSTED_ORIGINS','DJANGO_BACKUP_DIR','DJANGO_BACKUP_SCHEDULE'):
+    print(f'{k}={os.environ.get(k, \"(未设，用代码默认值)\")}')"
+```
+
+> `install.sh` 与 `deploy.sh` 里那些占位符校验（`<尖括号>`）就是防「复制模板后忘了替换」——它是硬门禁，不会放行。
+
 ## 3. 更新与回滚
 
 ### 更新
@@ -502,8 +522,23 @@ tar -xzf backup-media-<时间戳>.tar.gz -C <应用目录>
 「库里有记录、媒体文件缺失」。社团规模下这个窗口是秒级，可以接受；要严格一致就先
 停写。数据库与媒体用同一份时间戳命名，配对恢复即可。
 
-> `backups/`（旧位置）已随 `.gitignore` 排除在版本库外。**建议每季度做一次真实恢复
-> 演练**——没验证过的备份不算备份。
+> `backups/`（旧位置）已随 `.gitignore` 排除在版本库外。
+
+### 恢复演练（每季度一次，别只在出事时做）
+
+没验证过的备份不算备份。演练的目标是**在另一处**把备份变成能跑的服务，而不是「看着文件在」：
+
+1. 取回一对**时间戳相同**的 `db-*.sql.gz` 与 `media-*.tar.gz`（见上一节）。
+2. 在一台临时机器上装好 PostgreSQL 与 Python 环境，**用与生产相同的 `DJANGO_DB_*` 名字**建库。
+3. 恢复库与两个媒体目录，`manage.py migrate --check` 应当没有任何待应用的迁移。
+4. 起 `runserver`，确认三件事：能登录、**受保护件能下载**（项目书/头像）、公开页的图能显示（`/media/`）。
+5. 记下这次演练的日期、备份时间戳与结果（一行即可）——**这份记录本身就是审计证据**：
+
+   | 日期 | 备份时间戳 | 结果 |
+   |---|---|---|
+   | （尚未做过） | | |
+
+> 加密过的备份要先解密：`gpg --decrypt db-*.sql.gz.gpg | gunzip | psql …`；忘了私钥等于没有备份，私钥要留在备份机而不是生产机上。
 
 ## 5. 日常运维
 
@@ -514,6 +549,27 @@ tar -xzf backup-media-<时间戳>.tar.gz -C <应用目录>
 | 证书续期 | `club702-certbot-renew.timer` 一天两次；验证用 `systemctl list-timers club702-certbot-renew.timer --all` 与 `sudo /opt/certbot/bin/certbot renew --dry-run`（**必须写全路径**——PATH 里的 `certbot` 是发行版的旧版，会给一个查不出所以然的假故障） |
 | 拨测 | 外部访问 `https://<域名>/` |
 | 磁盘 | 关注 `mediafiles/`（视频单个 ≤500MB）、`backups/`、`logs/` |
+
+### 5.1 容量与扩展
+
+单台服务器、单进程 gunicorn、数据库在本机——社团规模下够用，但有几处会先满：
+
+| 会先满的 | 现状 | 满了怎么办 |
+|---|---|---|
+| **磁盘** | 媒体文件（视频单个 ≤500 MB）、`logs/`（10 MB × 5 轮转）、备份（默认留 14 份，含媒体包） | 先看 `du -sh mediafiles protected_media logs`；媒体是增长主项，可把 `DJANGO_BACKUP_RETAIN` 调小或把备份挪到更大的盘 |
+| **上传体积** | Nginx `client_max_body_size 520m`（要给视频留余量），Django 侧另有各自的类型上限 | 改 Nginx 模板要「先 `deploy.sh` 再 `install.sh`」，并读回 `/etc` 下的文件核对 |
+| **并发** | gunicorn 同步 worker；页面脚本极少，整页表单提交为主 | 加 worker 数（`club702.service` 的 `--workers`）；真到瓶颈先量再改 |
+| **数据库** | 单库、无只读副本；最大的表是审计日志与站内消息 | 审计日志可按年份归档导出；消息表有按来源的级联清理 |
+| **媒体文件数** | 公开件按 `uploads/%Y/%m/` 分目录，受保护件按类型 + `%Y/%m/` 分 | 单目录几十万文件才需要再分片 |
+
+要换形态（对象存储、视频转码、多机）时，媒体这一层是刻意留好的接缝：所有引用走 `MediaFile`，切 `django-storages` 只改存储配置一处（见 [`media/README.md`](../media/README.md)）。
+
+### 5.2 废弃与退役
+
+- **旧版本**：服务器上的代码**只从 git tag 取**（`deploy.sh` 强制），任意历史 tag 都能 `git checkout` 回去；数据库侧靠「破坏性迁移纪律」保证任一版代码与当版库兼容。不再维护的旧 tag 留在仓库里，不做单独的支持承诺。
+- **证书与域名**：换证书只改 `env.sh` 的两个路径 + `install.sh` 重渲染续期单元；**退役某个入口**（域名或 IP）要从 `nginx` 模板的 `server_name` 与 `DJANGO_CSRF_TRUSTED_ORIGINS` 里同时去掉，否则表单提交会因 Origin 校验失败。
+- **整站下线**顺序：① 公告通知成员 → ② 停 `club702.service`（站点不再可用）→ ③ 最后备份一次库与**两个**媒体目录 → ④ 把备份取回本地并确认可读 → ⑤ 再决定何时删除服务器上的数据与 Let's Encrypt 的续期单元。
+- **成员数据**：备份里有实名身份、学号手机号与全部评审意见。退役时按所在组织的留存要求处理——**先备份、后删除，且别把备份留在即将释放的机器上**。
 
 ## 6. 常见问题
 

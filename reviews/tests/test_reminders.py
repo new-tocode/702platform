@@ -176,7 +176,7 @@ class ReviewMessageDeliveryTests(ReviewTestCase):
         self.assertContains(response, "提醒页项目组")
 
     def test_pending_count_still_serves_the_queue_page(self):
-        """pending_task_summary 的计数口径没变，队列页仍从这里取数。"""
+        """pending_task_summary 的计数口径没变（当前没有生产调用方，口径仍以它为准）。"""
         submission = self._open_round()
 
         self.assertEqual(pending_task_summary(self.preliminary).preliminary, 1)

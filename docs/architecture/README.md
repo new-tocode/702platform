@@ -6,7 +6,7 @@
 
 | 文档 | 内容 |
 |---|---|
-| [overview.md](overview.md) | 平台是什么、给谁用、技术选型与理由、模块怎么划分 |
+| [overview.md](overview.md) | **设计说明（SDD）总纲**：范围与「不做什么」、质量目标与验收场景、设计视角、技术栈、架构、模块与依赖方向 |
 | [permissions.md](permissions.md) | 谁能做什么：角色表、权限矩阵、对象级权限、身份怎么管理 |
 
 `permissions.md` 值得早看：这个项目里绝大多数「这个功能谁能用」的问题，答案都在那一篇，
@@ -16,28 +16,32 @@
 
 | 文档 | 覆盖 |
 |---|---|
-| [accounts.md](accounts.md) | 账号、个人资料、头像与图册、强制改密、身份目录 |
-| [projects.md](projects.md) | 项目组、联系人、指导老师、入组申请、申请建组 |
-| [reviews.md](reviews.md) | 项目书同行评审（**最复杂的一篇**：送审、初审关卡、抽人、归档、请假、改派、超级评审） |
-| [notices.md](notices.md) | 公告的三种可见范围 |
-| [content.md](content.md) | 公开页与媒体库 |
-| [competitions.md](competitions.md) | 竞赛与报名 |
-| [equipment.md](equipment.md) | 设备台账与借用 |
-| [discussion.md](discussion.md) | 社团空间：板块、帖子、评论、成员目录 |
-| [core.md](core.md) | 操作入口注册表、审计日志、通用上传校验、文件指纹与取件出口 |
+| [accounts.md](accounts.md) | 账号与身份：三种「组」的区分、身份的两种作用域、历史包袱（`first_name` 等） |
+| [projects.md](projects.md) | 项目组：联系人怎么算、`can_view_group` 的并集语义、建组流程的由来 |
+| [reviews.md](reviews.md) | 项目书同行评审：跨模块口径、归档与待办数字的真实口径（**最复杂的一块**） |
+| [notices.md](notices.md) | 通知与「我的消息」：可见性的单点、消息表的归属、加一个 kind 要改三处 |
+| [content.md](content.md) | 公开展示页：判重身份串同时是锁的键、Markdown 白名单的外溢面、后台为什么「不判重」 |
+| [competitions.md](competitions.md) | 竞赛与报名：截止只约束前台、后台补录这条路的护栏、时间端点的口径差异 |
+| [equipment.md](equipment.md) | 设备台账与借用：归还为什么比借用宽、库存不变式为什么落在数据库 |
+| [discussion.md](discussion.md) | 社团空间：软删除那条链、@ 提及的跨 app 接线、折叠判据住在 CSS |
+| [core.md](core.md) | 平台底座：来源 IP 的单一口径、指纹的三个约定、两类存储根的边界 |
 
 ## 横切与参考
 
 | 文档 | 内容 |
 |---|---|
-| [security.md](security.md) | 安全设计要点（完整审查见 [安全检查.md](../../安全检查.md)） |
-| [routes.md](routes.md) | 全部页面与地址 |
+| [security.md](security.md) | 安全设计要点（完整的安全审查报告含生产标识，不入版本库） |
+| [interfaces.md](interfaces.md) | **接口规格**：A 节 HTTP 契约（全部页面与地址、方法、门槛、失败形态）、B 节跨应用公开函数、C 节数据模型与迁移 |
 | [flows.md](flows.md) | 九条关键流程的端到端走法 |
 | [roadmap.md](roadmap.md) | 已落地能力与可选扩展 |
 
-## 每篇的写法
+## 文档分两种写法
 
-正文只讲三件事：**表结构**、**为什么这么设计**、**改动时不能破坏什么**。开头那句
-引用块是给「偶然翻到这里」的人看的——一句话说清这篇覆盖什么、什么时候该看它。
+- **就地模块说明** `<app>/README.md`：六节——职责与边界（含**明确不做什么**）／关键接口与失败模式／状态与不变量／数据流与时序／错误处理与诊断／测试要点与**已知限制**。它跟代码放在一起，改模块时顺手更新；开头那句引用块是给「偶然翻到这里」的人看的。
+- **集中篇**（本目录）：只留**跨模块口径与由来**——这块与别处怎么耦合、某些设计当初为什么这么定。表结构与模块内部规则不在这里重复。
 
-`§N` 这种章节号引用已经全部换成文件链接：拆篇之后章节号会漂，链接不会。
+本目录各篇已经搬完：`accounts`／`projects`／`reviews`／`notices`／`content`／`competitions`／`discussion`／`equipment`／`core` 都只剩「跨模块口径与由来」。
+
+`media` 与 `config` **没有集中篇**——它们的说明直接就地（[`media/README.md`](../../media/README.md)、[`config/README.md`](../../config/README.md)），这两块本来就没什么跨模块口径可写。
+
+引用别的文件时一律用链接；指某个文件**内部**的小节可以写 `§N`（编号由那个文件自己维护）。本目录内不再有跨篇的章节号：拆篇之后它们会漂，链接不会。

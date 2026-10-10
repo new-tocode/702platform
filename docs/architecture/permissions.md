@@ -1,4 +1,4 @@
-# 7. 权限设计
+# 权限设计
 
 > 谁能做什么：角色表、权限矩阵、对象级权限，以及身份的管理方式。
 
@@ -6,7 +6,7 @@
 
 ---
 
-### 7.1 角色
+## 角色
 
 | 角色 | 说明 | 表达方式 |
 |---|---|---|
@@ -26,7 +26,7 @@
 - 社团空间的帖子管理沿用 `is_admin()`（staff 或 superuser）；板块管理单独要求 Django `is_superuser`，不能用评审资格代替。空间成员范围是 `is_active=True` 且已完成首次改密的账号。
 - **依赖方向**：跨应用引用只经 `permissions`／`services`／`selectors` 的公开函数，且不在模块加载期互相牵连（需要时用函数内局部 import）。`projects` 与 `reviews` 之间原本有一处双向 import，随着 `reviews` 改问 `core.permissions.is_admin` 而消失。
 
-#### 7.1.1 身份的管理：两种作用域，两套办法
+### 身份的管理：两种作用域，两套办法
 
 平台上的身份按**来源**分成两类，管理方式因此不同。这张表也是后台「身份管理」分组的依据：
 
@@ -41,7 +41,7 @@
 - 身份的**存储没有变**：全局身份是 `User` 上的布尔字段，对象身份是 `ProjectGroup.leader` 与 `ProjectGroup.members`。后台的六张名册是 `User` 的 proxy model——不建表，也就不存在与布尔字段分叉的第二处真相。统一的是**管理面**，不是存储面。
 - 资格的写入只有一处：`accounts.services.set_qualification`（带事务与 `accounts.qualification.grant/revoke` 审计）。可批量改的字段有白名单，**不含 `is_superuser` 与 `is_active`**；也没有「批量授予管理员资格」——把一批人放进后台应当逐个确认。
 
-### 7.2 权限矩阵
+## 权限矩阵
 
 | 能力 | 访客 | 无组员 | 组员 | 项目组联系人 | 管理员 |
 |---|:---:|:---:|:---:|:---:|:---:|
@@ -74,7 +74,7 @@
 
 初审人在项目组详情页拿到的是「我的初审」面板（通过 / 需修改 + 意见，没有批注版），可下载项目书；初审**通过**即让该轮进入评审并抽齐评审人，**打回**则本轮直接结束。请假窗口对初审人同样开放（面板与时长口径都叫「初审／评审请假」）。初审人身份对项目组匿名（页面上只写「初审」）。
 
-### 7.3 对象级权限（唯一的复杂度点）
+## 对象级权限（唯一的复杂度点）
 
 Django 原生支持「组级」权限，**对象级**需自定义；本项目把项目组相关的判定收敛在 `projects/permissions.py`：
 
@@ -84,7 +84,7 @@ Django 原生支持「组级」权限，**对象级**需自定义；本项目把
 - `can_decide_group_create_requests(user)`：`is_staff` —— 谁能处理创建项目组申请。申请送到管理员的「评审」页，评审侧局部 import 本函数决定给不给看那份待办，视图门槛与页面装配同源。
 - `can_use_equipment(user)`：`is_staff` 或 `is_project_member(user)` —— 设备借用门槛。
 - `groups_visible_to(user)`：staff/联系人→全部；有组→自己的组；无组→全部（申请模式）。
-- `can_view_borrow(borrow, user)`：借用记录本人可见，管理员可见全部。
+- **借用记录的可见范围不是判定函数**：本人只看自己的、管理员看全部——这是在查询里收窄的，没有对应的 `permissions` 函数（`equipment` 整个 app 都没有 `permissions.py`）。
 - **项目组报名权限**：`competitions.permissions.can_register_group` 委托 `can_manage_group`；报名成员与竞赛组长都必须属于所选项目组，且竞赛组长必须是参赛成员之一。
 - **通知可见性**：`notices/visibility.py` 的 `member_visible_notices(user)` 单点判定 —— `internal` 走 `visible_groups`，`contacts` 走 `is_project_contact(user)`；列表与详情共用，未命中返回 404。
 - **社团空间权限**：`discussion/permissions.py` 集中成员、作者、管理员和超级管理员判定；写操作在服务层再次校验。只有帖子作者可修改自己的帖子，管理员可删任意帖子并置顶；评论的删除口径与帖子对称（作者删自己的、管理员删任意），帖子作者对别人在自己帖子下的评论**没有**删除权。超级管理员才可在前端创建/删除空板块。

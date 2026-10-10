@@ -39,7 +39,7 @@ class ImageUploadBombAcceptanceTests(TestCase):
     过去 ``core.uploads`` 只接 ``UnidentifiedImageError`` / ``OSError`` /
     ``SyntaxError``，而 Pillow 超限时抛的 ``DecompressionBombError`` 直接继承
     ``Exception``——它漏出校验器就是一个未捕获异常，一个几十字节的文件即可让
-    视图报 500（见 安全检查.md 的 V1）。
+    视图报 500（复核见安全检查报告 V1 条；那份报告含生产标识，不入版本库）。
 
     第二条同样重要：Pillow 的 ``verify()`` 会把传给它的文件关掉。过去那个文件
     就是上传文件本身，于是「校验通过之后还要存盘」这条路会在 seek 时炸掉

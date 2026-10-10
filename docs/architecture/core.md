@@ -1,49 +1,26 @@
-# 6.8 core
+# core
 
-> 平台核心：操作入口注册表、审计日志，以及跨应用的权限口径、上传校验与文件指纹。
+> 平台底座：跨应用权限口径、审计、上传校验、文件指纹、取件出口、操作入口注册表与身份目录。
+> **模块说明（职责、接口、不变量、失败模式、测试与限制）在 [`core/README.md`](../../core/README.md)**。
+>
+> 这一篇只留**跨模块口径与由来**。
 
-**什么时候看**：加一个成员入口、写审计、改通用上传校验，或碰文件的取件出口。
+**什么时候看**：写审计、做视图门槛、碰文件的存储或指纹，或想确认某个「平台级口径」住在哪。
 
 ---
 
-```
-AuditLog（审计日志）
-  - user           FK(User)  操作者（可空，用户删除后保留记录）
-  - action         操作名
-  - target_type    目标类型（app_label.model_name）
-  - target_id      目标 ID
-  - detail         JSON  结构化非敏感信息
-  - request_id     关联请求 ID
-  - ip_address     请求来源 IP
-  - created_at     发生时间
-```
+## 跨模块口径
 
-- 审计记录只能追加：Admin 只读，不允许新增、修改、删除。
-- 所有 `record_audit()` 调用方只传入非敏感结构化信息，不得记录密码、Cookie 或完整请求数据。
+- **审计 `action` 字符串是跨模块承诺**：一旦发布就不再改，历史记录要保持连续。新增写操作时照着相邻的那一个取名（清单见各 app 的 README）。
+- **`get_client_ip` 是全站唯一的「来源 IP」口径**：审计记的 IP 与 django-axes 锁定的 IP 都取自它（`AXES_CLIENT_IP_CALLABLE` 指着同一个函数）。默认只信 `REMOTE_ADDR`，`TRUST_FORWARDED_FOR` 打开时才读 `X-Forwarded-For` 的**最后一段**——改它等于同时改「审计记了谁」与「谁被锁」，改错会让全站登录互相锁死，或让 IP 可被伪造。
+- **指纹的三个约定**：`FileDigestMixin` 给带文件字段的模型算 SHA-256（七个字段都接了）；**项目书、批注版、归档版**的取件响应另带 `Content-Digest` 与 `X-Checksum-SHA256`（图片类刻意不发，见 [glossary.md](../glossary.md) 的「指纹」）；归档件与其来源任务的指纹相同——对不上就说明归档之后被动过。
+- **存储的两类根是硬约定**：`PRIVATE_MEDIA_ROOT` 刻意不在 `MEDIA_ROOT` 之下，受保护件因此没有任何 HTTP 路径能直接命中。**这条边界是「取件必须走视图」的真正保障**——不是 `url()` 抛异常（它返回空串，理由见 `core/storage.py`）。
+- **注册表与目录的登记约定**：各 app 在 `AppConfig.ready()` 里登记操作入口（`core/registry.py`）与身份（`core/roles.py`）；后台「身份管理」分组的顺序必须与 `core/roles` 的 `sort_order` 一致。判定仍归各 app 的 `permissions`，授予仍归 `services`——目录不重复这两件事。
+- **边界**：`config/middleware.py`、`config/settings.py`、`config/admin.py` 归 **config 包**（见 [`config/README.md`](../../config/README.md)）；六个取件视图本身归各业务 app，用的才是 `core/downloads.serve_file`。
 
-## 上传件的 SHA-256
+## 由来
 
-`core/hashing.py` 给每个带文件字段的模型算一份内容指纹，`core/downloads.py` 在取件时
-把它附给下载人。七个字段全都接上了：项目书、批注版、归档批注版、头像、个人图册、
-帖子图、媒体库。
-
-```
-FileDigestMixin（抽象基类，子类声明 digest_field）
-  - digest_field   要计算指纹的文件字段名（子类给）
-  - sha256         小写十六进制；editable=False，不进任何表单
-```
-
-- 指纹**存在模型自己身上**，不单开一张按文件名索引的旁表。文件会跟着记录一起死
-  （换头像删旧图、删图册删盘、帖子图随编辑被替换），旁表在每条路径上都会留下没人
-  清理的孤儿行；字段跟着行走，删记录即删指纹。
-- 三种情形三种算法：**新上传**读的正是上传流，不必等落盘再读一遍；**文件没换**就沿用
-  现有的值（改一句简介不该重读 20 MB 的项目书）；**老数据指纹为空**时从存储补算一次。
-  算完必须把上传流拨回开头，否则紧接着的落盘会存下一个空文件。
-- `save(update_fields=[…])` 里**带了文件列**时，`sha256` 会被并进写入列表——换头像走的
-  正是 `save(update_fields=["avatar", "updated_at"])`，不并进去就永远写不进去。文件列
-  **不在**列表里时则不动指纹：Django 不会落盘那个新文件，指纹跟着内存里的内容走就会
-  与库里的文件对不上。
-- 取件统一走 `core/downloads.serve_file()`，六个取件视图共用它。它带两个响应头：
-  `Content-Digest`（RFC 9530 的标准写法）与 `X-Checksum-SHA256`（十六进制，与
-  `sha256sum`、`certutil -hashfile` 的输出一致，是真正会被拿去比对的那个）。公开媒体库
-  不经这里——它由 Nginx 直出 `/media/`。
+- **指纹为什么存在模型自己身上**：文件会跟着记录一起死（换头像删旧图、删图册删盘、帖子图随编辑被替换），单开一张按文件名索引的旁表会在每条路径上留下没人清理的孤儿行。字段跟着行走，删记录即删指纹。
+- **审计为什么只追加**：它是「谁在什么时候动了什么」的底账。**如实记下**：这一条目前**只由后台类 `AuditLogAdmin` 保证**（禁增删改），数据库层与模型层都没有强制——脚本或 ORM 仍能改，见 `core/README.md` 的已知限制。
+- **`core.storage.rehome` 当前没有调用点**：docstring 说「数据迁移与运维脚本共用它」，实际「受保护上传件搬家」那条迁移刻意另写了一份冻结实现（迁移不能依赖会变的代码）。留着它是给下一次搬家用的——**别按 docstring 以为它天天在跑**。
+- **为什么 `url()` 返回空串而不是抛异常**：Django 的 `ClearableFileInput.is_initial()` 会主动求值 `.url`，抛出去会让模板渲染 500（实测 `{{ form.proposal }}` 直接 500）；`getattr(value, "url", False)` 带默认值也说明框架本就预期它可能取不到。护栏因此落在目录边界上。

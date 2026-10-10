@@ -56,7 +56,7 @@ def _validate_image_content(uploaded_file):
     * **解压炸弹**。``Image.open()`` 只读文件头，读完尺寸就判定，超限抛
       ``DecompressionBombError``。这个异常必须在当场接住——它的基类是
       ``Exception`` 而不是 ``OSError``，漏出去就是一个未捕获异常，一个几十字节
-      的文件即可让视图报 500（见 安全检查.md 的 V1）。
+      的文件即可让视图报 500（复核见安全检查报告 V1 条；那份报告含生产标识，不入版本库）。
     * **尺寸上限**。Pillow 只在「超过它自己上限一倍」时才抛异常，介于半倍与
       一倍之间的图发一条 ``DecompressionBombWarning`` 就放行，落盘后要等到页面
       渲染时才真正解码——受害的是每一个打开该页的人。这里按

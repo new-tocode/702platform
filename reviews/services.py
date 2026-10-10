@@ -36,6 +36,9 @@ from .draw import draw_tasks, eligible_holders, ensure_pool, qualification_for
 from .exceptions import ReviewError
 from .permissions import may_receive_tasks
 from .selectors import (
+    # PendingTasks / pending_task_summary 在本模块内没用到，但**用例从这里导入**
+    # （`reviews.tests` 的几个模块写的是 `from reviews.services import …`）——
+    # 别当死 import 删掉，删了会让那三个测试模块整个收集失败。
     PendingTasks,
     can_override_review,
     open_leave_for,
