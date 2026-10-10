@@ -1,61 +1,24 @@
-# 6.4 projects
+# projects
 
-> 项目组：联系人（由 `leader` 计算）、指导老师、入组申请、申请建组。
+> 项目组、联系人、指导老师与两类申请。**模块说明（职责、接口、不变量、失败模式、测试与限制）在
+> [`projects/README.md`](../../projects/README.md)**——表结构、规则与坑都搬去了那里。
+>
+> 这一篇只留**跨模块口径与由来**。
 
-**什么时候看**：动项目组成员关系、指导老师槽位，或建组审批流程。
+**什么时候看**：改一处判定却不确定该问谁、想知道建组流程为什么长这样，或要碰「谁能看这个项目组」。
 
 ---
 
-```
-ProjectGroup
-  - name           组名
-  - leader         FK(User)  项目组联系人（一个，唯一真相源）
-  - members        M2M(User) 组员（保存时自动确保项目组联系人也在成员列表中）
-  - description    简介
-  - college        学院
-  - proposal       项目书（doc/docx/pdf，≤20 MB，落私有根、uuid 命名；下载走 projects.views）
-  - sha256         proposal 的 SHA-256 指纹（上传时自动算，见 [core.md](core.md)）
-  - created_at
-  - updated_at
+## 跨模块口径
 
-ProjectAdvisor（指导老师）
-  - group          FK(ProjectGroup)
-  - name           指导老师姓名（纯文本——平台没有教师账号可关联）
-  - sort_order     槽位 0 / 1 / 2
-  - created_at / updated_at
-  - 槽位唯一约束 (group, sort_order) 加 CHECK(sort_order < 3)，两条合起来即「每组至多 3 位」；
-    上限只有一处写法：projects.models.MAX_ADVISORS_PER_GROUP
+- **联系人身份是对象级的、算出来的**（`ProjectGroup.leader`，不建用户组）：`reviews`、`competitions`、`equipment`、`notices`、`core.stats` 都来问 `projects.permissions` 的判定函数（`is_project_contact` / `is_project_member` / `can_manage_group` / `can_use_equipment` / `groups_visible_to`），别各自算一遍。
+- **`can_view_group` 是跨 app 的门槛**：它把项目组侧（staff／该组成员）与评审侧（`reviews.permissions.has_review_claim`）**取并集**，评审队列页与三处受保护件取件都拿它当门槛。改动它会影响评审侧的准入——并集意味着不许提前 `return`，否则同时具备多种资格的账号会丢掉任务带来的可见性。
+- **建组申请的处理入口在评审页**（`reviews:queue`），不在项目组页：管理员不需要评审资格，`reviews.permissions.can_open_queue` 为此对 `is_staff` 单独放行；「谁算管理员」的口径仍取自 `can_decide_group_create_requests` 一处。
+- **搜索与成员数共用一条 join（未修）**：按成员姓名搜索时，列表卡片上的人数会跟着过滤变小。细节与修法方向见 README §6 的已知限制。
 
-GroupJoinRequest（入组申请）
-  - group          FK(ProjectGroup)
-  - applicant      FK(User)
-  - message        申请理由
-  - status         pending（待审核）| approved（已通过）| rejected（已拒绝）
-  - decided_by     FK(User, 可空)  处理人
-  - decided_at     处理时间
-  - created_at / updated_at
-  - 部分唯一约束：(group, applicant) 仅当 status=pending —— 同组同一人同时只有一条待审申请，被拒后可重新申请
+## 由来
 
-GroupCreateRequest（创建项目组申请）
-  - name / description    项目组名称与描述（申请时必填）
-  - college               学院（选填）
-  - advisor_1 / _2 / _3   指导老师三位固定槽位（选填，与 MAX_ADVISORS_PER_GROUP 一一对应）
-  - applicant             FK(User)  申请人——通过后即新组的项目组联系人
-  - status                pending（待审核）| approved（已通过）| rejected（已拒绝）
-  - decided_by / decided_at
-  - created_group         OneToOne(ProjectGroup, 可空)  通过后建成的项目组
-  - created_at / updated_at
-  - 部分唯一约束：(applicant) 仅当 status=pending —— 同一申请人同时只有一条待审申请，被拒后可重新申请
-```
-
-- 联系人身份**由 `ProjectGroup.leader` 计算**，不新建任何用户组存储；判定统一收敛在 `projects/permissions.py`。
-- 联系人可审核入组申请、移除非联系人成员、修改项目组介绍、维护学院与指导老师、把联系人转让给组内成员（原联系人保留为普通成员）。
-- **申请类的消息**：有人申请入组 → 联系人一条「待你审核」；通过／拒绝 → 申请人一条结果。有人申请建组 → 申请这一刻在册的全体管理员各一条「待审核」（任一管理员处理后，其余人的那一条仍在，点进去看到的是「已被处理」）；通过／拒绝 → 申请人一条结果，通过后直接链到新建的组。写入都在各自事务里，`get_or_create` 幂等——重复提交申请刷新的是申请，不刷新消息。呈现与去向见 [notices](notices.md#我的消息)。
-- **申请创建项目组**：任何登录成员（不论身份）都能在项目组页发起，申请人为项目组联系人；学院与指导老师可以先不填。
-  - **审核人是全体管理员**，任一管理员同意即视为通过。`approve_create_request` 在事务内锁行并复查状态，其余管理员随后提交同一申请只会收到「该申请已被处理」，不会建出第二个组。
-  - 通过后按申请内容建立正式 `ProjectGroup`（指导老师从申请的三列槽位转成 `ProjectAdvisor` 行）并出现在项目组列表中；拒绝则申请人可修改后重交。
-  - 创建申请**后台只读留痕**；**处理入口只在管理员的「评审」页**——管理员不需要评审资格，`reviews.permissions.can_open_queue` 为此把 `is_staff` 也放行，「谁算管理员」的口径仍取自 `projects.permissions.can_decide_group_create_requests` 这一处。
-- 学院与指导老师在同一张表单上维护：指导老师固定三行输入框，空槽位表示没有这一位，保存时按槽位顺序补齐（`projects.services.update_group_info`），因此不会撞上槽位唯一约束。学院与指导老师在项目组详情页与项目组列表页都对外展示。
-- **列表页的搜索与「我的项目组」**：搜索是一个关键字扫组名与三种姓名（联系人、成员、指导老师），姓名同时认 `Profile.full_name` 与 `username`——后者是 `full_name` 为空时页面回退显示的名字。过滤跨 `members` / `advisors` 两个一对多关系，`selectors.search_groups` 结尾用 `distinct` 收回重复行。
-
-**已知的口径问题（未修）**：搜索的 `WHERE` 与 `member_count` 的聚合落在同一条 member join 上，过滤会把参与聚合的行一起筛掉——搜「高」只命中一名成员时，卡片写「成员 1 人」而下面的名单列着 5 人；`distinct=True` 防的是 `advisors` 那处 join 的重复行，防不了这个。要显示真实人数，得让聚合不受过滤影响（子查询，或 `annotate` 早于过滤）。改动前先想清楚卡片上的数字**应该**是哪一个。「我的项目组」（`?mine=1`）按 `permissions.member_group_ids` 收窄：联系人一定在成员名单里，所以成员那一侧就是「联系人 ∪ 组员」。两者都只在 `groups_visible_to` 给定的可见范围内进行——搜索不越过可见性。
+- **为什么联系人存 `leader` 而不是用户组**：存两份必然分叉。判定收敛在一处，其他模块复用。
+- **为什么指导老师是纯文本**：平台没有教师账号体系；做成外键就要先有那套体系。每组至多 3 位，上限只有 `MAX_ADVISORS_PER_GROUP` 一处写法。
+- **为什么建组申请用三个固定列**（`advisor_1..3`）而不是子表：申请不是项目组，不为临时草稿建子表；代价是把上限提到 3 以上要动迁移。
+- **依赖方向**：`reviews` 在加载期依赖 `projects`（`ProjectGroup` 外键、`can_view_group`），反向只在函数体内局部 import。历史上这里曾有一处双向 import，随着 `reviews` 改问 `core.permissions.is_admin` 而消失——别把它加回来。

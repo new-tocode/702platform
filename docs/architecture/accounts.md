@@ -1,50 +1,25 @@
-# 6.1 accounts
+# accounts
 
-> 账号与个人资料：自定义 User、Profile、个人图册，以及强制改密与身份目录。
+> 账号、个人资料与身份。**模块说明（职责、接口、不变量、失败模式、测试与限制）在
+> [`accounts/README.md`](../../accounts/README.md)**——表结构、规则与坑都搬去了那里，
+> 因为它跟代码放在一起才不会被改漏。
+>
+> 这一篇只留**跨模块口径与由来**：账号这块与别处怎么耦合、某些设计当初为什么这么定。
 
-**什么时候看**：改账号字段、动个人资料页、碰资格字段或身份名册。
+**什么时候看**：改一处判定却不确定该问谁、或想知道某个历史包袱的来历。
 
 ---
 
-```
-User（继承 AbstractUser，项目自定义，经 AUTH_USER_MODEL 生效）
-  - 复用默认字段：username / password / is_staff / is_active / groups / date_joined
-  - must_change_password   bool  首次登录强制改密标记（默认 True）
-  - is_reviewer           bool  评审资格（默认 False）
-  - is_preliminary_reviewer bool 初审资格（默认 False）
-  - is_super_reviewer     bool  超级评审资格（默认 False）
-  - 权限口径以用户上的布尔标志表达（is_staff／is_reviewer／is_preliminary_reviewer／is_super_reviewer），不新增 role 字段；
-    Django auth.Group 只用于内部通知的投递范围
+## 跨模块口径
 
-Profile（User 一对一扩展）
-  - user          OneToOne(User)
-  - full_name     姓名（单一字段）
-  - avatar        头像（图片，≤2 MB；圆形只是展示层的裁切，原图不动）
-  - sha256        avatar 的 SHA-256 指纹（上传时自动算，见 [core.md](core.md)）
-  - student_id    学号（唯一）
-  - college       学院
-  - major         专业
-  - specialty     特长（自由文本，可写多项）
-  - phone         手机号
-  - contact       其他联系方式（可选）
-  - bio           个人简介（≤1000 字）
-  - created_at / updated_at
+- **三种「组」不是一回事**，混起来是最常见的误读：Django `auth.Group` 是**内部通知的投递范围**（`Notice.visible_groups`）；`ProjectGroup` 是项目组本身；身份名册（`AdminRole` 等四个 proxy）只是 `User` 上布尔字段的一个视图，不建表。**用户组不是身份**，不进 `core.roles` 目录。
+- **身份按来源分两种作用域**：`GLOBAL`（管理员授予、后台可批量改）与 `OBJECT`（业务动作产生、名册只读不给分配入口）。后台「身份管理」分组的依据、「为什么对象身份没有分配入口」见 [permissions.md](permissions.md)。
+- **「当前身份」清单是两处共用的**：个人信息页与成员只读资料页都走 `accounts.selectors.member_identities`——全局身份问各 app 的 `permissions`，项目组那两项来自 `projects.selectors`。改身份显示口径会同时动到这两张页面。
+- **头像与图册的取件口在 accounts**（`accounts:avatar_file` / `accounts:gallery_file`），但上传校验、存储、指纹、取件响应分别归 `core.uploads` / `core.storage` / `core.hashing` / `core.downloads`——这四个 core 模块的口径一变，这里要跟着验。
 
-GalleryImage（个人图册里的一张图，随 Profile 级联删除）
-  - profile       FK(Profile)
-  - image         图片（≤5 MB；一个人的全部图像合计 ≤100 MB）
-  - sha256        image 的 SHA-256 指纹（上传时自动算）
-  - layout        normal（普通）| wide（大图，占两格）| full（整行铺满）
-  - sort_order    用户逐张调出来的顺序，页面按 (sort_order, id) 排
-  - file_size     文件大小（字节）
-  - created_at
-```
+## 由来
 
-- 管理员创建账号时设置初始密码（默认建议设为学号/工号，并在文档中提示安全改密）。
-- 成员可修改 Profile 中的单一 `full_name` 姓名字段及其他个人资料、头像、个人图册与本人密码；管理员可在 Admin 中重置任意用户密码（Django 内置功能）。
-- 自定义 User 仍继承 Django `AbstractUser` 的底层 `first_name` / `last_name` 数据列，但它们不再出现在任何用户界面，也不作为业务姓名使用；历史数据会在迁移中合并到 `Profile.full_name`。
-- **个人信息页**（`/member/profile/`）左栏是资料表单、右栏是头像与只读的「当前身份」、下方整幅宽度是个人图册。表单的分行与宽窄由 `ProfileForm.field_rows`／`narrow_fields` 声明、`rows()` 装配，模板只按行逐格渲染——排布是这张表单自己的事，散进模板就得在那边按字段名做判断。
-- **上传件的写入口只有两个**：`accounts.services.set_avatar`／`clear_avatar` 与 `accounts.services.add_gallery_images`／`move_gallery_image`／`set_gallery_layout`／`delete_gallery_image`。换头像、删图都连磁盘上的文件一起处理（文件系统不在事务里，删除一律放在提交之后：出错顶多多留一个旧文件，不会出现「库里还指着、磁盘上没了」）；批量加图在事务里连写多张，中途出错回滚时要连已落盘的文件一起清（`core.storage.delete_stored_files`）。
-- **图册的 100 MB 是合计上限**，求和前先 `select_for_update` 锁住账号那一行：同一个人开两个标签页同时上传时，不加锁就会双双读到还没涨上去的用量、一起放行。上传可以一次选多张，一批里放不下的、不合格的**逐张跳过并在页面上点名**，其余照加——单张校验因此也落在服务层：表单字段的校验器一遇错就中断整批，报不出「是哪几张」。单张 5 MB 与头像的 2 MB 走同一套图片校验（`core.uploads.validate_image_upload`），差别只是上限；审计仍是一张图一条，与删除对称。
-- **「当前身份」只读**：全局身份问各应用 `permissions` 的判定，项目组联系人／成员带组名，来自 `projects.selectors`——后台那六张名册的排法在这里同样成立，没持有的身份不出现。清单末尾另有一条「用户组」，列出账号所属的 `auth.Group`（通知投递范围，见 [notices](notices.md)）——用户组不是身份、不进 `core.roles` 目录，列在这里只是让本人知道通知为什么投给自己。同一份装配（`accounts.selectors.member_identities`）本人页与成员资料页共用，两处的面板因此一致。
-- **强制改密流程**：首次登录后若 `must_change_password=True`，重定向到改密页；改密成功后置 `False`，之后才能访问其他成员功能。
+- **`first_name` / `last_name` 为什么还在表上**：`User` 继承 `AbstractUser` 带来的历史列，界面与业务都改用 `Profile.full_name`，历史数据由迁移 `0004_copy_legacy_names` 合并过去。留着是因为删列要动 `AbstractUser` 的既有契约，收益不抵风险——但**别再把它接回业务**。
+- **为什么没有 `accounts/permissions.py`**：这个 app 不产出任何「谁能做什么」的判定——管理员问 `core.permissions`，联系人／成员问 `projects.permissions`，评审资格问 `reviews.permissions`。在这里新写一条判定，就是开出第二处真相。
+- **强制改密的拦截为什么在中间件**：标志字段在 accounts，但拦截必须是全局的（含 `/admin/`），所以放在 `config.middleware.ForcePasswordChangeMiddleware`。
+- **登录锁定为什么不是自己写的**：计数、冷却、锁定判定都归 django-axes 与 `config/settings.py` 的 `AXES_*`；`accounts.axes` 只把锁定响应换成站内中文页并写审计。
