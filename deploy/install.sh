@@ -133,7 +133,7 @@ else
 fi
 
 # 项目依赖（不自动 pip install，只检测）
-for pkg in django rest_framework bleach markdown PIL psycopg gunicorn; do
+for pkg in django bleach markdown PIL psycopg gunicorn; do
     if ! "$APP_DIR/.venv/bin/python" -c "import $pkg" >/dev/null 2>&1; then
         MISSING+=("Python 依赖未安装: $pkg（请先执行: $APP_DIR/.venv/bin/python -m pip install --require-hashes -r requirements.txt -r requirements-prod.txt）")
     fi
