@@ -23,4 +23,4 @@
 - **为什么用字符串外键**：notices 因此不在加载期依赖 `discussion` / `reviews` / `projects`；「哪一类消息挂哪个引用」不加库约束，交给写入函数。
 - **为什么未读要现算**：可见通知 − 已读回执（`NoticeRead`），不物化副本——发布人删通知，成员侧自然消失，回执随 CASCADE 清掉，不留孤儿。
 - **为什么撤回了「登录 flash 与成员中心待办卡片」**：同一个数字不该有两处口径；未读统一由「我的消息」的提醒条报出。任务类消息跟着任务生命周期走（交掉／被释放／被改派即撤），历史归评审页。
-- **一个运维缺口（如实记下）**：`config/settings.py` 的 `LOGGING["loggers"]` 里**没有 `notices` 一节**——实测它的生效级别是 `WARNING`、没有 handler，**与 `DEBUG` 无关**。所以 `logger.info`（如 `notice.messages.list`）不会落 `logs/django.log`，只有 `selectors` 的 `logger.warning`（`notice.messages.unknown_kind`）会落。要改需在 settings 补一段 logger；缺 logger 的是 `notices`／`content`／`media`／`discussion` 四个（其余 app 都是显式 DEBUG）。
+- **一个运维缺口（如实记下）**：`config/settings.py` 的 `LOGGING["loggers"]` 里**没有 `notices` 一节**——实测它的生效级别是 `WARNING`、没有 handler，**与 `DEBUG` 无关**。根 logger 也没有 handler，所以 `logger.info` 与 `logger.warning`（如 `notice.messages.unknown_kind`）**都不会落 `logs/django.log`**——warning 只经 `lastResort` 出现在 stderr。按这份文档去日志文件里找通知模块的告警会一无所获。要改需在 settings 补一段 logger；缺 logger 的是 `notices`／`content`／`media`／`discussion` 四个（其余 app 都是显式 DEBUG）。

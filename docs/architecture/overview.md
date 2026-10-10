@@ -160,7 +160,7 @@ app 的 README，向下落点靠代码坐标。
 ```
 
 - **渲染策略**：服务端渲染。公开页、成员界面、管理后台均由 Django 模板渲染；表单提交走整页跳转。页面脚本只有渐进增强那六个（见 §6），且集中在 `static/js/`——模板里不写内联的**可执行**脚本（`|json_script` 渲染出的 `application/json` 数据块不算，它不执行）。
-- **当前没有 API 层**：对外只有页面路由（契约见 [interfaces.md](interfaces.md) A 节），没有任何 serializer／viewset／APIView。曾把 DRF 作为「面向未来的 API」空装着，已按「不留不用的依赖」移除；真要开放 API（小程序 / App / 对接校园系统），先引入依赖，再把接口登记进 interfaces.md 的 B 节。
+- **当前没有 API 层**：对外只有页面路由（契约见 [interfaces.md](interfaces.md) A 节），没有任何 serializer／viewset／APIView。曾把 DRF 作为「面向未来的 API」空装着，已按「不留不用的依赖」移除；真要开放 API（小程序 / App / 对接校园系统），先引入依赖，再把接口登记进 interfaces.md 的 A 节（HTTP 契约）。
 - **数据来源唯一**：权限判断一律在视图层完成，模板只做展示层的隐藏/显示（双层防护，见 [security.md](security.md)）。
 
 ---

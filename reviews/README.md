@@ -47,7 +47,7 @@
 | `services.submit_verdict` | 交一张任务卡（两道关共用） | 任务是本人的；`decision` 合法；任务仍 `pending`；轮次仍停在这一关 | `ReviewError`：「这不是分配给你的…任务」／「请选择…决定」／「已经处理过了」／`StageRules.closed_refusal`；初审通过但池子不够时**整次回滚**（结论不落库、任务仍在初审人手上） |
 | `services._settle_submission` | 汇总本轮结论并在通过时归档（**私有**，由 `submit_verdict` 在父行锁内调用） | 调用方必须已持有 `ProjectSubmission` 行锁 | 不抛；非 `pending` 或有 `pending` 任务时原样返回（因此可被重试、幂等） |
 | `services.override_review` | 超级评审一票敲定 | `override_blocker()` 返回 `None`；`decision` 合法 | `ReviewError("无法行使超级评审权：%(reason)s。")` |
-| `services.reassign_task` | 把待处理任务原地换人（Admin 与服务唯一入口） | 任务 `pending`；轮次未走过这一关；新人不等于旧人、不是提交人/本组成员；新人未持有本轮任何任务；人在 `eligible_holders` 里 | `ReviewError`，文案按阶段取自 `lifecycle.STAGES[stage]`（`swap_not_pending`／`swap_phase`／`swap_holds` 等） |
+| `services.reassign_task` | 把待处理任务原地换人（Admin 与服务唯一入口） | 任务 `pending`；轮次未走过这一关；新人不等于旧人、不是提交人/本组成员；新人未持有本轮任何任务；人在 `eligible_holders` 里；**后台入口另要求调用者真的持有该模型的修改权限**（见 §5） | `ReviewError`，文案按阶段取自 `lifecycle.STAGES[stage]`（`swap_not_pending`／`swap_phase`／`swap_holds` 等） |
 | `services.set_reviewer_leave` | 登记或调整本人/他人的未结束窗口 | `may_receive_tasks(reviewer)`（超级评审不接任务，不在此列）；`ends_at > starts_at` 且 `ends_at` 在未来 | `ReviewError`：无资格／时间不合法 |
 | `services.clear_reviewer_leave` | 取消未结束窗口 | 至少有一个未结束窗口 | `ReviewError("当前没有可取消的请假。")` |
 | `draw.eligible_holders` / `ensure_pool` / `draw_tasks` | 「谁可以接手这一关」的唯一实现；候选不足即拒（附请假人数） | 传 `submission` 时排除本轮**两道关**的全部持有人 | `ensure_pool` 抛 `ReviewError`（「可用的%(role)s不足 N 人（另有 M 人请假）…」） |
@@ -84,6 +84,7 @@
 | `group` + `round` | 轮次号**组内唯一**（`unique_group_submission_round`）；送审时算「当前最大轮次 + 1」。`group` 是 `PROTECT`——轮次记录必须指向真实存在的项目组 |
 | `status` | 四个取值只在 `lifecycle` 里定义；模型上的同名常量是别名。默认 `preliminary_pending` |
 | `review_type` | 决定 `required_reviewers`；`blank=True, default=""` 是给升级前的老轮次留的——**空值回退 `DEFAULT_REVIEWERS`（2 人）**，且没有补填入口 |
+| `message` | 提交说明（选填，≤5000），联系人送审时填（如「申请开题」），在详情页可见 |
 | `submitted_by` | 提交人（`PROTECT`）；抽签与超级评审的利益冲突判定都读它 |
 | `submitted_at` / `decided_at` | `decided_at` 只在迁移表里 `stamps_decided_at=True` 的事件上打点——**初审通过不打**（那一轮还没结论），初审打回、评审汇总、一票敲定都打 |
 | `OPEN_STATUSES` | `(preliminary_pending, pending)`，「本轮还在进行吗」的唯一判据 |
@@ -219,6 +220,10 @@
 
 取件一律经视图（`FileResponse` 由 `core.downloads.serve_file` 生成），不走 Nginx——`protected_media` 刻意不在 `mediafiles/` 之下，没有任何 HTTP 路径能直接取到。批注版与归档件随 `Content-Digest` 与 `X-Checksum-SHA256` 送出（`ReviewTask.digest_field`／`ArchivedProposal.digest_field` 由 `core.hashing.FileDigestMixin` 维护）；归档件是源任务那份的副本，**两份指纹相同**——对不上就说明归档之后被动过。
 
+**改派的逐对象判断是「叠加」在模型权限之上，不是替代它**：后台开不开放改派，判的是「任务待处理 且 该轮未走出这一关」**并且** `super().has_change_permission(...)`——两条件同时成立。只写状态判断，只挂 `view_reviewtask`（只读观察者）的账号就能改派。改这段逻辑时别把这个 conjunction 丢掉；同理，详情页是否把「评审人」渲染成可编辑下拉，走的也是同一个判定。
+
+**改派留痕里带前一位持有人**：审计 `reviews.assignment.reassign`（初审是 `reviews.preliminary.reassign`）的 `detail` 写 `from_reviewer_id` / `to_reviewer_id`——追责时看的是它，不是页面。
+
 **为什么删除的单位是「整轮」**：Django 的级联检查会拿被级联的任务去问任务自己的 admin，所以 `ProjectSubmissionAdmin.get_deleted_objects` 必须豁免「任务不能增删」那两项权限，否则连整轮也删不掉；反过来，真让人删掉单条任务，会**悄悄改变该轮所需的评审人数**（名单少一个人，汇总就等不到他）。
 
 **诊断入口**：一个轮次的全貌在项目组详情页（初审一行、超级评审一行、其余按 `评审人 N` 编号），任务与轮次的原始记录在 Admin 的「项目评审」三屏 + 请假一屏；「这一票为什么不能投」在队列页的标注里。
@@ -246,7 +251,7 @@
 - **送审后项目组侧没有撤回入口**：本轮只能由初审打回、评审汇总、超级评审敲定三种方式出结论；确有需要时管理员在后台删整轮（连带任务，写审计）。
 - **评审名额完全由送审类型决定**：没有「本轮临时加人／减人」的入口（`ReviewTaskAdmin` 禁止新增），改派只能换人、不能补席位。
 - **没有「拒绝任务」这个动作**：评审人失联只能由管理员改派或超级评审收场。
-- **一票敲定通过时的归档只收「已完成且通过」的批注版**：此前判过「需修改」的普通评审人即便上传了批注版，也不进归档（`_archive_annotated_proposals` 的过滤条件就是 `completed` + `approve`）。`docs/architecture/reviews.md` 里「会一并收走此前普通评审人已上传的批注版」的说法比代码宽，以代码为准。
+- **一票敲定通过时的归档只收「已完成且通过」的批注版**：此前判过「需修改」的普通评审人即便上传了批注版，也不进归档（`_archive_annotated_proposals` 的过滤条件就是 `completed` + `approve`）。（本文早先版本与旧集中篇写的「会一并收走此前普通评审人已上传的批注版」比代码宽，均已按代码更正。）
 - **`ReviewerLeaveAdmin` 不经过 `set_reviewer_leave`**：后台可以直接新增/编辑请假，于是「一人至多一个未结束窗口」「有评审资格」「`ends_at` 在未来」这三条都不生效，只剩数据库 CHECK（`ends_at > starts_at`）兜底；`list_editable` 改时间同样只补一条 `reviews.leave.admin_save` 审计。
 - **「一人一个未结束窗口」不是数据库约束**：规则只在服务层，靠 `select_for_update` 锁住已有的未结束窗口来收窄竞态；这个人本来就没有窗口时（并发首次登记）两边都锁不到行，理论上可以留下两个重叠窗口。影响有限——抽签排除按「任一窗口命中即排除」，面板只显示最近的那个。
 - **升级前留下的老轮次**：`review_type` 为空（回退 2 人）且**可能没有初审任务**（唯一约束允许零条），所以 `preliminary_task_of()` 的调用方都要处理 `None`，模板也要能少渲染一行；这两样都无法补填。

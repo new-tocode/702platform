@@ -21,7 +21,7 @@
 | bleach | Apache-2.0 | 保留声明与 NOTICE（若有） |
 | Markdown | BSD-3-Clause | 保留声明 |
 | Pillow | MIT-CMU（HPND） | 保留声明 |
-| **psycopg / psycopg-binary** | **LGPL-3.0** | **弱传染**：以库的形式导入、未修改其源码，分发时随附 LGPL 原文即可，本项目不必开源 |
+| **psycopg / psycopg-binary** | **LGPL-3.0** | **弱传染**：以库的形式导入（未修改其源码），分发时**随附 LGPL 原文并声明**即可——LGPL-3.0 另外要求使用者能替换该库（本项目是动态导入的 Python 包 + 随附的二进制轮子，满足）。本项目因此**不必开源**。注：`psycopg-binary` 内含静态链接的 libpq（PostgreSQL License，宽松），不改变上面的结论 |
 | gunicorn（`requirements-prod`） | MIT | 保留声明 |
 | asgiref / sqlparse / webencodings | BSD-3-Clause | 保留声明 |
 | packaging（`requirements-prod`） | Apache-2.0 **或** BSD-2-Clause（双许可，择一） | 两份原文都收在 `THIRD_PARTY_LICENSES/`，保留所选那份的声明 |

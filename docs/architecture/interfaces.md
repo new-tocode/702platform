@@ -15,7 +15,8 @@
 ### A.0 共同口径
 
 - **地址即语言**：中文地址不带前缀，英文加 `/en/`；后台 `/admin/` 不在双语范围内（见 [glossary.md](../glossary.md)）。
-- **写操作一律 POST + CSRF**，成功后 302（PRG），失败重渲染 200。下表**标 POST 的是只接受 POST 的动作端点**（`@require_POST`，收到 GET 会 405）；未标的是「GET 显示表单 + POST 提交」的页面或纯展示页。
+- **写操作一律 POST + CSRF**。**表单页**失败时重渲染 200、成功 302；**动作端点**（`@require_POST`）不论成败都 302（PRG + flash）。下表**标 POST 的就是动作端点**（收到 GET 会 405）；未标的是「GET 显示表单 + POST 提交」的页面或纯展示页。
+- **路径写法**：同一入口的多个动作写成「`/a/` `/b/`」时，后一个是与前一个**同前缀**的兄弟路径（如 `/member/profile/avatar/` `/delete/` 指 `/member/profile/avatar/delete/`）。
 - **拒绝的四种形态**——下表每一行的失败形态由「这一行的门槛」加这张表推出，只有例外才单独标注：
 
   | 情形 | 形态 |
@@ -53,6 +54,8 @@
 | `/member/notices/message/<id>/go/` | | 事件消息的中转：先标已读、再跳到帖子锚点/项目组等目标页 | 登录（限收件人本人，别人 404） |
 | `/member/profile/` | | 个人信息：资料表单 + 头像与「当前身份」（只读）+ 个人图册 | 本人 |
 | `/member/profile/<id>/` | | 其他成员的只读资料：头像、姓名、院系、身份、图册及明确公开的联系方式（不显示学号/邮箱） | 登录成员（目标须 `is_active`） |
+| `/member/avatar/<user_id>/` | | 头像文件的取件口（受保护件，只能经此取） | 登录即可 |
+| `/member/gallery/<id>/file/` | | 图册图片的取件口（同上） | 登录即可（他人的图 404） |
 | `/member/profile/avatar/` `/delete/` | POST | 上传／更换／删除头像 | 本人 |
 | `/member/profile/gallery/` | POST | 往个人图册加图（可一次选多张） | 本人 |
 | `/member/profile/gallery/<id>/move/` `/layout/` `/delete/` | POST | 上移下移／改排布／删除一张 | 本人（他人的图 404） |
@@ -69,13 +72,13 @@
 | `/member/projects/` | | 项目组列表：无组员看全部可申请，组员看自己的组，联系人看全部；`?q=` 搜索、`?mine=1` 只看自己参与的组 | 登录 |
 | `/member/projects/create/` | | 申请创建项目组（名称与描述必填） | 登录 |
 | `/member/projects/<id>/apply/` | | 申请加入项目组 | 登录且非该组成员 |
-| `/member/projects/<id>/manage/` | POST | 管理组：GET 显示各区块，POST 带 `action=` 分派（核申请、移除成员、转让联系人、改组介绍与学院/指导老师） | 该组联系人 / 管理员 |
+| `/member/projects/<id>/manage/` | | 管理组：GET 显示各区块，POST 带 `action=` 分派（核申请、移除成员、转让联系人、改组介绍与学院/指导老师） | 该组联系人 / 管理员 |
 | `/member/projects/<id>/manage/requests/<req>/<action>/` | POST | 通过/拒绝入组申请 | 该组联系人 / 管理员 |
 | `/member/projects/<id>/manage/members/<user>/remove/` | POST | 移除组员 | 该组联系人 / 管理员 |
 | `/member/projects/<id>/manage/proposal/` | POST | 上传 / 更新项目书（doc/docx/pdf） | 该组联系人 / 管理员 |
 | `/member/projects/<id>/manage/submit/` | POST | 提交项目书审核（选送审类型 + 可选说明） | 该组联系人 / 管理员 |
 | `/member/projects/create/requests/<req>/<action>/` | POST | 同意/拒绝创建项目组申请；任一管理员同意即通过，处理完跳回「评审」页 | 管理员 |
-| `/member/projects/<id>/` | | 项目组详情：学院与指导老师、成员、项目书、批注版归档、初审与评审状态及历史 | staff / 该组成员 / 本轮初审人 / 被分配评审人（**并集**，见 [projects.md](projects.md)） |
+| `/member/projects/<id>/` | | 项目组详情：学院与指导老师、成员、项目书、批注版归档、初审与评审状态及历史 | staff / 该组成员 / 本轮初审人 / 被分配评审人 / **该组有进行中轮次时的超级评审**（几支**取并集**，见 [projects.md](projects.md)） |
 | `/member/projects/<id>/proposal/` | | 下载当前项目书 | 同上（越权 403，**无日志**） |
 | `/member/reviews/` | | 我的评审队列（初审与评审各三档；超级评审另有「全部进行中」；管理员另有「创建项目组申请」） | 初审人 / 评审人 / 超级评审 / 管理员 |
 | `/member/reviews/leave/` `/leave/cancel/` | POST | 登记 / 修改 / 取消本人「初审／评审请假」 | 初审人 / 评审人 |
@@ -114,6 +117,8 @@
 ## B. 跨应用公开函数
 
 **规矩**：跨应用只经对方的 `permissions` / `services` / `selectors` 公开函数（模型外键除外）；判定只写在 `permissions`，写命令只写在 `services`。每个函数的前置条件与失败模式见各自 app 的 `README.md`，这里只给**清单与一句话语义**——它是「这个能力该问谁」的索引。
+
+> **横切件不在下表**：`core.audit.record_audit`（写留痕）、`core.downloads.serve_file`（取件响应）、`core.hashing.FileDigestMixin`、`core.storage`、`core.stats` 这些是**每个 app 都可能调**的基础设施，清单与失败模式见 [`core/README.md`](../../core/README.md) §2。
 
 ### B.1 判定（谁能做什么）
 
@@ -185,9 +190,11 @@
 ### C.2 约束（对外承诺，改名要动迁移）
 
 - `accounts`：`Profile.student_id` 唯一（空值落 NULL——**空值语义是 NULL，不是空串**）。图册的「每人合计 100 MB」**不是**约束，只在 `services.add_gallery_images` 一条路上把守。
-- `projects`：`(group, sort_order)` + `CHECK(sort_order < 3)`＝每组至多 3 位指导老师；两张申请表各一条 `WHERE status='pending'` 的部分唯一。
-- `reviews`：`(group, round)`、`(submission, reviewer)`、`(submission) WHERE stage='preliminary'`、`ArchivedProposal(source_task)`、`CHECK(is_override=false OR stage='review')`、`CHECK(ends_at > starts_at)`。
-- `notices`：`(user, notice)`；`competitions`：`(competition, group)`；`equipment`：`CHECK(available_count <= total_count)`；`discussion`：板块英文名大小写不敏感唯一。
+- `projects`：`unique_project_advisor_slot`（`(group, sort_order)`）+ `CHECK(sort_order < 3)`＝每组至多 3 位指导老师；两张申请表各一条 `WHERE status='pending'` 的部分唯一。
+- `reviews`：`unique_group_submission_round`、`unique_submission_task_reviewer`、`(submission) WHERE stage='preliminary'`、`unique_archived_proposal_task`、`CHECK(is_override=false OR stage='review')`、`CHECK(ends_at > starts_at)`。
+- `notices`：`unique_notice_read_per_user`；`competitions`：`unique_competition_group_registration`；`equipment`：`equipment_available_lte_total` 与 `borrow_status_matches_return_date`；`discussion`：`discussion_board_name_ci_uniq`（板块英文名大小写不敏感唯一）。
+
+**这些约束名本身就是承诺**：改名要连迁移一起动，改行为（放宽/收紧）更要先想清存量数据怎么办。
 
 完整的约束清单与「为什么」在各 app 的 `README.md`。
 

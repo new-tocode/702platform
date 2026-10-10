@@ -30,7 +30,7 @@
 | 存联系人／成员身份（auth 用户组、独立 membership 表） | 不做：身份由 `ProjectGroup.leader` / `.members` 计算；后台只给只读名册，不给分配入口（`docs/architecture/permissions.md` §7.1.1） |
 | 「谁算管理员」 | `core.permissions.is_admin`。`can_decide_group_create_requests` 只是业务语义名，函数体委托过去 |
 | 受保护件的 HTTP 响应 | `core.downloads.serve_file`。本模块判权限后调用，并把 `group.sha256` 附上响应头 |
-| 消息的呈现与去向 | `notices`（`notices.selectors`）。本模块只在服务里调 `notices.services` 写事件消息 |
+| 消息的呈现与去向 | `notices`（`notices.selectors`）。本模块只在服务里调 `notices.services` 写事件消息。**细节**：建组申请发给全体管理员的那批消息**不会被撤回**——任一管理员处理后，其余人的队列里那条申请消失了，消息却还在（点进去看不到东西）。这是现状，不是漏写；要改成撤回得在 `notices` 加一条清理路径 |
 
 **所属层与依赖方向**
 
