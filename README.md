@@ -42,10 +42,14 @@ source env.local.sh          # PostgreSQL 连接配置；不加载会连接失�
 
 | 文档 | 内容 |
 |---|---|
-| [`docs/`](docs/README.md) | **文档索引**：五份文档各回答什么问题 |
-| [`docs/architecture/`](docs/architecture/README.md) | 架构：按 app 分篇的数据模型、权限设计、路由、关键流程 |
-| [`docs/development.md`](docs/development.md) | 开发指南：目录结构、环境配置、常用命令、测试与验收、日志调试、FAQ |
-| [`docs/deploy.md`](docs/deploy.md) | 部署手册：快速验证、生产一步脚本、更新回滚、备份恢复、运维 |
+| [`docs/`](docs/README.md) | **文档索引**：六份文档各回答什么问题 |
+| 各 app 目录下的 `README.md` | **模块说明**（唯一出处）：职责与边界、接口与失败模式、不变量、数据流、测试与已知限制——跟代码放在一起，改哪块看哪篇 |
+| [`docs/architecture/`](docs/architecture/README.md) | 架构：设计说明（SDD）总纲、权限、接口规格、关键流程，以及各模块的**跨模块口径与由来** |
+| [`docs/glossary.md`](docs/glossary.md) | 术语表：身份与角色、评审、通知、文件、代码约定、单位口径 |
+| [`docs/development.md`](docs/development.md) | 开发指南：目录结构、环境配置、常用命令、注释规范、测试与验收、日志调试、FAQ |
+| [`docs/deploy.md`](docs/deploy.md) | 部署手册：快速验证、生产一步脚本、更新回滚、备份与恢复演练、容量与退役 |
+| [`docs/manual.md`](docs/manual.md) | 用户手册：成员的日常操作、管理员的后台操作、提示的含义、平台不做什么 |
+| [`docs/licenses.md`](docs/licenses.md) | 依赖与许可：运行时依赖与分发义务、有意排除的依赖、SBOM 现状 |
 | 安全检查报告（不入库） | 威胁模型、逐类检查结果、风险清单与修复状态。**含生产标识，按 `.gitignore` 排除在版本库外**，只在维护者的工作区，所以这里没有链接 |
 | `deploy/` | 部署工件：`install.sh`、`deploy.sh`、`backup.sh`、systemd/Nginx 模板、`env.template` |
 
