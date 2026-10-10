@@ -193,6 +193,7 @@
 - `projects`：`unique_project_advisor_slot`（`(group, sort_order)`）+ `CHECK(sort_order < 3)`＝每组至多 3 位指导老师；两张申请表各一条 `WHERE status='pending'` 的部分唯一。
 - `reviews`：`unique_group_submission_round`、`unique_submission_task_reviewer`、`(submission) WHERE stage='preliminary'`、`unique_archived_proposal_task`、`CHECK(is_override=false OR stage='review')`、`CHECK(ends_at > starts_at)`。
 - `notices`：`unique_notice_read_per_user`；`competitions`：`unique_competition_group_registration`；`equipment`：`equipment_available_lte_total` 与 `borrow_status_matches_return_date`；`discussion`：`discussion_board_name_ci_uniq`（板块英文名大小写不敏感唯一）。
+- `core`：**不是约束但同级**——`core_auditlog` 上的行级触发器 `core_auditlog_append_only`（迁移 `0003`）拒掉 `UPDATE` / `DELETE`，是「审计只追加」的执行点。改名要动迁移，绕过（`DISABLE TRIGGER` 等）见 [deploy.md](../deploy.md) §5.3。
 
 **这些约束名本身就是承诺**：改名要连迁移一起动，改行为（放宽/收紧）更要先想清存量数据怎么办。
 

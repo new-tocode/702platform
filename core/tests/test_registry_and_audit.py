@@ -1,6 +1,7 @@
 """操作入口注册表与审计日志：入口按权限过滤，审计只读。"""
 
 from django.contrib.auth import get_user_model
+from django.db import DatabaseError, transaction
 from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from ..audit import get_client_ip, record_audit
@@ -218,3 +219,69 @@ class AuditLogAcceptanceTests(TestCase):
         self.assertFalse(model_admin.has_add_permission(None))
         self.assertFalse(model_admin.has_change_permission(None))
         self.assertFalse(model_admin.has_delete_permission(None))
+
+
+class AuditLogAppendOnlyTests(TestCase):
+    """「只追加」是数据库在守（迁移 `core.0003` 的行级触发器），不是约定。
+
+    每条断言都发一条真语句：把护栏换成注释、或迁移被反向掉，这里会红。写操作包在
+    自己的 `atomic()` 里，撞了触发器只回滚那个保存点，外层测试事务照常可用。
+    """
+
+    def setUp(self):
+        self.admin = User.objects.create_superuser(
+            username="append-only-admin",
+            password="Admin-Password-123!",
+        )
+        self.audit = record_audit(action="test.append_only", user=self.admin)
+
+    def test_update_is_rejected(self):
+        with self.assertRaises(DatabaseError):
+            with transaction.atomic():
+                AuditLog.objects.filter(pk=self.audit.pk).update(action="tampered")
+
+        self.audit.refresh_from_db()
+        self.assertEqual(self.audit.action, "test.append_only")
+
+    def test_delete_is_rejected(self):
+        with self.assertRaises(DatabaseError):
+            with transaction.atomic():
+                AuditLog.objects.filter(pk=self.audit.pk).delete()
+
+        self.assertTrue(AuditLog.objects.filter(pk=self.audit.pk).exists())
+
+    def test_insert_still_works(self):
+        """拦的是改与删：正常写入一个字都不受影响。"""
+        second = record_audit(action="test.append_only.second", user=self.admin)
+
+        self.assertIsNotNone(second.pk)
+        self.assertEqual(AuditLog.objects.count(), 2)
+
+    def test_statements_that_touch_no_row_are_allowed(self):
+        """行级触发器只在真有行要被改时拦——空匹配的语句放行。"""
+        with transaction.atomic():
+            AuditLog.objects.filter(pk=-1).update(action="tampered")
+            AuditLog.objects.filter(pk=-1).delete()
+
+    def test_deleting_a_user_with_audit_rows_is_rejected(self):
+        """`user` 外键是 SET_NULL，删人要改留痕，于是删不掉——这是刻意的一条。
+
+        没有审计行的账号照常删得掉（没有行会被改），这是同一个判据的两面。
+        """
+        with self.assertRaises(DatabaseError):
+            with transaction.atomic():
+                self.admin.delete()
+
+        self.assertTrue(User.objects.filter(pk=self.admin.pk).exists())
+        self.assertTrue(AuditLog.objects.filter(pk=self.audit.pk).exists())
+
+    def test_deleting_a_user_without_audit_rows_is_allowed(self):
+        spare = User.objects.create_user(
+            username="append-only-spare",
+            password="Member-Password-123!",
+        )
+
+        with transaction.atomic():
+            spare.delete()
+
+        self.assertFalse(User.objects.filter(username="append-only-spare").exists())
