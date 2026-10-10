@@ -13,6 +13,9 @@ from ..models import (
 from .base import ProjectViewTestCase
 
 
+User = get_user_model()
+
+
 class GroupBrowsingViewTests(ProjectViewTestCase):
     def test_group_leader_is_automatically_a_group_member(self):
         self.assertIn(self.leader, self.group.members.all())
@@ -137,6 +140,30 @@ class GroupListSearchTests(ProjectViewTestCase):
 
         self.assertEqual(self._rows(q="机器人"), ["机器人组"])
         self.assertEqual(self._rows(q="算法"), [])
+
+    def test_search_does_not_shrink_the_card_member_count(self):
+        """搜到的只是组里一个人时，卡片上的人数仍是**全组**人数。
+
+        数字要与同屏的名单一致：过滤筛的是这个组在不在列表里，不该把组内的人
+        也筛掉（`Count("members")` 落在被过滤的那条 join 上就会犯这个错）。
+        """
+        extra = User.objects.create_user(
+            username="search-extra",
+            password="Extra-Password-123!",
+        )
+        extra.profile.full_name = "高飞"
+        extra.profile.save(update_fields=["full_name"])
+        self.group.members.add(extra)
+
+        response = self.client.get(reverse("projects:group_list"), {"q": "高飞"})
+
+        rows = response.context["group_rows"]
+        self.assertEqual([row["group"].name for row in rows], ["机器人组"])
+        self.assertEqual(
+            rows[0]["group"].member_count,
+            len(rows[0]["group"].members.all()),
+        )
+        self.assertEqual(rows[0]["group"].member_count, 3)
 
     def test_blank_keyword_returns_everything_visible(self):
         self.assertEqual(set(self._rows(q="   ")), {"机器人组", "算法组"})

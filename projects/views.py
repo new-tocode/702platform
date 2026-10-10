@@ -7,7 +7,7 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
-from django.db.models import Count, Prefetch
+from django.db.models import Prefetch
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext as _, ngettext
@@ -34,7 +34,7 @@ from .permissions import (
     manageable_group_ids,
     member_group_ids,
 )
-from .selectors import search_groups
+from .selectors import annotate_member_count, search_groups
 from .services import (
     GroupCreateRequestError,
     GroupManagementError,
@@ -90,8 +90,9 @@ def group_list(request):
     manageable_ids = set(manageable_group_ids(request.user))
     member_ids = set(member_group_ids(request.user))
 
-    # 先搜索、后 annotate：搜索跨 members/advisors 过滤会 JOIN 出重复行，
-    # 排在聚合之前才不会把 member_count 放大（见 selectors.search_groups）。
+    # 搜索跨 members/advisors 过滤会 JOIN 出重复行，所以卡片上的人数不能直接
+    # Count("members")——那会数到过滤后剩下的那几个人。用子查询数真实人数，
+    # 数字与同屏的名单一致（见 selectors.annotate_member_count）。
     groups = search_groups(groups_visible_to(request.user), query=keyword)
     if mine_only:
         # 「我的项目组」= 自己作为联系人/组员的组。联系人一定在成员名单里
@@ -99,7 +100,8 @@ def group_list(request):
         # permissions.member_group_ids 一致。
         groups = groups.filter(pk__in=member_ids)
     groups = (
-        groups.select_related("leader__profile")
+        annotate_member_count(groups)
+        .select_related("leader__profile")
         .prefetch_related("members__profile")
         .prefetch_related("advisors")
         .prefetch_related(
@@ -109,7 +111,6 @@ def group_list(request):
                 to_attr="ordered_submissions",
             )
         )
-        .annotate(member_count=Count("members", distinct=True))
         .order_by("name", "id")
     )
     pending_ids = set(
