@@ -1,4 +1,4 @@
-"""评审的读与策略：手上还有多少活、请假窗口、超级评审能不能行使。
+"""评审的读与策略：手上还有多少活、超级评审能不能行使。
 
 只读不写，与 :mod:`reviews.services` 的写命令分开——页面装配（``panels``）与后台
 都要问「现在是什么情况」，它们不需要也不该碰事务。
@@ -14,7 +14,6 @@ from django.utils.translation import gettext_lazy as _, ngettext
 from . import lifecycle
 from .models import (
     ReviewTask,
-    ReviewerLeave,
     preliminary_task_of,
 )
 from .permissions import is_super_reviewer
@@ -74,14 +73,11 @@ def pending_task_summary(reviewer):
     """这个账号手上还没交的任务，按阶段计数——一次查询。
 
     The single place that answers "how much is waiting for me" and names the
-    parts. **It currently has no production caller**: the post-login nudge and
-    the member-centre card were withdrawn (reminders live in 「我的消息」 now),
-    and the queue page counts its own buckets. Keep it as the definition of the
-    figure — but if you are about to write ``# noqa`` because it looks unused,
-    read this first.
+    parts. 成员中心的接单开关面板是它现在的调用方：把「手上有几件没交」摆在开关
+    旁边，那条「有未完成任务时关不掉」的规则才是可预期的，而不是点了才知道。
+    （登录提醒与成员中心待办卡片已撤，提醒统一归「我的消息」。）
 
-    Leave is deliberately not applied — taking leave does not excuse the tasks a
-    reviewer already holds.
+    这里**不看接单开关**——关掉开关不等于手上已有的任务不算数了。
     """
     rows = dict(
         ReviewTask.objects.filter(reviewer=reviewer, status=ReviewTask.PENDING)
@@ -91,16 +87,6 @@ def pending_task_summary(reviewer):
     return PendingTasks(
         preliminary=rows.get(ReviewTask.PRELIMINARY, 0),
         review=rows.get(ReviewTask.REVIEW, 0),
-    )
-
-
-def open_leave_for(reviewer, at=None):
-    """The reviewer's not-yet-ended leave, if they have one."""
-    return (
-        ReviewerLeave.objects.filter(reviewer=reviewer)
-        .open(at)
-        .order_by("-starts_at", "-id")
-        .first()
     )
 
 

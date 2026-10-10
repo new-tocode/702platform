@@ -1,5 +1,6 @@
 """列表与详情：谁看得到哪个组、详情页显示什么，以及列表页的搜索与筛选。"""
 
+from unittest import mock
 from urllib.parse import urlencode
 
 from django.contrib.auth import get_user_model
@@ -13,18 +14,78 @@ from ..models import (
 from .base import ProjectViewTestCase
 
 
+User = get_user_model()
+
+
 class GroupBrowsingViewTests(ProjectViewTestCase):
     def test_group_leader_is_automatically_a_group_member(self):
         self.assertIn(self.leader, self.group.members.all())
         self.assertIn(self.member, self.group.members.all())
-    def test_group_member_sees_only_their_own_group(self):
+    def test_every_logged_in_member_sees_every_group(self):
+        """有没有组、什么身份，看到的都是全部——列表是「社团里有哪些组」的入口。
+
+        「只看自己参与的组」由页面上的「我的项目组」筛选提供，不再由可见范围代劳。
+        """
+        for user in (self.member, self.no_group_user, self.leader, self.admin):
+            with self.subTest(user=user.username):
+                self.client.force_login(user)
+
+                response = self.client.get(reverse("projects:group_list"))
+
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, self.group.name)
+                self.assertContains(response, self.other_group.name)
+
+    def test_apply_entry_is_offered_on_groups_you_are_not_in(self):
+        """申请入口不按身份设限：普通成员与管理员都看得到（管理员也有个人身份）。
+
+        管理员对每个组都有管理权，所以「管理项目组」与「申请加入」会同时出现——
+        前者不吃掉后者。member 已在 `self.group` 里，他那一张卡片必须没有入口。
+        """
+        for user, closed_group in ((self.member, self.group), (self.admin, None)):
+            with self.subTest(user=user.username):
+                self.client.force_login(user)
+
+                response = self.client.get(reverse("projects:group_list"))
+
+                self.assertContains(
+                    response,
+                    reverse("projects:group_apply", args=(self.other_group.pk,)),
+                )
+                # 反向也要钉（少了这一句，把 `{% if row.is_member %}` 改成恒假也照样全绿）：
+                # 已经在的组上没有申请入口，卡片上该出现的是「已加入」。
+                if closed_group is not None:
+                    self.assertNotContains(
+                        response,
+                        reverse("projects:group_apply", args=(closed_group.pk,)),
+                    )
+                    self.assertContains(response, "已加入")
+
+    def test_card_shows_the_latest_round_status(self):
+        """卡片上的 chip 是最近一轮的状态（`status_label` / `status_tone`）。
+
+        模板曾经判的是 `row.status`（视图不给这个键），于是这个 chip 从来不渲染——
+        键名对不上不会有任何报错，所以这里同时钉住「有轮次就出 chip」与
+        「没轮次不出」。
+        """
+        from reviews.models import ProjectSubmission
+
         self.client.force_login(self.member)
 
-        response = self.client.get(reverse("projects:group_list"))
+        blank = self.client.get(reverse("projects:group_list"))
+        self.assertNotContains(blank, "初审中")  # 没有轮次：一个状态都不出
 
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, self.group.name)
-        self.assertNotContains(response, self.other_group.name)
+        ProjectSubmission.objects.create(
+            group=self.group,
+            round=1,
+            review_type="innovation_start",
+            submitted_by=self.leader,
+        )
+
+        response = self.client.get(reverse("projects:group_list"))
+        self.assertContains(response, "初审中")
+        self.assertContains(response, "chip-on")  # 语气色跟着状态走
+
     def test_user_without_group_sees_all_groups_to_apply(self):
         self.client.force_login(self.no_group_user)
 
@@ -132,11 +193,44 @@ class GroupListSearchTests(ProjectViewTestCase):
         self.assertEqual(self._rows(q="project-leader"), ["机器人组"])
 
     def test_search_stays_inside_visible_scope(self):
-        """成员只在自己可见的组里搜：别的组不上列表，也就搜不出来。"""
+        """搜索只在 `groups_visible_to` 给出的范围里做，不会自己扩大范围。
+
+        可见范围现在是「登录即全部」，所以把范围收窄来验这条：范围被替换后，
+        范围外的组即使命中关键字也不该出现。视图哪天不再经过 `groups_visible_to`
+        （自己拼查询），这条就会红。
+        """
         self.client.force_login(self.member)
 
-        self.assertEqual(self._rows(q="机器人"), ["机器人组"])
-        self.assertEqual(self._rows(q="算法"), [])
+        with mock.patch(
+            "projects.views.groups_visible_to",
+            return_value=ProjectGroup.objects.filter(pk=self.group.pk),
+        ):
+            self.assertEqual(self._rows(q="机器人"), ["机器人组"])
+            self.assertEqual(self._rows(q="算法"), [])
+
+    def test_search_does_not_shrink_the_card_member_count(self):
+        """搜到的只是组里一个人时，卡片上的人数仍是**全组**人数。
+
+        数字要与同屏的名单一致：过滤筛的是这个组在不在列表里，不该把组内的人
+        也筛掉（`Count("members")` 落在被过滤的那条 join 上就会犯这个错）。
+        """
+        extra = User.objects.create_user(
+            username="search-extra",
+            password="Extra-Password-123!",
+        )
+        extra.profile.full_name = "高飞"
+        extra.profile.save(update_fields=["full_name"])
+        self.group.members.add(extra)
+
+        response = self.client.get(reverse("projects:group_list"), {"q": "高飞"})
+
+        rows = response.context["group_rows"]
+        self.assertEqual([row["group"].name for row in rows], ["机器人组"])
+        self.assertEqual(
+            rows[0]["group"].member_count,
+            len(rows[0]["group"].members.all()),
+        )
+        self.assertEqual(rows[0]["group"].member_count, 3)
 
     def test_blank_keyword_returns_everything_visible(self):
         self.assertEqual(set(self._rows(q="   ")), {"机器人组", "算法组"})

@@ -68,19 +68,19 @@
 │   ├── forms.py / views.py / urls.py / admin.py
 │   └── tests.py
 ├── reviews/                          # 项目书同行评审（初审关卡 + 评审）
-│   ├── models.py                     # ProjectSubmission、ReviewTask（初审/评审同表，stage 区分）、ArchivedProposal、ReviewerLeave
+│   ├── models.py                     # ProjectSubmission、ReviewTask（初审/评审同表，stage 区分）、ArchivedProposal（接单开关在 accounts 的 User 上）
 │   ├── lifecycle.py                  # 轮次状态机（迁移表 + 唯一写入点 transition()）与两道关的口径 STAGES
 │   ├── permissions.py                # 评审资格、「凭评审身份能否看这一组」与队列页准入（管理员无资格亦可）的唯一判定
 │   ├── panels.py                     # 队列页／项目组详情页／成员中心三处页面上下文的装配入口（含管理员的创建申请待办）
 │   ├── exceptions.py                 # ReviewError（独立成模块，好让下层的 draw 也能抛）
 │   ├── draw.py                       # 抽签：资格条件、排除冲突、候选池、抽不出来时的措辞（只查库）
-│   ├── selectors.py                  # 只读：待办计数 PendingTasks、请假窗口、超级评审能否行使
-│   ├── services.py                   # 写命令：送审、交卷（submit_verdict）、汇总与归档、超级评审敲定、管理员改派（reassign_task）、请假
+│   ├── selectors.py                  # 只读：待办计数 PendingTasks、超级评审能否行使
+│   ├── services.py                   # 写命令：送审、交卷（submit_verdict）、汇总与归档、超级评审敲定、管理员改派（reassign_task）、接单开关
 │   ├── forms.py / views.py / urls.py / admin.py
 │   └── tests/                        # 测试按功能分模块（用例多，见 §5）
 │       ├── factories.py              # 造对象：用户/角色、项目组、上传文件
 │       ├── base.py                   # ReviewTestCase：临时 MEDIA_ROOT + 推进轮次的动作
-│       └── test_*.py                 # 送审 / 结论与归档 / 页面 / 初审 / 请假 / 提醒 / 改派 / 超级评审 / 后台删整轮
+│       └── test_*.py                 # 送审 / 结论与归档 / 页面 / 初审 / 接单开关 / 提醒 / 改派 / 超级评审 / 后台删整轮
 ├── equipment/                        # 设备台账与借用
 │   ├── models.py                     # Equipment、EquipmentBorrow
 │   ├── services.py                   # 事务化借用/归还与库存更新
@@ -303,7 +303,7 @@ uuid（见 `core/storage.py`），因为原文件名会带人名、组名，而�
 
 **用户可填文本的长度上限**：成员能自由填写的长文本都有上限（评审意见 5000、
 送审说明 5000、入组申请理由 2000、项目组描述 2000、组介绍 2000、报名备注 2000、
-请假事由 500、借用备注 1000）。没有上限的文本字段是一条廉价的写入放大路径——
+借用备注 1000）。没有上限的文本字段是一条廉价的写入放大路径——
 一次请求就能塞进很大的内容，把库撑大、把后台列表与页面渲染拖慢。表单与模型两边
 都写：表单先给出友好报错，模型兜住后台表单与脚本写入。核心用例
 `core.tests.test_upload_validation.UserSuppliedTextLimitAcceptanceTests` 会逐项核对这张口径表。
@@ -422,18 +422,18 @@ source env.local.sh
 
 测试按模块分布在各 app 的 `tests.py`，覆盖的验收要点：
 
-**`reviews` 例外**：它的用例最多（179 条），因此按功能拆成 `reviews/tests/` 包，一个模块一个主题——送审规则、结论与归档、评审页面、初审关卡、请假、待办提醒、改派、超级评审、后台删整轮。共用件只有两处：`factories.py`（造对象）与 `base.py`（`ReviewTestCase`：临时 MEDIA_ROOT + `_open_round`/`_pass_preliminary`/`_submit` 三个推进轮次的动作）。夹具（谁是评审人、各有几名）**刻意留在各个类自己的 `setUp`**：送审类型决定名额，而名额是「恰好抽到谁」这类断言的前提，由基类统一发放夹具会让这些断言随候选人数变化而时灵时不灵。跑单个模块用 `manage.py test reviews.tests.test_preliminary`。
+**`reviews` 例外**：它的用例最多（179 条），因此按功能拆成 `reviews/tests/` 包，一个模块一个主题——送审规则、结论与归档、评审页面、初审关卡、接单开关、待办提醒、改派、超级评审、后台删整轮。共用件只有两处：`factories.py`（造对象）与 `base.py`（`ReviewTestCase`：临时 MEDIA_ROOT + `_open_round`/`_pass_preliminary`/`_submit` 三个推进轮次的动作）。夹具（谁是评审人、各有几名）**刻意留在各个类自己的 `setUp`**：送审类型决定名额，而名额是「恰好抽到谁」这类断言的前提，由基类统一发放夹具会让这些断言随候选人数变化而时灵时不灵。跑单个模块用 `manage.py test reviews.tests.test_preliminary`。
 
 | 模块 | 验收要点 |
 |---|---|
 | `accounts` | 管理员发放账号/重置密码；首次登录强制改密、改密后解锁；资料维护（姓名/学号/学院/专业/特长/联系方式）；无注册、无自助找回；审计与日志不含明文密码；非 staff 不能进后台；**身份名册与批量授予**——六张名册只列持有人且没有分配入口（新增页 403），建号表单可直接勾选资格，用户列表页的六个批量动作授予/撤销并写审计，重复授予不产生多余审计行，白名单外的字段（`is_superuser` 等）被拒，且没有「批量授予管理员资格」这个动作；**后台用户组的组内用户是穿梭框**——候选池是全部账号、一次可增删一批，重复保存同一份名单不产生审计行，真正的变更写 `accounts.group.membership.update` |
 | `notices` | `public`/`internal`/`contacts` 三种范围隔离；`internal` 按 auth 用户组、`contacts` 按项目组联系人；置顶排序；公开路由不泄漏内部/联系人通知；未授权详情 404；未改密拦截 |
 | `content` / `media` | 已发布才公开；按 slug 直连的未发布页 404，而顶栏固定入口 `/about/` 未发布时显示空状态；Markdown 经 bleach 白名单；图片/视频扩展名+大小+签名校验；**获奖页**：一个关键字搜全部字段、每页 10／20／40（白名单外的值回落默认）、页码链接带着关键字；勾选打包下载只含证书不含参赛图（游客与未选为空都被挡下）；登录成员可添加记录、重复项与错别字版本都被拦下而换人／换年放行，游客 GET/POST 皆拒 |
-| `projects` | 联系人由 `leader` 计算；「项目组成员」名册一行看出某人在哪些组、在各组里是联系人还是成员，且没有直接加人的入口；无组员看全部可申请、组员只看自己的组、联系人看全部并管理自己的组；申请→审核入组；拒绝后可重申；申请创建项目组（任一管理员在「评审」页同意即建组，其余管理员的待办随之消失）；移除成员；联系人转让后原联系人保留为成员；改组介绍与学院/指导老师（指导老师每组至多 3 位，空槽位不占位并自动补齐；上限在数据库层由槽位唯一约束 + CHECK 兜住，服务层另有一道）；非联系人管理页 403 |
+| `projects` | 联系人由 `leader` 计算；「项目组成员」名册一行看出某人在哪些组、在各组里是联系人还是成员，且没有直接加人的入口；任何登录成员都列出全部组（想只看自己参与的用 `?mine=1` 筛选）、联系人另能在自己的组上管理；申请→审核入组（申请对任何身份开放，唯一限制是「还不是该组成员」）；拒绝后可重申；申请创建项目组（任一管理员在「评审」页同意即建组，其余管理员的待办随之消失）；移除成员；联系人转让后原联系人保留为成员；改组介绍与学院/指导老师（指导老师每组至多 3 位，空槽位不占位并自动补齐；上限在数据库层由槽位唯一约束 + CHECK 兜住，服务层另有一道）；非联系人管理页 403 |
 | `competitions` | 竞赛列表所有登录成员可见；仅项目组联系人报名（限自己的组）；参赛成员与竞赛组长须属该组且组长在参赛成员内；重复报名/截止校验；报名修改与放弃；跨组越权拒绝 |
 | `equipment` | 借用限项目组成员（入口隐藏 + 视图 403）；库存事务 + 行锁不超借；仅见本人记录；归还回补、重复归还不重复回补；管理员代还；被移出组后仍可归还 |
 | `discussion` | 游客与首次改密账号不可访问；作者仅改/删自己的帖与评论，管理员可删他人帖/评论与置顶，仅超级管理员可建/删空板块；评论软删除后不再出现在页面与计数里但仍留在库中；中英文板块名必填、板块条可横向滑动；成员目录按姓名过滤、只读资料字段白名单；每帖 3 张、单张 3 MB 图片上限与文件清理；英文界面翻译完整但用户内容原样 |
-| `reviews` | 任务是一张表（`ReviewTask`，`stage` 区分初审／评审）；状态机与两道关的口径收敛在 `lifecycle.py`（改状态一律经 `transition()`）；页面上下文由 `panels.py` 统一装配；评审判定在 `permissions.py`。**这一块的规则细节见 [架构文档的 reviews 一篇](architecture/reviews.md)**——这里只列验收要看住的几件事：初审先于评审且每轮恰好一条初审任务、抽人排除请假者与本轮初审人、初审通过时评审人不够则整次回滚、同一项目组同时只能有一个未结束的轮次、「一人一轮一席」等三条约束在数据库层、超级评审一票敲定会释放等待中的任务、改派只对「待处理且该轮未判结论」开放且要真的持有模型修改权限、初审人与评审人一律匿名（页面、文件名、下载头都不带身份） |
+| `reviews` | 任务是一张表（`ReviewTask`，`stage` 区分初审／评审）；状态机与两道关的口径收敛在 `lifecycle.py`（改状态一律经 `transition()`）；页面上下文由 `panels.py` 统一装配；评审判定在 `permissions.py`。**这一块的规则细节见 [架构文档的 reviews 一篇](architecture/reviews.md)**——这里只列验收要看住的几件事：初审先于评审且每轮恰好一条初审任务、抽人排除**关掉接单开关**的人与本轮初审人、初审通过时评审人不够则整次回滚、同一项目组同时只能有一个未结束的轮次、「一人一轮一席」等三条约束在数据库层、超级评审一票敲定会释放等待中的任务、改派只对「待处理且该轮未判结论」开放且要真的持有模型修改权限、初审人与评审人一律匿名（页面、文件名、下载头都不带身份） |
 | `core` | 操作入口注册表按登录/改密/权限/自定义条件过滤；审计只读；Admin 标题定制；上传件的通用校验（含图片那份共用实现）；界面翻译兜底（源码标了翻译的文案都在 `.po` 里、译文非空、占位符一致） |
 
 **测试跑得快是配置出来的，不是碰巧**：`manage.py test` 时 `config.settings` 会把
@@ -466,7 +466,7 @@ source env.local.sh
 |---|---|
 | `projects/selectors.py` | `search_groups(groups, *, query="")`：跨 `members` / `advisors` 两个一对多关系过滤，结尾 `distinct()` 收回重复行 |
 | `projects/permissions.py` | `member_group_ids(user)`：把「我参与的组」收在一处，视图不来拼 |
-| `projects/views.py` | `group_list`：`search_groups` 收窄 → `?mine=1` 按 id 集合再收窄 → `annotate(member_count=Count("members", distinct=True))`。**顺序在这里有讲究，但方向和直觉相反**：`WHERE` 与聚合落在同一条 member join 上时，过滤会把参与聚合的行一起筛掉——搜「高」（只命中 1 名成员）时卡片写「成员 1 人」，而下面列着 5 个人。`distinct=True` 防的是另一处 `advisors` join 带来的重复行，防不了这个（这是一处**已知的口径问题**，见 [architecture/projects.md](architecture/projects.md)） |
+| `projects/views.py` | `group_list`：`search_groups` 收窄 → `?mine=1` 按 id 集合再收窄 → `annotate_member_count(...)` 数人数。**数人不能用 `Count("members")`**：`search_groups` 已经 JOIN 了 `members`，聚合落在那条**被过滤过的** join 上时，过滤会把参与聚合的行一起筛掉——搜「高」（只命中 1 名成员）时卡片写「成员 1 人」，而下面列着 5 个人。`annotate_member_count` 用子查询数与过滤各走一条 join，卡片数字恒等于名单长度（见 [architecture/projects.md](architecture/projects.md)） |
 | `templates/projects/group_list.html` | 搜索框与「我的项目组」写在**同一个 GET 表单**里：提交搜索时用 hidden 把筛选带上，切筛选时用 `{% querystring %}` 把关键字带上 |
 | `projects/tests/test_browsing.py` | 两个测试类：`GroupListSearchTests`（按组名／联系人／成员／指导老师／账号名各搜一次、不越可见范围、空白关键字、无结果空状态）、`GroupListMineFilterTests`（联系人、管理员、无组员各看到什么，筛选与关键字互相保留） |
 
@@ -475,10 +475,12 @@ source env.local.sh
 钉的是姓名回退（`full_name` 为空时用账号名）。写用例时问一句：**改坏哪一行会让它变红？**
 答不上来的是装饰，不是测试。
 
-这一段里正好有个**反面教材**：`test_search_lists_each_group_once` 想钉的是 `search_groups`
-结尾的 `distinct()`，但视图随后无条件 `annotate(...)`，`GROUP BY` 主键已经把重复行收回一行
-了——实测去掉 `distinct()` 后，过滤出的 10 行经 `annotate` 仍是 3 行（每组一行），测试照样绿。
-断言落在了别人顺手兜住的副作用上，看着像覆盖，其实没有判别力。
+这一段里有个现成的例子：`test_search_lists_each_group_once` 钉的是 `search_groups` 结尾的
+`distinct()`——去掉 `distinct()` 它就红（同一组被 JOIN 出两行）。**它曾经没有这个判别力**：
+那时视图随后无条件 `annotate(member_count=Count("members"))`，`GROUP BY` 主键顺手把重复行
+收回了一行，断言其实落在别人的副作用上；改成子查询数人之后外层没有 `GROUP BY` 了，去重
+只剩 `distinct()` 一处，测试才真正钉住它。所以用例写完后要问一句：**改坏哪一行会让它变红？**
+答不上来的是装饰，不是测试——而且答案会随后续改动变化，别一直信旧答案。
 
 **4. 文档跟着改**：口径变了改 `docs/architecture/projects.md`；新文案进模板后要跑
 `.po` 那一套（见 §3.4）；若新增了成员入口，去 `core.registry` 登记。

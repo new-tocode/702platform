@@ -88,6 +88,7 @@ class StageRules(NamedTuple):
     label: str  # 初审 / 评审
     holder_label: str  # 初审人 / 评审人
     qualification: str  # accounts.User 上的资格字段名
+    receives: str  # accounts.User 上的接单开关字段名（有资格的人才能开关它）
     open_status: str  # 轮次停在这个状态时，这道关才可提交、才可改派
     submit_action: str  # 审计动作名（沿用合并前的字符串，历史记录保持连续）
     reassign_action: str
@@ -102,6 +103,7 @@ STAGES = {
         label=_("初审"),
         holder_label=_("初审人"),
         qualification="is_preliminary_reviewer",
+        receives="receives_preliminary_tasks",
         open_status=PRELIMINARY_PENDING,
         submit_action="reviews.preliminary.complete",
         reassign_action="reviews.preliminary.reassign",
@@ -114,6 +116,7 @@ STAGES = {
         label=_("评审"),
         holder_label=_("评审人"),
         qualification="is_reviewer",
+        receives="receives_review_tasks",
         open_status=PENDING,
         submit_action="reviews.assignment.complete",
         reassign_action="reviews.assignment.reassign",

@@ -364,7 +364,26 @@ LOGGING = {
             "level": "INFO",
             "propagate": False,
         },
+        # 下面按 INSTALLED_APPS 的顺序逐个列出（`config` 不是 app，夹在其中）。**别省**：没列到的
+        # logger 会继承 root 的 WARNING 且没有 handler，info 连级别检查都过不去、
+        # warning 只经 lastResort 落到 stderr，不进 logs/django.log——排查时会以为
+        # 「什么都没发生」。`config.tests.AppLoggerTests` 盯着这条，漏了新 app 会红。
         "accounts": {
+            "handlers": ["console", "file"],
+            "level": "DEBUG",
+            "propagate": False,
+        },
+        "notices": {
+            "handlers": ["console", "file"],
+            "level": "DEBUG",
+            "propagate": False,
+        },
+        "media": {
+            "handlers": ["console", "file"],
+            "level": "DEBUG",
+            "propagate": False,
+        },
+        "content": {
             "handlers": ["console", "file"],
             "level": "DEBUG",
             "propagate": False,
@@ -390,6 +409,11 @@ LOGGING = {
             "propagate": False,
         },
         "equipment": {
+            "handlers": ["console", "file"],
+            "level": "DEBUG",
+            "propagate": False,
+        },
+        "discussion": {
             "handlers": ["console", "file"],
             "level": "DEBUG",
             "propagate": False,

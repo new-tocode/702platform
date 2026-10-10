@@ -16,7 +16,7 @@
                 <h1>{% translate "项目组" %}</h1>
                 <div class="sub">
                     {# 两句话合成一条：中文「。」与英文「. 」之间的空格没法靠拼接得到。 #}
-                    {% blocktranslate count counter=group_rows|length %}共 1 个项目组。组员只看得到自己的项目组，项目组联系人可管理自己的项目组。{% plural %}共 {{ counter }} 个项目组。组员只看得到自己的项目组，项目组联系人可管理自己的项目组。{% endblocktranslate %}
+                    {% blocktranslate count counter=group_rows|length %}共 1 个项目组。所有成员都看得到全部项目组，都能申请加入。{% plural %}共 {{ counter }} 个项目组。所有成员都看得到全部项目组，都能申请加入。{% endblocktranslate %}
                 </div>
             </div>
             <div class="head-actions">
@@ -55,7 +55,8 @@
         <div class="panel reveal">
             <div class="panel-head">
                 <h2>{{ row.group.name }}</h2>
-                {% if row.status %}
+                {# 最近一轮的状态；没有轮次时 status_label 是空串，不渲染。 #}
+                {% if row.status_label %}
                     <span class="chip chip-{{ row.status_tone }}">{{ row.status_label }}</span>
                 {% endif %}
             </div>
@@ -90,8 +91,12 @@
                     {% endif %}
                     {% if row.can_manage %}
                         <a class="btn btn-primary btn-sm" href="{% url 'projects:group_manage' row.group.pk %}">{% translate "管理项目组" %}</a>
-                    {% elif row.is_member %}
-                        <span class="chip chip-off">{% translate "已加入" %}</span>
+                    {% endif %}
+                    {# 入组状态与「管理」是两件事：管理员对每个组都有管理权，但他没进的组照样要能申请，所以申请入口不挂在上面的 elif 链上。 #}
+                    {% if row.is_member %}
+                        {% if not row.can_manage %}
+                            <span class="chip chip-off">{% translate "已加入" %}</span>
+                        {% endif %}
                     {% elif row.has_pending %}
                         <span class="chip chip-warn">{% translate "申请审核中" %}</span>
                     {% else %}

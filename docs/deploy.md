@@ -334,6 +334,42 @@ ls -d protected_media                                   # 迁移建出来的受�
 
 `deploy.sh` 自动：备份库与媒体（保留 RETAIN 份）→ **`chmod 600 env.sh`** → checkout tag → 升级依赖 → **`check --deploy` 门禁** → `mkdir -p protected_media` → `migrate` + `collectstatic` + `compilemessages` → 重启 → 健康检查（先打 Nginx、再退回直连 gunicorn，详见 2.6）。任何一步失败即中止，其中门禁那一步会拦下「DEBUG 还开着」「Cookie 没带 Secure」「SECRET_KEY 还是源码默认值」这类不会让站点起不来、只会让它安静地不安全的问题。版本号命名 `v主.次.修订`（修订=修复，次=新功能，主=不兼容）。
 
+### 升级到「接单开关」那一版的完整步骤
+
+这一版删掉了评审请假窗口（表 `reviews_reviewerleave`），换成 `User` 上的两个接单
+开关。**迁移里既有加列也有删表，是这条流水线上少见的「一次发布两头都动」**，所以
+单独记一段：
+
+```bash
+cd ~/applications/702platform
+./deploy/deploy.sh v<新版本>          # 备份 → 迁移（accounts 加列、reviews 删表）→ 重启 → 健康检查
+```
+
+**窗口期**：`deploy.sh` 的顺序是 `migrate` → 重启，中间那几秒旧进程还在跑、而表
+已经被删——这段时间里「送审」（抽人）与「成员中心」会 500。挑低峰发布，别在有人正
+送审时做。旧进程一重启即恢复。
+
+**回滚顺序与平时相反，先看这里**：回滚要**先反迁移、再切旧 tag**——
+
+```bash
+.venv/bin/python manage.py migrate reviews 0010    # 把表建回来（结构回来，数据不回来）
+.venv/bin/python manage.py migrate accounts 0014   # 去掉两个开关列
+# 然后按下面的常规回滚步骤切回旧 tag
+```
+
+反着做（先切旧 tag 再迁移）会让旧代码撞上「表没了」，站点起不来。
+
+**两件只发生一次的事，发布前先通知本人**：
+
+- **迁移只把「此刻正在请假」的人搬成开关关闭**（判定与旧的 `active()` 逐字一致：
+  `starts_at <= now < ends_at`）。**已排期但还没开始的窗口不会搬**——那些人事先
+  以为自己下周不接单，部署之后会被重新纳入抽签。要让这次发布对这些人是安全的，
+  发布前在群里说一声「以后请假改成自己到成员中心按开关」。
+- **已结束的窗口不搬**（本来也该恢复接单）。
+
+历史审计行里的 `reviews.leave.set` / `.clear` / `.admin_save` **保留不动**——动作
+字符串一旦发布就不再改，新动作是 `reviews.availability.open` / `.close`。
+
 ### 回滚
 
 健康检查失败时 `deploy.sh` 会把这套步骤直接打印出来。**回滚不能靠重跑 `deploy.sh`**：
@@ -559,7 +595,7 @@ tar -xzf backup-media-<时间戳>.tar.gz -C <应用目录>
 | **磁盘** | 媒体文件（视频单个 ≤500 MB）、`logs/`（10 MB × 5 轮转）、备份（默认留 14 份，含媒体包） | 先看 `du -sh mediafiles protected_media logs`；媒体是增长主项，可把 `DJANGO_BACKUP_RETAIN` 调小或把备份挪到更大的盘 |
 | **上传体积** | Nginx `client_max_body_size 520m`（要给视频留余量），Django 侧另有各自的类型上限 | 改 Nginx 模板要「先 `deploy.sh` 再 `install.sh`」，并读回 `/etc` 下的文件核对 |
 | **并发** | gunicorn 同步 worker；页面脚本极少，整页表单提交为主 | 加 worker 数（`club702.service` 的 `--workers`）；真到瓶颈先量再改 |
-| **数据库** | 单库、无只读副本；最大的表是审计日志与站内消息 | 审计日志可按年份归档导出；消息表有按来源的级联清理 |
+| **数据库** | 单库、无只读副本；最大的表是审计日志与站内消息 | 审计日志可按年份归档，但**清理要先走 §5.3 的逃生口**（只追加是数据库在守）；消息表有按来源的级联清理 |
 | **媒体文件数** | 公开件按 `uploads/%Y/%m/` 分目录，受保护件按类型 + `%Y/%m/` 分 | 单目录几十万文件才需要再分片 |
 
 要换形态（对象存储、视频转码、多机）时，媒体这一层是刻意留好的接缝：所有引用走 `MediaFile`，切 `django-storages` 只改存储配置一处（见 [`media/README.md`](../media/README.md)）。
@@ -570,6 +606,39 @@ tar -xzf backup-media-<时间戳>.tar.gz -C <应用目录>
 - **证书与域名**：换证书只改 `env.sh` 的两个路径 + `install.sh` 重渲染续期单元；**退役某个入口**（域名或 IP）要从 `nginx` 模板的 `server_name` 与 `DJANGO_CSRF_TRUSTED_ORIGINS` 里同时去掉，否则表单提交会因 Origin 校验失败。
 - **整站下线**顺序：① 公告通知成员 → ② 停 `club702.service`（站点不再可用）→ ③ 最后备份一次库与**两个**媒体目录 → ④ 把备份取回本地并确认可读 → ⑤ 再决定何时删除服务器上的数据与 Let's Encrypt 的续期单元。
 - **成员数据**：备份里有实名身份、学号手机号与全部评审意见。退役时按所在组织的留存要求处理——**先备份、后删除，且别把备份留在即将释放的机器上**。
+
+### 5.3 审计日志：改不动是数据库在守，以及它的逃生口
+
+审计表 `core_auditlog` 上挂着行级触发器 `core_auditlog_append_only`（迁移 `core.0003`）：任何 `UPDATE` / `DELETE` 命中即 `RAISE EXCEPTION`，语句回滚，应用侧看到 `DatabaseError`。这是**有意挡住正常路径的**——数据修复脚本、`queryset.update()`、数据库客户端都改不动留痕里的**某一行**，别看到报错就去把它摘掉。
+
+两个真实的副作用，先知道再遇到：
+
+- **删账号会被挡**：`AuditLog.user` 是 `SET_NULL`，删用户前要先把他名下的审计行置空（一次 `UPDATE`）→ **有审计行的账号删不掉**，一条都没有的账号照常删得掉。在后台点删除的**页面结果是 500**（`ProgrammingError` 不是 `IntegrityError`，admin 接不住），日志里是 `Internal Server Error: /admin/accounts/user/<id>/delete/`。账号退场的正常口径是**停用**（后台取消 `is_active`），不是删除。
+- **归档审计日志**（按年份清理旧行）也不能直接 `DELETE`，得走下面的逃生口。
+
+**逃生口**（两条，都不改代码、不改迁移）：
+
+```sql
+-- 甲之一：临时摘掉触发器（要表属主，即应用账号；只影响这一张表）
+ALTER TABLE core_auditlog DISABLE TRIGGER core_auditlog_append_only;
+```
+
+……做完要做的清理/归档，**立刻装回去**——装回去之前这段时间这张表没有任何保护：
+
+```sql
+-- 甲之二：装回去
+ALTER TABLE core_auditlog ENABLE TRIGGER core_auditlog_append_only;
+```
+
+```sql
+-- 乙：superuser 会话里关掉本会话的触发器执行（不动表定义，作用域限于这个连接）
+SET session_replication_role = replica;
+--   ……同一个连接里做完，退出即失效
+```
+
+甲的两条**别整块复制**（那样等于摘下来又立刻装上，中间什么都没做）；它要给表加 `ACCESS EXCLUSIVE` 锁——站点在用的话会短暂阻塞对审计表的读写，挑低峰做。**做完读回确认**：`\d core_auditlog` 里 `Triggers` 一栏应重新出现该触发器。
+
+**能挡住的与挡不住的**：挡的是行级 `UPDATE` / `DELETE`（含 ORM 与脚本）。**挡不住**整表级与 DDL 级的动作——`TRUNCATE`（`manage.py flush` 走的就是它）、`DROP TABLE`、从备份整库恢复、`ALTER TABLE`（删列、改类型：值没了而触发器一声不吭），以及上面两条逃生口。也就是说：留痕不会被某段代码或某个人悄悄改掉一行，但「把库整个换掉」这种级别的操作，任何应用层护栏都拦不住，靠的是备份与权限。
 
 ## 6. 常见问题
 

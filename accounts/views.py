@@ -183,7 +183,7 @@ def member_home(request):
     # 平台概览数字只对管理员与项目组联系人呈现，普通成员与访客都不显示。
     if can_view_platform_overview(request.user):
         context["overview"] = platform_overview()
-    # 评审那一半（待办数字与请假面板）由评审应用自己装配，没有资格时返回空字典；
+    # 评审那一半（待办数字与接单开关面板）由评审应用自己装配，没有资格时返回空字典；
     # 消息提醒（未读计数）对新成员人人有份，未读为 0 时模板不渲染。
     context.update(reviews_panels.member_home_context(user=request.user))
     context.update(notices_panels.member_home_context(user=request.user))

@@ -18,7 +18,9 @@ parameterised by :data:`reviews.lifecycle.STAGES`.
 
 import logging
 import os
+from typing import NamedTuple
 
+from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -32,16 +34,15 @@ from . import lifecycle
 # 抽签与只读查询已分别搬到 draw / selectors，但各调用方（views、panels、
 # forms、admin、accounts.signals 以及各测试模块）一直从本模块取这些名字，
 # 所以照旧转出，import 路径不变。
-from .draw import draw_tasks, eligible_holders, ensure_pool, qualification_for
+from .draw import draw_tasks, eligible_holders, ensure_pool
 from .exceptions import ReviewError
-from .permissions import may_receive_tasks
+from .permissions import qualifies_for_stage
 from .selectors import (
     # PendingTasks / pending_task_summary 在本模块内没用到，但**用例从这里导入**
     # （`reviews.tests` 的几个模块写的是 `from reviews.services import …`）——
     # 别当死 import 删掉，删了会让那三个测试模块整个收集失败。
     PendingTasks,
     can_override_review,
-    open_leave_for,
     override_blocker,
     pending_task_summary,
 )
@@ -51,11 +52,12 @@ from .models import (
     ArchivedProposal,
     ReviewTask,
     ProjectSubmission,
-    ReviewerLeave,
 )
 
 
 logger = logging.getLogger(__name__)
+
+User = get_user_model()
 
 
 def _advance(submission, event, *, at=None):
@@ -120,7 +122,7 @@ def submit_for_review(*, group, submitter, review_type, message="", request=None
             ).exclude(pk=preliminary_reviewer.pk),
             count=REVIEWER_QUOTA[review_type],
             label=lifecycle.STAGES[lifecycle.STAGE_REVIEW].holder_label,
-            qualification=qualification_for(lifecycle.STAGE_REVIEW),
+            stage=lifecycle.STAGE_REVIEW,
             hint=_("无法提交审核。"),
         )
         last = group.submissions.order_by("-round").first()
@@ -517,7 +519,10 @@ def reassign_task(*, task, new_reviewer, actor, request=None):
             submission=submission,
         ).filter(pk=new_reviewer.pk).exists():
             raise ReviewError(
-                _("该账号当前不能接手本轮的%(stage)s（可能没有资格、正在请假，或已在本轮持有任务）。")
+                _(
+                    "该账号当前不能接手本轮的%(stage)s"
+                    "（可能没有资格、关掉了接单开关，或已在本轮持有任务）。"
+                )
                 % {"stage": rules.label}
             )
 
@@ -566,88 +571,118 @@ def reassign_task(*, task, new_reviewer, actor, request=None):
     return locked
 
 
-def set_reviewer_leave(*, reviewer, starts_at, ends_at, reason="", actor, request=None):
-    """Register or adjust the reviewer's open leave window.
+def set_reviewer_availability(*, reviewer, stage, receives, actor, request=None):
+    """打开／关闭某一道关的「接单开关」，返回是否真的改动了。
 
-    A reviewer holds at most one open window, so registering again edits that
-    one instead of stacking a second. This is also how a reviewer or an
-    administrator moves the recovery time earlier or later.
+    开关与资格是两件事：关掉它不撤资格、不影响手上已有的任务，只是这个人不再被
+    抽中、也不再出现在改派候选里（见 :func:`reviews.draw.eligible_holders`）。
+
+    两条规则：
+
+    * **手上还有这一道关的未完成任务时关不掉**——先交掉，或让管理员改派走。这条
+      只在「关」的方向上判；打开任何时候都可以。
+    * 取值本来就一样时是 **no-op**，不留审计（与 ``accounts.services.set_qualification``
+      同款口径：审计记的是「谁真正动过什么」）。
+
+    ``actor`` 是本人或代做的管理员（谁能替谁做由调用方把关：成员中心只给自己开，
+    后台动作限 ``change`` 权限）。跨应用调用方请看本模块的 README。
+
+    What it does *not* do: 不写 ``ReviewTask``、不碰 ``is_reviewer`` /
+    ``is_preliminary_reviewer``。两条都不需要「恢复」——开关一直存在，随时可以
+    再打开。
     """
-    if not may_receive_tasks(reviewer):
-        raise ReviewError(_("该账号没有评审或初审资格，无需请假。"))
-    if ends_at <= starts_at:
-        raise ReviewError(_("请假结束时间必须晚于开始时间。"))
-    if ends_at <= timezone.now():
-        raise ReviewError(_("请假结束时间必须晚于当前时间。"))
-
-    with transaction.atomic():
-        leave = (
-            ReviewerLeave.objects.select_for_update()
-            .filter(reviewer=reviewer)
-            .open()
-            .order_by("-starts_at", "-id")
-            .first()
+    rules = lifecycle.STAGES.get(stage)
+    if rules is None:
+        raise ReviewError(_("不认识的评审环节：%(stage)s。") % {"stage": stage})
+    if not qualifies_for_stage(reviewer, stage):
+        raise ReviewError(
+            _("该账号没有%(role)s资格，没有可开关的接单状态。")
+            % {"role": rules.holder_label}
         )
-        created = leave is None
-        if created:
-            leave = ReviewerLeave(reviewer=reviewer)
-        leave.starts_at = starts_at
-        leave.ends_at = ends_at
-        leave.reason = reason
-        leave.created_by = actor
-        leave.save()
 
-    record_audit(
-        action="reviews.leave.set",
-        user=actor,
-        target=leave,
-        detail={
-            "reviewer_id": reviewer.pk,
-            "created": created,
-            "ends_at": ends_at.isoformat(),
-        },
-        request=request,
-    )
-    logger.info(
-        "reviews.leave.set reviewer_id=%s leave_id=%s created=%s ends_at=%s actor=%s",
-        reviewer.pk,
-        leave.pk,
-        created,
-        ends_at.isoformat(),
-        actor.get_username(),
-        extra={"request_id": getattr(request, "request_id", "-")},
-    )
-    return leave
+    pending = ReviewTask.objects.filter(
+        reviewer=reviewer, stage=stage, status=ReviewTask.PENDING
+    ).count()
+    if not receives and pending:
+        raise ReviewError(
+            _("手上还有 %(count)s 件未完成的%(stage)s任务，交掉或改派走之后才能关闭。")
+            % {"count": pending, "stage": rules.label}
+        )
 
-
-def clear_reviewer_leave(*, reviewer, actor, request=None):
-    """Drop the reviewer's open leave window, restoring them immediately.
-
-    Nothing restores eligibility because nothing ever removed it — deleting the
-    window is the whole operation. The removal is kept in the audit log.
-    """
+    field = rules.receives
     with transaction.atomic():
-        open_leaves = ReviewerLeave.objects.select_for_update().filter(
-            reviewer=reviewer
-        ).open()
-        removed = open_leaves.count()
-        if removed:
-            open_leaves.delete()
-
-    if not removed:
-        raise ReviewError(_("当前没有可取消的请假。"))
+        locked = User.objects.select_for_update().get(pk=reviewer.pk)
+        if getattr(locked, field) == receives:
+            return False
+        setattr(locked, field, receives)
+        locked.save(update_fields=[field])
 
     record_audit(
-        action="reviews.leave.clear",
+        action="reviews.availability.open" if receives else "reviews.availability.close",
         user=actor,
         target=reviewer,
-        detail={"reviewer_id": reviewer.pk, "removed": removed},
+        detail={"reviewer_id": reviewer.pk, "stage": stage, "pending_tasks": pending},
         request=request,
     )
     logger.info(
-        "reviews.leave.clear reviewer_id=%s removed=%s actor=%s",
+        "reviews.availability.set reviewer_id=%s stage=%s receives=%s pending=%s actor=%s",
         reviewer.pk,
-        removed,
+        stage,
+        receives,
+        pending,
         actor.get_username(),
         extra={"request_id": getattr(request, "request_id", "-")},
     )
+    return True
+
+
+class AvailabilityBatchResult(NamedTuple):
+    """一次批量开关的结果，**按人计数、五种结局互斥**——同一个人只出现在一格。
+
+    逐环节的结果（改了／被挡下／本来就是）会落在同一个人身上，堆成「已改 N 人」
+    加「M 人未暂停」两句就会自相矛盾（那个人确实关掉了一关）。所以粒度收到人：
+    改了一部分的人单独报，不混进任何一个极端。
+    """
+
+    changed: int = 0  # 该关／该开的环节都改成了
+    partly: int = 0  # 改了一部分：另一些环节因手上有未完成任务没改成
+    blocked: int = 0  # 一个环节也没改成，全因手上有未完成任务
+    unchanged: int = 0  # 本来就是目标状态（重复点一次批量动作会落到这里）
+    skipped: int = 0  # 没有这两道关的资格，什么也没做
+
+
+def set_availability_for_users(*, users, receives, actor, request=None):
+    """后台批量动作：替一批人开关两道关的接单状态。
+
+    逐人逐环节调用 :func:`set_reviewer_availability`（审计因此仍是每人每条各一行），
+    再把结果按**人**收成 :class:`AvailabilityBatchResult`——调用方据此给人一句不会
+    自相矛盾的汇总，也不会把「没有资格、跳过」的人悄悄咽掉。
+    """
+    counts = {field: 0 for field in AvailabilityBatchResult._fields}
+    for user in users:
+        stages = [s for s in lifecycle.STAGES if qualifies_for_stage(user, s)]
+        if not stages:
+            counts["skipped"] += 1
+            continue
+        changed = refused = 0
+        for stage in stages:
+            try:
+                if set_reviewer_availability(
+                    reviewer=user,
+                    stage=stage,
+                    receives=receives,
+                    actor=actor,
+                    request=request,
+                ):
+                    changed += 1
+            except ReviewError:
+                refused += 1
+        if changed and refused:
+            counts["partly"] += 1
+        elif refused:
+            counts["blocked"] += 1
+        elif changed:
+            counts["changed"] += 1
+        else:
+            counts["unchanged"] += 1
+    return AvailabilityBatchResult(**counts)

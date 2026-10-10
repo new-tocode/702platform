@@ -256,10 +256,11 @@
 `content.awards.archive.missing`）与 `admin.*`（`admin.content_page.save`、`admin.award.save`、
 `admin.home_slide.save`、`admin.showcase.save`）。
 
-> **注意**：`config/settings.py` 的 `LOGGING["loggers"]` 里没有 `content` 这一项（也没有
-> `root` 项），所以这些 `logger.info` 目前**不会落进 `logs/django.log`**。排查 content 的
-> 问题先看数据库里的审计行与页面表现；要临时看到日志，得给 `LOGGING["loggers"]` 加一项
-> 或单独调级别。
+**级别**：`config/settings.py` 的 `LOGGING["loggers"]` 里有 `content` 这一节，`DEBUG` 级、
+`console` + `file` 两个 handler，上面这些事件都落 `logs/django.log`（`config/tests.py` 的
+`AppLoggerTests` 盯着：配置节被删、运行时没接上那个文件、或真发一条 `INFO` 却没落盘，测试都会红）。
+早先这一节是缺的（root 也没有 handler），这些 `logger.info` 连级别检查都过不去——那时排查 content
+只能看数据库里的审计行与页面表现。
 
 **刻意不报错**：
 
@@ -300,8 +301,9 @@
   （只有测试用）；平台也没有前台编辑入口——成员加错了要管理员在后台处理。
 - **后台删除不写审计**：`admin.py` 只覆写 `save_model`，`delete_model` / `delete_queryset`
   没动，删一条获奖或页面不留审计行。
-- **content 的 INFO 日志目前落不到盘**：settings 的 `LOGGING["loggers"]` 里没有 `content`
-  项也没有 `root` 项（见 §5 的提示）。这是配置现状，不代表「日志写错了」。
+- **日志没有监控与告警**：`content` 的 logger 已经配好、`logger.warning`（如
+  `content.awards.archive.missing`）落 `logs/django.log`，但没人盯着这个文件——出问题仍然要
+  有人主动去翻。
 - **`certificates` 限图片只在校验层**：`limit_choices_to` 只约束后台表单的可选项；
   用 ORM 直接 `award.certificates.add(<视频>)` 能加进去，打包时那段视频会被**分块（1 MiB）抄进
   临时文件再写进 zip**——`archives.py` 是流式的，不会把它整个读进内存；真正的代价是临时文件

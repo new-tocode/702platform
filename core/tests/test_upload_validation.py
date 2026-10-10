@@ -211,7 +211,6 @@ class UserSuppliedTextLimitAcceptanceTests(TestCase):
         ("projects", "GroupJoinRequest", "message", 2000),
         ("projects", "GroupCreateRequest", "description", 2000),
         ("competitions", "CompetitionRegistration", "remark", 2000),
-        ("reviews", "ReviewerLeave", "reason", 500),
         ("equipment", "EquipmentBorrow", "remark", 1000),
         # 帖子与评论本来就有表单上限，这里把模型侧也钉住——后台表单与脚本写入
         # 走的是模型，只靠表单挡不住。

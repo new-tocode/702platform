@@ -247,8 +247,9 @@
 `discussion.post.edit.denied` / `discussion.post.delete.denied` / `discussion.comment.delete.denied`；
 门槛拒绝走 `core.permissions.require`，事件名由调用方给：`discussion.permission.denied`、
 `discussion.board.create.denied`、`discussion.board.delete.denied`、`discussion.post.pin.denied`。
-都带 `extra={"request_id": ...}`。settings 的 `LOGGING` 里**没有单独的 `discussion` logger**
-（账号、项目组、评审等各有 DEBUG 级配置），视图层那几条落到根 logger；`core.permissions` 有 `core` 这一档兜住。
+都带 `extra={"request_id": ...}`。settings 的 `LOGGING` 里有 `discussion` 这一节（DEBUG 级 +
+`console`/`file` 两个 handler），与其余自家 app 一致，都落 `logs/django.log`；
+`core.permissions` 那几条另有 `core` 这一档兜住。
 
 **刻意不报错**：重复删除同一条评论 → 幂等短路，页面照常跳转、不写第二次审计；限速的拒绝条件是
 「窗口内已有 ≥ `SPEAKING_RATE_LIMIT` 条」，也就是每分钟发得出 45 条、第 46 条才被拒；

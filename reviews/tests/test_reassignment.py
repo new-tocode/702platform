@@ -4,11 +4,8 @@
 权限——只读账号不行。换了人不需要重新判结论，也完全不触碰归档。
 """
 
-from datetime import timedelta
-
 from django.contrib.auth.models import Permission
 from django.urls import reverse
-from django.utils import timezone
 
 from core.models import AuditLog
 
@@ -16,7 +13,6 @@ from .. import lifecycle
 from ..models import (
     ProjectSubmission,
     ReviewTask,
-    ReviewerLeave,
 )
 from ..services import (
     ReviewError,
@@ -190,16 +186,12 @@ class ReviewTaskReassignmentTests(ReviewTestCase):
         with self.assertRaises(ReviewError):
             reassign_task(task=assignment, new_reviewer=spare, actor=self.admin)
 
-    def test_a_reviewer_on_leave_cannot_be_swapped_in(self):
+    def test_a_reviewer_who_closed_the_switch_cannot_be_swapped_in(self):
         submission = self._submit()
         assignment = self.review_tasks(submission).first()
         spare = self._spare_reviewer(submission)
-        now = timezone.now()
-        ReviewerLeave.objects.create(
-            reviewer=spare,
-            starts_at=now - timedelta(days=1),
-            ends_at=now + timedelta(days=7),
-        )
+        spare.receives_review_tasks = False
+        spare.save(update_fields=["receives_review_tasks"])
 
         with self.assertRaises(ReviewError):
             reassign_task(task=assignment, new_reviewer=spare, actor=self.admin)

@@ -8,7 +8,8 @@
 ``ProjectGroup`` 的模型。
 """
 
-from django.db.models import Q
+from django.db.models import Count, IntegerField, OuterRef, Q, Subquery
+from django.db.models.functions import Coalesce
 
 from .models import ProjectGroup
 
@@ -40,8 +41,11 @@ def search_groups(groups, *, query=""):
     ``full_name`` 为空时页面回退显示的名字，页面上看得见就该搜得着。
 
     过滤跨 ``members`` / ``advisors`` 两个一对多关系，同一组会被 JOIN 出多行，
-    结尾用 ``distinct`` 收回一行。也正因为如此，调用方要把它排在 ``annotate``
-    **之前**：聚合之后再 filter 跨多值关系，``Count`` 的分母就跟着 join 变了。
+    结尾用 ``distinct`` 收回一行。
+
+    **别在这条 join 上直接数人**：``Count("members")`` 落在同一条被过滤过的
+    join 上时，数出来的只是「命中的那几个人」——搜一名成员、卡片写「成员 1 人」，
+    而同屏的名单列着 5 个。要数真实人数用 :func:`annotate_member_count`。
 
     可见范围由调用方先行收窄（``permissions.groups_visible_to``）；这里只管
     关键字，不管权限。
@@ -57,3 +61,29 @@ def search_groups(groups, *, query=""):
         | Q(members__profile__full_name__icontains=keyword)
         | Q(advisors__name__icontains=keyword)
     ).distinct()
+
+
+def annotate_member_count(groups):
+    """给项目组查询集加 ``member_count``：**该组的真实成员数**。
+
+    数的是这个组**有几个人**，与查询集上任何过滤（搜索、「我的项目组」）无关——
+    卡片上的数字因此恒等于同屏名单的长度。做法是子查询：计数自己走一条
+    ``projects_projectgroup_members`` 的 join，不与被过滤的那条共用。
+
+    为什么不用 ``Count("members")``：见 :func:`search_groups` 的说明——那个数字
+    会跟着搜索一起变小。``Coalesce`` 只是兜底（``ProjectGroup.save`` 保证联系人
+    恒为成员，正常数据下数不出 0），省得模板里的 ``blocktranslate count`` 拿到
+    ``None``。
+    """
+    member_counts = (
+        ProjectGroup.members.through.objects.filter(projectgroup=OuterRef("pk"))
+        .values("projectgroup")
+        .annotate(total=Count("user"))
+        .values("total")
+    )
+    return groups.annotate(
+        member_count=Coalesce(
+            Subquery(member_counts, output_field=IntegerField()),
+            0,
+        )
+    )

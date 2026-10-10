@@ -8,20 +8,18 @@
 调用方一律局部 import 本模块，免得 projects／accounts 在加载期就依赖 reviews。
 """
 
-from django.utils import timezone
-
 from core.permissions import is_admin
 from projects.models import GroupCreateRequest
 
-from . import permissions
-from .forms import PreliminaryReviewForm, ReviewForm, ReviewerLeaveForm
+from . import lifecycle, permissions
+from .forms import PreliminaryReviewForm, ReviewForm
 from .models import (
     ReviewTask,
     ProjectSubmission,
 )
+from .selectors import pending_task_summary
 from .services import (
     can_override_review,
-    open_leave_for,
     override_blocker,
 )
 
@@ -149,25 +147,34 @@ def _pending_task_of(submission, user):
 def member_home_context(*, user):
     """成员中心里评审那一半；没有评审资格的账号得到空字典（模板整块不渲染）。
 
-    这里只剩请假的面板：待办提醒已归「我的消息」（分配任务时写消息、未读计数
-    在成员中心顶部），评审页只负责把任务列出来。
+    这里只剩接单开关：待办提醒已归「我的消息」（分配任务时写消息、未读计数在
+    成员中心顶部），评审页只负责把任务列出来。
     """
-    if not permissions.has_review_qualification(user):
+    if not permissions.may_receive_tasks(user):
         return {}
-    context = {}
-    if permissions.may_receive_tasks(user):
-        leave = open_leave_for(user)
-        context["reviewer_leave"] = leave
-        context["leave_form"] = ReviewerLeaveForm(initial=_leave_initial(leave))
-    return context
+    return {"availability_rows": availability_rows(user)}
 
 
-def _leave_initial(leave):
-    """请假表单的初值：有未结束的窗口就照抄，没有就默认从此刻开始。"""
-    if leave is None:
-        return {"starts_at": timezone.localtime(timezone.now())}
-    return {
-        "starts_at": leave.starts_at,
-        "ends_at": leave.ends_at,
-        "reason": leave.reason,
+def availability_rows(user):
+    """本人每一道关的接单状态——有资格的那几道，一道一行。
+
+    行里带上「手上还有几件没交」：那条「有未完成任务就关不掉」的规则因此是
+    看得见的，而不是点了才被告知。计数一次查完（:func:`pending_task_summary`）。
+    """
+    stages = [stage for stage in lifecycle.STAGES if permissions.qualifies_for_stage(user, stage)]
+    if not stages:
+        return []
+    pending = pending_task_summary(user)
+    counts = {
+        lifecycle.STAGE_PRELIMINARY: pending.preliminary,
+        lifecycle.STAGE_REVIEW: pending.review,
     }
+    return [
+        {
+            "stage": stage,
+            "label": lifecycle.STAGES[stage].label,
+            "receives": getattr(user, lifecycle.STAGES[stage].receives),
+            "pending": counts[stage],
+        }
+        for stage in stages
+    ]

@@ -60,6 +60,28 @@ class User(AbstractUser):
         ),
     )
 
+    # 两道关各有一个「接单开关」：本人随时可开可关，关掉就不再被抽中，容量预检与
+    # 改派候选同样排除他。**它与资格是两回事**——资格（上面三个 is_*）是管理员授予
+    # 的「能不能做」，开关是本人的「现在做不做」，所以这里不叫 is_*，也不会因为关掉
+    # 开关而丢掉任务或资格。手上有未完成的任务时关不掉，那条规则在
+    # ``reviews.services.set_reviewer_availability``。
+    receives_preliminary_tasks = models.BooleanField(
+        "接收初审任务",
+        default=True,
+        help_text=(
+            "关闭后不再被抽为初审人，也不会出现在改派候选里；初审资格不受影响。"
+            "手上还有未完成的初审任务时关不掉。"
+        ),
+    )
+    receives_review_tasks = models.BooleanField(
+        "接收评审任务",
+        default=True,
+        help_text=(
+            "关闭后不再被抽为评审人，也不会出现在改派候选里；评审资格不受影响。"
+            "手上还有未完成的评审任务时关不掉。"
+        ),
+    )
+
     objects = UserManager()
 
     class Meta:

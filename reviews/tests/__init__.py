@@ -1,7 +1,7 @@
 """Acceptance tests for the review app, one module per feature.
 
 The review domain is two stages (初审 and 评审) plus the machinery around them
-(请假、改派、提醒、超级评审、后台). Each module here covers one of those, so a
+(接单开关、改派、提醒、超级评审、后台). Each module here covers one of those, so a
 change to the 初审 gate has an obvious place to look and an obvious place to add
 an assertion. 共用件只有两个：
 

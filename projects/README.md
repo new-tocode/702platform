@@ -48,15 +48,15 @@
 | `permissions.can_manage_group(user, group)` | 管理员或该组联系人（`group.leader_id == user.pk`） | 视图已取到组对象 | 假 → `_require_group_manager` 走 `core.permissions.require`，记 `project_group.permission.denied` 警告并抛 `PermissionDenied`（**403**）。管理页与其全部写动作、上传项目书、送审共用这一个门槛 |
 | `permissions.can_view_group(user, group)` | 管理员／该组成员／评审主张（委托 `has_review_claim`），几项**取并集** | — | 假 → **403**（`group_detail`、`group_proposal_download`）；组不存在则先 404 |
 | `permissions.can_decide_group_create_requests(user)` | 全体管理员（委托 `core.permissions.is_admin`） | — | 假 → `group_create_decide` 记 `project_group.create.decide.denied` 警告后 **403**；`action` 不是 `approve`/`reject` → 404 |
-| `permissions.groups_visible_to(user)` | 列表与「我的项目组」的范围：staff／联系人→全部，有组→自己的组，无组→全部（申请模式），未登录→空 | — | 不抛异常。这里判错只影响列表多／少行，不构成越权——详情与取件另有 `can_view_group` |
-| `services.apply_to_group(group, applicant, message)` | 新建或刷新一条待审入组申请 | 已登录、尚不是该组成员 | 未登录／已是成员／并发撞部分唯一约束 → `JoinRequestError`，视图 `messages.error` + 302 回列表（不是 4xx） |
+| `permissions.groups_visible_to(user)` | 列表的范围：**登录即可见全部**，未登录→空。「只看自己参与的组」由页面的 `?mine=1` 筛选提供，不是可见范围 | — | 不抛异常。这里判错只影响列表多／少行，不构成越权——详情与取件另有 `can_view_group` |
+| `services.apply_to_group(group, applicant, message)` | 新建或刷新一条待审入组申请。**对任何身份开放**（含管理员），唯一限制是「还不是该组成员」 | 已登录、尚不是该组成员 | 未登录／已是成员／并发撞部分唯一约束 → `JoinRequestError`，视图 `messages.error` + 302 回列表（不是 4xx） |
 | `services.approve_join_request` / `reject_join_request` | 落定一条待审申请；通过时把申请人写进 `members` | 调用方已过 `can_manage_group`；申请仍为 `pending` | 已处理 → `JoinRequestError("该申请已被处理。")` → 302 回管理页 |
 | `services.apply_to_create_group(applicant, name, description, college, advisor_names)` | 新建或整份刷新一条待审建组申请 | 已登录；指导老师 ≤ `MAX_ADVISORS_PER_GROUP` | 超限／并发撞部分唯一约束 → `GroupCreateRequestError` → 302 回列表 |
 | `services.approve_create_request` / `reject_create_request` | 建组（申请人即联系人，指导老师按槽位落行）或驳回 | 调用方为管理员；申请仍为 `pending` | 已处理 → `GroupCreateRequestError("该申请已被处理。")`；处理完统一 302 回 `reviews:queue` |
 | `services.remove_group_member` / `transfer_contact` / `update_group_info` | 成员移除、联系人转让、学院与指导老师维护 | 调用方已过 `can_manage_group` | `GroupManagementError`：联系人不可移除／新联系人必须是组员／指导老师超限 → `messages.error` + 302 |
 | `views.group_proposal_download` | 项目书取件口（受保护件） | `can_view_group` 为真；组有项目书 | 无权限 → **403**；没有项目书 → `Http404`（**404**）；组不存在 → 404 |
 
-- `selectors.search_groups(groups, query)` 不判权限，可见范围由调用方先用 `groups_visible_to` 收窄；跨 `members`／`advisors` 过滤会 JOIN 出多行，结尾用 `distinct` 收回。**注意它与 `member_count` 的关系**：两者落在同一条 member join 上，所以按成员姓名搜索时，卡片上的人数会跟着过滤变小（`distinct=True` 挡不住这个）——详见 §6 的已知限制。
+- `selectors.search_groups(groups, query)` 不判权限，可见范围由调用方先用 `groups_visible_to` 收窄；跨 `members`／`advisors` 过滤会 JOIN 出多行，结尾用 `distinct` 收回。**别在这条 join 上直接数人**：`Count("members")` 会跟着过滤变小（搜一名成员、卡片写「1 人」）。要数真实人数用 `selectors.annotate_member_count(groups)`——子查询，与过滤各走各的，卡片数字恒等于同屏名单的长度。
 
 ## 3. 状态与不变量
 
@@ -160,7 +160,7 @@
 | 文件 | 钉住 |
 |---|---|
 | `tests/base.py` | 共享夹具 `ProjectViewTestCase`：管理员／联系人／组员／无组者／另一个联系人 + 两个组；把 `PRIVATE_MEDIA_ROOT` 指到临时目录，真上传的用例不再往仓库的 `protected_media/` 里留孤儿文件 |
-| `tests/test_browsing.py` | `GroupBrowsingViewTests`（联系人自动入组；组员只看自己的组；无组者看全部可申请；联系人看到管理链接；匿名跳登录；详情从项目书文件名取扩展名；学院与指导老师两页都显示；没指导老师时用占位符）、`GroupListSearchTests`（关键字扫组名与联系人／成员／指导老师姓名、`username` 兜底、`distinct` 不重复出组、不越可见范围、空关键字、无命中空态）、`GroupListMineFilterTests`（`?mine=1` 三种身份的结果，与关键字及链接参数共存） |
+| `tests/test_browsing.py` | `GroupBrowsingViewTests`（联系人自动入组；**任何登录身份都看到全部组**；非本组的卡片上有申请入口——管理员也有；联系人看到管理链接；匿名跳登录；详情从项目书文件名取扩展名；学院与指导老师两页都显示；没指导老师时用占位符；卡片上的评审状态 chip 有轮次才出）、`GroupListSearchTests`（关键字扫组名与联系人／成员／指导老师姓名、`username` 兜底、`distinct` 不重复出组、搜索不越 `groups_visible_to` 给的范围（把范围换成单组来验）、空关键字、无命中空态、**只命中一名成员时卡片人数仍是全组人数**）、`GroupListMineFilterTests`（`?mine=1` 三种身份的结果，与关键字及链接参数共存） |
 | `tests/test_membership.py` | 申请→通过写进 `members`；重复待审申请只留一条；被拒后可重申；联系人可移除成员；**联系人不可被移除** |
 | `tests/test_contact_transfer.py` | 转让后原联系人仍是普通成员 |
 | `tests/test_group_management.py` | 管理页只对联系人／管理员开（其他人 403）；后台建组时联系人留在成员里；管理页各区块渲染得出来；上传项目书落 `sha256` 且完整渲染；**清空槽位后名字收拢、不留空洞**；上限从服务层也无法突破 |
@@ -170,8 +170,9 @@
 
 **已知限制 / 当前不支持**
 
-- **搜索与成员数共用一条 join（未修）**：`search_groups` 过滤与 `Count("members")` 聚合落在同一个 member join 上，按成员姓名搜索只命中一人时，卡片的人数会跟着变小；`distinct=True` 只挡 `advisors` 那处 join 的重复行。要修得让聚合不受过滤影响（子查询，或 `annotate` 早于过滤），动前先想清卡片数字**应该**是哪一个。
-- **`group_apply` 不判可见范围**：它只查「是否已是本组成员」，不调 `can_view_group`。列表页对已有组的人只列自己的组，但直接访问 `/member/projects/<id>/apply/` 可以向任意组提交申请，且可以同时向多个组各留一条待审（唯一约束只按 `(组, 人)`）。这是有意还是漏判，代码与文档都没有说明。
+- **可以同时向多个组各留一条待审申请**：唯一约束只按 `(组, 人)`，一个人手里同时压着三份「申请审核中」是允许的（页面在卡片上标状态，联系人也各自只看自己的组）。
+- **`group_apply` 不判可见范围，是有意的**：列表已经列全部组，直接访问 `/member/projects/<id>/apply/` 与从列表点进来是同一件事；那里唯一的门槛是「还不是该组的成员」。改动之前这两处口径不一致（列表按「有没有组」分档、申请却不设限），现在统一成「都能看、都能申请」。
+- **卡片上的评审状态是「最近一轮」的**：`status_label` / `status_tone` 取该组最新一轮的状态（没有轮次就不出 chip）。**这是有意给全体成员看的**——列表本来就列着每个组的简介、成员名单与指导老师，评审进度不再算额外暴露；详情页那份完整历史仍按 `can_view_group` 收着。
 - **列表卡片的详情链接与详情页门槛不是同一个函数**：`group_list` 里的 `can_view` 判的是「管理员或本组成员」，不是 `can_view_group`；评审人凭任务能打开详情页，但列表不会因此多出链接。
 - **「联系人恒为成员」没有数据库约束**：只靠 `ProjectGroup.save()` 与后台 `sync_group_membership()` 两处补偿。`QuerySet.update()`、直接 `members.remove(leader)`、或任何跳过 `save()` 的写入都会破坏它。
 - **提高指导老师上限要动迁移**：`GroupCreateRequest.advisor_1..3` 是三个固定列，`GroupCreateRequestForm` / `GroupInfoForm` 也各自显式声明三个字段；常量之外这些地方都要跟着改。

@@ -30,7 +30,7 @@
 | 成员中心的平台概览计数 | `stats.py` |
 | 模板过滤器与标签：`file_url`、`basename`、`file_ext`、`language_url` | `templatetags/` |
 | 本模块自己的入口登记（`core.audit`，指向后台的审计日志屏） | `apps.py` |
-| 建表与受保护件从公开根搬进受保护根的迁移 | `migrations/` |
+| 建表、受保护件从公开根搬进受保护根、审计表的只追加触发器（`0003`） | `migrations/` |
 
 **明确不做**——划出去的事，各自落在哪：
 
@@ -75,7 +75,7 @@
 
 | 入口 | 语义 | 前置条件 | 失败模式 |
 |---|---|---|---|
-| `record_audit(*, action, user=None, target=None, detail=None, request=None)` | 写一条审计并返回该行；同时记一条 `audit.record` info 日志 | 全参数**只收关键字**；`action` 用已发布的稳定字符串；`detail` 只放**非敏感**结构化信息；`target` 是已入库的模型实例 | 位置传参 → `TypeError`；匿名 / 未登录的 `user` 落库为 `NULL`（外键 `SET_NULL`，删用户不删记录）；未入库的 `target` 会把 `target_id` 记成 `"None"`；`detail` 必须是可 JSON 序列化的值；数据库错误照常抛 |
+| `record_audit(*, action, user=None, target=None, detail=None, request=None)` | 写一条审计并返回该行；同时记一条 `audit.record` info 日志 | 全参数**只收关键字**；`action` 用已发布的稳定字符串；`detail` 只放**非敏感**结构化信息；`target` 是已入库的模型实例 | 位置传参 → `TypeError`；匿名 / 未登录的 `user` 落库为 `NULL`；未入库的 `target` 会把 `target_id` 记成 `"None"`；`detail` 必须是可 JSON 序列化的值；数据库错误照常抛（本函数只做 `INSERT`，只追加那个触发器管不到它） |
 | `get_client_ip(request)` | 全站唯一的来源 IP：默认只信 `REMOTE_ADDR`；`TRUST_FORWARDED_FOR` 打开时取 `X-Forwarded-For` 的**最后一段** | — | `request=None` → `None`；转发头为空 → 回退 `REMOTE_ADDR`。**`settings.AXES_CLIENT_IP_CALLABLE` 指着它**，改这里会同时改「锁了谁」与「记了谁」 |
 
 **操作入口注册表**（`registry.py`）：
@@ -158,14 +158,15 @@
 | 字段 | 决定什么 |
 |---|---|
 | `action` | 操作名。**一旦发布就不再改**，历史记录要保持连续 |
-| `user` | 操作者，`SET_NULL`：用户被删，记录仍在，操作者变成 `NULL` |
+| `user` | 操作者，`SET_NULL`（置空而不是删行）。**这一列不是给删账号准备的**：那是一次 `UPDATE`，会被只追加的触发器拦下（见下），只有走逃生口时才走得到 |
 | `target_type` / `target_id` | `"<app_label>.<model_name>"` 与 `str(pk)`；**字符串列**，所以被删对象也留得下标识 |
 | `detail` | JSON，只放非敏感结构化信息（口令、Cookie、完整请求体从不进这里） |
 | `request_id` | 关联请求（`config.middleware.RequestLoggingMiddleware` 设的 `request.request_id`），没有请求时为空串 |
 | `ip_address` | 来源 IP，口径是 `get_client_ip` |
 | `created_at` | `auto_now_add`；`Meta.ordering` 与按时间读的那两个索引都是倒序，另有 `(target_type, target_id)` 索引供按目标反查 |
 
-- **审计只追加**：模型层没有任何写保护，**唯一的执行点是 `AuditLogAdmin`**——新增、修改、删除三个权限全为假（删是唯一一条明确禁删的只读记录）。新开一条改审计路径，这条不变量就破了。
+- **审计只追加**：告示层与执行层是分开的——后台 `AuditLogAdmin` 增改删三个权限全为假（删是唯一一条明确禁删的只读记录），但真正拦得住的是**数据库**：迁移 `core.0003` 建的**行级触发器** `core_auditlog_append_only` 对 `core_auditlog` 的 `UPDATE` / `DELETE` 一律 `RAISE EXCEPTION`，语句回滚、调用方拿到 `DatabaseError`。于是脚本、`queryset.update()`、数据库客户端都改不动这张表里的**行**（**模型层仍没有写保护**，绕过数据库的应用路径不存在而已；整表级的 DDL 与 `TRUNCATE` 是另一回事，见下面「已知限制」）。行级而非语句级：只在真有行要被改时拦，`UPDATE … WHERE false` 这类空语句放行。**要清理得走逃生口**，见 [`docs/deploy.md`](../docs/deploy.md) §5.3。
+- **删账号会被同一个触发器挡住**：`AuditLog.user` 是 `SET_NULL`，删用户前要先把他名下的审计行置空，而那是一次 `UPDATE`——所以**有审计行的账号删不掉**（一条审计行都没有的账号照常删得掉）。这是刻意的：留痕不该因为删账号而变。平台因此把「停用」（`is_active=False`）当作账号退场的口径；真要删，先走逃生口。
 - **`record_audit` 不体检 `detail`**：「只记非敏感信息」靠调用方自律，没有任何运行时过滤。
 - **审计的事务边界由调用方决定**：`core` 不替调用方开事务——跟写操作同事务还是提交之后写，取决于调用点怎么安排（各 app 的做法见各自的 README）。
 
@@ -236,6 +237,9 @@
 4. `AuditLog.objects.create(...)`，紧接着一条 `audit.record` info 日志（带 `request_id`）。
 5. 是否在事务内、什么时候提交，全看调用点——core 不加事务、不重试、不吞异常。
 
+写入只有 `INSERT` 一条路：`UPDATE` / `DELETE` 到不了表上（数据库触发器，见 §3）。**读**也没有专用入口——
+后台、概览与排查都直接用 ORM 查，只读不加锁。
+
 ---
 
 ## 5. 错误处理与诊断
@@ -280,7 +284,7 @@
 
 | 文件 | 钉住什么 |
 |---|---|
-| `tests/test_registry_and_audit.py` | 各 app 登记了哪些入口、按权限与改密状态过滤、登记幂等与排序；审计行落库的 actor/target/request_id/detail；`AuditLogAdmin` 三项权限全假；`get_client_ip` 的分支（默认不信转发头、开关打开才读、只取最后一段、空头回退） |
+| `tests/test_registry_and_audit.py` | 各 app 登记了哪些入口、按权限与改密状态过滤、登记幂等与排序；审计行落库的 actor/target/request_id/detail；`AuditLogAdmin` 三项权限全假；**数据库真的拒掉 `UPDATE` / `DELETE`**（发一条真语句、断言 `DatabaseError`，`INSERT` 不受影响）；删有审计行的账号被同一个触发器挡下；`get_client_ip` 的分支（默认不信转发头、开关打开才读、只取最后一段、空头回退） |
 | `tests/test_upload_validation.py` | 解压炸弹一律翻成 `ValidationError`（含 Pillow 半倍与一倍之间那一档）、校验不破坏调用方手里的上传流、四条真实上传通道（头像表单／图册服务／帖子表单／媒体库）都不 500、成员可填长文本的长度上限逐项核对 |
 | `tests/test_hashing.py` | 分块算法的正确性与块边界、结果与 `hashlib` 一致；`digest_field` 未声明当场炸；三种情形各自的分支；`update_fields` 的两条规则与「指纹没变就别硬塞」；文件缺失不编指纹 |
 | `tests/test_downloads.py` | 两个指纹头的写法、响应体就是原文件字节、无指纹只发文件、畸形指纹不 500、文件不在盘上 404 |
@@ -290,7 +294,8 @@
 
 ### 已知限制 / 当前不支持
 
-- **审计的「只追加」靠后台类守，没有数据库约束**：模型层能改能删。绕过 `AuditLogAdmin` 的代码路径（数据修复、脚本、`queryset.update()`）不受任何保护。
+- **「只追加」拦的是行级 `UPDATE` / `DELETE`，不是整表**：`TRUNCATE`（含 `manage.py flush`）、`DROP TABLE`、从备份恢复都不经过行级触发器；`ALTER TABLE`（删列、改类型——值没了而触发器一声不吭）与表继承（`INHERITS` 出来的子表不继承父表的行触发器）同样绕过；`ALTER TABLE … DISABLE TRIGGER` 与 superuser 会话 `SET session_replication_role = replica` 是敞开的逃生口（见 [`docs/deploy.md`](../docs/deploy.md) §5.3）。这些路径都要表属主或 superuser 的权限，保证的是「应用账号改不动、也删不掉单条留痕」，不是「谁都毁不掉」。
+- **模型层没有写保护**：`AuditLog.save()` / `queryset.update()` 照样发语句，只是数据库会拒（`DatabaseError`）。护栏只有数据库这一层，`AuditLogAdmin` 那三个权限是给后台的告示。
 - **`record_audit` 不检查 `detail` 的内容**：写进去什么就永久留什么，敏感信息靠调用方自律。
 - **`PrivateStorage.url()` 不是访问控制**：它只返回空串。真正的保障是 `PRIVATE_MEDIA_ROOT` 不在 `MEDIA_ROOT` 之下 + Nginx 只映射后者；把两个根配到一起，页面上不会有任何异常提示。
 - **`rehome` 当前没有生产调用点**：`0002` 迁移刻意自带一份冻结实现（迁移要冻结当时的行为，不能跟着 `core.storage` 演进）。它的幂等与「缺文件只警告」是给运维脚本准备的。

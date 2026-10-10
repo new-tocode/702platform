@@ -1,17 +1,15 @@
-"""Admin oversight for project submissions, review tasks, archives and leaves.
+"""Admin oversight for project submissions, review tasks and archives.
 
 The review records themselves are read-only: they are the durable trace of what
-happened. Three models are exceptions, all because they are settings rather than
-records —
+happened. The exception is ``ProjectSubmission`` and ``ReviewTask``: a whole
+round may be deleted together with its tasks, and a task's holder may be swapped
+while it is still pending on a round that has not moved past it, and only then.
+The reassignment goes through the matching service so the eligibility rules and
+the audit trail hold.
 
-* ``ReviewerLeave``: the two time fields are editable straight from the
-  changelist, because shifting a reviewer's recovery time earlier or later is
-  the whole administrative action.
-* ``ProjectSubmission`` and ``ReviewTask``: a whole round may be deleted
-  together with its tasks, and a task's holder may be swapped while it is still
-  pending on a round that has not moved past it, and only then. The
-  reassignment goes through the matching service so the eligibility rules and
-  the audit trail hold.
+接单开关（谁现在收不收新任务）**不在这个文件**：那是 ``User`` 上的两个布尔字段，
+开关动作挂在 ``accounts`` 的用户列表页（一列状态 + 两个批量动作），写入口只有
+``reviews.services.set_reviewer_availability`` 一条。
 """
 
 from django.contrib import admin, messages
@@ -25,7 +23,6 @@ from .models import (
     ArchivedProposal,
     ReviewTask,
     ProjectSubmission,
-    ReviewerLeave,
     preliminary_task_of,
 )
 from .services import ReviewError, reassign_task
@@ -249,47 +246,3 @@ class ArchivedProposalAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
         "archived_at",
     )
     date_hierarchy = "archived_at"
-
-
-@admin.register(ReviewerLeave)
-class ReviewerLeaveAdmin(admin.ModelAdmin):
-    list_display = (
-        "reviewer",
-        "starts_at",
-        "ends_at",
-        "state_label",
-        "reason",
-        "created_by",
-        "updated_at",
-    )
-    # The whole point of this screen: move a reviewer's recovery time without
-    # opening each row.
-    list_editable = ("starts_at", "ends_at")
-    list_filter = ("starts_at", "ends_at")
-    search_fields = ("reviewer__username", "reviewer__profile__full_name", "reason")
-    list_select_related = ("reviewer", "created_by")
-    readonly_fields = ("created_by", "created_at", "updated_at")
-    date_hierarchy = "starts_at"
-    ordering = ("-starts_at", "-id")
-
-    @admin.display(description="当前状态")
-    def state_label(self, obj):
-        return obj.state_label
-
-    def save_model(self, request, obj, form, change):
-        if obj.created_by_id is None:
-            obj.created_by = request.user
-        super().save_model(request, obj, form, change)
-        # Django's own LogEntry also records the edit; this keeps the platform's
-        # audit trail complete for changes made straight from the changelist.
-        record_audit(
-            action="reviews.leave.admin_save",
-            user=request.user,
-            target=obj,
-            detail={
-                "reviewer_id": obj.reviewer_id,
-                "created": not change,
-                "ends_at": obj.ends_at.isoformat() if obj.ends_at else "",
-            },
-            request=request,
-        )

@@ -69,7 +69,7 @@
 | `/member/space/images/<id>/` | | 帖子图片本身（随机文件名落盘，经此路由校验后才发出） | 登录成员 |
 | `/member/space/posts/<id>/pin/` | POST | 置顶 / 取消置顶 | 管理员 |
 | `/member/space/boards/create/`、`/boards/<id>/delete/` | POST | 前端创建板块或删除空板块 | Django 超级管理员 |
-| `/member/projects/` | | 项目组列表：无组员看全部可申请，组员看自己的组，联系人看全部；`?q=` 搜索、`?mine=1` 只看自己参与的组 | 登录 |
+| `/member/projects/` | | 项目组列表：**登录即列全部**（任何身份都一样）；`?q=` 搜索、`?mine=1` 只看自己参与的组 | 登录 |
 | `/member/projects/create/` | | 申请创建项目组（名称与描述必填） | 登录 |
 | `/member/projects/<id>/apply/` | | 申请加入项目组 | 登录且非该组成员 |
 | `/member/projects/<id>/manage/` | | 管理组：GET 显示各区块，POST 带 `action=` 分派（核申请、移除成员、转让联系人、改组介绍与学院/指导老师） | 该组联系人 / 管理员 |
@@ -81,7 +81,7 @@
 | `/member/projects/<id>/` | | 项目组详情：学院与指导老师、成员、项目书、批注版归档、初审与评审状态及历史 | staff / 该组成员 / 本轮初审人 / 被分配评审人 / **该组有进行中轮次时的超级评审**（几支**取并集**，见 [projects.md](projects.md)） |
 | `/member/projects/<id>/proposal/` | | 下载当前项目书 | 同上（越权 403，**无日志**） |
 | `/member/reviews/` | | 我的评审队列（初审与评审各三档；超级评审另有「全部进行中」；管理员另有「创建项目组申请」） | 初审人 / 评审人 / 超级评审 / 管理员 |
-| `/member/reviews/leave/` `/leave/cancel/` | POST | 登记 / 修改 / 取消本人「初审／评审请假」 | 初审人 / 评审人 |
+| `/member/reviews/availability/` | POST | 开关本人某一类任务的接收（`stage` + `receives`） | 初审人 / 评审人 |
 | `/member/reviews/preliminary/<id>/complete/` 与 `/member/reviews/<id>/complete/` | POST | 提交结论（两条路径是**同一个视图**，按任务的 `stage` 选门槛与表单；两条都保留以保住历史链接） | 该任务的初审人 / 评审人 |
 | `/member/reviews/override/<id>/` | POST | 超级评审对进行中的轮次直接通过或打回 | 超级评审 |
 | `/member/reviews/<id>/annotated/`、`/archive/<id>/download/` | | 下载批注版 / 归档版项目书 | 同项目组详情页的门槛 |
@@ -110,7 +110,7 @@
   六张名册都是只读的（`core.admin.RoleRosterAdmin`），顶上有一句「这个身份从哪来」。分组的顺序必须与 `core.roles` 的 `sort_order` 一致。
 - **用户组（`auth.Group`）的成员直接在组页增删**：这个「组」只用于内部通知的投递范围，既不是项目组，也不是身份名册。组页的「组内用户」是一个穿梭框，保存走 `accounts.services.set_group_members`（整份覆盖、与现状比对后只动真正变了的人、锁组行、真变更才留审计）。
 - 账号后台的「权限」区可以逐个发放三种评审资格；**批量**发放走用户列表页的六个动作（授予／撤销 × 三种资格），写入经 `accounts.services.set_qualification`。**没有**「批量授予管理员资格」。
-- 评审记录以只读留痕为主，四处例外：请假的两个时间可列表直改、待处理且该轮未判结论的评审/初审任务可改派、**整轮送审可删**（已归档的除外）。写操作都经服务层或留审计。
+- 评审记录以只读留痕为主，三处例外：待处理且该轮未判结论的评审/初审任务可改派、**整轮送审可删**（已归档的除外）、接单开关可改（它不是评审记录，是 `User` 上的两个字段，走用户列表的批量动作）。写操作都经服务层或留审计。
 
 ---
 
@@ -130,7 +130,7 @@
 | projects | `can_use_equipment` / `can_decide_group_create_requests` | 设备借用门槛；谁能处理建组申请 |
 | projects | `contact_group_ids` / `member_group_ids` / `manageable_group_ids` / `groups_visible_to` | 列表与收件范围的四个集合口径 |
 | reviews | `is_reviewer` / `is_preliminary_reviewer` / `is_super_reviewer` | 三种资格 |
-| reviews | `qualifies_for_stage` / `may_receive_tasks` / `has_review_qualification` / `has_review_claim` | 按阶段取资格、能否接新任务（请假不算）、任一资格、凭任务看某个组 |
+| reviews | `qualifies_for_stage` / `may_receive_tasks` / `has_review_qualification` / `has_review_claim` | 按阶段取资格、有没有接单状态可开关（超级评审不接任务）、任一资格、凭任务看某个组 |
 | reviews | `can_open_queue` | 「评审」入口与队列页：三种资格任一**或管理员** |
 | notices | `public_visible_notices` / `member_visible_notices` | 通知可见性的单点（列表、详情、未读计数共用） |
 | discussion | `is_member` / `can_view_space` / `can_create_post` / `can_comment` / `can_edit_post` / `can_delete_post` / `can_delete_comment` / `can_pin_post` | 成员与作者／管理员的分层（`is_member` 被 `content` 在加载期依赖） |
@@ -150,7 +150,7 @@
 | projects | `sync_group_membership` / `remove_group_member` / `transfer_contact` / `update_group_info` / `update_group_description` | 成员与组信息维护 |
 | reviews | `submit_for_review` / `submit_verdict` | 开一轮送审；交一张任务卡（两道关共用） |
 | reviews | `override_review` / `reassign_task` | 一票敲定；改派（唯一补救路径） |
-| reviews | `set_reviewer_leave` / `clear_reviewer_leave` | 请假窗口的登记与取消 |
+| reviews | `set_reviewer_availability` / `set_availability_for_users` | 开关某一道关的接单状态（后者是后台批量动作的入口） |
 | notices | `notify_*` / `clear_review_task_messages` / `sync_mention_messages` / `clear_mention_messages` | 事件消息的写入与撤回（**别的模块只调用，不自己写表**） |
 | notices | `mark_read` / `mark_message_read` / `mark_all_read` | 已读回执与全部已读 |
 | content | `create_award` | 前台加获奖记录（判重在这里） |
@@ -163,8 +163,8 @@
 | 模块 | 函数 | 一句话 |
 |---|---|---|
 | accounts | `member_identities` / `gallery_usage` | 「当前身份」清单；图册用量 |
-| projects | `groups_led_by` / `groups_of_member` / `search_groups` | 按人取组；按关键字搜组（**排在 `annotate` 之前**） |
-| reviews | `override_blocker` / `can_override_review` / `pending_task_summary` / `open_leave_for` | 一票敲定能不能行使（返回**原因**）；待办数字；未结束的请假 |
+| projects | `groups_led_by` / `groups_of_member` / `search_groups` / `annotate_member_count` | 按人取组；按关键字搜组（会 JOIN `members`/`advisors`，结尾 `distinct`）；给查询集加 `member_count`——**真实**成员数，子查询，不随搜索过滤变小 |
+| reviews | `override_blocker` / `can_override_review` / `pending_task_summary` | 一票敲定能不能行使（返回**原因**）；待办数字（成员中心的开关面板在用它） |
 | notices | `message_rows` / `unread_message_count` / `message_target_url` | 消息行的现取现算（标题/链接/说明不落库） |
 | content | `search_awards` | 获奖搜索（一个关键字扫五个字段 + 年份） |
 | discussion | `board_list` / `posts_for_board` / `page_of_post` / `member_directory` | 板块、帖子流与**全站唯一**的「这条帖子在第几页」 |
@@ -180,6 +180,7 @@
 | 字段 | 谁在读 | 承诺 |
 |---|---|---|
 | `User.is_reviewer` / `is_preliminary_reviewer` / `is_super_reviewer` / `must_change_password` | `reviews.permissions`、中间件 | 资格是用户属性、相互独立；资格**判定**在 `reviews`，这里只存 |
+| `User.receives_preliminary_tasks` / `receives_review_tasks` | `reviews.draw`（抽人与改派候选）、`accounts/admin.py`（状态列与批量动作） | 接单开关（默认开）：**不是资格**，关掉不撤资格、不动已有任务；写入口只有 `reviews.services.set_reviewer_availability`（含批量版），别直接写字段 |
 | `ProjectGroup.leader` / `.members` | `reviews`、`competitions`、`equipment`、`notices`、`core.stats` | 联系人的唯一真相源；联系人恒为成员（**靠代码保证，没有数据库约束**） |
 | `ProjectGroup.proposal` | `reviews`（各轮次共用同一份） | 项目书只存这一份，评审侧不复制 |
 | `Notice.scope` / `visible_groups` | `notices.visibility`、成员侧过滤 | 三个取值；`internal` 才需要用户组 |
@@ -193,6 +194,7 @@
 - `projects`：`unique_project_advisor_slot`（`(group, sort_order)`）+ `CHECK(sort_order < 3)`＝每组至多 3 位指导老师；两张申请表各一条 `WHERE status='pending'` 的部分唯一。
 - `reviews`：`unique_group_submission_round`、`unique_submission_task_reviewer`、`(submission) WHERE stage='preliminary'`、`unique_archived_proposal_task`、`CHECK(is_override=false OR stage='review')`、`CHECK(ends_at > starts_at)`。
 - `notices`：`unique_notice_read_per_user`；`competitions`：`unique_competition_group_registration`；`equipment`：`equipment_available_lte_total` 与 `borrow_status_matches_return_date`；`discussion`：`discussion_board_name_ci_uniq`（板块英文名大小写不敏感唯一）。
+- `core`：**不是约束但同级**——`core_auditlog` 上的行级触发器 `core_auditlog_append_only`（迁移 `0003`）拒掉 `UPDATE` / `DELETE`，是「审计只追加」的执行点。改名要动迁移，绕过（`DISABLE TRIGGER` 等）见 [deploy.md](../deploy.md) §5.3。
 
 **这些约束名本身就是承诺**：改名要连迁移一起动，改行为（放宽/收紧）更要先想清存量数据怎么办。
 

@@ -215,12 +215,11 @@
 `notice.messages.unknown_kind`（warning）。视图层的都带 `extra={"request_id": ...}`；
 `selectors` 那条 warning 不带（取数层拿不到 request）。
 
-**注意级别**：`config/settings.py` 的 `LOGGING["loggers"]` 里**没有 `notices` 这一节**
-（`accounts` / `projects` / `reviews` / `core` 等都是显式的 DEBUG 级），根 logger 也没有配 handler。
-实测：`notices.views` / `notices.selectors` 的生效级别是 **WARNING**、`handlers = []`，
-**与 `DEBUG` 取值无关**（`DEBUG=True` 时同样如此）。所以 `logger.info` 不会落 `logs/django.log`；
-warning 只经 `lastResort`（stderr）出现，**同样不进文件**。要让通知模块的日志进文件，得在 settings
-里补一段 logger（配置改动，不是这个模块能自决的）。缺 logger 的是 notices／content／media／discussion 四个。
+**级别**：`config/settings.py` 的 `LOGGING["loggers"]` 里有 `notices` 这一节，`DEBUG` 级、
+`console` + `file` 两个 handler，所以上面这些事件都落 `logs/django.log`（`config/tests.py` 的
+`AppLoggerTests` 盯着：配置节被删、运行时没接上那个文件、或真发一条 `INFO` 却没落盘，测试都会红）。
+早先这一节是缺的，info 连级别检查都过不去、warning 只经 `lastResort` 到 stderr——排查时会以为
+「什么都没发生」。
 
 **刻意不报错**：
 
@@ -257,8 +256,6 @@ warning 只经 `lastResort`（stderr）出现，**同样不进文件**。要让�
 - **`notify_create_request` 的收件人是申请那一刻的管理员快照**，过滤写成
   `Q(is_staff=True) | Q(is_superuser=True)`：之后才建的管理员收不到旧申请；被停用的管理员仍在收件人里
   （没有 `is_active` 过滤）。这份内联口径与 `core.permissions.is_admin` 目前一致，但改后者不会自动改这里。
-- **日志级别**：settings 里没有 `notices` logger，生产（`DEBUG=False`）下本模块的 `logger.info`
-  不落盘，见 §5。
 - **`internal_detail` 是 GET 写库**：没有 `require_GET` / `require_POST`，POST 同样会写回执。
   回执幂等、写的是本人的行，风险可控，但「这个 URL 是只读的」不成立。
 - **「我的消息」不分页**：`message_rows` 一次装配全部行，每装配一条提及还要查一次它所在帖子的页码

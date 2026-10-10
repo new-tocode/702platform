@@ -7,18 +7,11 @@ from django.utils.translation import gettext_lazy as _
 from projects.validators import validate_proposal_file
 
 from . import lifecycle
-from .models import REVIEW_TYPE_CHOICES, ReviewTask, ReviewerLeave
+from .models import REVIEW_TYPE_CHOICES, ReviewTask
 from .services import eligible_holders
 
 
 User = get_user_model()
-
-
-#: ``<input type="datetime-local">`` only accepts the literal "T" form. The
-#: zh-hans localised default renders as "2026/09/20 14:30", which the browser
-#: silently drops, leaving the field blank — so the format is pinned here.
-DATETIME_LOCAL_FORMAT = "%Y-%m-%dT%H:%M"
-DATETIME_LOCAL_INPUT_FORMATS = ["%Y-%m-%dT%H:%M", "%Y-%m-%dT%H:%M:%S"]
 
 
 class SubmissionForm(forms.Form):
@@ -109,53 +102,6 @@ class ReviewForm(DecisionForm):
     )
 
 
-def _datetime_local_widget():
-    return forms.DateTimeInput(
-        format=DATETIME_LOCAL_FORMAT, attrs={"type": "datetime-local"}
-    )
-
-
-class ReviewerLeaveForm(forms.ModelForm):
-    """Register a review-leave window: two time points plus an optional reason.
-
-    The window covers both kinds of task the platform may hand out — 初审 and
-    评审 — since it describes when the person is away, not what they are away
-    from.
-    """
-
-    starts_at = forms.DateTimeField(
-        label=_("请假开始"),
-        input_formats=DATETIME_LOCAL_INPUT_FORMATS,
-        widget=_datetime_local_widget(),
-    )
-    ends_at = forms.DateTimeField(
-        label=_("请假结束"),
-        input_formats=DATETIME_LOCAL_INPUT_FORMATS,
-        widget=_datetime_local_widget(),
-        help_text=_(
-            "请假期间不会被分配新的初审或评审请求，到点自动恢复；"
-            "已有的任务不受影响。"
-        ),
-    )
-
-    class Meta:
-        model = ReviewerLeave
-        fields = ("starts_at", "ends_at", "reason")
-        widgets = {
-            "reason": forms.Textarea(
-                attrs={"rows": 2, "placeholder": _("例如：考试周、外出比赛")}
-            ),
-        }
-
-    def clean(self):
-        cleaned = super().clean()
-        starts_at = cleaned.get("starts_at")
-        ends_at = cleaned.get("ends_at")
-        if starts_at and ends_at and ends_at <= starts_at:
-            self.add_error("ends_at", _("请假结束时间必须晚于开始时间。"))
-        return cleaned
-
-
 class AdminReassignTaskForm(forms.ModelForm):
     """管理员把一张还没交的任务卡换个人——两道关共用这一个表单。
 
@@ -175,8 +121,8 @@ class AdminReassignTaskForm(forms.ModelForm):
         submission = task.submission
         self.fields["reviewer"].label = rules.holder_label
         self.fields["reviewer"].help_text = (
-            f"只列出有{rules.label}资格、启用中、非本项目组成员、未请假、"
-            "且本轮尚未持有任务的人。"
+            f"只列出有{rules.label}资格、启用中、非本项目组成员、"
+            f"没有关掉{rules.label}接单开关、且本轮尚未持有任务的人。"
         )
         candidates = eligible_holders(
             stage=task.stage,

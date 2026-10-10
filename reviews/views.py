@@ -15,8 +15,8 @@ from core.downloads import serve_file
 from core.permissions import require
 from projects.permissions import can_view_group
 
-from . import panels, permissions
-from .forms import PreliminaryReviewForm, ReviewForm, ReviewerLeaveForm
+from . import lifecycle, panels, permissions
+from .forms import PreliminaryReviewForm, ReviewForm
 from .models import (
     ArchivedProposal,
     ReviewTask,
@@ -24,9 +24,8 @@ from .models import (
 )
 from .services import (
     ReviewError,
-    clear_reviewer_leave,
     override_review,
-    set_reviewer_leave,
+    set_reviewer_availability,
     submit_verdict,
 )
 
@@ -204,53 +203,39 @@ def complete_task(request, pk):
 
 @login_required
 @require_POST
-def set_leave(request):
-    """Register or adjust the reviewer's own review-leave window."""
-    _require_reviewer(request)
-    form = ReviewerLeaveForm(request.POST)
-    if form.is_valid():
-        try:
-            leave = set_reviewer_leave(
-                reviewer=request.user,
-                starts_at=form.cleaned_data["starts_at"],
-                ends_at=form.cleaned_data["ends_at"],
-                reason=form.cleaned_data["reason"],
-                actor=request.user,
-                request=request,
-            )
-        except ReviewError as exc:
-            messages.error(request, str(exc))
-        else:
-            messages.success(
-                request,
-                _("已登记评审请假：%(starts)s 至 %(ends)s，期间不再接收新的评审请求。")
-                % {
-                    "starts": leave.starts_at.strftime("%Y-%m-%d %H:%M"),
-                    "ends": leave.ends_at.strftime("%Y-%m-%d %H:%M"),
-                },
-            )
-    else:
-        for field_errors in form.errors.values():
-            for error in field_errors:
-                messages.error(request, error)
-    return redirect("accounts:member_home")
+def set_availability(request):
+    """开关**本人**某一道关的接单状态（POST：``stage`` + ``receives``）。
 
-
-@login_required
-@require_POST
-def cancel_leave(request):
-    """Drop the reviewer's own open leave window."""
+    只能给自己开关——管理员替别人做走后台的批量动作。``stage`` 只认阶段表里
+    登记的键，别的值当作不存在的地址（404），与全站「未知参数 404」的口径一致。
+    """
     _require_reviewer(request)
+    stage = request.POST.get("stage")
+    if stage not in lifecycle.STAGES:
+        raise Http404
+    receives = request.POST.get("receives") == "1"
     try:
-        clear_reviewer_leave(
+        changed = set_reviewer_availability(
             reviewer=request.user,
+            stage=stage,
+            receives=receives,
             actor=request.user,
             request=request,
         )
     except ReviewError as exc:
         messages.error(request, str(exc))
     else:
-        messages.success(request, _("已取消请假，即刻恢复接收评审请求。"))
+        role = lifecycle.STAGES[stage].label
+        if not changed:
+            messages.info(request, _("接单状态没有变化。"))
+        elif receives:
+            messages.success(request, _("已恢复接收新的%(role)s任务。") % {"role": role})
+        else:
+            messages.success(
+                request,
+                _("已暂停接收新的%(role)s任务；资格仍在，随时可以再打开。")
+                % {"role": role},
+            )
     return redirect("accounts:member_home")
 
 
