@@ -258,8 +258,9 @@
 
 **级别**：`config/settings.py` 的 `LOGGING["loggers"]` 里有 `content` 这一节，`DEBUG` 级、
 `console` + `file` 两个 handler，上面这些事件都落 `logs/django.log`（`config/tests.py` 的
-`AppLoggerTests` 盯着这条）。早先这一节是缺的（root 也没有 handler），这些 `logger.info`
-连级别检查都过不去——那时排查 content 只能看数据库里的审计行与页面表现。
+`AppLoggerTests` 盯着：配置节被删、运行时没接上那个文件、或真发一条 `INFO` 却没落盘，测试都会红）。
+早先这一节是缺的（root 也没有 handler），这些 `logger.info` 连级别检查都过不去——那时排查 content
+只能看数据库里的审计行与页面表现。
 
 **刻意不报错**：
 

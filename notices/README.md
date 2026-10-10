@@ -217,8 +217,9 @@
 
 **级别**：`config/settings.py` 的 `LOGGING["loggers"]` 里有 `notices` 这一节，`DEBUG` 级、
 `console` + `file` 两个 handler，所以上面这些事件都落 `logs/django.log`（`config/tests.py` 的
-`AppLoggerTests` 盯着这条：哪一节被删掉、或新增 app 忘了配，测试会红）。早先这几节是缺的，
-info 连级别检查都过不去、warning 只经 `lastResort` 到 stderr——排查时会以为「什么都没发生」。
+`AppLoggerTests` 盯着：配置节被删、运行时没接上那个文件、或真发一条 `INFO` 却没落盘，测试都会红）。
+早先这一节是缺的，info 连级别检查都过不去、warning 只经 `lastResort` 到 stderr——排查时会以为
+「什么都没发生」。
 
 **刻意不报错**：
 

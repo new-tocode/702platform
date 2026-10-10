@@ -12,6 +12,7 @@
 import logging
 import logging.handlers
 from pathlib import Path
+from uuid import uuid4
 
 from django.apps import apps
 from django.conf import settings
@@ -51,30 +52,58 @@ class RunningTestsDetectionTests(SimpleTestCase):
         )
 
 
-class AppLoggerTests(SimpleTestCase):
-    """每个自家 app 都配了 logger，而且真的写到 ``logs/django.log``。
+def _in_site_packages(path):
+    """第三方件的判据：路径里出现过这两个目录名（virtualenv 与系统安装都用它们）。"""
+    return bool({"site-packages", "dist-packages"} & set(path.parts))
 
-    判定「自家 app」用安装位置：app 目录**直接挂在仓库根下**才算（``.venv`` 也在
-    根下，所以不能只判「在 ``BASE_DIR`` 之下」），``django.contrib.*`` 与第三方
-    （``axes``）在 site-packages 里，自然排除。这样以后新增 app 忘了配 logger，这条会红。
+
+class AppLoggerTests(SimpleTestCase):
+    """每个自家包都配了 logger，而且真的写到 ``logs/django.log``。
+
+    样本量两头钉：一头是**仓库里实际有哪些包**（按安装位置现场数：在 ``BASE_DIR``
+    之下、不在 site-packages 里——``.venv`` 就在根下，只判「在 BASE_DIR 之下」会把
+    site-packages 里的 app 全收进来），另一头是下面这份**显式清单**。检测规则变哑、
+    或包增删了而清单没跟上，`test_the_package_list_matches_the_repo` 都会红。
+
+    ``config`` 不是 app（没有 ``AppConfig``），但它发的 `request.start` / `request.end`
+    正是诊断路径要翻的那几行，所以同样在清单里。
     """
 
-    def own_app_names(self):
-        base = Path(settings.BASE_DIR)
-        return sorted(
+    #: 自家包。**新增一个包要同时改这里与 `settings.LOGGING["loggers"]`。**
+    EXPECTED_PACKAGES = (
+        "accounts",
+        "notices",
+        "media",
+        "content",
+        "config",
+        "projects",
+        "competitions",
+        "reviews",
+        "equipment",
+        "discussion",
+        "core",
+    )
+
+    def repo_package_names(self):
+        base = Path(settings.BASE_DIR).resolve()
+        names = {
             config.name
             for config in apps.get_app_configs()
-            if Path(config.path).parent == base
-        )
+            if not _in_site_packages(path := Path(config.path).resolve())
+            and path.is_relative_to(base)
+        }
+        names.add("config")
+        return names
 
-    def test_every_own_app_is_listed_in_the_logging_config(self):
+    def test_the_package_list_matches_the_repo(self):
+        """清单与仓库对得上——检测规则失效、或新增／改名了包，这条先红。"""
+        self.assertEqual(self.repo_package_names(), set(self.EXPECTED_PACKAGES))
+
+    def test_every_own_package_is_listed_in_the_logging_config(self):
         loggers = settings.LOGGING["loggers"]
-        names = self.own_app_names()
 
-        # 配置漂了（比如 INSTALLED_APPS 换了写法）会让下面的断言空转，先钉住样本量。
-        self.assertIn("notices", names)
-        for name in names:
-            with self.subTest(app=name):
+        for name in self.EXPECTED_PACKAGES:
+            with self.subTest(package=name):
                 self.assertIn(
                     name,
                     loggers,
@@ -82,12 +111,12 @@ class AppLoggerTests(SimpleTestCase):
                 )
                 self.assertTrue(loggers[name]["handlers"])
 
-    def test_every_own_app_logger_is_actually_wired_to_the_log_file(self):
+    def test_every_own_package_logger_is_actually_wired_to_the_log_file(self):
         """dictConfig 真的执行过了：生效级别不是 WARNING，且挂着日志文件的 handler。"""
         log_file = Path(settings.LOG_DIR, "django.log")
 
-        for name in self.own_app_names():
-            with self.subTest(app=name):
+        for name in self.EXPECTED_PACKAGES:
+            with self.subTest(package=name):
                 logger = logging.getLogger(name)
                 self.assertLess(
                     logger.getEffectiveLevel(),
@@ -105,6 +134,27 @@ class AppLoggerTests(SimpleTestCase):
                     file_handlers,
                     f"{name} 没挂上 {log_file} 的 handler：日志出不了进程",
                 )
+
+    def test_a_record_from_every_own_package_logger_lands_in_the_file(self):
+        """端到端：真发一条 INFO，真去文件里找它。
+
+        上面那条只看接线（结构），handler 级别被抬到 ERROR、或格式化时吞掉记录，
+        它照样绿——这条才是「日志写进日志文件」本身。
+        """
+        log_file = Path(settings.LOG_DIR, "django.log")
+        marker = f"app-logger-probe-{uuid4().hex}"
+        start = log_file.stat().st_size
+
+        for name in self.EXPECTED_PACKAGES:
+            logging.getLogger(name).info("%s %s", marker, name)
+
+        with log_file.open(encoding="utf-8") as handle:
+            handle.seek(start)
+            appended = handle.read()
+
+        for name in self.EXPECTED_PACKAGES:
+            with self.subTest(package=name):
+                self.assertIn(f"{marker} {name}", appended)
 
 
 class SecurityHeadersTests(TestCase):
