@@ -1,36 +1,23 @@
-# 6.6 equipment
+# equipment
 
-> 设备台账与借用：库存事务、行锁、归还回补。
+> 设备台账与借用。**模块说明（职责、接口、不变量、失败模式、测试与限制）在
+> [`equipment/README.md`](../../equipment/README.md)**——表结构、规则与坑都搬去了那里。
+>
+> 这一篇只留**跨模块口径与由来**。
 
-**什么时候看**：改库存口径或借用门槛。
+**什么时候看**：改库存口径、动借用门槛，或弄清「为什么归还比借用宽」。
 
 ---
 
-```
-Equipment
-  - name           设备名称
-  - category       分类（文本）
-  - total_count    总量
-  - available_count 当前可借数量（必须 ≤ 总量，且不得小于已借出数量约束）
-  - description    说明
-  - is_active      是否上架
-  - created_at
-  - updated_at
+## 跨模块口径
 
-EquipmentBorrow
-  - equipment      FK(Equipment)
-  - borrower       FK(User)  借用人
-  - borrow_date    借用日期
-  - planned_return_date  计划归还日期
-  - actual_return_date   实际归还日期（已归还时必填）
-  - status         borrowed（已借用）| returned（已归还）
-  - remark         备注
-  - created_at
-  - updated_at
-```
+- **借用的门槛在项目组侧**：`projects.permissions.can_use_equipment`（staff 或任一项目组成员）；本模块**没有 `permissions.py`**，只在自己那几张视图里调它。
+- **归还刻意比借用宽**：归还只要求登录 + 是本人的记录（管理员可代还），**不查项目组归属**——被移出组的人仍要能还掉手里的设备，否则权限就把人锁死了。`is_active=False` 的设备同理必须还能还。
+- **可见范围不是判定函数，而是在查询里收窄**：本人只看自己的借用记录，管理员看全部。（`docs/architecture/permissions.md` 里曾把这个口径写成一个函数名 `can_view_borrow`——**代码里没有这个函数**，以本段为准。）
+- **后台代还的门槛是模型权限**：`permissions=["change_equipmentborrow"]`，不是 `is_admin`——那个 admin 类的 `has_change_permission` 被覆写成 `is_admin`，动作声明必须跟着它，否则只挂 `view_equipmentborrow` 的只读账号就能改别人的借还、把库存加回去。
 
-- 借用入口仅对**项目组成员**开放（未加入任何项目组的成员看不到入口、访问返回 403）。
-- 无审批：成员直接登记借用；服务在数据库事务内锁定设备记录、创建借用记录并扣减 `available_count`。
-- 成员仅可查看和归还自己的借用记录；管理员可查看全部记录并代归还。
-- 归还不受项目组归属限制：成员被移出项目组后仍可归还既有设备，避免权限锁死。
-- 归还操作在事务内锁定借用记录和设备，状态改为 `returned` 后才回补库存；重复归还不会重复回补。
+## 由来
+
+- **为什么没有审批、预约、续借、逾期**：社团规模下这几件事没有争议性，加状态机与待办的收益不抵成本（见 [overview.md](overview.md) §1.1）。台账只回答「现在谁手上有什么」。
+- **为什么库存不变式落在数据库**：`available_count <= total_count` 由 CHECK 约束 `equipment_available_lte_total` 兜住，而不是只靠服务层——库存错了会让「还能不能借」这个判断整体失真。
+- **为什么重复归还不重复回补**：归还流程在**行锁内**先复查状态、再改任何东西；这一条是「已归还的借用点两次不会把库存加两遍」的唯一依据。回补前的 `available_count < total_count` 守卫是给管理员手工改过台账的情形准备的。

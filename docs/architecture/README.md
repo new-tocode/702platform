@@ -22,9 +22,9 @@
 | [notices.md](notices.md) | 通知与「我的消息」：可见性的单点、消息表的归属、加一个 kind 要改三处 |
 | [content.md](content.md) | 公开展示页：判重身份串同时是锁的键、Markdown 白名单的外溢面、后台为什么「不判重」 |
 | [competitions.md](competitions.md) | 竞赛与报名：截止只约束前台、后台补录这条路的护栏、时间端点的口径差异 |
-| [equipment.md](equipment.md) | 设备台账与借用 |
+| [equipment.md](equipment.md) | 设备台账与借用：归还为什么比借用宽、库存不变式为什么落在数据库 |
 | [discussion.md](discussion.md) | 社团空间：软删除那条链、@ 提及的跨 app 接线、折叠判据住在 CSS |
-| [core.md](core.md) | 操作入口注册表、审计日志、通用上传校验、文件指纹与取件出口 |
+| [core.md](core.md) | 平台底座：来源 IP 的单一口径、指纹的三个约定、两类存储根的边界 |
 
 ## 横切与参考
 
@@ -40,6 +40,8 @@
 - **就地模块说明** `<app>/README.md`：六节——职责与边界（含**明确不做什么**）／关键接口与失败模式／状态与不变量／数据流与时序／错误处理与诊断／测试要点与**已知限制**。它跟代码放在一起，改模块时顺手更新；开头那句引用块是给「偶然翻到这里」的人看的。
 - **集中篇**（本目录）：只留**跨模块口径与由来**——这块与别处怎么耦合、某些设计当初为什么这么定。表结构与模块内部规则不在这里重复。
 
-上面各篇正在逐篇搬：已经搬完的有 accounts／projects／reviews／notices／content／competitions／discussion；其余篇目仍是老写法（表结构＋为什么＋不能破坏什么）。
+本目录各篇已经搬完：`accounts`／`projects`／`reviews`／`notices`／`content`／`competitions`／`discussion`／`equipment`／`core` 都只剩「跨模块口径与由来」。
+
+`media` 与 `config` **没有集中篇**——它们的说明直接就地（[`media/README.md`](../../media/README.md)、[`config/README.md`](../../config/README.md)），这两块本来就没什么跨模块口径可写。
 
 引用别的文件时一律用链接；指某个文件**内部**的小节可以写 `§N`（编号由那个文件自己维护）。本目录内不再有跨篇的章节号：拆篇之后它们会漂，链接不会。

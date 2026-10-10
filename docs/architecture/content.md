@@ -24,4 +24,4 @@
 - **判重为什么逐字段比、不给整串打分**：整串相似度会被长字段稀释——赛事名几十个字、获奖人几个字，合在一起算，短字段上换个人也未必跌破阈值。年份是硬判据（也是预筛条件，走 `Award.Meta.indexes` 里已有的索引），层级是精确相等，空值不否决（回填时认不出层级的老记录）。
 - **`tier` 与 `winners` 为什么必填**：两者各撑着一件事——层级是判重身份与浏览时的分辨依据，获奖人是「我的获奖」按姓名搜索所依附的那一项。`level`（证书上的写法，如「东北赛区一等奖」）与 `tier` 分开存：「省一等奖」与「东北赛区一等奖」是同一层，措辞差别不算差别。
 - **已录入的重复不会自己消失**：`manage.py report_duplicate_awards` 按同一口径列出重复组（只读），人工在后台留下一条、删掉其余。
-- **一个运维缺口（如实记下）**：`config/settings.py` 的 `LOGGING["loggers"]` 里**没有 `content` 一节**，所以 `content.*` 的 `logger.info` 在 `DEBUG=False` 下不落 `logs/django.log`（实测生效级别 WARNING、无 handler）。排查前台加记录的问题时看审计行，不要指望日志。
+- **一个运维缺口（如实记下）**：`config/settings.py` 的 `LOGGING["loggers"]` 里**没有 `content` 一节**——实测生效级别 `WARNING`、无 handler，**与 `DEBUG` 取值无关**。所以 `content.*` 的 `logger.info` 不落 `logs/django.log`。排查前台加记录的问题时看审计行，不要指望日志。缺 logger 的是 `notices`／`content`／`media`／`discussion` 四个。
