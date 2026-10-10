@@ -1,10 +1,19 @@
 """settings 里的判定逻辑单测。
 
-目前只有一条：快速口令哈希只该在测试进程生效。它守着一道安全线——判定写坏
-（比如只认 ``sys.argv[1]``，碰上 ``manage.py --settings=x test`` 就漏了）会让生产
-静默落到弱哈希上，没有任何报错，所以单独钉住。
+两条主线，都是「写坏了不会有报错、只会静默降级」的地方：
+
+- **快速口令哈希只该在测试进程生效**：判定写坏（比如只认 ``sys.argv[1]``，碰上
+  ``manage.py --settings=x test`` 就漏了）会让生产静默落到弱哈希上。
+- **每个自家 app 都要有自己的 logger**：漏一个，那个 app 的 ``logger.info`` 连级别
+  检查都过不去、``logger.warning`` 只经 ``lastResort`` 落到 stderr，都不进
+  ``logs/django.log``——排查时会以为「什么都没发生」。
 """
 
+import logging
+import logging.handlers
+from pathlib import Path
+
+from django.apps import apps
 from django.conf import settings
 from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
@@ -40,6 +49,62 @@ class RunningTestsDetectionTests(SimpleTestCase):
             settings.PASSWORD_HASHERS,
             ["django.contrib.auth.hashers.MD5PasswordHasher"],
         )
+
+
+class AppLoggerTests(SimpleTestCase):
+    """每个自家 app 都配了 logger，而且真的写到 ``logs/django.log``。
+
+    判定「自家 app」用安装位置：app 目录**直接挂在仓库根下**才算（``.venv`` 也在
+    根下，所以不能只判「在 ``BASE_DIR`` 之下」），``django.contrib.*`` 与第三方
+    （``axes``）在 site-packages 里，自然排除。这样以后新增 app 忘了配 logger，这条会红。
+    """
+
+    def own_app_names(self):
+        base = Path(settings.BASE_DIR)
+        return sorted(
+            config.name
+            for config in apps.get_app_configs()
+            if Path(config.path).parent == base
+        )
+
+    def test_every_own_app_is_listed_in_the_logging_config(self):
+        loggers = settings.LOGGING["loggers"]
+        names = self.own_app_names()
+
+        # 配置漂了（比如 INSTALLED_APPS 换了写法）会让下面的断言空转，先钉住样本量。
+        self.assertIn("notices", names)
+        for name in names:
+            with self.subTest(app=name):
+                self.assertIn(
+                    name,
+                    loggers,
+                    f"{name} 没有自己的 logger：它的 info 不落盘、warning 只到 stderr",
+                )
+                self.assertTrue(loggers[name]["handlers"])
+
+    def test_every_own_app_logger_is_actually_wired_to_the_log_file(self):
+        """dictConfig 真的执行过了：生效级别不是 WARNING，且挂着日志文件的 handler。"""
+        log_file = Path(settings.LOG_DIR, "django.log")
+
+        for name in self.own_app_names():
+            with self.subTest(app=name):
+                logger = logging.getLogger(name)
+                self.assertLess(
+                    logger.getEffectiveLevel(),
+                    logging.WARNING,
+                    f"{name} 的生效级别是 WARNING：logger.info 会在级别检查处被丢掉",
+                )
+
+                file_handlers = [
+                    handler
+                    for handler in logger.handlers
+                    if isinstance(handler, logging.handlers.RotatingFileHandler)
+                    and Path(handler.baseFilename) == log_file
+                ]
+                self.assertTrue(
+                    file_handlers,
+                    f"{name} 没挂上 {log_file} 的 handler：日志出不了进程",
+                )
 
 
 class SecurityHeadersTests(TestCase):

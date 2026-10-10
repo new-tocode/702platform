@@ -170,14 +170,14 @@ CI 在 PR 上跑同一道门（`.github/workflows/ci.yml`）。它拦的是「�
 | logger | 级别 | 覆盖 |
 |---|---|---|
 | `django` / `django.request` / `django.server` | `INFO` / `ERROR` / `INFO` | 框架自身与开发服务器 |
-| `accounts` / `config` / `projects` / `competitions` / `reviews` / `equipment` / `core` | `DEBUG` | 各 app 与 config 自己（`config.middleware`、`config.logging` 挂在 `config` 下） |
+| `accounts` / `notices` / `media` / `content` / `config` / `projects` / `competitions` / `reviews` / `equipment` / `discussion` / `core` | `DEBUG` | 各 app 与 config 自己（`config.middleware`、`config.logging` 挂在 `config` 下） |
 
-**没有自己 logger 的 app**：`LOGGING["loggers"]` 里没有 `notices`、`content`、`media`、`discussion` 四节。
-它们没被配置，于是生效级别**继承 root 的 `WARNING`**、没有任何 handler——这些模块里的 `logger.info(...)`
-在级别检查处就被丢掉，终端与 `logs/django.log` 都不会出现；`logger.warning` 也只落到 Python 的
-`logging.lastResort`（stderr），**同样不进日志文件**。这与 `DEBUG` 取值无关（实测两种取值下生效级别都是
-`WARNING`、handler 为空）。要收它们的日志，得在 `settings.LOGGING["loggers"]` 里补一段。
-排查这几块时**看审计行与页面，不要指望日志**。
+**每个自家 app 都要有自己的 logger**：`LOGGING["loggers"]` 里**逐个列出**（顺序同 `INSTALLED_APPS`），
+配的都是一样的 `console` + `file` 两个 handler。漏掉一个的后果是静默的——它的生效级别回落到 root 的
+`WARNING` 且没有 handler，`logger.info(...)` 在级别检查处就被丢掉，终端与 `logs/django.log` 都不会出现；
+`logger.warning` 也只落到 Python 的 `logging.lastResort`（stderr），**同样不进日志文件**。这与 `DEBUG`
+取值无关（实测两种取值下生效级别都是 `WARNING`、handler 为空），排查时会以为「什么都没发生」。
+`config/tests.py` 的 `AppLoggerTests` 盯着这条：新增 app 忘了配 logger，或哪一节被删掉，测试会红。
 
 **诊断路径**：记下响应头 `X-Request-ID` → 在 `logs/django.log` 里搜这个 id → 看 `request.start` /
 `request.end` 的状态与耗时 → 有 `request.exception` 就读紧随的 traceback（`docs/development.md` §7）。
@@ -194,14 +194,16 @@ CI 在 PR 上跑同一道门（`.github/workflows/ci.yml`）。它拦的是「�
 |---|---|
 | `tests.py` 的 `RunningTestsDetectionTests` | `running_tests()` 认哪些命令行、不认哪些（`runserver`／`migrate`／`shell`／`gunicorn`），以及**判定与赋值之间没有断链**——测试进程里 `PASSWORD_HASHERS` 真的换成了 MD5。它守的是一道安全线：判定写坏会让生产静默落到弱哈希上，不会有任何报错 |
 | `tests.py` 的 `SecurityHeadersTests` | 中间件真的挂在 `MIDDLEWARE` 里：CSP 是强制模式（不再带 `Report-Only`）、前台不含 `unsafe-inline`、`/admin/` 放宽但 `frame-ancestors`／`object-src` 照旧、`Permissions-Policy` 关掉摄像头等用不到的浏览器特性、视图自己发的头不被覆盖（`setdefault`） |
+| `tests.py` 的 `AppLoggerTests` | 每个自家 app 都配了 logger 且**真的接上 `logs/django.log`**：配置节存在、运行时生效级别不是 `WARNING`、挂着那个文件的 `RotatingFileHandler`。「自家 app」按安装位置判（app 目录直接挂在仓库根下），新增 app 自动纳入 |
 
 请求日志与强制改密这两个中间件的**行为**不在这里测：改密的拦截由 `accounts` 的用例覆盖
 （首次登录强制改密、改密后解锁成员区），请求日志只有人工看 `logs/django.log`。
 
 ### 已知限制 / 当前不支持
 
-- **四个 app 没有自己的 logger**（`notices`、`content`、`media`、`discussion`，见 §5）：它们的 `logger.info`
-  不落盘、`logger.warning` 只在 stderr。排查这几块要看审计行与数据库。
+- **logger 靠「显式列出」而不是兜底**：root 没有 handler，也没配 `root` 一节，所以没列进
+  `LOGGING["loggers"]` 的 logger 一律不落盘（见 §5）。目前由 `AppLoggerTests` 兜着自家 app，
+  但**第三方库的日志**（如 `axes`）仍然只走 `lastResort` 到 stderr——要用得单独加一节。
 - **后台站点定制没有测试兜底**：`config/admin.py` 的标题与「身份管理」分组、以及它在 `config/urls.py`
   里的副作用导入，都没有断言盯着——改坏了唯一的发现方式是打开 `/admin/` 看首页。
 - **「身份管理」分组只改首页索引**：各名册自己的 URL 与页面一个字都不动；单个 app 的索引页
