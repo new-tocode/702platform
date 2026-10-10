@@ -123,7 +123,7 @@
 - 三条唯一约束：`ProjectSubmission` 的 `(group, round)`；`ReviewTask` 的 `(submission, reviewer)`（**一人一轮一席**）与 `(submission) WHERE stage='preliminary'`（每轮恰好一条初审；**允许零条**——升级前的老轮次没有）。
 - `ReviewTask` 上另有 CHECK `override_is_review_stage_only`（`is_override=False OR stage='review'`）。
 - `ArchivedProposal` 上 `source_task` 唯一——归档幂等的依据。
-- **接单开关没有数据库约束**：「手上还有未完成的任务时关不掉」只在 `services.set_reviewer_availability` 里判——`queryset.update()`、后台改字段都能绕过（这也是它不做成表单字段的原因）。代价是这条规则不是硬约束，收益是它不需要任何触发器或定时任务。
+- **接单开关没有数据库约束，规则也不是原子的**：「手上还有未完成的任务时关不掉」只在 `services.set_reviewer_availability` 里判，而且**先数任务、再取账号行的锁**——两件事之间若有抽签落下，会短暂出现「开关已关 + 手上多了一张新任务」（那张照做，只是不再接新的）。`queryset.update()`、脚本直接写字段同样绕得过（这也是它不做成后台表单字段的原因）。收益是它不需要任何触发器，也没有「到点恢复」那种要人来兜的状态。
 - **`RELEASED` 是终态**：不再计入待办、不能再提交（`submit_verdict` 对非 `pending` 一律拒绝），但行保留——名单上仍看得出曾请过谁。
 - **`REVIEWER_QUOTA` 是配额的唯一判定点**：竞赛立项／省赛／国赛 3 人，大创中期／结题 2 人，大创立项 1 人。加一个 `REVIEW_TYPE_CHOICES` 选项必须同时在配额表里加一行，否则 `required_reviewers` 会悄悄回退到 2（`ReviewTypeQuotaTests.test_every_choice_has_a_quota` 盯着这条）。
 - 送审类型是**平台内标签**，刻意不与 `competitions.Competition` 建外键。

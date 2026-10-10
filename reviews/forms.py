@@ -121,8 +121,8 @@ class AdminReassignTaskForm(forms.ModelForm):
         submission = task.submission
         self.fields["reviewer"].label = rules.holder_label
         self.fields["reviewer"].help_text = (
-            f"只列出有{rules.label}资格、启用中、非本项目组成员、未请假、"
-            "且本轮尚未持有任务的人。"
+            f"只列出有{rules.label}资格、启用中、非本项目组成员、"
+            f"没有关掉{rules.label}接单开关、且本轮尚未持有任务的人。"
         )
         candidates = eligible_holders(
             stage=task.stage,

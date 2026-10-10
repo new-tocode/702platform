@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 702platform\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-10 20:38+0800\n"
+"POT-Creation-Date: 2026-10-10 20:59+0800\n"
 "PO-Revision-Date: 2026-09-19 18:39\n"
 "Last-Translator: 702platform\n"
 "Language-Team: 702platform\n"
@@ -1118,7 +1118,7 @@ msgstr "%(role)s shortage: %(count)s more needed"
 msgid "当前%(shortfall)s%(closed)s，%(hint)s"
 msgstr "%(shortfall)s%(closed)s — %(hint)s"
 
-#: reviews/draw.py:123 reviews/services.py:125
+#: reviews/draw.py:123 reviews/services.py:126
 msgid "无法提交审核。"
 msgstr "cannot submit for review."
 
@@ -1347,91 +1347,92 @@ msgstr ""
 msgid "你在本轮已有评审任务，请直接提交那一条"
 msgstr "You already hold a review task this round — submit that one"
 
-#: reviews/services.py:89
+#: reviews/services.py:90
 msgid "请选择评审类型。"
 msgstr "Please choose a review type."
 
-#: reviews/services.py:91
+#: reviews/services.py:92
 msgid "请先上传项目书，再提交审核。"
 msgstr "Upload the proposal before submitting it for review."
 
-#: reviews/services.py:105
+#: reviews/services.py:106
 #, python-format
 msgid "第 %(round)s 轮评审尚未结束，请等本轮出结论后再提交下一轮。"
 msgstr ""
 "Round %(round)s is still under review; wait for its decision before "
 "submitting another round."
 
-#: reviews/services.py:271
+#: reviews/services.py:272
 #, python-format
 msgid "这不是分配给你的%(stage)s任务。"
 msgstr "This %(stage)s task is not assigned to you."
 
-#: reviews/services.py:273
+#: reviews/services.py:274
 #, python-format
 msgid "请选择%(stage)s决定。"
 msgstr "Please choose your %(stage)s decision."
 
-#: reviews/services.py:295
+#: reviews/services.py:296
 #, python-format
 msgid "该%(stage)s任务已经处理过了，无法再次提交。"
 msgstr ""
 "This %(stage)s task has already been handled and cannot be submitted again."
 
-#: reviews/services.py:372
+#: reviews/services.py:373
 msgid "无法通过初审，请稍后重试或联系管理员补充评审人。"
 msgstr ""
 "cannot pass preliminary review; retry later or ask an administrator to add "
 "reviewers."
 
-#: reviews/services.py:404
+#: reviews/services.py:405
 msgid "请选择评审决定。"
 msgstr "Please choose a review decision."
 
-#: reviews/services.py:410
+#: reviews/services.py:411
 #, python-format
 msgid "无法行使超级评审权：%(reason)s。"
 msgstr "The super reviewer power cannot be used: %(reason)s."
 
-#: reviews/services.py:499
+#: reviews/services.py:500
 #, python-format
 msgid "%(role)s没有变化。"
 msgstr "%(role)s is unchanged."
 
-#: reviews/services.py:503
+#: reviews/services.py:504
 #, python-format
 msgid "提交人不能%(stage)s自己的项目书。"
 msgstr "The submitter cannot take the %(stage)s task for their own proposal."
 
-#: reviews/services.py:505
+#: reviews/services.py:506
 #, python-format
 msgid "该项目组成员不能%(stage)s本组的项目书。"
 msgstr ""
 "A member of this group cannot take the %(stage)s task for their own group's "
 "proposal."
 
-#: reviews/services.py:521
+#: reviews/services.py:523
 #, python-format
 msgid ""
-"该账号当前不能接手本轮的%(stage)s（可能没有资格、正在请假，或已在本轮持有任"
-"务）。"
+"该账号当前不能接手本轮的%(stage)s（可能没有资格、关掉了接单开关，或已在本轮持"
+"有任务）。"
 msgstr ""
 "This account cannot take the %(stage)s task for this round right now (they "
-"may lack the role, be on leave, or already hold a task this round)."
+"may lack the role, have switched this stage off, or already hold a task this "
+"round)."
 
-#: reviews/services.py:592
+#: reviews/services.py:596
 #, python-format
 msgid "不认识的评审环节：%(stage)s。"
 msgstr "Unknown review stage: %(stage)s."
 
-#: reviews/services.py:595
+#: reviews/services.py:599
 #, python-format
 msgid "该账号没有%(role)s资格，没有可开关的接单状态。"
 msgstr ""
 "This account does not hold the %(role)s qualification, so there is no "
 "availability switch to change."
 
-#: reviews/services.py:604
+#: reviews/services.py:608
 #, python-format
 msgid "手上还有 %(count)s 件未完成的%(stage)s任务，交掉或改派走之后才能关闭。"
 msgstr ""

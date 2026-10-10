@@ -18,6 +18,7 @@ parameterised by :data:`reviews.lifecycle.STAGES`.
 
 import logging
 import os
+from typing import NamedTuple
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
@@ -518,7 +519,10 @@ def reassign_task(*, task, new_reviewer, actor, request=None):
             submission=submission,
         ).filter(pk=new_reviewer.pk).exists():
             raise ReviewError(
-                _("该账号当前不能接手本轮的%(stage)s（可能没有资格、正在请假，或已在本轮持有任务）。")
+                _(
+                    "该账号当前不能接手本轮的%(stage)s"
+                    "（可能没有资格、关掉了接单开关，或已在本轮持有任务）。"
+                )
                 % {"stage": rules.label}
             )
 
@@ -632,20 +636,36 @@ def set_reviewer_availability(*, reviewer, stage, receives, actor, request=None)
     return True
 
 
+class AvailabilityBatchResult(NamedTuple):
+    """一次批量开关的结果，**按人计数、五种结局互斥**——同一个人只出现在一格。
+
+    逐环节的结果（改了／被挡下／本来就是）会落在同一个人身上，堆成「已改 N 人」
+    加「M 人未暂停」两句就会自相矛盾（那个人确实关掉了一关）。所以粒度收到人：
+    改了一部分的人单独报，不混进任何一个极端。
+    """
+
+    changed: int = 0  # 该关／该开的环节都改成了
+    partly: int = 0  # 改了一部分：另一些环节因手上有未完成任务没改成
+    blocked: int = 0  # 一个环节也没改成，全因手上有未完成任务
+    unchanged: int = 0  # 本来就是目标状态（重复点一次批量动作会落到这里）
+    skipped: int = 0  # 没有这两道关的资格，什么也没做
+
+
 def set_availability_for_users(*, users, receives, actor, request=None):
     """后台批量动作：替一批人开关两道关的接单状态。
 
-    返回 ``(changed, blocked)``：前者是真正改过的人数，后者是「因为手上还有未完成
-    的任务而没关成」的人数（那个人的其他环节该关的仍然照关）。批量动作只给人一句
-    汇总，所以这里把逐人的结果收成两个计数；审计仍是每人每条各一行（走
-    :func:`set_reviewer_availability`）。
+    逐人逐环节调用 :func:`set_reviewer_availability`（审计因此仍是每人每条各一行），
+    再把结果按**人**收成 :class:`AvailabilityBatchResult`——调用方据此给人一句不会
+    自相矛盾的汇总，也不会把「没有资格、跳过」的人悄悄咽掉。
     """
-    changed = set()
-    blocked = set()
+    counts = {field: 0 for field in AvailabilityBatchResult._fields}
     for user in users:
-        for stage in lifecycle.STAGES:
-            if not qualifies_for_stage(user, stage):
-                continue
+        stages = [s for s in lifecycle.STAGES if qualifies_for_stage(user, s)]
+        if not stages:
+            counts["skipped"] += 1
+            continue
+        changed = refused = 0
+        for stage in stages:
             try:
                 if set_reviewer_availability(
                     reviewer=user,
@@ -654,7 +674,15 @@ def set_availability_for_users(*, users, receives, actor, request=None):
                     actor=actor,
                     request=request,
                 ):
-                    changed.add(user.pk)
+                    changed += 1
             except ReviewError:
-                blocked.add(user.pk)
-    return len(changed), len(blocked)
+                refused += 1
+        if changed and refused:
+            counts["partly"] += 1
+        elif refused:
+            counts["blocked"] += 1
+        elif changed:
+            counts["changed"] += 1
+        else:
+            counts["unchanged"] += 1
+    return AvailabilityBatchResult(**counts)

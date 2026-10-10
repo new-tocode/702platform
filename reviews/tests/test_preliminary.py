@@ -4,12 +4,9 @@
 这一轮的评审人里——一个人既放行又评审，等于让同一份意见在一轮里占两个位置。
 """
 
-from datetime import timedelta
-
 from django.contrib.auth.models import Permission
 from django.db import IntegrityError
 from django.urls import reverse
-from django.utils import timezone
 
 from core.models import AuditLog
 from core.registry import get_entries_for_user

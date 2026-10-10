@@ -96,31 +96,46 @@ def _availability_action(*, receives):
         # 就够，也不必让 accounts 在导入期牵出 reviews 的整条依赖链。
         from reviews.services import set_availability_for_users
 
-        changed, blocked = set_availability_for_users(
+        result = set_availability_for_users(
             users=queryset,
             receives=receives,
             actor=request.user,
             request=request,
         )
         verb = "恢复" if receives else "暂停"
-        if changed:
+        # 五种结局互斥，各报各的——一句「已改 N 人」加一句「M 人未暂停」会
+        # 对「改了一半」的人说两次话，而两次都不准。
+        if result.changed:
             modeladmin.message_user(
                 request,
-                f"已{verb}接收新任务：{changed} 人。",
+                f"已{verb}接收新任务：{result.changed} 人。",
                 messages.SUCCESS,
             )
-        if blocked:
+        if result.partly:
+            modeladmin.message_user(
+                request,
+                f"{result.partly} 人只改了一部分：有未完成任务的环节保持原样，"
+                f"其余已{verb}。",
+                messages.WARNING,
+            )
+        if result.blocked:
             # 逐人逐环节的规则：被挡下的都是手上还有未完成任务的人。
             modeladmin.message_user(
                 request,
-                f"{blocked} 人手上还有未完成的任务，未{verb}；"
+                f"{result.blocked} 人手上还有未完成的任务，一个环节也没{verb}；"
                 "先让他们交掉或改派走，再操作一次。",
                 messages.WARNING,
             )
-        if not changed and not blocked:
+        if result.unchanged:
             modeladmin.message_user(
                 request,
-                "所选账号的接单状态没有变化（没有评审／初审资格，或本来就是该状态）。",
+                f"{result.unchanged} 人本来就是该状态，没有变化。",
+                messages.INFO,
+            )
+        if result.skipped:
+            modeladmin.message_user(
+                request,
+                f"{result.skipped} 人没有评审／初审资格，跳过。",
                 messages.WARNING,
             )
 

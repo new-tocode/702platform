@@ -10,6 +10,7 @@
 """
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.urls import reverse
 
 from core.models import AuditLog
@@ -231,11 +232,13 @@ class ReviewerAvailabilityTests(ReviewTestCase):
         self.assertEqual(closed.detail["stage"], REVIEW)
         self.assertEqual(closed.detail["pending_tasks"], 0)
 
-        self._open(self.reviewer, REVIEW)
+        # 打开方向同样带 stage——两道关的开关动作在审计里分得清。
+        self._close(self.preliminary, PRELIMINARY)
+        self._open(self.preliminary, PRELIMINARY)
 
-        self.assertTrue(
-            AuditLog.objects.filter(action="reviews.availability.open").exists()
-        )
+        opened = AuditLog.objects.get(action="reviews.availability.open")
+        self.assertEqual(opened.user, self.preliminary)
+        self.assertEqual(opened.detail["stage"], PRELIMINARY)
 
     def test_an_administrator_may_flip_someone_elses_switch(self):
         """代做：后台动作就是这么调的（谁能替谁做由调用方把关）。"""
@@ -426,11 +429,43 @@ class ReviewerAvailabilityTests(ReviewTestCase):
             follow=True,
         )
 
-        self.assertContains(response, "1 人手上还有未完成的任务，未暂停")
+        self.assertContains(response, "1 人手上还有未完成的任务，一个环节也没暂停")
         self.reviewer.refresh_from_db()
         self.assertTrue(self.reviewer.receives_review_tasks)
 
-    def test_the_admin_action_skips_accounts_without_any_qualification(self):
+    def test_the_admin_action_reports_a_half_done_person_once(self):
+        """一个人两关、只有一关关得掉时：报「只改了一部分」，不能既说改了又说没改。
+
+        同一个人既进「已暂停 N 人」又进「M 人未暂停」是自相矛盾的——他的初审开关
+        确实关了。
+        """
+        # 他同时具备两道关的资格、并且是本案唯一的初审候选，所以本轮那条**初审**
+        # 任务一定在他手上（评审任务则落在 self.reviewer 手上）：初审那一关关不掉，
+        # 评审那一关没有待办、关得掉。两处都是确定的，不掷骰子。
+        self.preliminary.is_reviewer = True
+        self.preliminary.save(update_fields=["is_reviewer"])
+        submission = self._open_round()
+        self.assertEqual(submission.preliminary_task.reviewer, self.preliminary)
+        self.client.force_login(self.admin)
+
+        response = self.client.post(
+            reverse("admin:accounts_user_changelist"),
+            {
+                "action": "close_availability",
+                "_selected_action": [str(self.preliminary.pk)],
+            },
+            follow=True,
+        )
+
+        self.assertContains(response, "1 人只改了一部分")
+        self.assertNotContains(response, "已暂停接收新任务：")
+        self.assertNotContains(response, "一个环节也没暂停")
+        self.preliminary.refresh_from_db()
+        self.assertTrue(self.preliminary.receives_preliminary_tasks)  # 有初审任务，关不掉
+        self.assertFalse(self.preliminary.receives_review_tasks)  # 没有评审任务，关掉了
+
+    def test_the_admin_action_reports_accounts_it_skipped(self):
+        """没有这两道关资格的人不能被悄悄咽掉：选了他就说他会被跳过。"""
         self.client.force_login(self.admin)
 
         response = self.client.post(
@@ -442,10 +477,33 @@ class ReviewerAvailabilityTests(ReviewTestCase):
             follow=True,
         )
 
-        self.assertContains(response, "接单状态没有变化")
+        self.assertContains(response, "1 人没有评审／初审资格，跳过。")
+
+    def test_a_read_only_observer_cannot_submit_the_availability_actions(self):
+        """``permissions=["change"]`` 是这两个动作唯一的 HTTP 门槛。"""
+        observer = make_admin("availability-observer")
+        observer.is_superuser = False
+        observer.save(update_fields=["is_superuser"])
+        observer.user_permissions.add(
+            Permission.objects.get(codename="view_user"),
+        )
+        self.client.force_login(observer)
+
+        response = self.client.post(
+            reverse("admin:accounts_user_changelist"),
+            {
+                "action": "close_availability",
+                "_selected_action": [str(self.reviewer.pk)],
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)  # 动作被过滤掉了，什么都没发生
+        self.reviewer.refresh_from_db()
+        self.assertTrue(self.reviewer.receives_review_tasks)
         self.assertFalse(
             AuditLog.objects.filter(action="reviews.availability.close").exists()
         )
+
 
 
 class AvailabilityPoolTests(ReviewTestCase):

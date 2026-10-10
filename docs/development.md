@@ -68,7 +68,7 @@
 │   ├── forms.py / views.py / urls.py / admin.py
 │   └── tests.py
 ├── reviews/                          # 项目书同行评审（初审关卡 + 评审）
-│   ├── models.py                     # ProjectSubmission、ReviewTask（初审/评审同表，stage 区分）、ArchivedProposal、ReviewerLeave
+│   ├── models.py                     # ProjectSubmission、ReviewTask（初审/评审同表，stage 区分）、ArchivedProposal（接单开关在 accounts 的 User 上）
 │   ├── lifecycle.py                  # 轮次状态机（迁移表 + 唯一写入点 transition()）与两道关的口径 STAGES
 │   ├── permissions.py                # 评审资格、「凭评审身份能否看这一组」与队列页准入（管理员无资格亦可）的唯一判定
 │   ├── panels.py                     # 队列页／项目组详情页／成员中心三处页面上下文的装配入口（含管理员的创建申请待办）

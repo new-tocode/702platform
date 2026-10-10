@@ -334,6 +334,42 @@ ls -d protected_media                                   # 迁移建出来的受�
 
 `deploy.sh` 自动：备份库与媒体（保留 RETAIN 份）→ **`chmod 600 env.sh`** → checkout tag → 升级依赖 → **`check --deploy` 门禁** → `mkdir -p protected_media` → `migrate` + `collectstatic` + `compilemessages` → 重启 → 健康检查（先打 Nginx、再退回直连 gunicorn，详见 2.6）。任何一步失败即中止，其中门禁那一步会拦下「DEBUG 还开着」「Cookie 没带 Secure」「SECRET_KEY 还是源码默认值」这类不会让站点起不来、只会让它安静地不安全的问题。版本号命名 `v主.次.修订`（修订=修复，次=新功能，主=不兼容）。
 
+### 升级到「接单开关」那一版的完整步骤
+
+这一版删掉了评审请假窗口（表 `reviews_reviewerleave`），换成 `User` 上的两个接单
+开关。**迁移里既有加列也有删表，是这条流水线上少见的「一次发布两头都动」**，所以
+单独记一段：
+
+```bash
+cd ~/applications/702platform
+./deploy/deploy.sh v<新版本>          # 备份 → 迁移（accounts 加列、reviews 删表）→ 重启 → 健康检查
+```
+
+**窗口期**：`deploy.sh` 的顺序是 `migrate` → 重启，中间那几秒旧进程还在跑、而表
+已经被删——这段时间里「送审」（抽人）与「成员中心」会 500。挑低峰发布，别在有人正
+送审时做。旧进程一重启即恢复。
+
+**回滚顺序与平时相反，先看这里**：回滚要**先反迁移、再切旧 tag**——
+
+```bash
+.venv/bin/python manage.py migrate reviews 0010    # 把表建回来（结构回来，数据不回来）
+.venv/bin/python manage.py migrate accounts 0014   # 去掉两个开关列
+# 然后按下面的常规回滚步骤切回旧 tag
+```
+
+反着做（先切旧 tag 再迁移）会让旧代码撞上「表没了」，站点起不来。
+
+**两件只发生一次的事，发布前先通知本人**：
+
+- **迁移只把「此刻正在请假」的人搬成开关关闭**（判定与旧的 `active()` 逐字一致：
+  `starts_at <= now < ends_at`）。**已排期但还没开始的窗口不会搬**——那些人事先
+  以为自己下周不接单，部署之后会被重新纳入抽签。要让这次发布对这些人是安全的，
+  发布前在群里说一声「以后请假改成自己到成员中心按开关」。
+- **已结束的窗口不搬**（本来也该恢复接单）。
+
+历史审计行里的 `reviews.leave.set` / `.clear` / `.admin_save` **保留不动**——动作
+字符串一旦发布就不再改，新动作是 `reviews.availability.open` / `.close`。
+
 ### 回滚
 
 健康检查失败时 `deploy.sh` 会把这套步骤直接打印出来。**回滚不能靠重跑 `deploy.sh`**：
