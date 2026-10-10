@@ -1,38 +1,25 @@
-# 6.5 competitions
+# competitions
 
-> 竞赛与报名：谁能为哪个组报名、参赛成员与竞赛组长的约束。
+> 竞赛与报名。**模块说明（职责、接口、不变量、失败模式、测试与限制）在
+> [`competitions/README.md`](../../competitions/README.md)**——表结构、规则与坑都搬去了那里。
+>
+> 这一篇只留**跨模块口径与由来**。
 
-**什么时候看**：改报名规则、加竞赛字段。
+**什么时候看**：改报名规则、动后台补录这条路，或弄清「送审类型」与本模块为什么没有关系。
 
 ---
 
-```
-Competition
-  - title          竞赛名称
-  - description    说明
-  - deadline       报名截止时间
-  - team_size      组队人数要求（如 min/max 或文本说明）
-  - is_open        报名是否开放
-  - published_by   FK(User)  发布人（仅管理员）
-  - published_at
-  - created_at
-  - updated_at
+## 跨模块口径
 
-CompetitionRegistration
-  - competition    FK(Competition)
-  - group          FK(ProjectGroup)
-  - registered_by  FK(User)  登记人（审计用；应为该组项目组联系人或管理员）
-  - team_leader    FK(User, 可空)  竞赛组长（为该竞赛指定的角色，从参赛成员中选，可与登记人不同）
-  - members        M2M(User) 参赛成员（从组内选择）
-  - remark         备注
-  - created_at
-  - updated_at
-  - 唯一约束：(competition, group) —— 每组每赛只登记一次
-```
+- **截止时间只约束前台**：`Competition.is_registration_open` 是唯一口径；**后台不受它限制**——`deadline` 可填已过去的时间，报名可在任何时候补录、修改、删除，把项目组加进已截止的竞赛**只有后台这一条路**。`AdminDeadlineOverrideAcceptanceTests` 是这条设计的护栏；谁若在 admin 表单里补上与前台一致的截止校验，就堵掉了补录。
+- **前台三件事共用同一个判定**：报名、修改、放弃同受 `is_registration_open` 约束。`services.save_registration` **自己不查截止**（查询单在表单与视图那一侧）；新增前台写入口必须自带这道校验，否则口径会分叉。
+- **报名权限委托项目组侧**：`competitions.permissions.can_register_group` 是 `projects.permissions.can_manage_group` 的薄封装（对象级：联系人只管自己的组）；`context_processors` 决定报名入口显不显示——与视图门槛同源。
+- **送审类型与竞赛没有外键**：评审的 `review_type`（竞赛立项／省赛／国赛……）是平台内标签，刻意不与 `Competition` 关联，两边各管各的。
+- **跨模块标识符**：唯一约束名 `unique_competition_group_registration`、操作入口注册表 key `competitions.registration`（被 `core/tests/test_registry_and_audit.py` 钉住）、五个审计 action 字符串——都是对外承诺，改之前先搜引用。
 
-- 管理员发布竞赛信息；项目组联系人只能为自己负责的项目组登记报名，管理员可以为任意项目组登记（对象级权限校验，见 [permissions.md](permissions.md)）。
-- 报名成员只能从所选项目组成员中选择；竞赛组长必须从所选参赛成员中指定（可为联系人本人）。
-- 同一项目组对同一竞赛只能登记一次，由 `(competition, group)` 唯一约束保证。
-- 报名必须在 `is_open=True` 且未超过 `deadline` 时提交；报名后联系人在竞赛页修改或放弃，也走同一个 `Competition.is_registration_open`。截止之后联系人在前台什么也改不了，包括删掉自己的记录——否则平台记录会与已报给主办方的名单对不上。
-- **截止时间只约束前台**（`views.py` 的三个入口与 `forms.CompetitionRegistrationForm`）。后台不受它限制：`deadline` 可填任意时间（含已过去的），报名可在任何时候补录、修改、删除——**把项目组加进已截止的竞赛，后台是唯一入口**，`AdminDeadlineOverrideAcceptanceTests` 钉住这一侧；谁若在 admin 表单里补上与前台一致的截止校验，就堵掉了补录这条路。
-- 无审批流：登记即生效。
+## 由来
+
+- **为什么没有审批流**：登记即生效。加审批要引入状态机与待办，而这件事没有争议性（见 [overview.md](overview.md) §1.1）。
+- **为什么外键全是 `PROTECT`**：报名记录是报给主办方的档案，删账号或删已报名的项目组应当被挡下、由人先处理。**代码如此，但没有文档说明这是当初的决定还是顺带**——要放宽时先想清档案要不要留。
+- **时间口径的一处不一致（如实记下）**：判定式是 `now() <= deadline`，**闭端**——截止那一刻仍可报名；而 [glossary.md](../glossary.md) 的「单位与格式约定」写着「时间窗的结束点一律当开区间读」（那条说的是评审请假窗口 `ends_at`）。两处口径不同，改时间比较前先确认是哪一种。
+- **后台表单不校验「竞赛组长在参赛成员内」**：那条校验只在前台表单里，后台刻意留宽（与截止一样，是补录路径的一部分）。别顺手「补齐」，先想清是否故意。

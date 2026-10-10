@@ -69,7 +69,7 @@
 |---|---|
 | 分层约定 | `models` / `permissions` / `services` / `selectors` / `forms` / `views` / `panels` / `admin` 各自放什么，见 [development.md](development.md) 的 §1.2 |
 | 判定点 | 「谁能做什么」的唯一实现处（`permissions.py`，或 `notices/visibility.py` 这类单点模块）。视图、模板、`panels` 都来问它，不各写一份会漂移的副本 |
-| 视图门槛 | `core.permissions.require(request, predicate, event, **fields)`：取对象 → 判定 → 记审计 → 放行或拒绝 |
+| 视图门槛 | `core.permissions.require(request, predicate, event, **fields)`：取对象 → 判定 → 不通过就**记一条警告日志**（`event` 是日志前缀）并抛 `PermissionDenied`（403）。它**不写审计**——审计只记成功的写操作 |
 | 操作入口注册表 | `core/registry.py`。成员中心的入口卡片由注册表按登录／改密／权限／自定义条件过滤后生成 |
 | 身份目录 | `core/roles.py`。登记「有哪些身份、各自叫什么、从哪来」；判定仍归各应用 `permissions`，授予仍归 `services`，目录不重复这两件事 |
 | 领域异常 | 服务层抛出的业务错误（如 `ReviewError`），由视图翻译成 `messages` 文案；服务层不写用户可见文案 |
@@ -91,7 +91,7 @@
 | 约定 | 口径 |
 |---|---|
 | 文件大小 | 文档与界面一律写 **MB**，代码按 `1024 × 1024` 字节算（`media/validators.py`、`accounts/validators.py` 等），也就是通常说的 MiB。**不要再引入 MiB 的写法**，否则同一个上限会出现两个数字 |
-| 时间 | 存储与显示统一 `Asia/Shanghai`（`DJANGO_TIME_ZONE`）；时间窗的结束点一律当开区间读 |
+| 时间 | 存储与显示统一 `Asia/Shanghai`（`DJANGO_TIME_ZONE`）。**时间窗的端点逐个看清，别记「一律」**：评审请假窗口的 `ends_at` 是**开区间**端点（该时刻即视为在岗），竞赛报名截止是**闭端**（`now() <= deadline`，截止那一刻仍可报名） |
 | 文本长度 | 成员可自由填写的长文本都有上限，清单见 [development.md](development.md) §3.3（`core.tests.test_upload_validation.UserSuppliedTextLimitAcceptanceTests` 逐项核对） |
 | 主键 | 一律数据库自增整数；地址里的 `<id>` 就是这个值 |
 
