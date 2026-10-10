@@ -27,7 +27,7 @@
 | 评审本身：送审轮次、初审／评审任务、结论、批注版、归档 | `reviews`。本模块只在 `group_submit_review` 里转交 `reviews.services.submit_for_review`，详情页的评审区块由 `reviews.panels.group_detail_context` 装配 |
 | 评审资格判定，以及「凭评审身份能不能看这个组」 | `reviews.permissions`（`has_review_claim`）。`can_view_group` 只委托这一次，不在本模块重写 |
 | 教师账号、把指导老师关联成用户 | 不做：指导老师是纯文本姓名，没有可指向的账号（`docs/architecture/overview.md` §1.1） |
-| 存联系人／成员身份（auth 用户组、独立 membership 表） | 不做：身份由 `ProjectGroup.leader` / `.members` 计算；后台只给只读名册，不给分配入口（`docs/architecture/permissions.md` §7.1.1） |
+| 存联系人／成员身份（auth 用户组、独立 membership 表） | 不做：身份由 `ProjectGroup.leader` / `.members` 计算；后台只给只读名册，不给分配入口（[permissions.md](../docs/architecture/permissions.md) 的「身份的管理」一节） |
 | 「谁算管理员」 | `core.permissions.is_admin`。`can_decide_group_create_requests` 只是业务语义名，函数体委托过去 |
 | 受保护件的 HTTP 响应 | `core.downloads.serve_file`。本模块判权限后调用，并把 `group.sha256` 附上响应头 |
 | 消息的呈现与去向 | `notices`（`notices.selectors`）。本模块只在服务里调 `notices.services` 写事件消息。**细节**：建组申请发给全体管理员的那批消息**不会被撤回**——任一管理员处理后，其余人的队列里那条申请消失了，消息却还在（点进去看不到东西）。这是现状，不是漏写；要改成撤回得在 `notices` 加一条清理路径 |

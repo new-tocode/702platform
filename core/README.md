@@ -194,7 +194,7 @@
 
 - **注册表是进程内的内存态**（`_ENTRIES` + `RLock`），靠各 `AppConfig.ready()` 在启动时填充；按 `key` 幂等，所以开发自动重载不会长出两份。入口的 `key` 与 `url_name` 是契约。
 - **两个注册表同一套形状**（frozen dataclass + 幂等注册 + `RLock`）：操作入口用 `OperationEntry`，身份用 `Role`；排序都取 `(sort_order, key)`，同分按 key 兜底。
-- **身份目录不存数据、不判权限、不做授予**：四种 `GLOBAL` 身份由管理员授予、两种 `OBJECT` 身份由业务动作产生，区别决定了后台给不给分配入口（见 [../docs/architecture/permissions.md](../docs/architecture/permissions.md) §7.1.1）。
+- **身份目录不存数据、不判权限、不做授予**：四种 `GLOBAL` 身份由管理员授予、两种 `OBJECT` 身份由业务动作产生，区别决定了后台给不给分配入口（见 [../docs/architecture/permissions.md](../docs/architecture/permissions.md) 的「身份的管理」一节）。
 - **唯一的表是 `AuditLog`**：core 没有业务模型，也没有 schema 之外的持久状态（注册表与目录都是内存里的）。
 
 ---
