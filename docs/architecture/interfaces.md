@@ -69,7 +69,7 @@
 | `/member/space/images/<id>/` | | 帖子图片本身（随机文件名落盘，经此路由校验后才发出） | 登录成员 |
 | `/member/space/posts/<id>/pin/` | POST | 置顶 / 取消置顶 | 管理员 |
 | `/member/space/boards/create/`、`/boards/<id>/delete/` | POST | 前端创建板块或删除空板块 | Django 超级管理员 |
-| `/member/projects/` | | 项目组列表：无组员看全部可申请，组员看自己的组，联系人看全部；`?q=` 搜索、`?mine=1` 只看自己参与的组 | 登录 |
+| `/member/projects/` | | 项目组列表：**登录即列全部**（任何身份都一样）；`?q=` 搜索、`?mine=1` 只看自己参与的组 | 登录 |
 | `/member/projects/create/` | | 申请创建项目组（名称与描述必填） | 登录 |
 | `/member/projects/<id>/apply/` | | 申请加入项目组 | 登录且非该组成员 |
 | `/member/projects/<id>/manage/` | | 管理组：GET 显示各区块，POST 带 `action=` 分派（核申请、移除成员、转让联系人、改组介绍与学院/指导老师） | 该组联系人 / 管理员 |

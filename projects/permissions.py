@@ -117,15 +117,14 @@ def manageable_group_ids(user):
 def groups_visible_to(user):
     """Return the project groups the user may see on the member project page.
 
-    Staff and contacts see every group. A member who already belongs to a group
-    sees only their own. A logged-in user with no group sees every group so they
-    can apply to join one.
+    **登录即可见全部**，不再按「有没有组」分档——这一页是「社团里有哪些组、
+    我想进哪一个」的入口，看不出别的组就没有比较可言。想只看自己参与的组，
+    用页面上的「我的项目组」筛选（`?mine=1`，那是筛选，不是可见范围）。
+    未登录 → 空查询集。
+
+    注意这里**只管列表**：详情页与项目书取件是另一道门（:func:`can_view_group`，
+    它还并进评审侧的主张），两者不是同一个口径。
     """
     if not (user and user.is_authenticated):
         return ProjectGroup.objects.none()
-    if is_admin(user) or is_project_contact(user):
-        return ProjectGroup.objects.all()
-    own = ProjectGroup.objects.filter(members=user)
-    if own.exists():
-        return own
     return ProjectGroup.objects.all()

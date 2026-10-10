@@ -90,8 +90,12 @@
                     {% endif %}
                     {% if row.can_manage %}
                         <a class="btn btn-primary btn-sm" href="{% url 'projects:group_manage' row.group.pk %}">{% translate "管理项目组" %}</a>
-                    {% elif row.is_member %}
-                        <span class="chip chip-off">{% translate "已加入" %}</span>
+                    {% endif %}
+                    {# 入组状态与「管理」是两件事：管理员对每个组都有管理权，但他没进的组照样要能申请，所以申请入口不挂在上面的 elif 链上。 #}
+                    {% if row.is_member %}
+                        {% if not row.can_manage %}
+                            <span class="chip chip-off">{% translate "已加入" %}</span>
+                        {% endif %}
                     {% elif row.has_pending %}
                         <span class="chip chip-warn">{% translate "申请审核中" %}</span>
                     {% else %}

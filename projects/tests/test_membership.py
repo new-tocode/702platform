@@ -8,6 +8,7 @@ from ..models import (
     ProjectAdvisor,
     ProjectGroup,
 )
+from ..services import JoinRequestError, apply_to_group
 from .base import ProjectViewTestCase
 
 
@@ -39,6 +40,45 @@ class MembershipViewTests(ProjectViewTestCase):
         self.assertEqual(join_request.status, GroupJoinRequest.APPROVED)
         self.assertEqual(join_request.decided_by, self.leader)
         self.assertIn(self.no_group_user, self.group.members.all())
+    def test_admin_can_apply_to_a_group_they_are_not_in(self):
+        """申请不按身份设限：管理员也可以（以个人身份）申请加入别的组。"""
+        self.client.force_login(self.admin)
+
+        response = self.client.post(
+            reverse("projects:group_apply", args=(self.group.pk,)),
+            {"message": "以个人身份申请加入。"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(
+            GroupJoinRequest.objects.filter(
+                group=self.group,
+                applicant=self.admin,
+                status=GroupJoinRequest.PENDING,
+            ).exists()
+        )
+
+    def test_member_cannot_apply_to_their_own_group(self):
+        """唯一剩下的限制：已经是这个组的人（含联系人）不能再申请它。
+
+        视图先短路（给一句提示就回列表），服务层再拒一次——直调服务同样拦得住。
+        """
+        for user in (self.member, self.leader):
+            with self.subTest(user=user.username):
+                self.client.force_login(user)
+
+                response = self.client.post(
+                    reverse("projects:group_apply", args=(self.group.pk,)),
+                    {"message": "再申请一次。"},
+                )
+
+                self.assertEqual(response.status_code, 302)
+        self.assertFalse(GroupJoinRequest.objects.filter(group=self.group).exists())
+
+    def test_service_refuses_an_existing_member(self):
+        with self.assertRaises(JoinRequestError):
+            apply_to_group(group=self.group, applicant=self.member, message="再来一次")
+
     def test_duplicate_pending_application_is_rejected(self):
         self.client.force_login(self.no_group_user)
         url = reverse("projects:group_apply", args=(self.group.pk,))

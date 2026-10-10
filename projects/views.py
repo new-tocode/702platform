@@ -274,6 +274,13 @@ def group_proposal_download(request, pk):
 
 @login_required
 def group_apply(request, pk):
+    """申请加入任意项目组：**唯一门槛是「还不是它的成员」**。
+
+    不按身份设限——普通成员、联系人、评审人、管理员都走这一条（管理员也常以
+    个人身份入组）。所以这里**不判可见范围**：列表已经列全部组，直接访问这个
+    地址与从列表点进来是同一件事。联系人恒在成员名单里（``ProjectGroup.save``
+    保证），「已是成员（含联系人）」因此由下面这一个判断兜住。
+    """
     group = get_object_or_404(
         ProjectGroup.objects.select_related("leader__profile"),
         pk=pk,

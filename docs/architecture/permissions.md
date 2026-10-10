@@ -83,7 +83,7 @@ Django 原生支持「组级」权限，**对象级**需自定义；本项目把
 - `can_manage_group(user, group)`：`is_staff` 或 `group.leader_id == user.pk`。
 - `can_decide_group_create_requests(user)`：`is_staff` —— 谁能处理创建项目组申请。申请送到管理员的「评审」页，评审侧局部 import 本函数决定给不给看那份待办，视图门槛与页面装配同源。
 - `can_use_equipment(user)`：`is_staff` 或 `is_project_member(user)` —— 设备借用门槛。
-- `groups_visible_to(user)`：staff/联系人→全部；有组→自己的组；无组→全部（申请模式）。
+- `groups_visible_to(user)`：登录→全部（未登录→空）。**不再按「有没有组」分档**——列表是「社团里有哪些组、我想进哪一个」的入口，看不出别的组就没有比较可言；「只看自己参与的组」由页面上的 `?mine=1` 筛选提供。范围只管**列表**，详情与项目书取件是 `can_view_group` 那道门（含评审侧主张）。
 - **借用记录的可见范围不是判定函数**：本人只看自己的、管理员看全部——这是在查询里收窄的，没有对应的 `permissions` 函数（`equipment` 整个 app 都没有 `permissions.py`）。
 - **项目组报名权限**：`competitions.permissions.can_register_group` 委托 `can_manage_group`；报名成员与竞赛组长都必须属于所选项目组，且竞赛组长必须是参赛成员之一。
 - **通知可见性**：`notices/visibility.py` 的 `member_visible_notices(user)` 单点判定 —— `internal` 走 `visible_groups`，`contacts` 走 `is_project_contact(user)`；列表与详情共用，未命中返回 404。
