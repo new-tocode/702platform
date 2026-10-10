@@ -16,7 +16,7 @@
                 <h1>{% translate "项目组" %}</h1>
                 <div class="sub">
                     {# 两句话合成一条：中文「。」与英文「. 」之间的空格没法靠拼接得到。 #}
-                    {% blocktranslate count counter=group_rows|length %}共 1 个项目组。组员只看得到自己的项目组，项目组联系人可管理自己的项目组。{% plural %}共 {{ counter }} 个项目组。组员只看得到自己的项目组，项目组联系人可管理自己的项目组。{% endblocktranslate %}
+                    {% blocktranslate count counter=group_rows|length %}共 1 个项目组。所有成员都看得到全部项目组，都能申请加入。{% plural %}共 {{ counter }} 个项目组。所有成员都看得到全部项目组，都能申请加入。{% endblocktranslate %}
                 </div>
             </div>
             <div class="head-actions">

@@ -40,9 +40,9 @@ class GroupBrowsingViewTests(ProjectViewTestCase):
         """申请入口不按身份设限：普通成员与管理员都看得到（管理员也有个人身份）。
 
         管理员对每个组都有管理权，所以「管理项目组」与「申请加入」会同时出现——
-        前者不吃掉后者。
+        前者不吃掉后者。member 已在 `self.group` 里，他那一张卡片必须没有入口。
         """
-        for user in (self.member, self.admin):
+        for user, closed_group in ((self.member, self.group), (self.admin, None)):
             with self.subTest(user=user.username):
                 self.client.force_login(user)
 
@@ -52,6 +52,15 @@ class GroupBrowsingViewTests(ProjectViewTestCase):
                     response,
                     reverse("projects:group_apply", args=(self.other_group.pk,)),
                 )
+                # 反向也要钉（少了这一句，把 `{% if row.is_member %}` 改成恒假也照样全绿）：
+                # 已经在的组上没有申请入口，卡片上该出现的是「已加入」。
+                if closed_group is not None:
+                    self.assertNotContains(
+                        response,
+                        reverse("projects:group_apply", args=(closed_group.pk,)),
+                    )
+                    self.assertContains(response, "已加入")
+
     def test_user_without_group_sees_all_groups_to_apply(self):
         self.client.force_login(self.no_group_user)
 
