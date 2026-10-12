@@ -520,5 +520,5 @@ ${GRN}============================================${RST}
   日志     : journalctl -u club702 -f
 
   后续发布新版本: git checkout <新tag> 后执行 ./deploy/deploy.sh <新tag>
-  说明        : 本脚本只负责首次部署；依赖环境的落地请参考 docs/deploy.md
+  说明        : 本脚本只负责首次部署；依赖环境的落地请参考 docs/更新维护/开发与部署.md
 EOF

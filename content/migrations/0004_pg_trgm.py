@@ -14,7 +14,7 @@ migrate 前会先探一次并给出安装命令。
 **建不出来的话**：pg_trgm 自 PostgreSQL 13 起是 trusted 扩展，库的属主就能建；
 ``deploy/install.sh`` 建的库正是以应用角色为属主（``createdb -O "$DJANGO_DB_USER"``），
 所以扩展在位时这一步不会因权限失败。真遇到权限被收走的库，用超级用户执行一次
-``CREATE EXTENSION pg_trgm;`` 再重跑迁移即可（见 docs/deploy.md）。
+``CREATE EXTENSION pg_trgm;`` 再重跑迁移即可（见 docs/更新维护/开发与部署.md §1.1）。
 """
 
 from django.contrib.postgres.operations import TrigramExtension

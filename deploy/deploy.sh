@@ -391,7 +391,7 @@ else
     echo "     curl -i $SITE_URL                             # 期望 200（直连要求 DJANGO_ALLOWED_HOSTS 含 127.0.0.1）" >&2
     echo "     journalctl -u $SERVICE_NAME -n 50 ; journalctl -u nginx -n 50" >&2
     # 回滚**不要**重跑本脚本：它第一步是备份、第五步是正向 migrate，方向与回滚相反。
-    echo "   回滚（手工三步，说明见 docs/deploy.md 的「更新与回滚」）:" >&2
+    echo "   回滚（手工三步，说明见 docs/更新维护/开发与部署.md 的「更新」「回滚」两节）:" >&2
     echo "     set -a; source env.sh; set +a" >&2
     echo "     git checkout <上一个tag>" >&2
     echo "     .venv/bin/python manage.py migrate --noinput   # 仅当这一版带了迁移" >&2

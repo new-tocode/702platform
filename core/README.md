@@ -189,6 +189,9 @@
 
 - **两个根里的相对路径相同**：所以 `rehome` 搬完之后数据库字段一个字都不用改，迁移也因此天然幂等。
 - **真正的屏障是目录边界，不是 `url()`**：`PrivateStorage.url()` 返回空串只是「别拼地址」的软约束；受保护件不在 `mediafiles/` 之下，Nginx 的 `/media/` 永远指不到它们。**把 `PRIVATE_MEDIA_ROOT` 挪进 `MEDIA_ROOT`，全部取件判定立刻失效，而页面上看不出来。**
+- **`upload_to` 是函数时 Django 原样采用返回值、不做 `strftime`**：日期目录要在函数里
+  自己算（`neutral_upload_to` 就是这么做的）。写 `upload_to="uploads/%Y/%m/"` 这种字符串
+  才有 `strftime`，换成可调用对象时这一层就没了。
 - **落盘名与用户填的名字彻底脱钩**：`neutral_upload_to(prefix)` 换成 uuid 并按年月分目录，只保留扩展名——原文件名会带人名、组名、项目名，而它会跟着文件走进备份、运维的 `ls` 与下载头。
 
 ### 注册表与目录

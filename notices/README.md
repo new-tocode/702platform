@@ -90,7 +90,7 @@
 | 字段 | 决定什么 |
 |---|---|
 | `scope` | `public` / `internal` / `contacts`，决定谁在可见集合里；**数据库没有约束**，靠 `NoticeAdminForm.clean` 保证搭配 |
-| `visible_groups` | `auth.Group` 的 M2M，只对 `internal` 生效；用户组是**通知的投递范围，不是身份**（见 `docs/architecture/accounts.md`） |
+| `visible_groups` | `auth.Group` 的 M2M，只对 `internal` 生效；用户组是**通知的投递范围，不是身份**（见 [`../accounts/README.md`](../accounts/README.md) §7） |
 | `is_pinned` | 排序与「置顶」标记；`Meta.ordering = ("-is_pinned", "-published_at", "-id")` |
 | `published_by` | `on_delete=PROTECT`：**发过公告的账号删不掉**；后台新增时被 `save_model` 强制写成 `request.user`，编辑不改 |
 | `published_at` | 默认 `timezone.now`（新建时由模型默认填）；**后台只读**（`NoticeAdmin.readonly_fields`），编辑不改。它既排序，也决定这条公告何时出现在首页的最新几条里 |
