@@ -29,7 +29,7 @@ CREATE_TRIGGER_SQL = [
     CREATE OR REPLACE FUNCTION {TRIGGER_NAME}() RETURNS trigger
     LANGUAGE plpgsql AS $$
     BEGIN
-        RAISE EXCEPTION '审计日志只追加（表 core_auditlog）：% 被拒绝。确需清理见 docs/deploy.md §5.3 的逃生口', TG_OP;
+        RAISE EXCEPTION '审计日志只追加（表 core_auditlog）：% 被拒绝。确需清理见 docs/更新维护/开发与部署.md §6.3 的逃生口', TG_OP;
     END;
     $$;
     """,

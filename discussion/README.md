@@ -111,7 +111,7 @@
 |---|---|
 | `image` | `private_storage` + `neutral_upload_to("discussion")`：落在 `PRIVATE_MEDIA_ROOT` 下、名为 `discussion/YYYY/MM/<uuid>.<ext>`，单张 ≤ `POST_IMAGE_MAX_BYTES`（3 MB，`validate_post_image` 里配文案） |
 | `file_size` | `save()` 时从 `image.size` 写入，`editable=False`；`save()` 每次还跑 `full_clean()` |
-| `sha256` | 保存时由 `FileDigestMixin` 维护；**存库但从不随响应发**（见 §5） |
+| `sha256` | 保存时由 `FileDigestMixin` 维护；**存库但从不随响应发**（见 §6） |
 
 ### Comment
 

@@ -26,7 +26,7 @@
 它与 `更新维护/` 或代码冲突时，**一律以后两者为准**。唯一的例外是「当初为什么这么选型」——
 那条理由冻结在那里，不会被重写。
 
-`run-local` 干的事：**起本地服务，再用真实浏览器（Playwright，已随项目 venv 装好）登录、点击、断言、截图**——用来在页面上验证改动，而不只是读代码。要点四条：`source env.local.sh` 后以 `runserver 127.0.0.1:8021 --noreload` 后台起服务、探活后用完 `pkill`；一个角色一个 `browser.new_context()`；Playwright 开 `reduced_motion="reduce"`（页面有入场动画，否则截到一半发灰）；断言用 locator 计数，别用「页面上不出现某个词」（flash 提示里常带同一个名字）。演示账号与口令是本地造的、不入库。
+`run-local` 干的事：**起本地服务，再用真实浏览器（Playwright，已随项目 venv 装好）登录、点击、断言、截图**——用来在页面上验证改动，而不只是读代码。要点四条：`source env.local.sh` 后以 `runserver 127.0.0.1:8021 --noreload` 后台起服务、探活后用完 `pkill`；一个角色一个 `browser.new_context()`；Playwright 开 `reduced_motion="reduce"`（页面有入场动画，否则截到一半发灰）；断言用 locator 计数，别用「页面上不出现某个词」（flash 提示里常带同一个名字）。里面还有现成的**截图脚本、多角色流程模板与一份回归场景集**（各入口权限、报名、一整轮评审、后台身份管理、长帖折叠）。演示账号与口令是本地造的、不入库——**克隆后自己造一批**，从 `createsuperuser` 起步即可。
 
 ---
 
@@ -91,9 +91,12 @@
 
 ### 容易踩的坑
 
+> 这几条是**每轮都要用到的规则**，所以留在这里；**细节在 [`docs/更新维护/开发与部署.md`](docs/更新维护/开发与部署.md) §3**
+> （注释规范、样式与模板约定、i18n 流程）。与「关键命令」同样处理：**改一边必须同步改另一边**。
+
 - **上传件分两类**：公开配图落 `mediafiles/`（Nginx 直出）；项目书、批注版、头像、图册等受保护件落 `protected_media/`（刻意不在 `mediafiles/` 之下），落盘名换成 uuid，取件一律经视图做权限判定。新增上传模型先想清属于哪类；模板里**不要写 `{{ field.url }}`**（受保护件的 `url()` 返回空串，字段为空时还会直接抛 `ValueError`），用 `{{ field|file_url }}`。
 - **i18n**：前台文案一律 `gettext`；不拼接句子（用 `%(name)s` 占位）；惰性译文不要在模块／类体里插值（那会在导入时定型，用 `format_lazy`）；给成员用的 `ModelForm` 要在 `Meta.labels` 写一遍标签（模型的 `verbose_name` 不进 `.po`）。改完文案跑 `makemessages -l en --no-obsolete` 填 `.po`，兜底测试会抓漏译。
-- **样式只在 `static/css/app.css`**：模板不写行内样式、不写内联 `<script>`，页面脚本放 `static/js/`。
+- **样式只在 `static/css/app.css`**：模板不写行内样式、不写内联 `<script>`，页面脚本放 `static/js/`。唯一的例外是 `|json_script`——它渲染出的是 `application/json` 数据块，不执行。
 - **`reviews` 是状态机**：状态变更一律经 `reviews/lifecycle.py` 的 `transition()`（唯一写入点），页面上下文走 `panels.py`，判定走 `permissions.py`。
 - **测试快是配置出来的**：只在 `manage.py test` 时把 `PASSWORD_HASHERS` 换成 MD5（`config.settings.running_tests()`），别顺手改掉。
 - **`/etc` 下的配置归 `install.sh` 管**：改了 `deploy/` 里的模板要「先 `deploy.sh` 再 `install.sh`」，并读回线上文件核对；`deploy.sh` 只检查、不修。

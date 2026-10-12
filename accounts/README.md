@@ -17,7 +17,7 @@
 
 | 东西 | 代码坐标 |
 |---|---|
-| `User`（`AbstractUser` + 四个布尔字段）、`Profile`、`GalleryImage`、四张身份名册 proxy | `models.py` |
+| `User`（`AbstractUser` + 六个布尔字段：强制改密、三种资格、两个接单开关）、`Profile`、`GalleryImage`、四张身份名册 proxy | `models.py` |
 | 登录、登出、强制改密（首次与后续同一张页、两个表单）、改密后的 `next` 校验 | `views.py`、`forms.py`、`urls.py` |
 | 公开首页 `accounts:home` 与成员中心 `accounts:member_home` | `views.py`、`templates/accounts/` |
 | 个人信息页（资料表单 + 头像 + 身份清单 + 图册）与成员只读资料页 | `views.py`、`forms.py`、`selectors.py`、`roles.py` |
