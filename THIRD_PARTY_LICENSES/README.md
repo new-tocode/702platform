@@ -1,6 +1,6 @@
 # 第三方许可证原文
 
-这里放**运行时依赖**的许可证原文，与 [`requirements.txt`](../requirements.txt) / [`requirements-prod.txt`](../requirements-prod.txt) 的锁文件一一对应。义务评估见 [`docs/licenses.md`](../docs/licenses.md)。
+这里放**运行时依赖**的许可证原文，与 [`requirements.txt`](../requirements.txt) / [`requirements-prod.txt`](../requirements-prod.txt) 的锁文件一一对应。义务评估见 [`../docs/更新维护/许可.md`](../docs/更新维护/许可.md)。
 
 | 包 | 许可证 | 文件 |
 |---|---|---|

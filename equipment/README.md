@@ -30,13 +30,13 @@
 | 不做 | 落在哪 |
 |---|---|
 | 「谁能借」「谁算管理员」 | `projects.permissions.can_use_equipment`（= `is_admin` 或 `is_project_member`）、`core.permissions.is_admin`。本模块只调用，不重写 |
-| 审批流 | 有意不做：登记即生效（`docs/architecture/overview.md` 的「刻意不做」表） |
+| 审批流 | 有意不做：登记即生效（`../docs/原型设计/SRS.md` 的「刻意不做」表） |
 | 替成员登记借用 | 没有任何入口：`EquipmentBorrowAdmin.has_add_permission` 恒为 `False`，前台借用人恒为 `request.user`。**只有归还可以代做** |
 | 逾期 | 不做：`planned_return_date` 只入库展示，不改状态、不提醒、不挡归还 |
 | 删除借用记录 | `EquipmentBorrowAdmin.has_delete_permission` 恒为 `False`——删掉一条在借记录会让库存凭空少一件 |
 
 **没有的模块**：没有 `permissions.py`、`selectors.py`、`panels.py`。
-借用记录的可见范围**不是判定函数**（本 app 没有 `permissions.py`，也没有 `can_view_borrow` 这个函数——[permissions.md](../docs/architecture/permissions.md) 曾误列它，已更正），而是在查询里收窄：
+借用记录的可见范围**不是判定函数**（本 app 没有 `permissions.py`，也没有 `can_view_borrow` 这个函数——[权限](../docs/更新维护/权限.md) 曾误列它，已更正），而是在查询里收窄：
 `views.borrow_list` 按 `borrower` 过滤，`views.borrow_return` 在 `get_object_or_404` 里带 `borrower`。
 上游是 `core`（`permissions`／`audit`／`registry`／`stats`）与 `projects.permissions`；
 `projects` 侧只在文档里把本模块列为下游，代码上不反向依赖。
@@ -218,3 +218,23 @@
   「总量 ≥ 可借 + 在借」的校验（数据库那条 `available_count <= total_count` 仍在）。改库存请走 `services`。
 - **`EquipmentBorrowForm.__init__` 收下 `equipment` 但当前没用到**（`self.equipment` 只存不读）：
   是预留位，别以为表单校验依赖它。
+
+---
+
+## 7. 跨模块口径与由来
+
+> 这一节讲**这块与别处怎么咬合**、以及**当初为什么这么定**——模块内部的规则与失败模式
+> 在 §1–§6。
+
+### 跨模块口径
+
+- **借用的门槛在项目组侧**：`projects.permissions.can_use_equipment`（staff 或任一项目组成员）；本模块**没有 `permissions.py`**，只在自己那几张视图里调它。
+- **归还刻意比借用宽**：归还只要求登录 + 是本人的记录（管理员可代还），**不查项目组归属**——被移出组的人仍要能还掉手里的设备，否则权限就把人锁死了。`is_active=False` 的设备同理必须还能还。
+- **可见范围不是判定函数，而是在查询里收窄**：本人只看自己的借用记录，管理员看全部——没有对应的 `permissions` 函数（[权限](../docs/更新维护/权限.md) 已按此更正）。
+- **后台代还的门槛是模型权限**：`permissions=["change_equipmentborrow"]`，不是 `is_admin`——那个 admin 类的 `has_change_permission` 被覆写成 `is_admin`，动作声明必须跟着它，否则只挂 `view_equipmentborrow` 的只读账号就能改别人的借还、把库存加回去。
+
+### 由来
+
+- **为什么没有审批、预约、续借、逾期**：社团规模下这几件事没有争议性，加状态机与待办的收益不抵成本（见 [SRS](../docs/原型设计/SRS.md) §2）。台账只回答「现在谁手上有什么」。
+- **为什么库存不变式落在数据库**：`available_count <= total_count` 由 CHECK 约束 `equipment_available_lte_total` 兜住，而不是只靠服务层——库存错了会让「还能不能借」这个判断整体失真。
+- **为什么重复归还不重复回补**：归还流程在**行锁内**先复查状态、再改任何东西；这一条是「已归还的借用点两次不会把库存加两遍」的唯一依据。回补前的 `available_count < total_count` 守卫是给管理员手工改过台账的情形准备的。

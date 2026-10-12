@@ -60,7 +60,7 @@
 
 | 字段 | 决定什么 |
 |---|---|
-| `file` | `FileField(upload_to="uploads/%Y/%m/")`，落 `MEDIA_ROOT`（`mediafiles/`）；必填；**原文件名保留**（uuid 换名只针对受保护件，见 `docs/glossary.md`） |
+| `file` | `FileField(upload_to="uploads/%Y/%m/")`，落 `MEDIA_ROOT`（`mediafiles/`）；必填；**原文件名保留**（uuid 换名只针对受保护件，见 `../docs/术语表.md`） |
 | `kind` | `image` / `video` 二选一：决定走哪套校验，也是引用方 `limit_choices_to` 的筛选依据 |
 | `caption` | ≤255、可空；后台列表与 `__str__` 用它，页面拿它当 `alt`／说明 |
 | `uploader` | FK `User`，`PROTECT`，`related_name="uploaded_media"`；后台只读 |
@@ -77,7 +77,7 @@
   图片的扩展名集合是 `core.uploads.IMAGE_EXTENSIONS`（`gif/jpeg/jpg/png/webp`），
   视频是 `validators.VIDEO_EXTENSIONS`（`mp4`／`webm`）。
 - **它是公开件那一类**：消费方都是对匿名访客开放的页面，所以文件落 `mediafiles/`，
-  `{{ media.file.url }}` 正常给地址（`docs/development.md` §3.3：公开媒体「因为它本来就
+  `{{ media.file.url }}` 正常给地址（`../docs/更新维护/开发与部署.md` §1.4：公开媒体「因为它本来就
   对匿名访客开放」由 Nginx 直出）。需要判权限的图（帖子图、头像、图册）刻意不进这里，
   它们落 `protected_media/` 且模板要走 `|file_url`。
 - **单张上限**：图片 10 MB、视频 500 MB；nginx 的 `client_max_body_size 520m` 为视频留了
@@ -162,7 +162,7 @@
   两份盘上文件。指纹在媒体库上只活在后台与数据层（模型注释里写着它管的是「这张照片还是
   当初上传的那张吗」），不像项目书那样随响应头送出。
 - **后台删除不写审计**：`MediaFileAdmin` 只覆写 `save_model`，删行不留痕（与 `content` 同款）。
-- **原文件名会进 URL**：公开件不做 uuid 换名（`docs/glossary.md` 的「落盘名」条目只覆盖
+- **原文件名会进 URL**：公开件不做 uuid 换名（`../docs/术语表.md` 的「落盘名」条目只覆盖
   受保护件），上传时叫什么，`/media/uploads/<年>/<月>/…` 里就是什么——名字带人名、组名
   就会原样出现在地址栏与备份里。要藏文件名就得落受保护件。
 - **校验只在 `save()` 上**：`QuerySet.update()`、`bulk_create` 这类不调用 `save()` 的写法

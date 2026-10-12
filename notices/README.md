@@ -35,7 +35,7 @@
 | @ 提及「提了谁」的解析 | `discussion.mentions.extract_mentions`；本模块只按解析结果对齐消息行 |
 | 消息点开后的目标页 | 帖子 `discussion:board`、项目组 `projects:group_detail`、建组申请 `reviews:queue`；`message_go` 只标已读 + 302 |
 | 任务的生命周期与历史 | `reviews`：消息只负责「有事等你」，交掉／释放／改派后待办被撤掉，历史留在评审页 |
-| 配图／视频的存储与可见性 | `media.MediaFile`：媒体库是**公开件**（落 `mediafiles/`、Nginx 直出、匿名可访问，见 `docs/glossary.md`），公告附件没有权限判定 |
+| 配图／视频的存储与可见性 | `media.MediaFile`：媒体库是**公开件**（落 `mediafiles/`、Nginx 直出、匿名可访问，见 `../docs/术语表.md`），公告附件没有权限判定 |
 | 强制改密的拦截 | `config.middleware.ForcePasswordChangeMiddleware`；本模块只是被它拦住的页面之一 |
 | 事务边界 | 本模块不 `import transaction`、不 `select_for_update`：事件消息写在调用方（`projects` / `reviews` / `discussion`）的事务里，已读是单条幂等写 |
 | 已读的审计 | 刻意不写（已读是高频、个人、幂等的操作）。全模块只有后台发布公告写 `notices.create` / `notices.update` |
@@ -271,3 +271,26 @@
   `{{ notice.scope }}`、不写已读回执——把成员侧的通知接进这一页会同时丢掉回执与范围口径。
   成员侧另有 `message_list.html`。
 - **已读回执没有清理入口**：只随通知／账号级联删除，没有「清理 N 天前的回执」这类命令。
+
+---
+
+## 7. 跨模块口径与由来
+
+> 这一节讲**这块与别处怎么咬合**、以及**当初为什么这么定**——模块内部的规则与失败模式
+> 在 §1–§6。
+
+### 跨模块口径
+
+- **三种可见范围**（`public` / `internal` / `contacts`）的判定只有一个函数：`notices/visibility.py` 的 `member_visible_notices`——列表、详情、未读计数、「全部已读」全走它。在视图或 `selectors` 里另拼一段 `Q(...)` 就是开出第二处真相。
+- **未授权详情是 404，不是 403**：过滤直接把不该看的从查询集里拿掉，连「存在与否」都不说。这与受保护件取件的 403 是两种口径，别改串（见 [SRS](../docs/原型设计/SRS.md) §4.2）。
+- **用户组（`auth.Group`）只在这里有意义**：它是内部通知的投递范围，**不是身份**，也不进 `core.roles` 目录。成员想知道自己在哪些组上，看个人信息页「当前身份」末条。
+- **事件型消息是别的模块「借」这张表**：@ 提及（解析归 `discussion`，写入归 `notices.services.sync_mention_messages`）、评审任务与结果、入组／建组申请与结果。表格的所有权在 notices，**呈现与去向也在 notices**（`notices.selectors` 的 `_CONTENT_BUILDERS` / `_TYPE_LABELS`）。
+- **加一个新 kind 要同时改三处**：`Message.KIND_CHOICES`、`selectors._CONTENT_BUILDERS`、`selectors._TYPE_LABELS`。漏第二处该行被静默跳过（只有 warning），漏第三处装配时整页 500。
+
+### 由来
+
+- **为什么消息只存引用、不存副本**：行里存的是五个可空外键与已读状态，标题／链接／说明由 `notices.selectors` 现取现算——帖子改名、轮次出了新结论，消息里跟着变，不会对不上。**别把显示字段落进表**，那会让这条性质失效。
+- **为什么用字符串外键**：notices 因此不在加载期依赖 `discussion` / `reviews` / `projects`；「哪一类消息挂哪个引用」不加库约束，交给写入函数。
+- **为什么未读要现算**：可见通知 − 已读回执（`NoticeRead`），不物化副本——发布人删通知，成员侧自然消失，回执随 CASCADE 清掉，不留孤儿。
+- **为什么撤回了「登录 flash 与成员中心待办卡片」**：同一个数字不该有两处口径；未读统一由「我的消息」的提醒条报出。任务类消息跟着任务生命周期走（交掉／被释放／被改派即撤），历史归评审页。
+- **每个自家包都要在 `LOGGING["loggers"]` 里显式列一节**（`notices` 这一节曾经是缺的，后果是 info 与 warning 都不落 `logs/django.log`，排查时会以为「什么都没发生」）。现在十一个包逐个列出，`config/tests.py` 的 `AppLoggerTests` 从四个方向盯着：仓库里实际的包与测试里的显式清单相等、配置节在、运行时挂着日志文件的 handler、每个包真发一条 `INFO` 能落盘。新增包忘了配（或只配了一半）会红。

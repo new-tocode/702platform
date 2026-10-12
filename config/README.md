@@ -70,17 +70,17 @@ config 是 app 名字最集中的一处：新增一个前台 app，要在 `confi
   换它等于重建全库。加字段要在 `accounts` 里加，config 只负责指过去。
 - **两个媒体根刻意分家**：`MEDIA_ROOT`（`mediafiles/`）公开、Nginx 的 `/media/` 直出；
   `PRIVATE_MEDIA_ROOT`（`protected_media/`）**刻意不在前者之下**，没有任何 HTTP 路径能直接取到它，
-  取件一律经视图做权限判定（`docs/development.md` §3.3）。`config/urls.py` 在 `DEBUG=True` 时只挂
+  取件一律经视图做权限判定（`../docs/更新维护/开发与部署.md` §1.4）。`config/urls.py` 在 `DEBUG=True` 时只挂
   `MEDIA_ROOT`，受保护根本地也不挂——**「开发能直连、线上不能」这种差异会掩盖问题**。
   备份要同时收两个目录（`deploy/backup.sh` 与 `deploy/deploy.sh` 都已这么做）。
 - **`/admin/` 不在双语名单里**：地址固定 `/admin/`，后台文案写中文原样、不进 `.po`。
   前台用 `i18n_patterns(prefix_default_language=False)`，**中文地址与改造前逐字节相同**；
-  **地址即语言**，与浏览器语言、Cookie 都无关（`docs/development.md` §3.4）。
+  **地址即语言**，与浏览器语言、Cookie 都无关（`../docs/更新维护/开发与部署.md` §3.3）。
 - **静音的检查项跟着开关走**：`SILENCED_SYSTEM_CHECKS` 由两个条件推导——`security.W004` 跟随
   `SECURE_HSTS_SECONDS`、`security.W008` 跟随 `SECURE_SSL_REDIRECT`。开关一打开，告警自动回来。
   **不要把它改成写死的清单**：一条永远为真的告警会让「有告警即失败」的上线门禁变成摆设。
 - **两个「默认关」是刻意的**：`SECURE_SSL_REDIRECT` 与 `SECURE_HSTS_SECONDS` 默认关闭，理由与开启条件
-  在 `docs/deploy.md` §2.5；HSTS 一旦生效，浏览器会在有效期内拒绝一切非 https 访问，证书出问题就锁死站点。
+  在 `../docs/更新维护/开发与部署.md` §4.3；HSTS 一旦生效，浏览器会在有效期内拒绝一切非 https 访问，证书出问题就锁死站点。
 - **安全默认值站在安全那一侧**：`SESSION_COOKIE_SECURE` / `CSRF_COOKIE_SECURE` 默认开（唯一例外是纯 http
   部署，要在 `env.sh` 显式改 0，否则浏览器不带 Cookie、谁都登不进来）；`SESSION_COOKIE_AGE` 是 3 天且
   `SESSION_EXPIRE_AT_BROWSER_CLOSE=True`——对装着实名信息与评审机密的站来说，这是取舍不是遗漏。
@@ -133,7 +133,7 @@ config 是 app 名字最集中的一处：新增一个前台 app，要在 `confi
 2. 请求进来时 `LocaleMiddleware` 从地址前缀判定语言：`/` 是中文、`/en/` 是英文；没有 `/en/` 就用
    `LANGUAGE_CODE = "zh-hans"`。浏览器语言与 Cookie 都不参与。
 3. 页面里的 `{% url %}` / `reverse()` 按**当前语言**自动加或去掉前缀，所以模板里不需要手写 `/en/`；
-   顶栏的语言切换链接由 `core.templatetags.language_urls.language_url` 现算（`docs/development.md` §3.4）。
+   顶栏的语言切换链接由 `core.templatetags.language_urls.language_url` 现算（`../docs/更新维护/开发与部署.md` §3.3）。
 4. 中文是源语言：模板与代码里的 msgid 本身就是中文，英文译文在 `locale/en/LC_MESSAGES/django.po`。
 
 ### 启动时序
@@ -157,13 +157,13 @@ config 是 app 名字最集中的一处：新增一个前台 app，要在 `confi
 | `DEBUG=False` 且 `SECRET_KEY` 仍是源码默认串 | 导入期 `ImproperlyConfigured`（消息里带生成随机密钥的命令） |
 | 整型环境变量填了非数字（如 `DJANGO_SECURE_HSTS_SECONDS=abc`） | 导入期 `ValueError`，且没有额外解释 |
 | 数据库连不上／没 `source env.local.sh` | `manage.py` 任何命令都失败（数据库固定 PostgreSQL，没有回退） |
-| `DEBUG=False` 没跑 `collectstatic` | 静态指纹（`ManifestStaticFilesStorage`）取不到 manifest，页面报错，见 `docs/deploy.md` §6 |
+| `DEBUG=False` 没跑 `collectstatic` | 静态指纹（`ManifestStaticFilesStorage`）取不到 manifest，页面报错，见 `../docs/更新维护/开发与部署.md` §6.2 |
 
 **上线门禁**：`deploy/deploy.sh` 在重启服务之前跑 `manage.py check --deploy --fail-level WARNING`，
 CI 在 PR 上跑同一道门（`.github/workflows/ci.yml`）。它拦的是「不会让站点起不来、只会让它安静地不安全」
 的退化——DEBUG 还开着、Cookie 没带 `Secure`、`SECRET_KEY` 还是源码默认值等；`SILENCED_SYSTEM_CHECKS`
 的两条静音与开关绑定，所以那两个告警只在开关关着时被压住。**门禁不覆盖 `DJANGO_CSRF_TRUSTED_ORIGINS`**：
-漏填要等成员提交表单才以 403 出现（`docs/deploy.md` §2.5 有实测记录），只能靠人对着 `env.template` 核。
+漏填要等成员提交表单才以 403 出现（`../docs/更新维护/开发与部署.md` §4.3 有实测记录），只能靠人对着 `env.template` 核。
 
 **日志**（`logs/django.log`：`RotatingFileHandler`，10 MB × 5 份，UTF-8；同时输出终端）：
 
@@ -182,7 +182,7 @@ CI 在 PR 上跑同一道门（`.github/workflows/ci.yml`）。它拦的是「�
 删掉哪一节、新增包忘了配、或把 `file` handler 的级别抬到 `ERROR`，都会红。
 
 **诊断路径**：记下响应头 `X-Request-ID` → 在 `logs/django.log` 里搜这个 id → 看 `request.start` /
-`request.end` 的状态与耗时 → 有 `request.exception` 就读紧随的 traceback（`docs/development.md` §7）。
+`request.end` 的状态与耗时 → 有 `request.exception` 就读紧随的 traceback（`../docs/更新维护/开发与部署.md` §6.1）。
 请求日志只记 method／path／query／用户名／来源 IP／状态码／耗时，**不记口令、不记请求体、不记 Cookie**；
 来源 IP 走 `core.audit.get_client_ip`，所以反代下它与审计、axes 是同一个口径。
 

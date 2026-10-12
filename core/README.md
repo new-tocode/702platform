@@ -165,7 +165,7 @@
 | `ip_address` | 来源 IP，口径是 `get_client_ip` |
 | `created_at` | `auto_now_add`；`Meta.ordering` 与按时间读的那两个索引都是倒序，另有 `(target_type, target_id)` 索引供按目标反查 |
 
-- **审计只追加**：告示层与执行层是分开的——后台 `AuditLogAdmin` 增改删三个权限全为假（删是唯一一条明确禁删的只读记录），但真正拦得住的是**数据库**：迁移 `core.0003` 建的**行级触发器** `core_auditlog_append_only` 对 `core_auditlog` 的 `UPDATE` / `DELETE` 一律 `RAISE EXCEPTION`，语句回滚、调用方拿到 `DatabaseError`。于是脚本、`queryset.update()`、数据库客户端都改不动这张表里的**行**（**模型层仍没有写保护**，绕过数据库的应用路径不存在而已；整表级的 DDL 与 `TRUNCATE` 是另一回事，见下面「已知限制」）。行级而非语句级：只在真有行要被改时拦，`UPDATE … WHERE false` 这类空语句放行。**要清理得走逃生口**，见 [`docs/deploy.md`](../docs/deploy.md) §5.3。
+- **审计只追加**：告示层与执行层是分开的——后台 `AuditLogAdmin` 增改删三个权限全为假（删是唯一一条明确禁删的只读记录），但真正拦得住的是**数据库**：迁移 `core.0003` 建的**行级触发器** `core_auditlog_append_only` 对 `core_auditlog` 的 `UPDATE` / `DELETE` 一律 `RAISE EXCEPTION`，语句回滚、调用方拿到 `DatabaseError`。于是脚本、`queryset.update()`、数据库客户端都改不动这张表里的**行**（**模型层仍没有写保护**，绕过数据库的应用路径不存在而已；整表级的 DDL 与 `TRUNCATE` 是另一回事，见下面「已知限制」）。行级而非语句级：只在真有行要被改时拦，`UPDATE … WHERE false` 这类空语句放行。**要清理得走逃生口**，见 [`../docs/更新维护/开发与部署.md`](../docs/更新维护/开发与部署.md) §6.3。
 - **删账号会被同一个触发器挡住**：`AuditLog.user` 是 `SET_NULL`，删用户前要先把他名下的审计行置空，而那是一次 `UPDATE`——所以**有审计行的账号删不掉**（一条审计行都没有的账号照常删得掉）。这是刻意的：留痕不该因为删账号而变。平台因此把「停用」（`is_active=False`）当作账号退场的口径；真要删，先走逃生口。
 - **`record_audit` 不体检 `detail`**：「只记非敏感信息」靠调用方自律，没有任何运行时过滤。
 - **审计的事务边界由调用方决定**：`core` 不替调用方开事务——跟写操作同事务还是提交之后写，取决于调用点怎么安排（各 app 的做法见各自的 README）。
@@ -195,7 +195,7 @@
 
 - **注册表是进程内的内存态**（`_ENTRIES` + `RLock`），靠各 `AppConfig.ready()` 在启动时填充；按 `key` 幂等，所以开发自动重载不会长出两份。入口的 `key` 与 `url_name` 是契约。
 - **两个注册表同一套形状**（frozen dataclass + 幂等注册 + `RLock`）：操作入口用 `OperationEntry`，身份用 `Role`；排序都取 `(sort_order, key)`，同分按 key 兜底。
-- **身份目录不存数据、不判权限、不做授予**：四种 `GLOBAL` 身份由管理员授予、两种 `OBJECT` 身份由业务动作产生，区别决定了后台给不给分配入口（见 [../docs/architecture/permissions.md](../docs/architecture/permissions.md) 的「身份的管理」一节）。
+- **身份目录不存数据、不判权限、不做授予**：四种 `GLOBAL` 身份由管理员授予、两种 `OBJECT` 身份由业务动作产生，区别决定了后台给不给分配入口（见 [权限](../docs/更新维护/权限.md) 的「身份的管理」一节）。
 - **唯一的表是 `AuditLog`**：core 没有业务模型，也没有 schema 之外的持久状态（注册表与目录都是内存里的）。
 
 ---
@@ -249,7 +249,7 @@
 | 情形 | 表现 |
 |---|---|
 | `require` 的 `predicate` 不成立 | warning 日志（`event` 前缀 + `username=` + `fields` + `path=`）→ `PermissionDenied` → **403**；页面上不解释为什么 |
-| 按对象判可见性的取件（项目书／批注版／归档版／帖子图） | **403**（各视图里的 `PermissionDenied`）；通知详情是另一类口径，越权一律 **404**，见 [../docs/architecture/overview.md](../docs/architecture/overview.md) §4 |
+| 按对象判可见性的取件（项目书／批注版／归档版／帖子图） | **403**（各视图里的 `PermissionDenied`）；通知详情是另一类口径，越权一律 **404**，见 [SRS](../docs/原型设计/SRS.md) §4.2 |
 | 受保护文件在盘上缺失 | **404**（`serve_file` 把 `FileNotFoundError` 转掉），不是 500 |
 | 上传件不合格（含几十字节的解压炸弹） | 各表单/服务的 `ValidationError` → 表单错误或 `messages.error`；`core.uploads` 保证**不 500、不落盘** |
 | 入口的 `visible_when` 抛异常 | 该入口隐藏，页面照常渲染；日志 `operation_registry.visibility_error` |
@@ -294,7 +294,7 @@
 
 ### 已知限制 / 当前不支持
 
-- **「只追加」拦的是行级 `UPDATE` / `DELETE`，不是整表**：`TRUNCATE`（含 `manage.py flush`）、`DROP TABLE`、从备份恢复都不经过行级触发器；`ALTER TABLE`（删列、改类型——值没了而触发器一声不吭）与表继承（`INHERITS` 出来的子表不继承父表的行触发器）同样绕过；`ALTER TABLE … DISABLE TRIGGER` 与 superuser 会话 `SET session_replication_role = replica` 是敞开的逃生口（见 [`docs/deploy.md`](../docs/deploy.md) §5.3）。这些路径都要表属主或 superuser 的权限，保证的是「应用账号改不动、也删不掉单条留痕」，不是「谁都毁不掉」。
+- **「只追加」拦的是行级 `UPDATE` / `DELETE`，不是整表**：`TRUNCATE`（含 `manage.py flush`）、`DROP TABLE`、从备份恢复都不经过行级触发器；`ALTER TABLE`（删列、改类型——值没了而触发器一声不吭）与表继承（`INHERITS` 出来的子表不继承父表的行触发器）同样绕过；`ALTER TABLE … DISABLE TRIGGER` 与 superuser 会话 `SET session_replication_role = replica` 是敞开的逃生口（见 [`../docs/更新维护/开发与部署.md`](../docs/更新维护/开发与部署.md) §6.3）。这些路径都要表属主或 superuser 的权限，保证的是「应用账号改不动、也删不掉单条留痕」，不是「谁都毁不掉」。
 - **模型层没有写保护**：`AuditLog.save()` / `queryset.update()` 照样发语句，只是数据库会拒（`DatabaseError`）。护栏只有数据库这一层，`AuditLogAdmin` 那三个权限是给后台的告示。
 - **`record_audit` 不检查 `detail` 的内容**：写进去什么就永久留什么，敏感信息靠调用方自律。
 - **`PrivateStorage.url()` 不是访问控制**：它只返回空串。真正的保障是 `PRIVATE_MEDIA_ROOT` 不在 `MEDIA_ROOT` 之下 + Nginx 只映射后者；把两个根配到一起，页面上不会有任何异常提示。
@@ -306,3 +306,26 @@
 - **`FileDigestMixin` 一个模型只能有一个文件字段**：`digest_field` 是单个字段名。
 - **`get_client_ip` 默认不信 `X-Forwarded-For`**：反代下没打开 `TRUST_FORWARDED_FOR`，审计里所有来源都是代理地址，而 axes 的按 IP 锁定会把全站用户算成同一个人。这个开关**只在 nginx 确实会覆写该头时才该打开**。
 - **core 不提供页面，也不替调用方开事务**：它没有 `views.py` / `urls.py` / `services.py` / `selectors.py`；「审计跟写操作同事务还是提交后写」是调用点的决定。
+
+---
+
+## 7. 跨模块口径与由来
+
+> 这一节讲**这块与别处怎么咬合**、以及**当初为什么这么定**——模块内部的规则与失败模式
+> 在 §1–§6。
+
+### 跨模块口径
+
+- **审计 `action` 字符串是跨模块承诺**：一旦发布就不再改，历史记录要保持连续。新增写操作时照着相邻的那一个取名（清单见各 app 的 README）。
+- **`get_client_ip` 是全站唯一的「来源 IP」口径**：审计记的 IP 与 django-axes 锁定的 IP 都取自它（`AXES_CLIENT_IP_CALLABLE` 指着同一个函数）。默认只信 `REMOTE_ADDR`，`TRUST_FORWARDED_FOR` 打开时才读 `X-Forwarded-For` 的**最后一段**——改它等于同时改「审计记了谁」与「谁被锁」，改错会让全站登录互相锁死，或让 IP 可被伪造。
+- **指纹的三个约定**：`FileDigestMixin` 给带文件字段的模型算 SHA-256（七个字段都接了）；**项目书、批注版、归档版**的取件响应另带 `Content-Digest` 与 `X-Checksum-SHA256`（图片类刻意不发，见 [术语表](../docs/术语表.md) 的「指纹」）；归档件与其来源任务的指纹相同——对不上就说明归档之后被动过。
+- **存储的两类根是硬约定**：`PRIVATE_MEDIA_ROOT` 刻意不在 `MEDIA_ROOT` 之下，受保护件因此没有任何 HTTP 路径能直接命中。**这条边界是「取件必须走视图」的真正保障**——不是 `url()` 抛异常（它返回空串，理由见 `core/storage.py`）。
+- **注册表与目录的登记约定**：各 app 在 `AppConfig.ready()` 里登记操作入口（`core/registry.py`）与身份（`core/roles.py`）；后台「身份管理」分组的顺序必须与 `core/roles` 的 `sort_order` 一致。判定仍归各 app 的 `permissions`，授予仍归 `services`——目录不重复这两件事。
+- **边界**：`config/middleware.py`、`config/settings.py`、`config/admin.py` 归 **config 包**（见 [`../config/README.md`](../config/README.md)）；六个取件视图本身归各业务 app，用的才是 `core/downloads.serve_file`。
+
+### 由来
+
+- **指纹为什么存在模型自己身上**：文件会跟着记录一起死（换头像删旧图、删图册删盘、帖子图随编辑被替换），单开一张按文件名索引的旁表会在每条路径上留下没人清理的孤儿行。字段跟着行走，删记录即删指纹。
+- **审计为什么只追加、又为什么由数据库来守**：它是「谁在什么时候动了什么」的底账，改动它等于篡改历史。最初只有后台类 `AuditLogAdmin` 在拦（禁增删改），脚本与 ORM 照样能改——「只追加」那时是约定。现在这条落到了数据库：迁移 `core.0003` 给 `core_auditlog` 挂了行级触发器，`UPDATE` / `DELETE` 一律 `RAISE EXCEPTION`。**为什么不做成「收权限」**：属主能 `REVOKE` 自己（实测收得动），但也**随时能 `GRANT` 回来**——收不掉的只是属主的 grant option，所以「收权限」拦得住误操作、拦不住恶意；真要收住得另建角色、把日常连接换成非属主账号，那是部署形态的改动，比一条触发器贵得多（见 `core/README.md` 的不变量；逃生口见 [开发与部署](../docs/更新维护/开发与部署.md) §6.3）。
+- **`core.storage.rehome` 当前没有调用点**：docstring 说「数据迁移与运维脚本共用它」，实际「受保护上传件搬家」那条迁移刻意另写了一份冻结实现（迁移不能依赖会变的代码）。留着它是给下一次搬家用的——**别按 docstring 以为它天天在跑**。
+- **为什么 `url()` 返回空串而不是抛异常**：Django 的 `ClearableFileInput.is_initial()` 会主动求值 `.url`，抛出去会让模板渲染 500（实测 `{{ form.proposal }}` 直接 500）；`getattr(value, "url", False)` 带默认值也说明框架本就预期它可能取不到。护栏因此落在目录边界上。
