@@ -1,45 +1,74 @@
-# CLAUDE.md
+# CLAUDE.md — 竞赛社团管理平台
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+> **本文件是给 AI 的工作约定，只写规则，不写状态。**
+> 状态在代码、测试和 git 里；规则不会过期，状态会。
+>
+> 项目是什么、怎么跑起来 → [`README.md`](README.md)。
 
-## 这是什么
+---
 
-竞赛社团管理平台：Django 单体应用 + 服务端渲染模板，数据库**固定 PostgreSQL**（SQLite 已移除）。含公开门户、成员系统与 Django Admin 后台，界面中英双语——**中文是源语言**（地址不带前缀），英文走 `/en/` 前缀，地址即语言，后台 `/admin/` 不在双语范围内。
+## 1. 开工先读什么
 
-## 常用命令
-
-先 `source env.local.sh`（**必须**，不加载连不上数据库），命令一律走项目 venv：
-
-```bash
-source env.local.sh
-.venv/bin/python manage.py check
-.venv/bin/python manage.py makemigrations --check --dry-run   # 预期 No changes detected
-.venv/bin/python manage.py test                               # 全量，用测试库，不动开发库
-.venv/bin/python manage.py test reviews.tests.test_preliminary        # 单模块
-.venv/bin/python manage.py test accounts.tests.XxxTests.test_y        # 单条
-.venv/bin/python manage.py runserver 127.0.0.1:8021 --noreload
-```
-
-**做完的定义**：`check` + `makemigrations --check --dry-run` + `test` 三项全绿；迁移文件与模型代码一起提交。
-
-## 先读文档，别从代码里重新发现约定
-
-| 要改什么 | 先读 |
+| 要什么 | 读哪 |
 |---|---|
-| 某个模块（账号／项目组／评审／通知／社团空间……） | **`<app>/README.md`**——就地模块说明，讲职责与边界、接口与失败模式、不变量、数据流、测试要点与**已知限制**，是那个模块的**唯一出处** |
-| 跨模块的口径与「为什么当初这么定」 | `docs/architecture/<app>.md`（只剩跨模块口径与由来）、`docs/architecture/permissions.md` |
-| 整体结构、质量目标与验收场景、设计视角 | `docs/architecture/overview.md`（设计说明总纲） |
-| 加页面／找地址／跨 app 调函数／改被别处依赖的字段 | `docs/architecture/interfaces.md`（HTTP 契约、跨应用公开函数、数据模型承诺） |
-| 不认识的词、单位口径 | `docs/glossary.md` |
-| 环境、分层约定、注释怎么写、FAQ | `docs/development.md` |
-| 部署、回滚、备份 | `docs/deploy.md` |
-| 用户看到什么（写文案前） | `docs/manual.md` |
-| 加依赖之前 | `docs/licenses.md` |
+| 这轮要动的**那个模块**（职责与边界、失败模式、不变量、**已知限制**） | **`<app>/README.md`**——就地模块说明，那个模块的**唯一出处** |
+| 模块清单、谁依赖谁、跨模块约定 | [`docs/更新维护/模块与关系.md`](docs/更新维护/模块与关系.md) |
+| 有哪些地址、门槛是什么、怎么失败；跨 app 该调哪个函数 | [`docs/更新维护/接口.md`](docs/更新维护/接口.md) |
+| 「这个功能谁能用」 | [`docs/更新维护/权限.md`](docs/更新维护/权限.md) |
+| 环境、构建测试、部署回滚、看日志 | [`docs/更新维护/开发与部署.md`](docs/更新维护/开发与部署.md) |
+| 业务怎么走（也用来核对**用户可见文案**） | [`docs/更新维护/业务流.md`](docs/更新维护/业务流.md) |
+| 名词、缩写、单位口径 | [`docs/术语表.md`](docs/术语表.md) |
+| **当初为什么这么定** | [`docs/更新维护/ADR.md`](docs/更新维护/ADR.md)；初始选型的理由在 [`docs/原型设计/设计说明.md`](docs/原型设计/设计说明.md) |
+| 加依赖之前 | [`docs/更新维护/许可.md`](docs/更新维护/许可.md) |
 | 要在真实页面上验证改动、截图、端到端走一遍 | `run-local` skill——本机在 `.claude/skills/run-local/`，**不进版本库**（目录里写着本地演示账号的口令） |
 
-`run-local` 干的事，以及重建它所需的最小信息：**起本地服务，再用真实浏览器（Playwright，已随项目 venv 装好）登录、点击、断言、截图**——用来在页面上验证改动，而不只是读代码；里面还有现成的截图脚本、多角色流程模板与一份回归场景集（各入口权限、报名、一整轮评审、后台身份管理、长帖折叠）。要点四条：`source env.local.sh` 后以 `runserver 127.0.0.1:8021 --noreload` 后台起服务、探活后用完 `pkill`；一个角色一个 `browser.new_context()`；Playwright 开 `reduced_motion="reduce"`（页面有入场动画，否则截到一半发灰）；断言用 locator 计数，别用「页面上不出现某个词」（flash 提示里常带同一个名字）。演示账号与口令是本地造的、不入库，克隆后自己造一批即可（从 `createsuperuser` 起步）。
+⚠️ **`docs/原型设计/` 是已冻结的历史文档**，描述的是当前版本被追认为原型时的样子，**不是现状**。
+它与 `更新维护/` 或代码冲突时，**一律以后两者为准**。唯一的例外是「当初为什么这么选型」——
+那条理由冻结在那里，不会被重写。
 
-## 分层约定
+`run-local` 干的事：**起本地服务，再用真实浏览器（Playwright，已随项目 venv 装好）登录、点击、断言、截图**——用来在页面上验证改动，而不只是读代码。要点四条：`source env.local.sh` 后以 `runserver 127.0.0.1:8021 --noreload` 后台起服务、探活后用完 `pkill`；一个角色一个 `browser.new_context()`；Playwright 开 `reduced_motion="reduce"`（页面有入场动画，否则截到一半发灰）；断言用 locator 计数，别用「页面上不出现某个词」（flash 提示里常带同一个名字）。演示账号与口令是本地造的、不入库。
+
+---
+
+## 2. 文档规则
+
+- **只写代码里读不出来的**：意图、边界、约定、为什么这么定 → 写。有哪些函数、参数是什么、谁调用谁、数据结构长什么样 → **不写**。能用一次提问回答的，就别写文档。
+- **引用，不复述**：同一件事只有一个主。别处要么写 `见 <文件> §X`，要么写**不含具体值**的转述（面向另一个读者的翻译可以，照抄字段名与数值不行）。
+- **默认不动文档**：一轮改动默认不改任何文档。先想清「这次让哪条事实变了、谁是它的主」，只改那一份。
+- **纯重构自测**：一次纯重构（行为不变）如果逼你改某份文档，说明那份文档写得太低了。
+- **接口、数据格式、参数默认值以代码为准**，不另设文档。
+
+---
+
+## 3. 每轮工作的流程
+
+**开始**
+
+1. 读 §1 表里对应的那几份，定位这轮要动的模块——**不要为了「了解现状」去翻 `原型设计/`**
+2. 读**这轮要动的那部分代码**
+3. 说清这轮的**一个可验收目标**：改什么、怎么算改完（一条命令，或一个数值）
+
+**做**
+
+4. 改代码，加或改测试
+5. 跑 §5 的关键命令（三项检查）
+6. 按 §2 的规则，更新受影响的那一份文档
+
+**收尾**
+
+7. 自检并明确回答：**这轮改动让哪份文档变成假话了？改了没有？不用改的说清为什么**
+8. 若发现文档与代码不符：**判断哪个是错的，改错的那个**，不要默默跟着错的那份走
+9. 提交——**一个小步骤一个提交**
+
+> **三项检查全绿不等于可以交付**：代码写完、测试跑过之后，派一个对抗性审查 agent
+> （如 `/code-review`，让它从「这段代码会怎么坏」出发，而不是复述作者意图）再审一遍，
+> 再按结论决定改还是交。审出真问题就改完重跑三项检查；判为误报的，在提交信息或回复里写明理由。
+
+---
+
+## 4. 全局约定
+
+### 分层约定
 
 每个 app 的模块分工是固定的，视图与 admin 都不越层：
 
@@ -58,7 +87,7 @@ source env.local.sh
 - `services.py` 只为「被多处复用」或「含多表事务 / 约束翻译」的写操作而建；只有一个调用点的「保存 + 一条审计」留在视图里更清楚。
 - 用户可见文案归模板与 `panels`；服务层抛领域异常，由视图翻译成 `messages`。
 
-## 容易踩的坑
+### 容易踩的坑
 
 - **上传件分两类**：公开配图落 `mediafiles/`（Nginx 直出）；项目书、批注版、头像、图册等受保护件落 `protected_media/`（刻意不在 `mediafiles/` 之下），落盘名换成 uuid，取件一律经视图做权限判定。新增上传模型先想清属于哪类；模板里**不要写 `{{ field.url }}`**（受保护件的 `url()` 返回空串，字段为空时还会直接抛 `ValueError`），用 `{{ field|file_url }}`。
 - **i18n**：前台文案一律 `gettext`；不拼接句子（用 `%(name)s` 占位）；惰性译文不要在模块／类体里插值（那会在导入时定型，用 `format_lazy`）；给成员用的 `ModelForm` 要在 `Meta.labels` 写一遍标签（模型的 `verbose_name` 不进 `.po`）。改完文案跑 `makemessages -l en --no-obsolete` 填 `.po`，兜底测试会抓漏译。
@@ -67,9 +96,42 @@ source env.local.sh
 - **测试快是配置出来的**：只在 `manage.py test` 时把 `PASSWORD_HASHERS` 换成 MD5（`config.settings.running_tests()`），别顺手改掉。
 - **`/etc` 下的配置归 `install.sh` 管**：改了 `deploy/` 里的模板要「先 `deploy.sh` 再 `install.sh`」，并读回线上文件核对；`deploy.sh` 只检查、不修。
 
-## 工作节奏
+### 提交
 
-- 多阶段改造：先切分支 → 写可勾选的 `TASKS.md`（已被 gitignore，属过程文件，做完删掉）→ 每阶段一个提交，阶段内保持三项检查全绿。
-- **三项检查全绿不等于可以交付**：代码写完、测试跑过之后，派一个对抗性审查 agent（如 `/code-review`，让它从「这段代码会怎么坏」出发，而不是复述作者意图）再审一遍，再按结论决定改还是交——审出真问题就改完重跑三项检查，判为误报的要在提交信息或回复里写明理由。
 - 提交信息写中文，讲清**为什么这么改**并附测试结果（与仓库既有风格一致）。
-- **仓库是公开的**：代码、注释、提交信息、PR 标题与描述一律用占位符，不写真实部署信息（公网 IP、域名、实例 ID、部署用户名、正在运行的服务版本号）。
+- 多阶段改造：先切分支 → 写可勾选的 `TASKS.md`（已被 gitignore，属过程文件，做完删掉）→ 每阶段一个提交，阶段内保持三项检查全绿。
+- 迁移文件与模型代码一起提交。
+
+### 仓库是公开的
+
+代码、注释、文档、提交信息、PR 标题与描述一律用**占位符**，不写真实部署信息
+（公网 IP、域名、实例 ID、部署用户名、正在运行的服务版本号）。
+
+---
+
+## 5. 关键命令
+
+先 `source env.local.sh`（**必须**，不加载连不上数据库），命令一律走项目 venv：
+
+```bash
+source env.local.sh
+.venv/bin/python manage.py check
+.venv/bin/python manage.py makemigrations --check --dry-run   # 预期 No changes detected
+.venv/bin/python manage.py test                               # 全量，用测试库，不动开发库
+.venv/bin/python manage.py test reviews.tests.test_preliminary        # 单模块
+.venv/bin/python manage.py test accounts.tests.XxxTests.test_y        # 单条
+.venv/bin/python manage.py runserver 127.0.0.1:8021 --noreload
+```
+
+**做完的定义**：上面三项（`check` + `makemigrations --check --dry-run` + `test`）全绿。
+这几条与 [`docs/更新维护/开发与部署.md`](docs/更新维护/开发与部署.md) §2 是同一份事实，**改这里必须同步改那里**。
+
+---
+
+## 6. 不要做的事
+
+- ❌ **不要每轮把所有文档读一遍**——只读 §1 表里那几份。
+- ❌ **不要把 `docs/原型设计/` 当成现状描述**——它是历史资料。
+- ❌ **不要为「文档更完整」而新增文档**——先回答：它拥有什么别处没有的事实？
+- ❌ **不要在本文件里写项目状态**（进度、当前分支、待办）——那是最先烂掉的部分。
+- ❌ **不要把测试通过当成可以交付**——还要过一遍对抗性审查（§3 收尾那条）。
