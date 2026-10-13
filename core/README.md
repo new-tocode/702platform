@@ -252,7 +252,7 @@
 | 情形 | 表现 |
 |---|---|
 | `require` 的 `predicate` 不成立 | warning 日志（`event` 前缀 + `username=` + `fields` + `path=`）→ `PermissionDenied` → **403**；页面上不解释为什么 |
-| 按对象判可见性的取件（项目书／批注版／归档版／帖子图） | **403**（各视图里的 `PermissionDenied`）；通知详情是另一类口径，越权一律 **404**，见 [SRS](../docs/原型设计/SRS.md) §4.2 |
+| 按对象判可见性的取件（项目书／批注版／归档版／帖子图） | **403**（各视图里的 `PermissionDenied`）；通知详情是另一类口径，越权一律 **404**，见 [`../docs/更新维护/接口.md`](../docs/更新维护/接口.md) |
 | 受保护文件在盘上缺失 | **404**（`serve_file` 把 `FileNotFoundError` 转掉），不是 500 |
 | 上传件不合格（含几十字节的解压炸弹） | 各表单/服务的 `ValidationError` → 表单错误或 `messages.error`；`core.uploads` 保证**不 500、不落盘** |
 | 入口的 `visible_when` 抛异常 | 该入口隐藏，页面照常渲染；日志 `operation_registry.visibility_error` |
