@@ -20,7 +20,7 @@
 |---|---|
 | 表与不变量 | `models.py`：`Notice`、`NoticeRead`、`Message` |
 | 可见性判定 | `visibility.py`：`public_visible_notices()` / `member_visible_notices(user)`——成员侧可见集合的**唯一出处** |
-| 写操作 | `services.py`：标已读／全部已读，八个 kind 的消息写入与撤回 |
+| 写操作 | `services.py`：标已读／全部已读，九个 kind 的消息写入与撤回 |
 | 只读装配 | `selectors.py`：`MessageRow`、`message_rows`、`unread_message_count`、`message_target_url` |
 | 页面 | `views.py` + `templates/notices/`：公开公告栏 `notices:public_list` / `public_detail`（匿名可看，挂 `/notices/`）；「我的消息」`member_notices:internal_list` / `internal_detail` / `message_go` / `mark_all_read`（挂 `/member/notices/`） |
 | 后台发布 | `admin.py` + `forms.py`：`NoticeAdminForm` 校验范围与用户组的搭配，`save_model` 补发布人并记审计 |
@@ -66,6 +66,8 @@
 | `services.mark_message_read(message)` | 单条事件消息标已读 | — | 已读 → `False`，不重写 `read_at` |
 | `services.sync_mention_messages(post, comment, actor, mentioned_users)` | 让某个来源的提及消息与名单**对齐**（缺的写、多的删），返回新写几条 | `post` 必填；`comment=None` 表示帖子正文 | 自己 @ 自己不发；已读状态不因重对齐而复位；`bulk_create` 不触发任何信号 |
 | `services.clear_mention_messages(comment)` | 评论软删后撤掉它的提及消息 | — | 只按 `comment=` 删，不碰帖子正文上的提及 |
+| `services.notify_comment(comment, actor)` | 有人评论了你的帖子：给帖子作者一条「评论」 | `comment.post` 必须能取到作者；调用方**先写提及**再调它 | 自己评论自己的帖子不发；评论里已经 @ 到帖主时也不发（那条提及更具体）；同一条评论 `get_or_create` 幂等 |
+| `services.clear_comment_messages(comment)` | 评论软删后撤掉帖主收到的那条 | — | 只按 `comment=` 删，与提及各撤各的 |
 | `services.notify_preliminary_task` / `notify_review_task` | 给初审人／评审人一条待办 | 任务行已创建 | 同一轮次、同一人、同一阶段 `get_or_create` → 改派走了再回来不攒第二条、也不把已读的重新标未读；`actor` 不写（「来自」列空着） |
 | `services.clear_review_task_messages(submission, reviewer=None)` | 撤掉待办消息 | `reviewer=None` 表示撤掉这一轮全部 | 一律 `delete()`，**不看已读** |
 | `services.notify_review_result(submission)` | 给 `submission.group.leader` 一条结论 | 只应在轮次落定为 `approved` / `needs_revision` 后调（由 `reviews` 判） | `get_or_create` 幂等（一轮一条）；「已通过／需修改」在渲染时现取 |
@@ -109,7 +111,7 @@
 
 | 字段 | 决定什么 |
 |---|---|
-| `kind` | 八种，见 `KIND_CHOICES`；**每个 kind 必须同时出现在 `Message.KIND_CHOICES`、`selectors._CONTENT_BUILDERS`、`selectors._TYPE_LABELS` 三处**——漏了第二处该行被静默跳过（记 warning），漏了第三处装配时直接 `KeyError`（整页 500） |
+| `kind` | 九种，见 `KIND_CHOICES`；**每个 kind 必须同时出现在 `Message.KIND_CHOICES`、`selectors._CONTENT_BUILDERS`、`selectors._TYPE_LABELS` 三处**——漏了第二处该行被静默跳过（记 warning），漏了第三处装配时直接 `KeyError`（整页 500） |
 | `recipient` | `CASCADE`；`related_name="messages"` |
 | `actor` | `SET_NULL`：发起人注销后消息还在，「来自」列变空（`_display_name(None)` → `""`）；评审任务类根本不写 `actor` |
 | `is_read` / `read_at` | 只由 `mark_message_read` 与 `mark_all_read` 改；不写审计 |
@@ -128,8 +130,12 @@
   申请通过了，消息里跟着变；行里只有结构化引用与已读状态。
 - **进入详情即已读**：`internal_detail` 的 GET 写回执（`mark_read` 幂等），公开公告栏那条路不写——
   同一条公开通知，在公告栏看多少次都不会消掉「我的消息」里的未读角标。
-- **已读与撤回是两条路**：撤回（`clear_review_task_messages` / `clear_mention_messages`）直接 `delete()`，
-  不看已读状态；重对齐（`sync_mention_messages`）只增删行，**不把留下的人重新标成未读**。
+- **已读与撤回是两条路**：撤回（`clear_review_task_messages` / `clear_mention_messages` /
+  `clear_comment_messages`）直接 `delete()`，不看已读状态；重对齐（`sync_mention_messages`）只增删行，
+  **不把留下的人重新标成未读**。
+- **一条评论最多给帖主一条消息**：他自己评论自己的帖子不发；别人在评论里 @ 到了他，也只留那条提及
+  （`notify_comment` 先查同一条评论上有没有给他的提及）。为此 `discussion` 那边必须**先写提及、再调
+  `notify_comment`**——顺序反了就会同一条评论并列两条。
 - **后台表单是「范围 × 用户组」搭配的唯一执行点**：`internal` 必须至少一个用户组，`public` / `contacts`
   不许带用户组。`Notice` 没有模型级 `clean()`，`save()` 也不跑 `full_clean()`——绕过 admin 能造出
   永远不可见的 internal 通知，或带着用户组但照常对所有人可见的 public 通知。
@@ -156,7 +162,7 @@
 
 1. 调用方**在自己的事务里**调 `notices.services`（没有信号、没有队列、没有异步任务）：
    `projects`（入组／建组申请与结果）、`reviews`（任务分配与改派、结论、一票定论）、
-   `discussion`（提及）。
+   `discussion`（提及、评论）。
 2. 写入一律 `get_or_create` 或对齐：同一来源、同一收件人、同一 kind 只一行；重复调用幂等。
    任务改派 = 撤原持有人 + 写新持有人，改派回来靠 `get_or_create` 不攒第二条。
 3. 装配：`_event_rows` 按 `kind` 从 `_CONTENT_BUILDERS` 取渲染函数现算四个字段，
@@ -166,7 +172,7 @@
    `?page=N#post-<pk>` / `#comment-<pk>`（页码与列表观感一致，见 `discussion.selectors.page_of_post`），
    入组申请去项目组详情，建组申请去 `reviews:queue`。
 5. 消失有三条路：来源删除走 FK `CASCADE`；任务交掉／释放／改派走 `clear_review_task_messages`；
-   评论软删走 `clear_mention_messages`。
+   评论软删走 `clear_mention_messages` + `clear_comment_messages`。
 
 **提及：解析与消息分家**
 
@@ -175,7 +181,15 @@
 2. `discussion.services._sync_mentions` 在**发帖、编辑帖子、发评论**三处调 `sync_mention_messages`，
    按 `(kind=mention, post, comment)` 对齐；`comment=None` 是帖子正文上的提及，评论上的提及以评论为界、互不影响。
 3. 编辑是**对齐**不是追加：被去掉的人那一行直接删（已读的也删），留下的人原样不动。
-4. 评论软删后内容还在库里但界面看不到，消息点过去只会看到「该评论已删除」——所以单独撤掉，不提醒。
+4. 评论软删后内容还在库里，但页面上整条不再渲染（默认经理只给未删的）——消息点过去落不到那句话，
+   所以单独撤掉，不提醒。
+
+**评论：帖主那条从哪来**
+
+1. 同一处 `discussion.services.create_comment` 里，`_sync_mentions` 之后紧跟一句 `notify_comment`：
+   收件人是 `comment.post.author`，`actor` 是评论人，`post` / `comment` 两个引用都写上。
+2. 两条去重规则都在 `notify_comment` 里：自己评论自己的帖子、以及评论里已经 @ 到帖主，都不写。
+3. 评论不能编辑，所以这条消息只写不撤；撤回与提及同步发生——软删评论时两个 `clear_*` 一起调。
 
 ---
 
@@ -238,8 +252,9 @@
 |---|---|
 | `NoticeVisibilityAcceptanceTests` | 公开路由永不暴露 internal / contacts；internal 按用户组命中（任一命中即可）、别的组和无组都看不见；联系人才看 contacts；未改密成员被中间件挡回；首页只出公开通知；置顶排最前 |
 | `MessageReadStateTests` | 行只含该用户可见的通知；行带类型／来自／说明／已读；联系人说明是「仅项目组联系人」；内部通知列出全部命中的组名；没有姓名时「来自」回落账号；计数只算可见未读；标已读幂等；「全部已读」只动本人可见的；删通知后行、计数、回执一起消失 |
-| `EventMessageAggregationTests` | 提及行的类型／来自／说明与 `message_go` 链接；评论提及落到 `#comment-<pk>` 锚点；置顶最前、其余按时间混排；计数把两类相加；「全部已读」两类都清；`message_go` 别人的消息 404；不认识的 kind 跳过而不炸页 |
+| `EventMessageAggregationTests` | 提及行的类型／来自／说明与 `message_go` 链接；评论提及与评论通知都落到 `#comment-<pk>` 锚点（后者说明列是评论节选）；置顶最前、其余按时间混排；计数把两类相加；「全部已读」两类都清；`message_go` 别人的消息 404；不认识的 kind 跳过而不炸页 |
 | `MemberHomeReminderAcceptanceTests` | 成员中心入口叫「我的消息」；有未读才有提醒条与徽标且带计数；全读完什么都不渲染；别的组的未读不触发提醒 |
+| `MessageKindCoverageTests` | `KIND_CHOICES`、`_TYPE_LABELS`、`_CONTENT_BUILDERS` 三处的 kind 集合必须相等——加一类时漏掉后两处，这个测试直接红 |
 | `MessagePageAcceptanceTests` | 五列（类型／标题／来自／说明／时间）；未读行 `class="unread"` 与「N 条未读」；点详情清未读标记且只留一条回执；「全部已读」的 flash 与 POST-only；没有未读时不渲染按钮；删通知后页面少一行 |
 | `NoticeAdminAcceptanceTests` | 后台发布记 `published_by` 与 `notices.create` 审计；internal 没用户组、public / contacts 带用户组都拒绝保存；contacts 不带组可存；成员进不了后台 |
 
@@ -264,7 +279,8 @@
   「这条提及已撤销」的痕迹。这是刻意的对齐语义，但改它要连带考虑已读与计数的一致。
 - **`Message` 的五个引用没有组合约束**：哪一类消息挂哪个引用是 `services.py` 写入函数的责任
   （模型 docstring 明说）。绕过 services 直接建行能造出渲染不出来或语义错乱的消息；加新 kind 时
-  三处（`KIND_CHOICES`、`_TYPE_LABELS`、`_CONTENT_BUILDERS`）必须同时改。
+  三处（`KIND_CHOICES`、`_TYPE_LABELS`、`_CONTENT_BUILDERS`）必须同时改，漏掉后两处由
+  `MessageKindCoverageTests` 挡下。
 - **`mark_all_read` 的返回计数**是「尝试写的回执数 + 被 UPDATE 的事件消息数」，并发下可能多报
   （回执被 `ignore_conflicts` 挡掉，但计数已经算进去了）。这个数只用于日志，不影响页面。
 - **`list.html` 今天只服务公开列表**：它带 `detail_namespace` / `detail_name` 两个参数、范围列直接写

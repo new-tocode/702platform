@@ -102,7 +102,7 @@ class NoticeRead(models.Model):
 
 
 class Message(models.Model):
-    """事件型消息：一行一个收件人（@ 提及、评审、申请类都走这里）。
+    """事件型消息：一行一个收件人（@ 提及、评论、评审、申请类都走这里）。
 
     与广播型的 ``Notice`` 分工明确：通知按可见集合实时查、用 ``NoticeRead`` 记
     已读；事件型没有「可见集合」可言——发生时就落一行，来源删除就级联删行
@@ -117,6 +117,7 @@ class Message(models.Model):
     """
 
     MENTION = "mention"
+    COMMENT = "comment"
     REVIEW_PRELIMINARY = "review_preliminary"
     REVIEW = "review"
     REVIEW_RESULT = "review_result"
@@ -126,6 +127,7 @@ class Message(models.Model):
     CREATE_RESULT = "create_result"
     KIND_CHOICES = (
         (MENTION, "提及"),
+        (COMMENT, "评论"),
         (REVIEW_PRELIMINARY, "初审任务"),
         (REVIEW, "评审任务"),
         (REVIEW_RESULT, "评审结果"),

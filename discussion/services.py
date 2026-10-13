@@ -374,11 +374,12 @@ def delete_comment(*, comment_id, actor, request=None):
         if comment.deleted_at is not None:
             return comment.post.board_id, comment.post_id
         comment.soft_delete(actor=actor)
-        # 评论在界面上整条不再渲染（不是留占位），别人消息里的提及也一并撤掉（局部导入，
-        # 与 _sync_mentions 同一条理由）。
-        from notices.services import clear_mention_messages
+        # 评论在界面上整条不再渲染（不是留占位），别人消息里的提及与帖子作者收到的
+        # 「评论」消息都一并撤掉（局部导入，与 _sync_mentions 同一条理由）。
+        from notices.services import clear_comment_messages, clear_mention_messages
 
         clear_mention_messages(comment=comment)
+        clear_comment_messages(comment=comment)
         record_audit(
             action="discussion.comment.delete",
             user=actor,
@@ -410,6 +411,12 @@ def create_comment(*, post_id, content, actor, request=None):
             content=content,
         )
         _sync_mentions(post=post, comment=comment, actor=actor)
+        # 帖子作者另收一条「评论」消息（局部导入，与 _sync_mentions 同一条理由）。
+        # **顺序不能反**：notify_comment 要看得见刚写的提及消息，作者已经被 @ 到
+        # 时就不再发第二条。
+        from notices.services import notify_comment
+
+        notify_comment(comment=comment, actor=actor)
 
     record_audit(
         action="discussion.comment.create",

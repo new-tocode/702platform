@@ -47,10 +47,44 @@ def sync_mention_messages(*, post, comment, actor, mentioned_users):
 def clear_mention_messages(*, comment):
     """评论被（软）删除后，它在别人消息里留下的提及一并撤掉。
 
-    软删除的评论内容还留在库里，但界面上已经看不到了——消息点过去也只会看到
-    「该评论已删除」，不如不提醒。
+    软删除的评论内容还留在库里，但页面上整条不再渲染（默认经理只给未删的），
+    消息点过去落不到那句话，不如不提醒。
     """
     Message.objects.filter(kind=Message.MENTION, comment=comment).delete()
+
+
+def notify_comment(*, comment, actor):
+    """有人评论了你的帖子：给帖子作者一条。「自己评论自己的帖子」不发。
+
+    评论正文里已经 @ 到作者时也**不**发：那条提及消息更具体，同一条评论上并列
+    两条只会让人以为发生了两件事。所以调用方要**先写提及、再调这里**
+    （``discussion.services.create_comment`` 就是这个顺序）。
+
+    评论不能编辑，所以这里只写不撤——撤回是软删评论时的事，见
+    :func:`clear_comment_messages`。
+    """
+    recipient = comment.post.author
+    if recipient.pk == actor.pk:
+        return
+    if Message.objects.filter(
+        kind=Message.MENTION, comment=comment, recipient=recipient
+    ).exists():
+        return
+    Message.objects.get_or_create(
+        recipient=recipient,
+        kind=Message.COMMENT,
+        comment=comment,
+        defaults={"actor": actor, "post": comment.post},
+    )
+
+
+def clear_comment_messages(*, comment):
+    """评论被（软）删除后，它在帖子作者消息里留下的那条一并撤掉。
+
+    与 :func:`clear_mention_messages` 同一条理由：软删的评论界面上整条不再渲染，
+    消息点过去落不到那句话，不如不提醒。
+    """
+    Message.objects.filter(kind=Message.COMMENT, comment=comment).delete()
 
 
 def notify_preliminary_task(*, submission, reviewer):

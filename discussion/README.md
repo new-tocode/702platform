@@ -1,7 +1,7 @@
 # discussion 模块
 
 > 社团空间：板块、帖子（配图、置顶）、软删除的评论、成员目录，以及正文里 `@姓名` 的解析。
-> **它不拥有消息**——提及消息的写入与撤回归 `notices`；不存身份与资格（`must_change_password`
+> **它不拥有消息**——提及与评论消息的写入、撤回归 `notices`；不存身份与资格（`must_change_password`
 > 在 `accounts`，本 app 只读它）；不判「谁算管理员」（问 `core.permissions.is_admin`）；
 > 不做后台（**本 app 没有 `admin.py`**，Board／Post／Comment 都不进 Django Admin）。
 > `content` 直接 import 它提供的成员判据，`notices` 依赖它的帖子／评论外键与「第几页」查询，
@@ -36,7 +36,7 @@
 
 | 不在这里 | 落在哪 |
 |---|---|
-| 提及**消息**的写入与撤回 | `notices.services.sync_mention_messages` / `clear_mention_messages`——`Message` 归它所有；`Message.post` / `Message.comment` 用字符串外键指回来，加载期不依赖本 app |
+| 提及与「有人评论了你的帖子」**消息**的写入与撤回 | `notices.services.sync_mention_messages` / `clear_mention_messages` / `notify_comment` / `clear_comment_messages`——`Message` 归它所有；`Message.post` / `Message.comment` 用字符串外键指回来，加载期不依赖本 app |
 | 成员身份、姓名、头像、账号是否被锁 | `accounts`：`is_member` 读的 `is_active` / `must_change_password` 都存在 `User` 上 |
 | 「谁算管理员」 | `core.permissions.is_admin`；删帖、删评论、置顶都调它，不写 `user.is_staff` |
 | 受保护件的存储、落盘命名与取件响应 | `core.storage`（`private_storage`、`neutral_upload_to`）、`core.downloads.serve_file` |
@@ -71,8 +71,8 @@
 | `services.update_post` | 改帖并按 `remove_image_ids` 增删配图，重算提及 | 锁内再判 `can_edit_post`（作者本人）；`remove_image_ids` 是整数；这些 id **必须整份属于这篇帖子**；剩余 + 新增 ≤ 3 | `DiscussionError`（「所选图片无效。」／「所选图片不属于这篇帖子。」／「每篇帖子最多保留 3 张图片。」）；`PermissionDenied`；`DiscussionNotFound` |
 | `services.delete_post` | **硬删**帖子：评论行与图片行级联走，磁盘上的图片文件在提交后删 | `can_delete_post`（作者或 `is_admin`） | `PermissionDenied`；`DiscussionNotFound`；审计里先记 `comment_count` / `image_count` 再删，删完返回 `board_id` 供视图跳转 |
 | `services.set_post_pinned` | 置顶／取消置顶 | `can_pin_post`（成员且 `is_admin`） | `PermissionDenied`；`is_pinned` 只认 `"true"` / `"false"`，别的值视图先返回 400（不落到服务层） |
-| `services.create_comment` | 评论 + 该评论上的提及 | `can_comment`（成员）；未触发限速；内容非空 | `PermissionDenied`；`DiscussionError`；`DiscussionNotFound`（帖子没了） |
-| `services.delete_comment` | **软删**评论 + 撤回它的提及消息 | `can_delete_comment`（作者或 `is_admin`） | `PermissionDenied`；`DiscussionNotFound`；**已经删过 → 幂等短路**，不改首次的删除人与删除时间，也不重复写审计 |
+| `services.create_comment` | 评论 + 该评论上的提及 + 给帖子作者的一条「评论」消息 | `can_comment`（成员）；未触发限速；内容非空 | `PermissionDenied`；`DiscussionError`；`DiscussionNotFound`（帖子没了） |
+| `services.delete_comment` | **软删**评论 + 撤回它的提及消息与帖主那条「评论」消息 | `can_delete_comment`（作者或 `is_admin`） | `PermissionDenied`；`DiscussionNotFound`；**已经删过 → 幂等短路**，不改首次的删除人与删除时间，也不重复写审计 |
 | `services.create_board` | 建板块 | `can_create_board`（`is_superuser`）；中英名各自过清洗 | `PermissionDenied`；`DiscussionError`（名字为空／不合规）；`BoardNameTaken`（撞唯一约束） |
 | `services.delete_board` | 删空板块 | `can_delete_board`（同上）；锁内确认板块**没有帖子** | `PermissionDenied`；`BoardNotEmpty`（「请先删除板块中的所有帖子…」）；`DiscussionNotFound` |
 | `selectors.posts_for_board` | 板块帖子流，预取评论（只取未删的）与配图、作者资料 | 只读，不写库 | 不抛；排序即 `Post.Meta.ordering`（置顶优先、时间倒序） |
@@ -147,6 +147,10 @@
   「这段文本提了谁」的唯一实现是 `mentions.extract_mentions`。
 - **提及消息按 diff 对齐，不是只增不减**：`notices.services.sync_mention_messages` 以
   `(kind=mention, post, comment)` 为界对齐——编辑后新增的写消息、去掉的删消息；自己 `@` 自己不发。
+- **评论会给帖子作者留一条消息，但一条评论最多留一条**：`create_comment` 在 `_sync_mentions` **之后**
+  调 `notices.services.notify_comment`——先写提及，帖主才判得出自己是不是已经被 @ 到（是则不再发
+  「评论」，那条提及更具体）；自己评论自己的帖子也不发。两条规则都写在 `notify_comment` 里，
+  **不要把这个判断挪到视图或模板**。
 - **长帖折叠只有 CSS 一个出处**：`.discussion-post-content.is-collapsed` 的 `max-height`
   （`static/css/app.css`）是「多长算长」的唯一定义，`discussion.js` 不重复这个数字，模板里也**不写**
   `is-collapsed`（没有脚本时正文整段照常显示，按钮默认带 `hidden`）。
@@ -177,10 +181,11 @@
 **评论**（`services.create_comment` / `delete_comment`）
 
 1. 发评论：限速 → 锁帖子行 → 建 `Comment` → `_sync_mentions(comment=comment)`——评论上的提及以这条
-   评论为界，与帖子正文上的互不影响。
+   评论为界，与帖子正文上的互不影响 → `notify_comment(comment=...)` 给帖子作者一条（同在事务内）。
 2. 删评论：锁 `Comment.all_objects`（**已删的也锁得到**，重复提交因此是空操作而不是 404）→
-   `can_delete_comment` → 已经删过就直接返回 → `soft_delete` → `clear_mention_messages(comment=...)`
-   撤回别人的消息（局部 import）→ 写 `discussion.comment.delete` 审计。评论没有文件，全程不碰磁盘。
+   `can_delete_comment` → 已经删过就直接返回 → `soft_delete` → `clear_mention_messages` +
+   `clear_comment_messages` 撤回别人与帖主收到的消息（局部 import）→ 写 `discussion.comment.delete`
+   审计。评论没有文件，全程不碰磁盘。
 
 **删帖**（`services.delete_post`）
 
@@ -253,7 +258,8 @@
 
 **刻意不报错**：重复删除同一条评论 → 幂等短路，页面照常跳转、不写第二次审计；限速的拒绝条件是
 「窗口内已有 ≥ `SPEAKING_RATE_LIMIT` 条」，也就是每分钟发得出 45 条、第 46 条才被拒；
-编辑帖子把某个 `@` 去掉 → 那条消息被静默撤回，不发任何提示。
+编辑帖子把某个 `@` 去掉 → 那条消息被静默撤回；软删评论同理，提及与帖主那条「评论」一起消失，
+都不发任何提示。
 
 ---
 
@@ -271,6 +277,7 @@
 | `test_comments.py` | 删除按钮只对作者与管理员渲染；删除 POST-only、判定在服务层；已删评论从页面与计数里消失、帖子与其余评论不受影响；未知评论 404、被锁账号被挡 |
 | `test_images.py` | 三张合法图可发、删帖清文件；每张图各记一份 `sha256`；第四张与超 3 MB 被拒；编辑增删后仍 ≤3；表单层同样卡数量 |
 | `test_mentions.py` | 解析：`@` 后接姓名、账号名不算、邮箱里的 `@` 不算、最长匹配优先、重复合并、同名发给所有同名者；消息：发帖／评论各写一条、重复提及只一条、自己 `@` 自己不发、编辑按 diff 增删、软删评论撤回、删帖连带删除、消息链接带页码与锚点 |
+| `test_comment_notify.py` | 帖主收到的那条：收件人是帖主、每条评论各一条、自己评论自己的帖子不发、评论里 @ 到帖主时只留提及那一条（@ 别人则两条各归各）、软删评论与删帖都撤回；行渲染：类型「评论」、标题是帖子、来自是评论人、说明是截断的评论节选，落点是 `#comment-<pk>`，且计进未读 |
 | `test_models.py` | 板块名大小写不敏感唯一；空板块可删、有帖不可删；排序置顶优先、其余时间倒序；删帖级联删评论；默认经理挡掉软删评论 |
 | `test_services.py` | 服务层的作者／管理员／超级管理员分层；建帖与删板块锁板块行；评论软删幂等且保留首次删除人；删帖带走软删评论；停用／锁定／匿名账号用不了服务；同名板块翻成领域异常 |
 | `test_forms.py` | 板块表单要中英双名且英文名合规；帖子与评论表单拒空白内容 |
@@ -283,10 +290,8 @@
   （限速挡的是脚本化刷屏，为此给每条发言串行化得不偿失）；真正要求严格不超的地方（库存、评审席位）
   另有行锁。**限速与「已删评论仍计数」同源**：删掉自己的话不会把配额还回来。
 - **软删评论在页面上直接消失，没有占位行**：模板遍历的是默认经理（只含未删的），所以内容、计数与
-  `#comment-N` 锚点一起没了。提及消息已由 `clear_mention_messages` 撤回，正常路径下不会有人点进来；
-  但 `models.Comment` 的注释与 `notices.services.clear_mention_messages` 的 docstring 里写的
-  「在界面上让位给一行说明」「点过去只会看到该评论已删除」**按模板现状并不成立**：页面既没有占位行，
-  也没有那句话。以模板与测试为准，改文案时别照抄这两处注释。
+  `#comment-N` 锚点一起没了——**既没有占位行，也没有「该评论已删除」那句话**；提及消息与帖主那条
+  「评论」已由两个 `clear_*` 撤回，正常路径下不会有人点进来。
 - **`page_of_post` 要数一遍板块的全部帖子 id**（取全量 `pk` 再 `.index()`）：板块帖子多时是 O(n) 的内存与
   时间。它是「第几页」的唯一实现，`notices` 的消息链接依赖它；**改 `posts_for_board` 的排序时必须同步改它**，
   否则消息会落到别的页。

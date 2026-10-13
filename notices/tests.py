@@ -12,7 +12,12 @@ from core.models import AuditLog
 from projects.models import ProjectGroup
 
 from .models import Message, Notice, NoticeRead
-from .selectors import message_rows, unread_message_count
+from .selectors import (
+    _CONTENT_BUILDERS,
+    _TYPE_LABELS,
+    message_rows,
+    unread_message_count,
+)
 from .services import mark_all_read, mark_message_read, mark_read
 
 
@@ -451,6 +456,35 @@ class EventMessageAggregationTests(TestCase):
             f"#comment-{self.comment.pk}",
         )
 
+    def test_comment_row_carries_the_excerpt_and_links_to_the_comment(self):
+        comment_message = Message.objects.create(
+            recipient=self.member,
+            kind=Message.COMMENT,
+            actor=self.admin,
+            post=self.post,
+            comment=self.comment,
+        )
+
+        row = next(row for row in message_rows(self.member) if row.type_label == "评论")
+
+        self.assertEqual(row.title, "被提及的帖子")
+        self.assertEqual(row.actor, "event-admin")
+        self.assertEqual(row.context, "一条评论")
+
+        response = self.client.get(row.url)
+
+        self.assertEqual(
+            response["Location"],
+            f"{reverse('discussion:board', args=(self.board.pk,))}?page=1"
+            f"#comment-{self.comment.pk}",
+        )
+        comment_message.refresh_from_db()
+        self.assertTrue(comment_message.is_read)
+
+        page = self.client.get(reverse("member_notices:internal_list"))
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, "一条评论")
+
     def test_rows_sort_pinned_first_then_by_time(self):
         Notice.objects.create(
             title="更新的公开通知",
@@ -522,6 +556,16 @@ class EventMessageAggregationTests(TestCase):
 
         self.assertNotIn("from-the-future", titles)
         self.assertEqual(response.status_code, 200)
+
+
+class MessageKindCoverageTests(TestCase):
+    """一个 kind 要同时出现在三处才能渲染；漏一处以前只能在页面上炸出来。"""
+
+    def test_every_kind_has_a_type_label_and_a_content_builder(self):
+        kinds = {kind for kind, _label in Message.KIND_CHOICES}
+
+        self.assertEqual(set(_TYPE_LABELS), kinds)
+        self.assertEqual(set(_CONTENT_BUILDERS), kinds)
 
 
 class MemberHomeReminderAcceptanceTests(TestCase):

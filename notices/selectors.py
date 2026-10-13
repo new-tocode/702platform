@@ -17,6 +17,7 @@ from datetime import datetime
 from typing import NamedTuple
 
 from django.urls import reverse
+from django.utils.text import Truncator
 from django.utils.translation import gettext_lazy as _
 
 from .models import Message, Notice, NoticeRead
@@ -113,26 +114,47 @@ def _group_url(group_id):
     return reverse("projects:group_detail", args=(group_id,))
 
 
-def _mention_content(message):
-    """@ 提及：标题是帖子，说明是帖子还是评论，链接落到那一楼。"""
+def _discussion_url(message, anchor):
+    """帖子所在板块的那一页，带 ``#post-N`` / ``#comment-N`` 锚点。"""
     # 局部导入：notices 不在加载期依赖 discussion。
     from discussion.selectors import page_of_post
 
     post = message.post
     base = reverse("discussion:board", args=(post.board_id,))
-    page = page_of_post(post)
+    return f"{base}?page={page_of_post(post)}#{anchor}"
+
+
+def _mention_content(message):
+    """@ 提及：标题是帖子，说明是帖子还是评论，链接落到那一楼。"""
+    post = message.post
     if message.comment_id:
         return _EventContent(
             post.title,
-            f"{base}?page={page}#comment-{message.comment_id}",
+            _discussion_url(message, f"comment-{message.comment_id}"),
             _display_name(message.actor),
             _("评论"),
         )
     return _EventContent(
         post.title,
-        f"{base}?page={page}#post-{post.pk}",
+        _discussion_url(message, f"post-{post.pk}"),
         _display_name(message.actor),
         _("帖子"),
+    )
+
+
+#: 「说明」列里那条评论的节选上限（含末尾的省略号）：一格摘要，全文点开就是。
+_COMMENT_EXCERPT_CHARS = 40
+
+
+def _comment_content(message):
+    """有人评论了你的帖子：标题是帖子，说明是那条评论的节选。"""
+    return _EventContent(
+        message.post.title,
+        _discussion_url(message, f"comment-{message.comment_id}"),
+        _display_name(message.actor),
+        Truncator(" ".join(message.comment.content.split())).chars(
+            _COMMENT_EXCERPT_CHARS, truncate="…"
+        ),
     )
 
 
@@ -219,6 +241,7 @@ def _create_result_content(message):
 #: 类型列的标签；模块级只写一次，取用时按当时的语言求值。
 _TYPE_LABELS = {
     Message.MENTION: _("提及"),
+    Message.COMMENT: _("评论"),
     Message.REVIEW_PRELIMINARY: _("评审"),
     Message.REVIEW: _("评审"),
     Message.REVIEW_RESULT: _("评审结果"),
@@ -231,6 +254,7 @@ _TYPE_LABELS = {
 #: 每种 kind 怎么渲染成行；接新来源时在这里加一条。
 _CONTENT_BUILDERS = {
     Message.MENTION: _mention_content,
+    Message.COMMENT: _comment_content,
     Message.REVIEW_PRELIMINARY: _review_content,
     Message.REVIEW: _review_content,
     Message.REVIEW_RESULT: _review_result_content,
