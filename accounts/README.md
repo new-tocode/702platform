@@ -71,7 +71,7 @@
 | `services.move_gallery_image` / `set_gallery_layout` / `delete_gallery_image` | 调顺序／改排布／删一张（连文件） | `direction ∈ {up, down}`；`layout ∈ LAYOUT_CHOICES` | 参数越界 → `ValueError`（编程错误；视图先自行判定，页面上的非法值一律 404）；已在头／尾 → 返回 `False`；排布没变 → 直接返回，不写审计 |
 | `selectors.member_identities` / `gallery_usage` / `roles.describe_member` | 只读派生：身份清单（含组名）／图册用量／一个身份标签 | 只读，不写库 | 未登录时 `member_identities` 返回 `()`、`describe_member` 返回「游客」 |
 | `file_views.avatar_file` / `gallery_file` | 受保护取件，经 `core.downloads.serve_file` | `@login_required` | 匿名 → 302 到登录页；没有头像 → 404；文件不在盘上 → `serve_file` 转 404 而不是 500；**不发指纹响应头** |
-| `accounts:member_profile`（只读资料页） | 看另一位成员的公开资料 | 登录；目标 `is_active=True` | 目标不存在或已停用 → 404（不泄漏存在性）；非 GET → 405 |
+| `accounts:member_profile`（只读资料页） | 看另一位成员的公开资料；页头另有「私信」入口（对自己的资料页不显示，视图那边也不给那只表单） | 登录；目标 `is_active=True` | 目标不存在或已停用 → 404（不泄漏存在性）；非 GET → 405 |
 | `accounts:profile` 与 `gallery_*` / `avatar_*` 视图 | 本人维护资料、头像、图册 | 登录；除 profile 页外都要 POST | 别人的图 → 404（先按 `profile=` 过滤再 `get_object_or_404`）；非法 `direction` / `layout` → 404；未登录 → 302 到登录页；`GET` 打 POST-only 视图 → 405 |
 | `axes.lockout_response` | 锁定时的 403 页面 + `accounts.login.lockout` 审计 | 由 axes 在**口令校验之前**调用 | 正确口令同样进不来；`credentials` 只取用户名，口令从不进审计；状态码是 `LOCKOUT_STATUS = 403`（不是 429） |
 
@@ -238,7 +238,7 @@
 | `test_models_and_auth.py` | 建号即得 `Profile` 与 `must_change_password=True`；`create_superuser` 不受强制改密；无公开注册路由；首次改密解锁成员区；后续改密要旧密码；`next` 拒绝外站；失败日志与审计不含口令 |
 | `test_admin_provisioning.py` | 后台建号带姓名与强制改密；**重置密码重新打开强制改密周期**；姓名只有 `full_name` 一个字段；成员进不了后台 |
 | `test_login_lockout.py` | 账号与 IP 两个桶各算各的；锁定后正确口令也拒；403 中文文案；成功登录不清 IP 计数；审计不含口令 |
-| `test_profile_pages.py` | 表单排布由 `ProfileForm.field_rows` / `narrow_fields` 声明；bio 上限；只读页的字段白名单（**不含学号与邮箱**）；非 GET 405；「我的获奖」入口带姓名跳转 |
+| `test_profile_pages.py` | 表单排布由 `ProfileForm.field_rows` / `narrow_fields` 声明；bio 上限；只读页的字段白名单（**不含学号与邮箱**）；非 GET 405；「我的获奖」入口带姓名跳转。只读页上的私信入口由 `notices/tests.py` 的 `DirectMessageEntryAcceptanceTests` 钉着 |
 | `test_avatar.py` | 2 MB 与非图片被拒；换头像删旧文件并刷新 `sha256`；删头像清字段与文件；取件要登录 + POST |
 | `test_gallery.py` | 一批里逐张去留、点名报出；合计上限；中途失败回滚并清掉已落盘文件；顺序／排布／删除；别人的图 404；未知参数 404；登录 + POST |
 | `test_protected_uploads.py` | 头像与图册落在受保护根、落盘名不含用户信息、存储不给 URL；登录可取、匿名 302；无头像 404 而不是 500 |
@@ -271,7 +271,8 @@
 - **`first_name` / `last_name` 仍在表上**：不再出现在任何界面与表单，历史数据由迁移
   `0004_copy_legacy_names` 合并进 `Profile.full_name`；不要把这两个字段重新接进业务。
 - **只读资料页的公开口径**：`college` / `major` / `specialty` / `bio` / `phone` / `contact`
-  对任何登录成员可见，`student_id` 与 `email` 不显示；页面上没有任何表单。
+  对任何登录成员可见，`student_id` 与 `email` 不显示。页面上没有任何**资料**表单；今天唯一能提交的
+  是页头「私信」那个小浮动窗（写私信这件事整个归 `notices`，本页只提供那只空表单）。
 
 ---
 
