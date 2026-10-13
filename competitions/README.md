@@ -32,7 +32,7 @@
 | 文件上传／取件；概览里的开放竞赛计数 | 本模块没有任何文件字段；计数在 `core.stats.platform_overview`（局部 import `Competition`） |
 
 **没有的模块**：没有 `selectors.py` 也没有 `panels.py`，列表页上下文直接由
-`views.competition_list` 装配（`../CLAUDE.md` §4 的分层约定也是这个口径）。代价是
+`views.competition_list` 装配（见 [`../docs/更新维护/模块与关系.md`](../docs/更新维护/模块与关系.md) §3 的跨应用引用约定）。代价是
 `forms.py` 与 `views._member_group_map` **直接查 `ProjectGroup`**（含 `members.through`）；
 项目组侧改成员结构会波及这里。
 

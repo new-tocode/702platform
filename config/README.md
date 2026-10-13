@@ -75,7 +75,7 @@ config 是 app 名字最集中的一处：新增一个前台 app，要在 `confi
   备份要同时收两个目录（`deploy/backup.sh` 与 `deploy/deploy.sh` 都已这么做）。
 - **`/admin/` 不在双语名单里**：地址固定 `/admin/`，后台文案写中文原样、不进 `.po`。
   前台用 `i18n_patterns(prefix_default_language=False)`，**中文地址与改造前逐字节相同**；
-  **地址即语言**，与浏览器语言、Cookie 都无关（`../CLAUDE.md` §4）。
+  **地址即语言**，与浏览器语言、Cookie 都无关。
 - **静音的检查项跟着开关走**：`SILENCED_SYSTEM_CHECKS` 由两个条件推导——`security.W004` 跟随
   `SECURE_HSTS_SECONDS`、`security.W008` 跟随 `SECURE_SSL_REDIRECT`。开关一打开，告警自动回来。
   **不要把它改成写死的清单**：一条永远为真的告警会让「有告警即失败」的上线门禁变成摆设。
@@ -133,7 +133,7 @@ config 是 app 名字最集中的一处：新增一个前台 app，要在 `confi
 2. 请求进来时 `LocaleMiddleware` 从地址前缀判定语言：`/` 是中文、`/en/` 是英文；没有 `/en/` 就用
    `LANGUAGE_CODE = "zh-hans"`。浏览器语言与 Cookie 都不参与。
 3. 页面里的 `{% url %}` / `reverse()` 按**当前语言**自动加或去掉前缀，所以模板里不需要手写 `/en/`；
-   顶栏的语言切换链接由 `core.templatetags.language_urls.language_url` 现算（`../CLAUDE.md` §4）。
+   顶栏的语言切换链接由 `core.templatetags.language_urls.language_url` 现算（`../CLAUDE.md` §4 的 i18n 规则）。
 4. 中文是源语言：模板与代码里的 msgid 本身就是中文，英文译文在 `locale/en/LC_MESSAGES/django.po`。
 
 ### 启动时序

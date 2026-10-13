@@ -60,47 +60,37 @@
 
 7. 自检并明确回答：**这轮改动让哪份文档变成假话了？改了没有？不用改的说清为什么**
 8. 若发现文档与代码不符：**判断哪个是错的，改错的那个**，不要默默跟着错的那份走
-9. 提交——**一个小步骤一个提交**
-
-> **三项检查全绿不等于可以交付**：代码写完、测试跑过之后，派一个对抗性审查 agent
-> （如 `/code-review`，让它从「这段代码会怎么坏」出发，而不是复述作者意图）再审一遍，
-> 再按结论决定改还是交。审出真问题就改完重跑三项检查；判为误报的，在提交信息或回复里写明理由。
+9. **派一个对抗性审查 agent 再审一遍**——**三项检查全绿不等于可以交付**。让它从
+   「这段代码会怎么坏」出发（`/code-review` 之类），而不是复述作者意图
+10. 按审查结论决定改还是交：审出真问题就改完**重跑三项检查**；判为误报的，在提交信息或回复里
+    写明理由
+11. 提交——**一个小步骤一个提交**
 
 ---
 
 ## 4. 全局约定
 
-### 分层约定
+➥ **这里只留别处没有的规则。**能在代码或 `docs/` 里读到的，一律不在此重复。
 
-每个 app 的模块分工是固定的，视图与 admin 都不越层：
+### 分层与跨模块
 
-| 模块 | 职责 | 规矩 |
-|---|---|---|
-| `models.py` | 表结构与不变量 | 不查别的应用 |
-| `permissions.py` | 「谁能做什么」的判定 | **判定只写这里**，视图、模板、`panels` 都来问它 |
-| `services.py` | 写操作：事务边界、审计、领域异常 | 视图与 admin 都调它，不自己写事务 |
-| `selectors.py` | 只读查询与派生状态 | 不写库 |
-| `views.py` | 取对象 → 调服务 → 渲染 | 不写事务、不写审计 |
-| `panels.py` | 页面上下文装配 | 判定与取数都委托出去 |
-
-- 跨应用只经对方的 `permissions` / `services` / `selectors` 公开函数，不直接查对方的模型（模型外键除外）；要打断加载期依赖时用函数内局部 import 并写明理由。
-- 视图权限门槛一律用 `core.permissions.require(request, predicate, event, **fields)`；「谁算管理员」问 `core.permissions.is_admin`，不写 `user.is_staff`。
-- 写操作经 `core.audit.record_audit` 留痕，**action 字符串一旦发布就不再改**。
-- `services.py` 只为「被多处复用」或「含多表事务 / 约束翻译」的写操作而建；只有一个调用点的「保存 + 一条审计」留在视图里更清楚。
-- 用户可见文案归模板与 `panels`；服务层抛领域异常，由视图翻译成 `messages`。
+模块分工（`models` / `permissions` / `services` / `selectors` / `views` / `panels` 各放什么、
+各自什么规矩）与跨应用引用规则，**主在 [`docs/更新维护/模块与关系.md`](docs/更新维护/模块与关系.md) §3**；
+每个模块自己的文件落点在该 app README §1 的「面 → 落点」表里。这一轮要动哪个模块，看那一篇。
 
 ### 容易踩的坑
 
-> 这几条是**每轮都要用到的规则**，所以留在这里。**注释规范的细节在
-> [`docs/更新维护/开发与部署.md`](docs/更新维护/开发与部署.md) §3**；i18n 与样式约定的细节
-> 读代码与 `static/css/app.css` 即可，不另设文档。
+- **i18n**：前台文案一律 `gettext`、**不拼接句子**（用 `%(name)s` 占位）；惰性译文**别在模块／类体里
+  插值**（那会在导入时定型）；给成员用的 `ModelForm` 要在 `Meta.labels` 点名标签。改完文案跑
+  `makemessages -l en --no-obsolete` 填 `.po`——**兜底测试会抓漏译**。细节见 [`docs/术语表.md`](docs/术语表.md)
+  的「惰性译文」与 `content/tests.py`、`core/tests/test_interface_translation.py` 的 docstring。
+- **`/etc` 下的配置归 `install.sh` 管**：改了 `deploy/` 里的模板要「先 `deploy.sh` 再 `install.sh`」，
+  并读回线上文件核对；`deploy.sh` 只检查、不修。
 
-- **上传件分两类**：公开配图落 `mediafiles/`（Nginx 直出）；项目书、批注版、头像、图册等受保护件落 `protected_media/`（刻意不在 `mediafiles/` 之下），落盘名换成 uuid，取件一律经视图做权限判定。新增上传模型先想清属于哪类；模板里**不要写 `{{ field.url }}`**（受保护件的 `url()` 返回空串，字段为空时还会直接抛 `ValueError`），用 `{{ field|file_url }}`。
-- **i18n**：前台文案一律 `gettext`；不拼接句子（用 `%(name)s` 占位）；惰性译文不要在模块／类体里插值（那会在导入时定型，用 `format_lazy`）；给成员用的 `ModelForm` 要在 `Meta.labels` 写一遍标签（模型的 `verbose_name` 不进 `.po`）。改完文案跑 `makemessages -l en --no-obsolete` 填 `.po`，兜底测试会抓漏译。
-- **样式只在 `static/css/app.css`**：模板不写行内样式、不写内联 `<script>`，页面脚本放 `static/js/`。唯一的例外是 `|json_script`——它渲染出的是 `application/json` 数据块，不执行。
-- **`reviews` 是状态机**：状态变更一律经 `reviews/lifecycle.py` 的 `transition()`（唯一写入点），页面上下文走 `panels.py`，判定走 `permissions.py`。
-- **测试快是配置出来的**：只在 `manage.py test` 时把 `PASSWORD_HASHERS` 换成 MD5（`config.settings.running_tests()`），别顺手改掉。
-- **`/etc` 下的配置归 `install.sh` 管**：改了 `deploy/` 里的模板要「先 `deploy.sh` 再 `install.sh`」，并读回线上文件核对；`deploy.sh` 只检查、不修。
+> 其余常踩的坑**都写在它们自己的主里**，不在这里重复：上传件分两类与 `|file_url`
+> （[`docs/术语表.md`](docs/术语表.md) 的「公开件／受保护件」、[`media/README.md`](media/README.md)）·
+> 样式只在 `app.css`（那个文件头部的注释）· 评审状态机只能经 `transition()`
+> （[`reviews/README.md`](reviews/README.md)）· 测试时换 MD5 口令哈希（`config/settings.py` 与 `config/tests.py`）。
 
 ### 提交
 
