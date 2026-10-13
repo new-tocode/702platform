@@ -50,10 +50,8 @@ source env.local.sh          # PostgreSQL 连接配置；不加载会连接失�
 
 ## 目录
 
-十一个 Django app（`config` / `accounts` / `notices` / `projects` / `reviews` /
-`competitions` / `equipment` / `content` / `discussion` / `media` / `core`）＋ `templates/`、
-`static/`、`deploy/`、`docs/`。**各 app 的职责边界与依赖关系见**
-[`更新维护/模块与关系.md`](docs/更新维护/模块与关系.md)。
+十一个 Django app（`config` 加十个业务 app）。**各模块的职责边界、依赖关系与
+谁依赖谁，见** [`更新维护/模块与关系.md`](docs/更新维护/模块与关系.md)。
 
 ---
 
