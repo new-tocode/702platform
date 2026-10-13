@@ -77,7 +77,7 @@
   图片的扩展名集合是 `core.uploads.IMAGE_EXTENSIONS`（`gif/jpeg/jpg/png/webp`），
   视频是 `validators.VIDEO_EXTENSIONS`（`mp4`／`webm`）。
 - **它是公开件那一类**：消费方都是对匿名访客开放的页面，所以文件落 `mediafiles/`，
-  `{{ media.file.url }}` 正常给地址（`../docs/更新维护/开发与部署.md` §1.4：公开媒体「因为它本来就
+  `{{ media.file.url }}` 正常给地址（`../core/README.md`：公开媒体「因为它本来就
   对匿名访客开放」由 Nginx 直出）。需要判权限的图（帖子图、头像、图册）刻意不进这里，
   它们落 `protected_media/` 且模板要走 `|file_url`。
 - **单张上限**：图片 10 MB、视频 500 MB；nginx 的 `client_max_body_size 520m` 为视频留了

@@ -165,7 +165,7 @@
 | `ip_address` | 来源 IP，口径是 `get_client_ip` |
 | `created_at` | `auto_now_add`；`Meta.ordering` 与按时间读的那两个索引都是倒序，另有 `(target_type, target_id)` 索引供按目标反查 |
 
-- **审计只追加**：告示层与执行层是分开的——后台 `AuditLogAdmin` 增改删三个权限全为假（删是唯一一条明确禁删的只读记录），但真正拦得住的是**数据库**：迁移 `core.0003` 建的**行级触发器** `core_auditlog_append_only` 对 `core_auditlog` 的 `UPDATE` / `DELETE` 一律 `RAISE EXCEPTION`，语句回滚、调用方拿到 `DatabaseError`。于是脚本、`queryset.update()`、数据库客户端都改不动这张表里的**行**（**模型层仍没有写保护**，绕过数据库的应用路径不存在而已；整表级的 DDL 与 `TRUNCATE` 是另一回事，见下面「已知限制」）。行级而非语句级：只在真有行要被改时拦，`UPDATE … WHERE false` 这类空语句放行。**要清理得走逃生口**，见 [`../docs/更新维护/开发与部署.md`](../docs/更新维护/开发与部署.md) §6.3。
+- **审计只追加**：告示层与执行层是分开的——后台 `AuditLogAdmin` 增改删三个权限全为假（删是唯一一条明确禁删的只读记录），但真正拦得住的是**数据库**：迁移 `core.0003` 建的**行级触发器** `core_auditlog_append_only` 对 `core_auditlog` 的 `UPDATE` / `DELETE` 一律 `RAISE EXCEPTION`，语句回滚、调用方拿到 `DatabaseError`。于是脚本、`queryset.update()`、数据库客户端都改不动这张表里的**行**（**模型层仍没有写保护**，绕过数据库的应用路径不存在而已；整表级的 DDL 与 `TRUNCATE` 是另一回事，见下面「已知限制」）。行级而非语句级：只在真有行要被改时拦，`UPDATE … WHERE false` 这类空语句放行。**要清理得走逃生口**，见 [`../docs/更新维护/开发与部署.md`](../docs/更新维护/开发与部署.md) §6。
 - **删账号会被同一个触发器挡住**：`AuditLog.user` 是 `SET_NULL`，删用户前要先把他名下的审计行置空，而那是一次 `UPDATE`——所以**有审计行的账号删不掉**（一条审计行都没有的账号照常删得掉）。这是刻意的：留痕不该因为删账号而变。平台因此把「停用」（`is_active=False`）当作账号退场的口径；真要删，先走逃生口。
 - **`record_audit` 不体检 `detail`**：「只记非敏感信息」靠调用方自律，没有任何运行时过滤。
 - **审计的事务边界由调用方决定**：`core` 不替调用方开事务——跟写操作同事务还是提交之后写，取决于调用点怎么安排（各 app 的做法见各自的 README）。
@@ -297,7 +297,7 @@
 
 ### 已知限制 / 当前不支持
 
-- **「只追加」拦的是行级 `UPDATE` / `DELETE`，不是整表**：`TRUNCATE`（含 `manage.py flush`）、`DROP TABLE`、从备份恢复都不经过行级触发器；`ALTER TABLE`（删列、改类型——值没了而触发器一声不吭）与表继承（`INHERITS` 出来的子表不继承父表的行触发器）同样绕过；`ALTER TABLE … DISABLE TRIGGER` 与 superuser 会话 `SET session_replication_role = replica` 是敞开的逃生口（见 [`../docs/更新维护/开发与部署.md`](../docs/更新维护/开发与部署.md) §6.3）。这些路径都要表属主或 superuser 的权限，保证的是「应用账号改不动、也删不掉单条留痕」，不是「谁都毁不掉」。
+- **「只追加」拦的是行级 `UPDATE` / `DELETE`，不是整表**：`TRUNCATE`（含 `manage.py flush`）、`DROP TABLE`、从备份恢复都不经过行级触发器；`ALTER TABLE`（删列、改类型——值没了而触发器一声不吭）与表继承（`INHERITS` 出来的子表不继承父表的行触发器）同样绕过；`ALTER TABLE … DISABLE TRIGGER` 与 superuser 会话 `SET session_replication_role = replica` 是敞开的逃生口（见 [`../docs/更新维护/开发与部署.md`](../docs/更新维护/开发与部署.md) §6）。这些路径都要表属主或 superuser 的权限，保证的是「应用账号改不动、也删不掉单条留痕」，不是「谁都毁不掉」。
 - **模型层没有写保护**：`AuditLog.save()` / `queryset.update()` 照样发语句，只是数据库会拒（`DatabaseError`）。护栏只有数据库这一层，`AuditLogAdmin` 那三个权限是给后台的告示。
 - **`record_audit` 不检查 `detail` 的内容**：写进去什么就永久留什么，敏感信息靠调用方自律。
 - **`PrivateStorage.url()` 不是访问控制**：它只返回空串。真正的保障是 `PRIVATE_MEDIA_ROOT` 不在 `MEDIA_ROOT` 之下 + Nginx 只映射后者；把两个根配到一起，页面上不会有任何异常提示。
@@ -329,6 +329,6 @@
 ### 由来
 
 - **指纹为什么存在模型自己身上**：文件会跟着记录一起死（换头像删旧图、删图册删盘、帖子图随编辑被替换），单开一张按文件名索引的旁表会在每条路径上留下没人清理的孤儿行。字段跟着行走，删记录即删指纹。
-- **审计为什么只追加、又为什么由数据库来守**：它是「谁在什么时候动了什么」的底账，改动它等于篡改历史。最初只有后台类 `AuditLogAdmin` 在拦（禁增删改），脚本与 ORM 照样能改——「只追加」那时是约定。现在这条落到了数据库：迁移 `core.0003` 给 `core_auditlog` 挂了行级触发器，`UPDATE` / `DELETE` 一律 `RAISE EXCEPTION`。**为什么不做成「收权限」**：属主能 `REVOKE` 自己（实测收得动），但也**随时能 `GRANT` 回来**——收不掉的只是属主的 grant option，所以「收权限」拦得住误操作、拦不住恶意；真要收住得另建角色、把日常连接换成非属主账号，那是部署形态的改动，比一条触发器贵得多（见 `core/README.md` 的不变量；逃生口见 [开发与部署](../docs/更新维护/开发与部署.md) §6.3）。
+- **审计为什么只追加、又为什么由数据库来守**：它是「谁在什么时候动了什么」的底账，改动它等于篡改历史。最初只有后台类 `AuditLogAdmin` 在拦（禁增删改），脚本与 ORM 照样能改——「只追加」那时是约定。现在这条落到了数据库：迁移 `core.0003` 给 `core_auditlog` 挂了行级触发器，`UPDATE` / `DELETE` 一律 `RAISE EXCEPTION`。**为什么不做成「收权限」**：属主能 `REVOKE` 自己（实测收得动），但也**随时能 `GRANT` 回来**——收不掉的只是属主的 grant option，所以「收权限」拦得住误操作、拦不住恶意；真要收住得另建角色、把日常连接换成非属主账号，那是部署形态的改动，比一条触发器贵得多（见 `core/README.md` 的不变量；逃生口见 [开发与部署](../docs/更新维护/开发与部署.md) §6）。
 - **`core.storage.rehome` 当前没有调用点**：docstring 说「数据迁移与运维脚本共用它」，实际「受保护上传件搬家」那条迁移刻意另写了一份冻结实现（迁移不能依赖会变的代码）。留着它是给下一次搬家用的——**别按 docstring 以为它天天在跑**。
 - **为什么 `url()` 返回空串而不是抛异常**：Django 的 `ClearableFileInput.is_initial()` 会主动求值 `.url`，抛出去会让模板渲染 500（实测 `{{ form.proposal }}` 直接 500）；`getattr(value, "url", False)` 带默认值也说明框架本就预期它可能取不到。护栏因此落在目录边界上。

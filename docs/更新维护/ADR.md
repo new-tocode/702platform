@@ -56,7 +56,7 @@
 ### 2026-10-10 — 审计「只追加」从约定落到数据库触发器
 
 - **背景**：审计日志是「谁在什么时候动了什么」的底账，改动它等于篡改历史。此前只有后台的 `AuditLogAdmin` 在拦（禁增删改），脚本与 ORM 照样能改——「只追加」那时只是约定。
-- **决定了**：迁移 `core.0003` 给审计表挂行级触发器 `core_auditlog_append_only`，`UPDATE` / `DELETE` 一律 `RAISE EXCEPTION`。逃生口只有两条（临时摘触发器、或 superuser 会话里 `SET session_replication_role = replica`），见 [`开发与部署.md`](开发与部署.md) §6.3。
+- **决定了**：迁移 `core.0003` 给审计表挂行级触发器 `core_auditlog_append_only`，`UPDATE` / `DELETE` 一律 `RAISE EXCEPTION`。逃生口只有两条（临时摘触发器、或 superuser 会话里 `SET session_replication_role = replica`），见 [`开发与部署.md`](开发与部署.md) §6。
 - **没选**：**收数据库权限**。属主能 `REVOKE` 自己（实测收得动），但也**随时能 `GRANT` 回来**——收不掉的只是属主的 grant option，所以「收权限」拦得住误操作、拦不住恶意。真要收住得另建角色、把日常连接换成非属主账号，那是部署形态的改动，比一条触发器贵得多。
 - **后果**：**有审计行的账号删不掉了**（`AuditLog.user` 是 `SET_NULL`，置空那一步被触发器挡住；后台点删除的页面结果是 500）——账号退场的正常口径改成**停用**。归档旧审计行也要走逃生口。挡不住的还有整表级与 DDL 级动作（`TRUNCATE`、`DROP TABLE`、整库恢复、`ALTER TABLE`）——那些靠备份与权限。
 

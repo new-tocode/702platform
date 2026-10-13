@@ -267,7 +267,7 @@
   结果是 **500**（抛的是 `ProgrammingError` 而不是 `IntegrityError`，admin 里接
   `ProtectedError` / `RestrictedError` 的分支接不住它，页面不会给出人话）；一条审计行都
   没有的账号照常删得掉。**账号退场的口径是停用**
-  （后台取消 `is_active`，见 §3 的 `is_active` 一行），真要删见 [`../docs/更新维护/开发与部署.md`](../docs/更新维护/开发与部署.md) §6.3 的逃生口。
+  （后台取消 `is_active`，见 §3 的 `is_active` 一行），真要删见 [`../docs/更新维护/开发与部署.md`](../docs/更新维护/开发与部署.md) §6 的逃生口。
 - **`first_name` / `last_name` 仍在表上**：不再出现在任何界面与表单，历史数据由迁移
   `0004_copy_legacy_names` 合并进 `Profile.full_name`；不要把这两个字段重新接进业务。
 - **只读资料页的公开口径**：`college` / `major` / `specialty` / `bio` / `phone` / `contact`
