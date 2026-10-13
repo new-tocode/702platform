@@ -1391,6 +1391,15 @@ class DirectMessageAdminAcceptanceTests(TestCase):
         self.assertContains(detail, self.body)
         self.assertEqual(write.status_code, 403)
 
+    def test_a_message_whose_sender_is_gone_still_renders(self):
+        # 发信人硬删后 sender 变 NULL（SET_NULL）：姓名列回落空串，页面照常 200。
+        self.sender.delete()
+
+        response = self.client.get(self.changelist)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.body)
+
     def test_reading_in_the_backend_writes_no_audit_row(self):
         self.client.get(self.changelist)
         self.client.get(self.change)

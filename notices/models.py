@@ -119,8 +119,9 @@ class DirectMessage(models.Model):
     行上的 ``actor`` / ``recipient`` 是给所有 kind 统一装配用的冗余列，私信的「来自」
     与「回给谁」一律以本表为准。
 
-    **刻意不做**：不进后台、不写审计（见 ``../notices/README.md`` §5）——正文与收发关系
-    是成员之间的东西，不是给运维留痕的。
+    **写入口只有成员侧**：后台那只 ``DirectMessageAdmin`` 是只读的（无增、无改、无删），
+    也不写审计（见 ``../notices/README.md`` §5）——正文与收发关系是成员之间的东西，
+    后台能查是为了「出了事看得到」，不是给运维留痕的。
     """
 
     sender = models.ForeignKey(

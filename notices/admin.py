@@ -98,9 +98,8 @@ class DirectMessageAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
     """成员之间的私信：查得到，改不了、删不掉、加不出来。
 
     收件人报一条骚扰，管理员能在这里按人、按时间、按正文找到它——这就是这张表
-    在后台的全部用途。**删除也关掉**（``AuditLogAdmin`` 之外的只读表都交给 Django
-    权限，这一张是例外）：删一条私信会连收信人「我的消息」里那一行一起带走
-    （外键 ``CASCADE``），那是在动成员自己的东西，不是运维的便利。
+    在后台的全部用途。**删除也关掉**：删一条私信会连收信人「我的消息」里那一行
+    一起带走（外键 ``CASCADE``），那是在动成员自己的东西，不是运维的便利。
     """
 
     # 账号名（唯一、稳定）与姓名（认人靠它，空着回落账号名）都摆出来：后台看这一页
@@ -145,4 +144,5 @@ class DirectMessageAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
         return Truncator(" ".join(obj.body.split())).chars(60, truncate="…")
 
     def has_delete_permission(self, request, obj=None):
+        # ReadOnlyAdminMixin 刻意不碰删除（各表自己定），这一张定为不给。
         return False

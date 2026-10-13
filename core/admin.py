@@ -11,8 +11,8 @@ class ReadOnlyAdminMixin:
 
     留痕类的记录（审计日志、各类申请、归档、名册）都只该被查看，这层把
     「不能新增、不能修改」收成一处。**不覆写 has_delete_permission**——
-    各模型的删除口径本就不同（审计日志明确关掉，其余交给 Django 权限），
-    一并改掉会动到既有行为。
+    各模型的删除口径本就不同（有几张表自己关掉了它，理由写在各自的 admin 里；
+    其余交给 Django 权限），一并改掉会动到既有行为。
     """
 
     def has_add_permission(self, request):
@@ -92,5 +92,5 @@ class AuditLogAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
     ordering = ("-created_at", "-id")
 
     def has_delete_permission(self, request, obj=None):
-        # 审计留痕连删除也不给——只读记录里唯一一条明确禁删的。
+        # 审计留痕连删除也不给（禁删的表不止这一张，各表自己定，见 ReadOnlyAdminMixin）。
         return False
