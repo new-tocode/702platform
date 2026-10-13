@@ -251,12 +251,25 @@ def _create_result_content(message):
     )
 
 
+def direct_reply_target(direct):
+    """这条私信能回给谁：发信人**仍在册**才有得回，否则是 ``None``。
+
+    注销（硬删，``sender`` 变 ``None``）与**停用**都算没有可回的人。停用这条尤其要
+    跟住：本平台的账号退场口径是停用（见 ``../docs/更新维护/开发与部署.md`` §6），
+    而写私信那道门的条件是「收信人在册」——两边用同一个条件，行上的按钮才不会点出 404
+    （``direct_compose`` 对停用账号给的就是 404）。
+    """
+    sender = direct.sender
+    if sender is None or not sender.is_active:
+        return None
+    return sender.pk
+
+
 def _direct_content(message):
     """有人给你发了私信：标题是「有人给你发了一条私信」，说明是正文的节选。
 
     点开落到私信详情页（``member_notices:direct_detail``）——那是全文的家。行上的
-    「快速回信」回给发信人：对象取自 ``DirectMessage.sender``（本行只记引用），
-    发信人注销后为 ``None``，按钮跟着不出现。
+    「快速回信」回给发信人，能不能回由 :func:`direct_reply_target` 说了算。
     """
     direct = message.direct_message
     if direct is None:
@@ -267,7 +280,7 @@ def _direct_content(message):
         reverse("member_notices:direct_detail", args=(message.pk,)),
         display_name(direct.sender),
         Truncator(" ".join(direct.body.split())).chars(_EXCERPT_CHARS, truncate="…"),
-        reply_to_id=direct.sender_id,
+        reply_to_id=direct_reply_target(direct),
     )
 
 
@@ -300,8 +313,21 @@ _CONTENT_BUILDERS = {
 }
 
 
+def _renderable_messages(user):
+    """我收到的、真渲染得出来的事件消息行。
+
+    今天唯一被排除的是「有 ``kind=direct`` 但没有正文」的坏行（绕过写入函数建的）：
+    :func:`_event_rows` 渲染不出来它，计数若还算上它，就会「提醒条说 1 条未读、
+    「我的消息」里却没有任何一行可点」——同一个数字不该有两处口径。
+    """
+    return Message.objects.filter(recipient=user).exclude(
+        kind=Message.DIRECT,
+        direct_message__isnull=True,
+    )
+
+
 def _event_rows(user):
-    messages = Message.objects.filter(recipient=user).select_related(
+    messages = _renderable_messages(user).select_related(
         "actor__profile",
         "post",
         "comment",
@@ -324,7 +350,8 @@ def _event_rows(user):
             continue
         content = builder(message)
         if content is None:
-            # 渲染不出来的一行（今天只有「没有正文的私信」）：跳过它，别让整页 500。
+            # 取数时已经滤掉已知的坏行（见 _renderable_messages）；这里兜住「渲染函数
+            # 自己返回 None」那种将来才会有的情况——同样跳过，别让整页 500。
             logger.warning(
                 "notice.messages.missing_source message_id=%s kind=%s",
                 message.pk,
@@ -371,7 +398,7 @@ def unread_message_count(user):
         return 0
     read_ids = NoticeRead.objects.filter(user=user).values("notice_id")
     unread_notices = member_visible_notices(user).exclude(pk__in=read_ids).count()
-    unread_events = Message.objects.filter(recipient=user, is_read=False).count()
+    unread_events = _renderable_messages(user).filter(is_read=False).count()
     return unread_notices + unread_events
 
 

@@ -20,9 +20,9 @@
             </div>
             <div class="head-actions">
                 {# 读完不消失：要它走只有这一条路——自己删。 #}
-                {% if direct.sender_id %}
+                {% if reply_to_id %}
                     <a class="btn" data-direct-compose data-direct-name="{{ sender_display_name }}"
-                       href="{% url 'member_notices:direct_compose' direct.sender_id %}">{% translate "回复" %}</a>
+                       href="{% url 'member_notices:direct_compose' reply_to_id %}?next={{ request.get_full_path|urlencode }}">{% translate "回复" %}</a>
                 {% endif %}
                 <form method="post" action="{% url 'member_notices:direct_delete' message.pk %}"
                       data-confirm="{% translate '确定删除这条私信吗？删除后无法恢复。' %}">

@@ -1,6 +1,7 @@
 """Stage 2 acceptance tests for public and internal notices."""
 
 from datetime import timedelta
+from urllib.parse import quote
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -1150,6 +1151,8 @@ class DirectMessageInboxTests(TestCase):
 
         self.assertEqual(page.status_code, 200)
         self.assertEqual(len(rows), 1)
+        # 计数与列表同一个口径：显示不出来的行不能只从列表里消失、却还算在未读里。
+        self.assertEqual(unread_message_count(self.recipient), 1)
         self.assertEqual(
             self.client.get(
                 reverse("member_notices:message_go", args=(broken.pk,))
@@ -1184,13 +1187,44 @@ class DirectMessageInboxTests(TestCase):
         self.assertEqual(unread_message_count(self.sender), 1)
 
     def test_rows_without_a_reply_target_do_not_carry_the_button(self):
-        # 发信人注销后「来自」为空，也就没有可回的人（外键 SET_NULL）。
+        # 发信人注销（硬删）后「来自」为空，也就没有可回的人（外键 SET_NULL）。
         self.sender.delete()
 
         response = self.client.get(reverse("member_notices:internal_list"))
 
         self.assertNotContains(response, "快速回信")
         self.assertContains(response, self.body)
+
+    def test_a_deactivated_sender_leaves_no_reply_entry(self):
+        # 停用才是本平台真正的账号退场口径（有审计行的账号删不掉）。写私信那道门认的是
+        # 「收信人在册」，所以这里也得认「发信人在册」——否则按钮点下去是 404，
+        # 浮动窗那条路还会把写好的回信弄丢。
+        self.sender.is_active = False
+        self.sender.save(update_fields=["is_active"])
+
+        row = next(
+            row for row in message_rows(self.recipient) if row.type_label == "私信"
+        )
+        page = self.client.get(reverse("member_notices:internal_list"))
+        detail = self.client.get(
+            reverse("member_notices:direct_detail", args=(self.message.pk,))
+        )
+
+        self.assertIsNone(row.reply_to_id)
+        self.assertNotContains(page, "快速回信")
+        self.assertEqual(detail.status_code, 200)
+        self.assertNotContains(detail, "data-direct-compose")
+        # 私信本身照旧看得见：停用的是账号，不是他发过的话。
+        self.assertContains(detail, self.body)
+
+    def test_the_entry_hands_the_form_the_page_it_came_from(self):
+        # 没有脚本时入口就是一条普通链接：来处带在地址上，发完与「取消」才回得到这一页。
+        response = self.client.get(reverse("member_notices:internal_list"))
+
+        self.assertContains(
+            response,
+            f"?next={quote(reverse('member_notices:internal_list'))}",
+        )
 
 
 class DirectMessageEntryAcceptanceTests(TestCase):
@@ -1227,6 +1261,11 @@ class DirectMessageEntryAcceptanceTests(TestCase):
         self.assertContains(response, "data-direct-compose")
         self.assertContains(response, "data-direct-dialog")
         self.assertContains(response, 'data-direct-name="被看的成员"')
+        # 没有脚本时它是一条普通链接：来处带着，发完与「取消」回得到资料页。
+        self.assertContains(
+            response,
+            f"?next={quote(reverse('accounts:member_profile', args=(self.other.pk,)))}",
+        )
 
     def test_your_own_profile_page_has_no_direct_entry(self):
         response = self.client.get(

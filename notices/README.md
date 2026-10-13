@@ -25,7 +25,7 @@
 | 表与不变量 | `models.py`：`Notice`、`NoticeRead`、`Message`、`DirectMessage` |
 | 可见性判定 | `visibility.py`：`public_visible_notices()` / `member_visible_notices(user)`——成员侧可见集合的**唯一出处** |
 | 写操作 | `services.py`：标已读／全部已读，九个 kind 的消息写入与撤回，私信的发送与删除 |
-| 只读装配 | `selectors.py`：`MessageRow`、`message_rows`、`unread_message_count`、`message_target_url`、`display_name` |
+| 只读装配 | `selectors.py`：`MessageRow`、`message_rows`、`unread_message_count`、`message_target_url`、`display_name`、`direct_reply_target` |
 | 页面 | `views.py` + `templates/notices/`：公开公告栏 `notices:public_list` / `public_detail`（匿名可看，挂 `/notices/`）；「我的消息」`member_notices:internal_list` / `internal_detail` / `message_go` / `mark_all_read`；私信 `direct_compose`（整页与浮动窗共用）/ `direct_detail` / `direct_delete`（都挂 `/member/notices/`） |
 | 后台发布 | `admin.py` + `forms.py`：`NoticeAdminForm` 校验范围与用户组的搭配，`save_model` 补发布人并记审计 |
 | 成员中心提醒 | `panels.member_home_context()` → `{"unread_messages": ...}` |
@@ -137,7 +137,8 @@
 
 | 字段 | 决定什么 |
 |---|---|
-| `sender` | `SET_NULL`：发信人注销后私信还在，「来自」为空、也不再有可回的人（行上的「快速回信」跟着不出现）。与 `Message.actor` 同一个口径 |
+| `sender` | `SET_NULL`：发信人注销后私信还在（「来自」为空）。与 `Message.actor` 同一个口径 |
+| 能不能回给发信人 | 由 `selectors.direct_reply_target` 一处说了算：发信人**在册**才有得回。注销与**停用**都不给「快速回信」/「回复」——写私信那道门认的也是「在册」，两边同一个条件才不会点出 404（停用是本平台真正的退场口径，硬删几乎走不到） |
 | `recipient` | `CASCADE`：收信人没了，他收到的私信一起走（不会有人再看） |
 | `body` | 正文，`max_length=DIRECT_MESSAGE_MAX_CHARS`（1500）。**这是全文唯一的家**——通知行指过来，不复制 |
 | `created_at` | 既排序也显示（`Meta.ordering = ("-created_at", "-pk")`） |
@@ -156,7 +157,7 @@
   `DirectMessage`——「正文没有第二个家」与「消息行不存副本」是同一条性质的两种说法。
 - **私信的两行同生同死**：`send_direct_message` 在一个事务里写正文与通知；删除走
   `delete_direct_message` 删正文、通知行跟着 `CASCADE`。所以「我的消息」里出现过的私信行，
-  背后必有一条正文（**除非**绕过写入函数直接建行——那种行装配时被跳过，见 §5）。
+  背后必有一条正文（**除非**绕过写入函数直接建行——那种行在取数时就被排除，见 §5）。
 - **私信读完不消失**：已读只动 `is_read` / `read_at`，列表照样列着那条行（只是不再高亮）。
   要它走只有一条路——收信人在 `direct_detail` 上按「删除私信」（`direct_delete`，POST）。
   这与「来源删除即级联删行」并不冲突：那一头是**别的 app 删了自己的东西**，这一头是**收信人自己动手**。
@@ -270,7 +271,7 @@
 | 私信收信人不存在或已停用 | 404（`is_active=True` 的过滤，与只读资料页同一道门） |
 | 私信不是我的／不是私信／正文缺了 | 404（`get_object_or_404(..., recipient=request.user, kind=DIRECT)`） |
 | 私信正文空／超长 | 200 重渲染写私信那一页 + 表单错误，**写过的正文还在** |
-| 数据里出现没有正文的私信行 | 列表跳过该行并记 `notice.messages.missing_source` warning；点它（`message_go`）与其详情页都 404，页面 200 |
+| 数据里出现没有正文的私信行 | 取数时就排除它（`selectors._renderable_messages`）：**列表与未读计数都看不见它**，不会出现「提醒条说 1 条未读、列表里却没有任何一行可点」；直接点它（`message_go`）与其详情页都 404，页面 200 |
 | GET 打 `direct_delete`、POST 打 `direct_detail` | 405 |
 | 发完私信带的 `next` 是外站地址 | 忽略它，回「我的消息」（`url_has_allowed_host_and_scheme`，与改密页同一个口径） |
 
@@ -292,11 +293,11 @@
 **日志**：`notices.views` 与 `notices.selectors` 各一个 `logging.getLogger(__name__)`。
 关键事件名：`notice.list.view` / `notice.detail.view`（带 `scope=public|internal`）、
 `notice.messages.list`、`notice.messages.read_all`、`notice.messages.open`、`admin.notice.save`、
-`notice.messages.unknown_kind`（warning，装配层）、
+`notice.messages.unknown_kind` 与 `notice.messages.missing_source`（warning，装配层；前者是数据里有不认识的 kind，后者是某个渲染函数自己返回了 `None`，今天到不了）、
 私信的 `notice.messages.direct.send` / `.view` / `.delete`（INFO）与 `.reject`（warning，表单没过）、
 `notice.messages.missing_source`（warning，装配层）。
 视图层的都带 `extra={"request_id": ...}`；`selectors` 那两条 warning 不带（取数层拿不到 request）。
-**正文不进日志**：私信那几条只记 `message_id`、账号 id 与字数。
+**正文不进日志**：私信那几条只记 `message_id`、发信人的账号名、收信人的账号 id 与字数。
 
 **级别**：`config/settings.py` 的 `LOGGING["loggers"]` 里有 `notices` 这一节，`DEBUG` 级、
 `console` + `file` 两个 handler，所以上面这些事件都落 `logs/django.log`（`config/tests.py` 的
@@ -328,7 +329,7 @@
 | `MessagePageAcceptanceTests` | 五列（类型／标题／来自／说明／时间）；未读行 `class="unread"` 与「N 条未读」；点详情清未读标记且只留一条回执；「全部已读」的 flash 与 POST-only；没有未读时不渲染按钮；删通知后页面少一行 |
 | `NoticeAdminAcceptanceTests` | 后台发布记 `published_by` 与 `notices.create` 审计；internal 没用户组、public / contacts 带用户组都拒绝保存；contacts 不带组可存；成员进不了后台 |
 | `DirectMessageSendTests` | 写私信那一页渲染出收件人与上限（`maxlength` 取自模型常量）；两行一起落；消息行的四个字段；（浮动窗与整页两条路都）发完回得来、外站 `next` 被忽略；超长／空正文被拒且写过的正文还在；给自己发被 flash 挡回；停用账号与匿名进不来 |
-| `DirectMessageInboxTests` | 行读什么（类型／标题／来自／节选／回信对象）；发信人自己没有行；未读计数与成员中心提醒条／徽标；点开即已读且**读完还在**；详情页给全文而不是节选；主动删除连正文一起删；越权 404；非私信的消息没有私信页；没有正文的坏行跳过而不是 500；快速回信就是一条普通私信（反向送达）；发信人注销后行上不再有「快速回信」 |
+| `DirectMessageInboxTests` | 行读什么（类型／标题／来自／节选／回信对象）；发信人自己没有行；未读计数与成员中心提醒条／徽标；点开即已读且**读完还在**；详情页给全文而不是节选；主动删除连正文一起删；越权 404；非私信的消息没有私信页；没有正文的坏行在列表与计数里都不出现；快速回信就是一条普通私信（反向送达）；发信人**注销**与**停用**后行上都没有「快速回信」，但私信正文照旧看得见；入口把来处带在地址上（没有脚本时回得到原页） |
 | `DirectMessageEntryAcceptanceTests` | 成员资料页对别人有「私信」入口与那扇窗（`data-direct-compose` / `data-direct-dialog` / 收件人姓名），对自己的资料页两者都没有 |
 
 ### 已知限制 / 当前不支持
@@ -381,7 +382,7 @@
 > 这一节只讲**当初为什么这么定**——从代码里读不出来的那部分。跨模块的口径与依赖方向在
 > [`../docs/更新维护/模块与关系.md`](../docs/更新维护/模块与关系.md)。
 
-- **为什么消息只存引用、不存副本**：行里存的是五个可空外键与已读状态，标题／链接／说明由 `notices.selectors` 现取现算——帖子改名、轮次出了新结论，消息里跟着变，不会对不上。**别把显示字段落进表**，那会让这条性质失效。
+- **为什么消息只存引用、不存副本**：行里存的是六个可空外键与已读状态，标题／链接／说明由 `notices.selectors` 现取现算——帖子改名、轮次出了新结论，消息里跟着变，不会对不上。**别把显示字段落进表**，那会让这条性质失效。
 - **为什么用字符串外键**：notices 因此不在加载期依赖 `discussion` / `reviews` / `projects`；「哪一类消息挂哪个引用」不加库约束，交给写入函数。
 - **为什么未读要现算**：可见通知 − 已读回执（`NoticeRead`），不物化副本——发布人删通知，成员侧自然消失，回执随 CASCADE 清掉，不留孤儿。
 - **为什么私信的正文单开一张表**：消息行的规矩是「只存结构化引用与状态，可显示字段现取现算」——

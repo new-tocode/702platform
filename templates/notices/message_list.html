@@ -53,7 +53,7 @@
                             {% if row.reply_to_id %}
                                 {# 私信行上的快速回信：打开页面底部那个浮动窗；没有脚本时它就是一条普通链接，落到整页表单。 #}
                                 <a class="btn btn-sm direct-reply" data-direct-compose data-direct-name="{{ row.actor }}"
-                                   href="{% url 'member_notices:direct_compose' row.reply_to_id %}">{% translate "快速回信" %}</a>
+                                   href="{% url 'member_notices:direct_compose' row.reply_to_id %}?next={{ request.get_full_path|urlencode }}">{% translate "快速回信" %}</a>
                             {% endif %}
                         </td>
                         <td class="muted">{{ row.actor }}</td>

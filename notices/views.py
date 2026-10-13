@@ -22,6 +22,7 @@ from .forms import DirectMessageForm
 from .models import Message, Notice
 from .panels import direct_compose_context
 from .selectors import (
+    direct_reply_target,
     display_name,
     message_rows,
     message_target_url,
@@ -270,6 +271,8 @@ def direct_detail(request, pk):
             "message": message,
             "direct": direct,
             "sender_display_name": display_name(direct.sender),
+            # 能不能回由 selectors 那一个判定说了算（发信人已停用就不给按钮）。
+            "reply_to_id": direct_reply_target(direct),
             **direct_compose_context(),
         },
     )

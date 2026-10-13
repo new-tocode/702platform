@@ -21,7 +21,7 @@
                 {# 对自己的资料页不显示——视图那边对「给自己发」也另有一道。 #}
                 <div class="head-actions">
                     <a class="btn btn-primary" data-direct-compose data-direct-name="{{ display_name }}"
-                       href="{% url 'member_notices:direct_compose' member.pk %}">{% translate "私信" %}</a>
+                       href="{% url 'member_notices:direct_compose' member.pk %}?next={{ request.get_full_path|urlencode }}">{% translate "私信" %}</a>
                 </div>
             {% endif %}
         </div>
