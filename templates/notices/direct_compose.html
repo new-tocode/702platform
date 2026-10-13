@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% translate "写私信" %} - {% translate "竞赛社团管理平台" %}{% endblock %}
+
+{% block content %}
+<div class="wrap col-narrow">
+    <div class="pagehead">
+        <div class="path">
+            <a href="{% url 'member_notices:internal_list' %}">{% translate "我的消息" %}</a>
+            <span>/</span>
+            <span>{% translate "写私信" %}</span>
+        </div>
+        <div class="head-row">
+            <div>
+                <h1>{% translate "写私信" %}</h1>
+                <div class="sub"><span class="muted">{% translate "收件人" %}</span> {{ recipient_display_name }}</div>
+            </div>
+        </div>
+    </div>
+
+    {# 这一页是浮动窗的兜底：没有脚本时链接就落到这里，字段与上限和窗口里那一份同源。 #}
+    <div class="frame">
+        <form method="post" action="{% url 'member_notices:direct_compose' recipient.pk %}">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ back_to }}">
+            {{ direct_form.non_field_errors }}
+            <div class="field">
+                <label for="{{ direct_form.body.id_for_label }}">{{ direct_form.body.label }}</label>
+                {{ direct_form.body }}
+                {% if direct_form.body.help_text %}<p class="help">{{ direct_form.body.help_text }}</p>{% endif %}
+                {{ direct_form.body.errors }}
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" type="submit">{% translate "发送" %}</button>
+                <a class="btn" href="{{ back_to }}">{% translate "取消" %}</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

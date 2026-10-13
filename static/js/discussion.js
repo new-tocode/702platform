@@ -1,12 +1,3 @@
-document.addEventListener("submit", (event) => {
-  const form = event.target;
-  const confirmation = form.dataset.confirm;
-
-  if (confirmation && !window.confirm(confirmation)) {
-    event.preventDefault();
-  }
-});
-
 // 过长的帖子先折到一屏内，点「展开全文」后不再折回去。
 //
 // 「多长算长」只有 CSS 一个出处（.discussion-post-content.is-collapsed 的 max-height），

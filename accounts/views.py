@@ -210,6 +210,9 @@ def _member_profile(request):
 @login_required
 @require_GET
 def member_profile_readonly(request, user_id):
+    # 局部导入：让 accounts 不在模块加载期就依赖 notices（与 member_home 同一条理由）。
+    from notices import panels as notices_panels
+
     member = get_object_or_404(
         User.objects.filter(is_active=True).select_related("profile"),
         pk=user_id,
@@ -229,6 +232,10 @@ def member_profile_readonly(request, user_id):
         "identities": member_identities(member),
         "gallery_images": gallery_images,
     }
+    # 「私信」入口（只对别人的资料页）打开的浮动窗要一只空表单；给不给自己发这条
+    # 规则在这里说一次——上下文里没有表单，模板那一块就不渲染，页面上的窗口跟着没有。
+    if member.pk != request.user.pk:
+        context.update(notices_panels.direct_compose_context())
     return render(request, "accounts/member_profile_readonly.html", context)
 
 

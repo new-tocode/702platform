@@ -11,14 +11,25 @@ from django.utils import timezone
 from core.models import AuditLog
 from projects.models import ProjectGroup
 
-from .models import Message, Notice, NoticeRead
+from .models import (
+    DIRECT_MESSAGE_MAX_CHARS,
+    DirectMessage,
+    Message,
+    Notice,
+    NoticeRead,
+)
 from .selectors import (
     _CONTENT_BUILDERS,
     _TYPE_LABELS,
     message_rows,
     unread_message_count,
 )
-from .services import mark_all_read, mark_message_read, mark_read
+from .services import (
+    mark_all_read,
+    mark_message_read,
+    mark_read,
+    send_direct_message,
+)
 
 
 User = get_user_model()
@@ -862,3 +873,368 @@ class NoticeAdminAcceptanceTests(TestCase):
         response = self.client.get("/admin/notices/notice/")
 
         self.assertEqual(response.status_code, 302)
+
+
+class DirectMessageSendTests(TestCase):
+    """写私信：整页表单与页面上的浮动窗共用一个地址，两行一起落，拒绝各归其位。"""
+
+    def setUp(self):
+        self.sender = User.objects.create_user(
+            username="dm-sender",
+            password="Sender-Password-123!",
+        )
+        self.sender.must_change_password = False
+        self.sender.save(update_fields=["must_change_password"])
+        self.sender.profile.full_name = "发信人"
+        self.sender.profile.save(update_fields=["full_name"])
+        self.recipient = User.objects.create_user(
+            username="dm-recipient",
+            password="Recipient-Password-123!",
+        )
+        self.recipient.must_change_password = False
+        self.recipient.save(update_fields=["must_change_password"])
+        self.recipient.profile.full_name = "收信人"
+        self.recipient.profile.save(update_fields=["full_name"])
+        self.url = reverse(
+            "member_notices:direct_compose", args=(self.recipient.pk,)
+        )
+        self.client.force_login(self.sender)
+
+    def test_compose_page_renders_the_form_with_the_recipient(self):
+        response = self.client.get(self.url)
+
+        self.assertContains(response, "写私信")
+        self.assertContains(response, "收信人")
+        # 上限只有 models.DIRECT_MESSAGE_MAX_CHARS 一处：表单照它拒，widget 照它带 maxlength。
+        self.assertContains(response, f'maxlength="{DIRECT_MESSAGE_MAX_CHARS}"')
+
+    def test_sending_writes_the_body_and_the_notification_together(self):
+        response = self.client.post(self.url, {"body": "你好，这是一条私信。"}, follow=True)
+
+        self.assertEqual(
+            response.redirect_chain,
+            [(reverse("member_notices:internal_list"), 302)],
+        )
+        self.assertContains(response, "私信已发送。")
+        direct = DirectMessage.objects.get()
+        self.assertEqual(direct.sender, self.sender)
+        self.assertEqual(direct.recipient, self.recipient)
+        self.assertEqual(direct.body, "你好，这是一条私信。")
+        message = Message.objects.get()
+        self.assertEqual(message.kind, Message.DIRECT)
+        self.assertEqual(message.recipient, self.recipient)
+        self.assertEqual(message.actor, self.sender)
+        self.assertEqual(message.direct_message, direct)
+        self.assertFalse(message.is_read)
+
+    def test_the_window_returns_to_the_page_it_was_opened_from(self):
+        # 浮动窗那一份表单把 next 藏在表单里（见 includes/direct_compose.html），
+        # 整页那一份把 next 带在地址上；两条路都要回得去。
+        profile_url = reverse("accounts:member_profile", args=(self.recipient.pk,))
+
+        from_page = self.client.post(f"{self.url}?next={profile_url}", {"body": "从资料页。"})
+        from_window = self.client.post(self.url, {"body": "从窗口。", "next": profile_url})
+
+        self.assertRedirects(from_page, profile_url)
+        self.assertRedirects(from_window, profile_url)
+
+    def test_offsite_next_is_ignored(self):
+        response = self.client.post(
+            self.url,
+            {"body": "想跳外站。", "next": "https://evil.example/"},
+        )
+
+        self.assertRedirects(
+            response,
+            reverse("member_notices:internal_list"),
+            fetch_redirect_response=False,
+        )
+
+    def test_over_long_body_is_rejected_and_the_typed_text_stays(self):
+        too_long = "长" * (DIRECT_MESSAGE_MAX_CHARS + 1)
+
+        response = self.client.post(self.url, {"body": too_long})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, too_long)
+        self.assertFalse(DirectMessage.objects.exists())
+        self.assertFalse(Message.objects.exists())
+
+    def test_blank_body_is_rejected(self):
+        response = self.client.post(self.url, {"body": "   "})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "请输入私信内容。")
+        self.assertFalse(DirectMessage.objects.exists())
+
+    def test_cannot_send_to_yourself(self):
+        response = self.client.post(
+            reverse("member_notices:direct_compose", args=(self.sender.pk,)),
+            {"body": "给自己发一条。"},
+            follow=True,
+        )
+
+        self.assertContains(response, "不能给自己发私信。")
+        self.assertFalse(DirectMessage.objects.exists())
+        self.assertFalse(Message.objects.exists())
+
+    def test_inactive_member_cannot_receive(self):
+        self.recipient.is_active = False
+        self.recipient.save(update_fields=["is_active"])
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_anonymous_is_sent_to_the_login_page(self):
+        self.client.logout()
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("accounts:login"), response["Location"])
+
+
+class DirectMessageInboxTests(TestCase):
+    """收件人那一侧：行读什么、未读怎么算、读完还在、自己删、快速回信。"""
+
+    def setUp(self):
+        self.sender = User.objects.create_user(
+            username="inbox-sender",
+            password="Sender-Password-123!",
+        )
+        self.sender.must_change_password = False
+        self.sender.save(update_fields=["must_change_password"])
+        self.sender.profile.full_name = "发信人"
+        self.sender.profile.save(update_fields=["full_name"])
+        self.recipient = User.objects.create_user(
+            username="inbox-recipient",
+            password="Recipient-Password-123!",
+        )
+        self.recipient.must_change_password = False
+        self.recipient.save(update_fields=["must_change_password"])
+        self.body = "你好，这是一条私信。"
+        self.message = send_direct_message(
+            sender=self.sender,
+            recipient=self.recipient,
+            body=self.body,
+        )
+        self.client.force_login(self.recipient)
+
+    def test_row_reads_type_actor_and_the_body_excerpt(self):
+        row = next(
+            row for row in message_rows(self.recipient) if row.type_label == "私信"
+        )
+
+        self.assertEqual(row.title, "向你发送了一条私信")
+        self.assertEqual(row.actor, "发信人")
+        self.assertEqual(row.context, self.body)
+        self.assertFalse(row.is_read)
+        self.assertEqual(row.reply_to_id, self.sender.pk)
+        self.assertEqual(
+            row.url,
+            reverse("member_notices:message_go", args=(self.message.pk,)),
+        )
+
+    def test_the_sender_has_no_row_of_their_own(self):
+        self.assertEqual(message_rows(self.sender), ())
+
+    def test_the_notification_lights_up_the_badge_and_the_member_home_reminder(self):
+        self.assertEqual(unread_message_count(self.recipient), 1)
+
+        response = self.client.get(reverse("accounts:member_home"))
+
+        self.assertContains(response, "1 条未读消息")
+        self.assertContains(response, '<span class="entry-badge">1</span>')
+
+    def test_opening_the_row_shows_the_full_text_and_marks_it_read(self):
+        response = self.client.get(
+            reverse("member_notices:message_go", args=(self.message.pk,))
+        )
+
+        self.assertRedirects(
+            response,
+            reverse("member_notices:direct_detail", args=(self.message.pk,)),
+        )
+        page = self.client.get(
+            reverse("member_notices:direct_detail", args=(self.message.pk,))
+        )
+        self.assertContains(page, self.body)
+        self.message.refresh_from_db()
+        self.assertTrue(self.message.is_read)
+        self.assertEqual(unread_message_count(self.recipient), 0)
+
+    def test_the_detail_page_shows_the_whole_body_not_the_excerpt(self):
+        long_body = "很长的正文。" * 30
+        message = send_direct_message(
+            sender=self.sender,
+            recipient=self.recipient,
+            body=long_body,
+        )
+
+        page = self.client.get(
+            reverse("member_notices:direct_detail", args=(message.pk,))
+        )
+
+        self.assertContains(page, long_body)
+
+    def test_reading_keeps_the_message(self):
+        mark_message_read(message=self.message)
+
+        page = self.client.get(
+            reverse("member_notices:direct_detail", args=(self.message.pk,))
+        )
+
+        self.assertEqual(page.status_code, 200)
+        self.assertEqual(len(message_rows(self.recipient)), 1)
+
+    def test_delete_removes_the_row_and_the_body(self):
+        response = self.client.post(
+            reverse("member_notices:direct_delete", args=(self.message.pk,)),
+            follow=True,
+        )
+
+        self.assertContains(response, "私信已删除。")
+        self.assertFalse(Message.objects.filter(pk=self.message.pk).exists())
+        self.assertFalse(DirectMessage.objects.exists())
+        self.assertEqual(message_rows(self.recipient), ())
+
+    def test_delete_is_post_only(self):
+        response = self.client.get(
+            reverse("member_notices:direct_delete", args=(self.message.pk,))
+        )
+
+        self.assertEqual(response.status_code, 405)
+
+    def test_someone_elses_message_is_not_reachable(self):
+        outsider = User.objects.create_user(
+            username="inbox-outsider",
+            password="Outsider-Password-123!",
+        )
+        outsider.must_change_password = False
+        outsider.save(update_fields=["must_change_password"])
+        self.client.force_login(outsider)
+
+        detail = self.client.get(
+            reverse("member_notices:direct_detail", args=(self.message.pk,))
+        )
+        delete = self.client.post(
+            reverse("member_notices:direct_delete", args=(self.message.pk,))
+        )
+
+        self.assertEqual(detail.status_code, 404)
+        self.assertEqual(delete.status_code, 404)
+        self.assertTrue(DirectMessage.objects.exists())
+
+    def test_a_non_direct_message_has_no_direct_page(self):
+        # 绕过写入函数造一条别的 kind（表上没有组合约束，见模型 docstring）。
+        other = Message.objects.create(
+            recipient=self.recipient,
+            kind=Message.COMMENT,
+        )
+
+        response = self.client.get(
+            reverse("member_notices:direct_detail", args=(other.pk,))
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_a_direct_row_without_a_body_is_skipped_not_a_500(self):
+        broken = Message.objects.create(
+            recipient=self.recipient,
+            kind=Message.DIRECT,
+        )
+
+        page = self.client.get(reverse("member_notices:internal_list"))
+        rows = message_rows(self.recipient)
+
+        self.assertEqual(page.status_code, 200)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(
+            self.client.get(
+                reverse("member_notices:message_go", args=(broken.pk,))
+            ).status_code,
+            404,
+        )
+        self.assertEqual(
+            self.client.get(
+                reverse("member_notices:direct_detail", args=(broken.pk,))
+            ).status_code,
+            404,
+        )
+
+    def test_quick_reply_is_an_ordinary_direct_message_back(self):
+        page = self.client.get(reverse("member_notices:internal_list"))
+
+        self.assertContains(page, "快速回信")
+        self.assertContains(
+            page,
+            reverse("member_notices:direct_compose", args=(self.sender.pk,)),
+        )
+
+        self.client.post(
+            reverse("member_notices:direct_compose", args=(self.sender.pk,)),
+            {"body": "收到，回你一条。"},
+        )
+
+        reply = Message.objects.get(recipient=self.sender)
+        self.assertEqual(reply.kind, Message.DIRECT)
+        self.assertEqual(reply.direct_message.sender, self.recipient)
+        self.assertEqual(reply.direct_message.body, "收到，回你一条。")
+        self.assertEqual(unread_message_count(self.sender), 1)
+
+    def test_rows_without_a_reply_target_do_not_carry_the_button(self):
+        # 发信人注销后「来自」为空，也就没有可回的人（外键 SET_NULL）。
+        self.sender.delete()
+
+        response = self.client.get(reverse("member_notices:internal_list"))
+
+        self.assertNotContains(response, "快速回信")
+        self.assertContains(response, self.body)
+
+
+class DirectMessageEntryAcceptanceTests(TestCase):
+    """入口：成员资料页上对别人有「私信」，对自己没有。"""
+
+    def setUp(self):
+        self.viewer = User.objects.create_user(
+            username="entry-viewer",
+            password="Viewer-Password-123!",
+        )
+        self.viewer.must_change_password = False
+        self.viewer.save(update_fields=["must_change_password"])
+        self.other = User.objects.create_user(
+            username="entry-other",
+            password="Other-Password-123!",
+        )
+        self.other.must_change_password = False
+        self.other.save(update_fields=["must_change_password"])
+        self.other.profile.full_name = "被看的成员"
+        self.other.profile.save(update_fields=["full_name"])
+        self.client.force_login(self.viewer)
+
+    def test_profile_page_offers_the_button_and_the_window_for_another_member(self):
+        response = self.client.get(
+            reverse("accounts:member_profile", args=(self.other.pk,))
+        )
+
+        self.assertContains(
+            response,
+            reverse("member_notices:direct_compose", args=(self.other.pk,)),
+        )
+        # 脚本靠这两个属性打开窗口：入口自己带 data-direct-compose，
+        # 窗口本体带 data-direct-dialog（见 static/js/direct_compose.js）。
+        self.assertContains(response, "data-direct-compose")
+        self.assertContains(response, "data-direct-dialog")
+        self.assertContains(response, 'data-direct-name="被看的成员"')
+
+    def test_your_own_profile_page_has_no_direct_entry(self):
+        response = self.client.get(
+            reverse("accounts:member_profile", args=(self.viewer.pk,))
+        )
+
+        self.assertNotContains(
+            response,
+            reverse("member_notices:direct_compose", args=(self.viewer.pk,)),
+        )
+        self.assertNotContains(response, "data-direct-dialog")

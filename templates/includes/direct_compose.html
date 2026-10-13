@@ -1,0 +1,40 @@
+{% load i18n static %}
+{% comment %}
+写私信的小浮动窗（原生 <dialog>，浏览器自己居中）。
+
+页面上的每个入口——成员资料页的「私信」、消息行上的「快速回信」、私信详情页的
+「回复」——都是一条指向 member_notices:direct_compose 的普通链接：**没有脚本时它
+照样能发私信**，只是打开一整页（templates/notices/direct_compose.html）。有脚本时
+（static/js/direct_compose.js）拦下点击、把收件人名字与提交地址从被点的那条链接上
+取下来（data 属性与 href，脚本不去猜），再把这个窗打开。
+
+窗口的挂点：data-direct-dialog 是窗口本体、data-direct-form 是里面那张表单、
+data-direct-recipient 是收件人那一格、data-direct-cancel 是取消按钮。
+
+上下文里要有 direct_form（notices.panels.direct_compose_context 给的就是它，绑定的
+那一份由私信表单页自己传）：**页面没给就整块不渲染**——没有窗口，链接照旧打开整页。
+
+脚本跟着这一块走而不是挂在 base.html 上：只有挂了窗口的页面才需要它。
+{% endcomment %}
+{% if direct_form %}
+    <dialog class="direct-compose" data-direct-dialog aria-labelledby="direct-compose-title">
+        <form method="post" data-direct-form>
+            {% csrf_token %}
+            {# 发完回这一页：外壳可能挂在任何页面上，所以由页面自己报出它的地址。 #}
+            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+            <h2 id="direct-compose-title">{% translate "写私信" %}</h2>
+            <p class="direct-to"><span class="muted">{% translate "收件人" %}</span> <span data-direct-recipient></span></p>
+            <div class="field">
+                <label for="{{ direct_form.body.id_for_label }}">{{ direct_form.body.label }}</label>
+                {{ direct_form.body }}
+                {% if direct_form.body.help_text %}<p class="help">{{ direct_form.body.help_text }}</p>{% endif %}
+                {{ direct_form.body.errors }}
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-primary" type="submit">{% translate "发送" %}</button>
+                <button class="btn" type="button" data-direct-cancel>{% translate "取消" %}</button>
+            </div>
+        </form>
+    </dialog>
+    <script defer src="{% static 'js/direct_compose.js' %}"></script>
+{% endif %}
