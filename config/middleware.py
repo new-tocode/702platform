@@ -155,7 +155,11 @@ class SecurityHeadersMiddleware:
 
 
 class ForcePasswordChangeMiddleware:
-    """Restrict users with an initial password to the password-change flow."""
+    """Restrict users with an initial password to the password-change flow.
+
+    标志字段在 accounts，但拦截必须是**全局**的——连 ``/admin/`` 也不能放行——所以落在
+    中间件而不是某个视图装饰器上。挂在视图上会漏掉后台那条路。
+    """
 
     def __init__(self, get_response):
         self.get_response = get_response

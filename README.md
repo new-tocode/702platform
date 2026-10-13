@@ -50,24 +50,10 @@ source env.local.sh          # PostgreSQL 连接配置；不加载会连接失�
 
 ## 目录
 
-| 目录 | 一句话职责 |
-|---|---|
-| `config/` | 项目配置包：settings、根路由、中间件（请求日志／强制改密）、日志 |
-| `accounts/` | 账号与成员资料：自定义 User、Profile、个人图册、身份名册 |
-| `notices/` | 公告与「我的消息」：可见性判定、广播型与事件型两类消息 |
-| `projects/` | 项目组：联系人、成员、入组与建组申请 |
-| `reviews/` | 项目书同行评审：轮次状态机、初审关卡、抽签、归档、接单开关 |
-| `competitions/` | 竞赛信息与项目组报名 |
-| `equipment/` | 设备台账与借用登记 |
-| `content/` | 公开展示页：社团简介、历年获奖、成员风采 |
-| `discussion/` | 社团空间：板块、帖子、评论、成员目录 |
-| `media/` | 媒体库：图片／视频统一上传、校验 |
-| `core/` | 平台底座：操作入口注册表、身份目录、跨应用权限口径、审计、上传校验 |
-| `templates/` `static/` | 模板与前端资源（样式只在 `static/css/app.css`，页面脚本在 `static/js/`） |
-| `docs/` | 本仓库的文档（见上一节） |
-| `deploy/` | 部署与备份工件 |
-
-各模块的详细职责、边界与依赖，见 [`更新维护/模块与关系.md`](docs/更新维护/模块与关系.md)。
+十一个 Django app（`config` / `accounts` / `notices` / `projects` / `reviews` /
+`competitions` / `equipment` / `content` / `discussion` / `media` / `core`）＋ `templates/`、
+`static/`、`deploy/`、`docs/`。**各 app 的职责边界与依赖关系见**
+[`更新维护/模块与关系.md`](docs/更新维护/模块与关系.md)。
 
 ---
 

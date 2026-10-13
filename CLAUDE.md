@@ -13,7 +13,7 @@
 |---|---|
 | 这轮要动的**那个模块**（职责与边界、失败模式、不变量、**已知限制**） | **`<app>/README.md`**——就地模块说明，那个模块的**唯一出处** |
 | 模块清单、谁依赖谁、跨模块约定 | [`docs/更新维护/模块与关系.md`](docs/更新维护/模块与关系.md) |
-| 有哪些地址、门槛是什么、怎么失败；跨 app 该调哪个函数 | [`docs/更新维护/接口.md`](docs/更新维护/接口.md) |
+| 加地址／拿不准某个拒绝该是 403 还是 404／排查「怎么返回 302」「怎么没留日志」 | [`docs/更新维护/接口.md`](docs/更新维护/接口.md) |
 | 「这个功能谁能用」 | [`docs/更新维护/权限.md`](docs/更新维护/权限.md) |
 | 环境、构建测试、部署回滚、看日志 | [`docs/更新维护/开发与部署.md`](docs/更新维护/开发与部署.md) |
 | 业务怎么走（也用来核对**用户可见文案**） | [`docs/更新维护/业务流.md`](docs/更新维护/业务流.md) |
@@ -91,8 +91,9 @@
 
 ### 容易踩的坑
 
-> 这几条是**每轮都要用到的规则**，所以留在这里；**细节在 [`docs/更新维护/开发与部署.md`](docs/更新维护/开发与部署.md) §3**
-> （注释规范、样式与模板约定、i18n 流程）。与「关键命令」同样处理：**改一边必须同步改另一边**。
+> 这几条是**每轮都要用到的规则**，所以留在这里。**注释规范的细节在
+> [`docs/更新维护/开发与部署.md`](docs/更新维护/开发与部署.md) §3**；i18n 与样式约定的细节
+> 读代码与 `static/css/app.css` 即可，不另设文档。
 
 - **上传件分两类**：公开配图落 `mediafiles/`（Nginx 直出）；项目书、批注版、头像、图册等受保护件落 `protected_media/`（刻意不在 `mediafiles/` 之下），落盘名换成 uuid，取件一律经视图做权限判定。新增上传模型先想清属于哪类；模板里**不要写 `{{ field.url }}`**（受保护件的 `url()` 返回空串，字段为空时还会直接抛 `ValueError`），用 `{{ field|file_url }}`。
 - **i18n**：前台文案一律 `gettext`；不拼接句子（用 `%(name)s` 占位）；惰性译文不要在模块／类体里插值（那会在导入时定型，用 `format_lazy`）；给成员用的 `ModelForm` 要在 `Meta.labels` 写一遍标签（模型的 `verbose_name` 不进 `.po`）。改完文案跑 `makemessages -l en --no-obsolete` 填 `.po`，兜底测试会抓漏译。
@@ -123,10 +124,9 @@ source env.local.sh
 .venv/bin/python manage.py check
 .venv/bin/python manage.py makemigrations --check --dry-run   # 预期 No changes detected
 .venv/bin/python manage.py test                               # 全量，用测试库，不动开发库
-.venv/bin/python manage.py test reviews.tests.test_preliminary        # 单模块
-.venv/bin/python manage.py test accounts.tests.XxxTests.test_y        # 单条
-.venv/bin/python manage.py runserver 127.0.0.1:8021 --noreload
 ```
+
+单模块/单条测试、`runserver`、`collectstatic` 这些 `manage.py --help` 能列出，不在这里重复。
 
 **做完的定义**：上面三项（`check` + `makemigrations --check --dry-run` + `test`）全绿。
 这几条与 [`docs/更新维护/开发与部署.md`](docs/更新维护/开发与部署.md) §2 是同一份事实，**改这里必须同步改那里**。

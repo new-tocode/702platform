@@ -42,6 +42,9 @@ class ContentPageAdmin(admin.ModelAdmin):
         )
 
 
+# 后台**刻意不判重**：前台（``services.create_award``）会把同一年 + 同一赛事 + 同一批人的
+# 重复记录拦下，而「确实是另一条」（换个赛道之类）的例外正是从这里放行。
+# 这不是漏掉的检查——别顺手补上。
 @admin.register(Award)
 class AwardAdmin(admin.ModelAdmin):
     list_display = ("title", "competition", "year", "tier", "level", "advisor")

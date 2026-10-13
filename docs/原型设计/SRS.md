@@ -45,37 +45,9 @@
 
 ---
 
-## 3. 功能需求
+## 3. 非功能需求
 
-➥ 每条都**可客观验证**：判据一列给的是能当场跑出来或当场看到的东西。
-
-| 需求 | 判据 |
-|---|---|
-| 账号由管理员发放，**不开放注册**；成员首次登录**强制改密**，改密前除改密页与登出外一切路径都回改密页 | `config/middleware.py`；`accounts/tests/` |
-| 成员自维护资料、头像与个人图册（批量上传、排序、改排布、删除） | `accounts/services.py`、`accounts/selectors.py`；`accounts/tests/` |
-| 管理员可批量授予／撤销三种评审资格，**名册只读**、不给对象身份分配入口 | `accounts/services.py` 的 `set_qualification`；后台六张只读名册（**四张**是 `accounts/models.py` 的 proxy：管理员／评审人／初审人／超级评审；**另两张** `ProjectContact`／`ProjectMember` 在 `projects/models.py`） |
-| 通知三种可见范围：`public`／`internal`（按用户组）／`contacts`（仅项目组联系人） | 判定单点在 `notices/visibility.py`；越权详情 **404** |
-| 「我的消息」汇总广播型（通知）与事件型（八类 `Message`，含 @ 提及、评审任务与结果、申请与结果） | `notices/selectors.py` 的 `message_rows`；来源删除即级联删行 |
-| 公开展示：社团简介、历年获奖、成员风采、首页轮播 | `content/`；未发布的 ContentPage 直连 **404** |
-| 历年获奖：一个搜索框匹配姓名／指导老师／赛事／级别／年份；证书可勾选打包下载；登录成员可直接添加记录并**判重** | `content/selectors.py` 的 `search_awards`、`content/similarity.py`、`content/archives.py` |
-| 媒体库统一上传图片／视频，类型、大小、文件签名三道校验 | `media/validators.py`、`core/uploads.py`；`core/tests/test_upload_validation.py` |
-| 项目组：申请入组→联系人审核；申请建组→**任一管理员同意即建组**；移除成员、转让联系人、改组介绍 | `projects/services.py`；`projects/tests/` |
-| 项目组列表**对全体登录成员可见**（不再按「有没有组」分档），另有 `?mine=1` 与 `?q=` | `projects/permissions.py` 的 `groups_visible_to`、`projects/selectors.py`；`projects/tests/test_browsing.py` |
-| 竞赛信息发布与项目组联系人报名（指定竞赛组长），截止前可修改／放弃 | `competitions/services.py`；`competitions/tests.py` |
-| 设备台账与借用登记，库存扣减／回补在事务里，**无审批流** | `equipment/services.py`；`equipment/tests.py` |
-| 项目书同行评审：**先 1 名初审人**，通过后按送审类型抽齐评审人（竞赛类 3／大创中期·结题 2／大创立项 1），**全员通过**才算通过，批注版随通过归档；同一项目组同时只有一个未结束的轮次 | `reviews/lifecycle.py`、`reviews/draw.py`、`reviews/services.py`；`reviews/tests/` |
-| 评审补救两条路：管理员**改派**（仅限待处理且该轮未判结论的任务）、超级评审**一票敲定**（含初审中的轮次） | `reviews/services.py` 的 `reassign_task` / `override_review`；`reviews/tests/test_reassignment.py`、`test_super_reviewer.py` |
-| **接单开关**：初审人／评审人各一个开关，关掉后不被抽中、不进改派候选，手上有未完成任务时关不掉 | `reviews/services.py` 的 `set_reviewer_availability`；`reviews/tests/test_availability.py` |
-| 匿名口径：评审人身份**不**从页面、文件名、下载头漏出 | 页面只写「初审」「评审人 N」「超级评审」；`reviews/README.md` §5 |
-| 操作入口注册表按登录／改密／权限／自定义条件过滤，生成成员中心入口 | `core/registry.py`；`core/tests/test_registry_and_audit.py` |
-| 数据库审计日志**只追加**，后台只读 | `core/audit.py`；`core_auditlog` 的行级触发器（迁移 `0003`） |
-| 前台**中英双语**：中文为源语言（不带前缀），英文走 `/en/`，地址即语言；只翻译界面 | `config/`；`core/tests/test_interface_translation.py` 兜底 |
-
----
-
-## 4. 非功能需求
-
-### 4.1 质量目标
+### 3.1 质量目标
 
 按「这个平台最怕什么坏」排序，前五个。它们是取舍时的裁判——两处设计冲突时，
 让位给排在前面的。
@@ -88,30 +60,10 @@
 | 4 | **发得出去，也退得回来** | 单台服务器、没有灰度、出问题时维护者多半不在现场 |
 | 5 | **测试是「做完了」的判据**——`check` + `makemigrations --check --dry-run` + `test` 三项全绿 | 这套用例是代码里唯一能自动回答「有没有改坏」的东西 |
 
-### 4.2 质量场景
+> **一处测试盲区**：建组申请的并发用例覆盖的是**顺序第二次提交**，**真并发没有用例**——
+> 两个管理员同时同意时靠服务层的行锁 + 复查挡住，但没有测试钉住它。
 
-➥ 每一行的度量都能**当场跑出来**，不是形容词。
-
-| 场景（谁 → 做什么） | 期望响应 | 度量与验收 |
-|---|---|---|
-| 登录成员 → 直接请求不属于自己可见范围的项目书／批注版／归档版地址 | **403**，响应体不含文件 | `can_view_group` 在视图层拦下；受保护件不在 Nginx 的任何 `location` 里 |
-| 任何上传 → 几十字节的「解压炸弹」或超出上限的文件 | 当场拒绝、不落盘、不 500 | `core/uploads.py` 接住 `DecompressionBombError`；`core/tests/test_upload_validation.py` |
-| 两个管理员 → 同时同意同一条建组申请 | 只建成一个组，另一次收到「该申请已被处理」 | `projects.services.approve_create_request` 在事务内锁申请行并复查状态。**注意**：现有用例覆盖的是顺序第二次提交，真并发没有用例 |
-| 评审人 → 想从页面、文件名或下载头认出同行 | 认不出 | 落盘 uuid、下载用中性文件名、页面只渲染「评审人 N」 |
-| 成员 → 下载项目书后自己核对 | 页面折叠处的 SHA-256 与响应头一致 | 三处下载都带 `X-Checksum-SHA256`；`core/tests/test_downloads.py`、`test_hashing.py` |
-| 开发 → 新增一句界面文案却忘了跑 `makemessages` | 兜底测试变红 | `core/tests/test_interface_translation.py` |
-| 成员 → 提交超长文本 | 表单给出友好报错，模型兜住脚本写入 | `core/tests/test_upload_validation.py` 逐项核对上限表 |
-| 发布后发现坏 → 回滚 | 代码退到上一个 tag、库按发布前那份备份恢复 | [`../更新维护/开发与部署.md`](../更新维护/开发与部署.md) 的回滚步骤 + 破坏性迁移纪律 |
-
-> **拒绝的口径有三种，别改串**：按对象判可见性的**取件**越权一律 **403**；
-> **通知详情**的越权一律 **404**（可见性过滤直接把它们从查询集里拿掉）；
-> 头像与图册只要求登录、**不设对象级权限**（图册本来就在个人主页上给成员看，读口不做归属过滤；
-> **只有写口**——排序／改排布／删除与头像的增删——按 `profile=` 过滤，别人的图 404），
-> 匿名则一律 302 去登录页。
-
----
-
-## 5. 约束
+## 4. 约束
 
 ➥ **外部给定的、没得选**的前提（不是我们选了什么——那是
 [`设计说明.md`](设计说明.md) §2 的事）。
@@ -124,22 +76,7 @@
 | 生产走 HTTPS，Nginx 作反向代理与静态服务 | 视频直放与受保护件的目录边界都依赖它 | 受保护件的「没有 HTTP 路径能命中」不再成立 |
 | 没有教师账号体系 | 社团没有教师名册 | 指导老师只能是纯文本姓名 |
 | 分发的依赖里有 LGPL（psycopg） | 上游许可 | 见 [`../更新维护/许可.md`](../更新维护/许可.md) |
+| `pg_trgm` 是**硬依赖** | 历年获奖判重要用它算相似度（迁移 `content.0004_pg_trgm`） | 只装 PostgreSQL server、没装 contrib 的机器上那条迁移会失败 |
+| 社团规模：成员与记录量在几百量级 | 分页、缓存、搜索都按这个量级取舍 | 获奖搜索用 `icontains`，量级上去后要换索引方案 |
 
 ---
-
-## 6. 假设与前置依赖
-
-| 项 | 内容 | 若不成立会怎样 |
-|---|---|---|
-| 管理员亲自发账号并当面告知初始密码 | 没有注册与自助找回 | 成员进不来 |
-| 成员用现代浏览器 | 视频要求 MP4(H.264)／WebM 才能直放 | 视频放不出来 |
-| 生产装有 PostgreSQL ≥14 且带 contrib | `pg_trgm` 是历年获奖判重的硬依赖 | 那条迁移会失败（部署脚本在 migrate 前会先探一次并给出安装命令） |
-| 社团规模：成员与记录量都在几百的量级 | 分页、缓存、搜索都按这个量级取舍 | 获奖搜索用 `icontains`，量级上去后要换索引方案 |
-
----
-
-## 7. 引用
-
-- 代码坐标：`config/`、各业务 app（见 [`设计说明.md`](设计说明.md) §3）
-- 阶段骨架：[`里程碑.md`](里程碑.md)
-- 现状口径：[`../更新维护/`](../更新维护/) 与各 `<app>/README.md`

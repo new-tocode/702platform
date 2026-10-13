@@ -374,7 +374,7 @@ def delete_comment(*, comment_id, actor, request=None):
         if comment.deleted_at is not None:
             return comment.post.board_id, comment.post_id
         comment.soft_delete(actor=actor)
-        # 评论在界面上让位给一行说明，别人消息里的提及也一并撤掉（局部导入，
+        # 评论在界面上整条不再渲染（不是留占位），别人消息里的提及也一并撤掉（局部导入，
         # 与 _sync_mentions 同一条理由）。
         from notices.services import clear_mention_messages
 

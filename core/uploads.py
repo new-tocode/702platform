@@ -28,6 +28,9 @@ from PIL import Image, UnidentifiedImageError
 #: 阈值写在这里，下面的校验按它自己判，不再依赖 Pillow 的两档行为。
 MAX_IMAGE_PIXELS = 64_000_000
 
+#: **升级 Pillow 主版本时要确认** ``DecompressionBombError`` 与 ``Image.MAX_IMAGE_PIXELS``
+#: 都还在、语义没变——下面这一整套防护建立在它们之上（全量测试里有专门的用例）。
+
 #: 平台接受的图片扩展名：媒体库、头像、个人图册共用这一份。
 IMAGE_EXTENSIONS = frozenset({"jpg", "jpeg", "png", "webp", "gif"})
 

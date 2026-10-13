@@ -147,8 +147,10 @@ class Comment(models.Model):
     )
     content = models.TextField(_("评论内容"), max_length=4000)
     created_at = models.DateTimeField(_("评论时间"), auto_now_add=True)
-    # 删除是软删除：行与内容都留着，只在界面上让位给一行说明。硬删会让一条
-    # 有人回过的评论凭空消失、连删过这件事都没有痕迹；删除动作另有审计。
+    # 删除是软删除：行与内容都留着（默认经理 objects 挡掉已删的，all_objects 看全貌）。
+    # 硬删会让一条有人回过的评论凭空消失、连删过这件事都没有痕迹；删除动作另有审计。
+    # **界面上是整条不再渲染**（不是显示一行「该评论已删除」的占位），评论计数与
+    # ``#comment-N`` 锚点跟着一起没——模板遍历的是默认经理，没有占位那一步。
     deleted_at = models.DateTimeField(_("删除时间"), null=True, blank=True)
     deleted_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
