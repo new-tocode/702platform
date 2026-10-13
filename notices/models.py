@@ -101,6 +101,56 @@ class NoticeRead(models.Model):
         return f"{self.user} → {self.notice}"
 
 
+#: 一条私信的正文上限（字数）。与简介（1000）、评论（4000）一样是个「约」的数量级，
+#: 模型字段与表单共用这一份常量，模板里的 maxlength 由表单的 widget 带出去。
+DIRECT_MESSAGE_MAX_CHARS = 1500
+
+
+class DirectMessage(models.Model):
+    """一条私信：谁写给谁的、正文是什么。
+
+    与其余事件型消息的分别在于**正文没有第二个家**：提及、评论、评审、申请那几类都
+    指向一个另有主人的对象（帖子、评论、申请、轮次），消息行里只存引用；私信的正文
+    就落在这里，由 ``Message.direct_message`` 引用它。所以「删除私信」就是删这一行
+    ——通知行跟着级联走，与「来源删除即级联删行」是同一条口径。
+
+    发信人／收信人也住在这里（与 ``GroupJoinRequest`` 存 applicant 同一分工）：通知
+    行上的 ``actor`` / ``recipient`` 是给所有 kind 统一装配用的冗余列，私信的「来自」
+    与「回给谁」一律以本表为准。
+
+    **刻意不做**：不进后台、不写审计（见 ``../notices/README.md`` §5）——正文与收发关系
+    是成员之间的东西，不是给运维留痕的。
+    """
+
+    sender = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="sent_direct_messages",
+        verbose_name="发信人",
+    )
+    recipient = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="received_direct_messages",
+        verbose_name="收信人",
+    )
+    body = models.TextField(
+        "正文",
+        max_length=DIRECT_MESSAGE_MAX_CHARS,
+        help_text="最多 1500 字。",
+    )
+    created_at = models.DateTimeField("发送时间", default=timezone.now)
+
+    class Meta:
+        verbose_name = "私信"
+        verbose_name_plural = "私信"
+        ordering = ("-created_at", "-pk")
+
+    def __str__(self):
+        return f"{self.sender} → {self.recipient}"
+
+
 class Message(models.Model):
     """事件型消息：一行一个收件人（@ 提及、评论、评审、申请类都走这里）。
 
@@ -113,11 +163,15 @@ class Message(models.Model):
     字符串外键，notices 不在加载期依赖 discussion／reviews／projects。
 
     「哪一类消息挂哪个引用」不在库里加约束（都为空的行是写入函数的责任，见
-    ``notices/services.py``）——五种引用的组合约束会让表结构比问题本身复杂。
+    ``notices/services.py``）——六种引用的组合约束会让表结构比问题本身复杂。
+
+    私信那一类（``DIRECT``）指过来的是 ``DirectMessage``：正文在那边，本行照旧只有
+    引用与已读状态。
     """
 
     MENTION = "mention"
     COMMENT = "comment"
+    DIRECT = "direct"
     REVIEW_PRELIMINARY = "review_preliminary"
     REVIEW = "review"
     REVIEW_RESULT = "review_result"
@@ -128,6 +182,7 @@ class Message(models.Model):
     KIND_CHOICES = (
         (MENTION, "提及"),
         (COMMENT, "评论"),
+        (DIRECT, "私信"),
         (REVIEW_PRELIMINARY, "初审任务"),
         (REVIEW, "评审任务"),
         (REVIEW_RESULT, "评审结果"),
@@ -195,6 +250,14 @@ class Message(models.Model):
         blank=True,
         related_name="messages",
         verbose_name="建组申请",
+    )
+    direct_message = models.ForeignKey(
+        DirectMessage,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="messages",
+        verbose_name="私信",
     )
 
     class Meta:
