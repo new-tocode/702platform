@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% translate "私信" %} - {% translate "竞赛社团管理平台" %}{% endblock %}
+
+{% block content %}
+<div class="wrap col-narrow">
+    <div class="pagehead">
+        <div class="path">
+            <a href="{% url 'member_notices:internal_list' %}">{% translate "我的消息" %}</a>
+            <span>/</span>
+            <span>{% translate "私信" %}</span>
+        </div>
+        <div class="head-row">
+            <div>
+                <h1>{% translate "私信" %}</h1>
+                <div class="sub">
+                    {% if sender_display_name %}{% blocktranslate with name=sender_display_name %}来自 {{ name }}{% endblocktranslate %} · {% endif %}{{ direct.created_at|date:"Y-m-d H:i" }}
+                </div>
+            </div>
+            <div class="head-actions">
+                {# 读完不消失：要它走只有这一条路——自己删。 #}
+                {% if reply_to_id %}
+                    <a class="btn" data-direct-compose data-direct-name="{{ sender_display_name }}"
+                       href="{% url 'member_notices:direct_compose' reply_to_id %}?next={{ request.get_full_path|urlencode }}">{% translate "回复" %}</a>
+                {% endif %}
+                <form method="post" action="{% url 'member_notices:direct_delete' message.pk %}"
+                      data-confirm="{% translate '确定删除这条私信吗？删除后无法恢复。' %}">
+                    {% csrf_token %}
+                    <button class="btn btn-danger" type="submit">{% translate "删除私信" %}</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="frame reveal">
+        <div class="prose">{{ direct.body|linebreaksbr }}</div>
+    </div>
+
+    <div class="form-actions">
+        <a class="btn" href="{% url 'member_notices:internal_list' %}">{% translate "返回我的消息" %}</a>
+    </div>
+</div>
+
+{% include "includes/direct_compose.html" %}
+{% endblock %}

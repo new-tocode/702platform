@@ -35,6 +35,9 @@ class MessageRow:
     :data:`_TYPE_LABELS`）；``actor`` 是「来自」列（发布人、@ 你的人、申请人，
     没有合适的人就空着）；``context`` 是「说明」列（用户组名、帖子/评论、
     待初审…）；``at`` 既排序也显示。
+
+    ``reply_to_id`` 非空时行上多一个「快速回信」（值是要回给谁的账号 id，今天只有
+    私信会给）；``url`` 照旧是这一行点开之后去哪。
     """
 
     type_label: str
@@ -45,19 +48,28 @@ class MessageRow:
     context: str
     is_read: bool
     is_pinned: bool
+    reply_to_id: int | None = None
 
 
 class _EventContent(NamedTuple):
-    """事件消息渲染出来的四个可显示字段；链接也由同一处现算。"""
+    """事件消息渲染出来的四个可显示字段；链接也由同一处现算。
+
+    渲染函数返回 ``None`` 表示这一行渲染不出来（来源缺了），由调用方跳过——
+    详情页与列表都不该为一颗坏行整页 500。
+    """
 
     title: str
     url: str
     actor: str
     context: str
+    reply_to_id: int | None = None
 
 
-def _display_name(user):
-    """一个人的显示名：姓名优先，没填回落账号；没有人给空串。"""
+def display_name(user):
+    """一个人的显示名：姓名优先，没填回落账号；没有人给空串。
+
+    对外的公开函数：装配行要用它，页面（私信页头与浮动窗的收件人）也要用同一份口径。
+    """
     if user is None:
         return ""
     profile = getattr(user, "profile", None)
@@ -91,7 +103,7 @@ def _notice_rows(user, read_ids):
             title=notice.title,
             url=reverse("member_notices:internal_detail", args=(notice.pk,)),
             at=notice.published_at,
-            actor=_display_name(notice.published_by),
+            actor=display_name(notice.published_by),
             context=_audience_text(notice),
             is_read=notice.pk in read_ids,
             is_pinned=notice.is_pinned,
@@ -131,19 +143,20 @@ def _mention_content(message):
         return _EventContent(
             post.title,
             _discussion_url(message, f"comment-{message.comment_id}"),
-            _display_name(message.actor),
+            display_name(message.actor),
             _("评论"),
         )
     return _EventContent(
         post.title,
         _discussion_url(message, f"post-{post.pk}"),
-        _display_name(message.actor),
+        display_name(message.actor),
         _("帖子"),
     )
 
 
-#: 「说明」列里那条评论的节选上限（含末尾的省略号）：一格摘要，全文点开就是。
-_COMMENT_EXCERPT_CHARS = 40
+#: 「说明」列里的节选上限（含末尾的省略号）：一格摘要，全文点开就是。
+#: 评论与私信共用——两者都只是让人认出「说的是哪一句」。
+_EXCERPT_CHARS = 40
 
 
 def _comment_content(message):
@@ -151,9 +164,9 @@ def _comment_content(message):
     return _EventContent(
         message.post.title,
         _discussion_url(message, f"comment-{message.comment_id}"),
-        _display_name(message.actor),
+        display_name(message.actor),
         Truncator(" ".join(message.comment.content.split())).chars(
-            _COMMENT_EXCERPT_CHARS, truncate="…"
+            _EXCERPT_CHARS, truncate="…"
         ),
     )
 
@@ -189,7 +202,7 @@ def _join_request_content(message):
     return _EventContent(
         join_request.group.name,
         _group_url(join_request.group_id),
-        _display_name(join_request.applicant),
+        display_name(join_request.applicant),
         _("待你审核"),
     )
 
@@ -203,7 +216,7 @@ def _join_result_content(message):
     return _EventContent(
         join_request.group.name,
         _group_url(join_request.group_id),
-        _display_name(message.actor),
+        display_name(message.actor),
         _("已通过") if join_request.status == GroupJoinRequest.APPROVED else _("已拒绝"),
     )
 
@@ -214,7 +227,7 @@ def _create_request_content(message):
     return _EventContent(
         create_request.name,
         reverse("reviews:queue"),
-        _display_name(create_request.applicant),
+        display_name(create_request.applicant),
         _("待审核"),
     )
 
@@ -233,8 +246,41 @@ def _create_result_content(message):
     return _EventContent(
         create_request.name,
         url,
-        _display_name(message.actor),
+        display_name(message.actor),
         _("已通过") if approved else _("已拒绝"),
+    )
+
+
+def direct_reply_target(direct):
+    """这条私信能回给谁：发信人**仍在册**才有得回，否则是 ``None``。
+
+    注销（硬删，``sender`` 变 ``None``）与**停用**都算没有可回的人。停用这条尤其要
+    跟住：本平台的账号退场口径是停用（见 ``../docs/更新维护/开发与部署.md`` §6），
+    而写私信那道门的条件是「收信人在册」——两边用同一个条件，行上的按钮才不会点出 404
+    （``direct_compose`` 对停用账号给的就是 404）。
+    """
+    sender = direct.sender
+    if sender is None or not sender.is_active:
+        return None
+    return sender.pk
+
+
+def _direct_content(message):
+    """有人给你发了私信：标题是「有人给你发了一条私信」，说明是正文的节选。
+
+    点开落到私信详情页（``member_notices:direct_detail``）——那是全文的家。行上的
+    「快速回信」回给发信人，能不能回由 :func:`direct_reply_target` 说了算。
+    """
+    direct = message.direct_message
+    if direct is None:
+        # 没有正文的私信行（绕过 services 建的）：不给一条点不到、点开也没有内容的行。
+        return None
+    return _EventContent(
+        _("向你发送了一条私信"),
+        reverse("member_notices:direct_detail", args=(message.pk,)),
+        display_name(direct.sender),
+        Truncator(" ".join(direct.body.split())).chars(_EXCERPT_CHARS, truncate="…"),
+        reply_to_id=direct_reply_target(direct),
     )
 
 
@@ -242,6 +288,7 @@ def _create_result_content(message):
 _TYPE_LABELS = {
     Message.MENTION: _("提及"),
     Message.COMMENT: _("评论"),
+    Message.DIRECT: _("私信"),
     Message.REVIEW_PRELIMINARY: _("评审"),
     Message.REVIEW: _("评审"),
     Message.REVIEW_RESULT: _("评审结果"),
@@ -255,6 +302,7 @@ _TYPE_LABELS = {
 _CONTENT_BUILDERS = {
     Message.MENTION: _mention_content,
     Message.COMMENT: _comment_content,
+    Message.DIRECT: _direct_content,
     Message.REVIEW_PRELIMINARY: _review_content,
     Message.REVIEW: _review_content,
     Message.REVIEW_RESULT: _review_result_content,
@@ -265,8 +313,21 @@ _CONTENT_BUILDERS = {
 }
 
 
+def _renderable_messages(user):
+    """我收到的、真渲染得出来的事件消息行。
+
+    今天唯一被排除的是「有 ``kind=direct`` 但没有正文」的坏行（绕过写入函数建的）：
+    :func:`_event_rows` 渲染不出来它，计数若还算上它，就会「提醒条说 1 条未读、
+    「我的消息」里却没有任何一行可点」——同一个数字不该有两处口径。
+    """
+    return Message.objects.filter(recipient=user).exclude(
+        kind=Message.DIRECT,
+        direct_message__isnull=True,
+    )
+
+
 def _event_rows(user):
-    messages = Message.objects.filter(recipient=user).select_related(
+    messages = _renderable_messages(user).select_related(
         "actor__profile",
         "post",
         "comment",
@@ -274,6 +335,7 @@ def _event_rows(user):
         "join_request__group",
         "join_request__applicant__profile",
         "create_request__applicant__profile",
+        "direct_message__sender__profile",
     )
     rows = []
     for message in messages:
@@ -287,6 +349,15 @@ def _event_rows(user):
             )
             continue
         content = builder(message)
+        if content is None:
+            # 取数时已经滤掉已知的坏行（见 _renderable_messages）；这里兜住「渲染函数
+            # 自己返回 None」那种将来才会有的情况——同样跳过，别让整页 500。
+            logger.warning(
+                "notice.messages.missing_source message_id=%s kind=%s",
+                message.pk,
+                message.kind,
+            )
+            continue
         rows.append(
             MessageRow(
                 type_label=_TYPE_LABELS[message.kind],
@@ -300,6 +371,7 @@ def _event_rows(user):
                 context=content.context,
                 is_read=message.is_read,
                 is_pinned=False,
+                reply_to_id=content.reply_to_id,
             )
         )
     return rows
@@ -326,11 +398,14 @@ def unread_message_count(user):
         return 0
     read_ids = NoticeRead.objects.filter(user=user).values("notice_id")
     unread_notices = member_visible_notices(user).exclude(pk__in=read_ids).count()
-    unread_events = Message.objects.filter(recipient=user, is_read=False).count()
+    unread_events = _renderable_messages(user).filter(is_read=False).count()
     return unread_notices + unread_events
 
 
 def message_target_url(message):
-    """一条事件消息跳转的最终去向；kind 不认识时给 ``None``（调用方 404）。"""
+    """一条事件消息跳转的最终去向；kind 不认识、或来源缺失时给 ``None``（调用方 404）。"""
     builder = _CONTENT_BUILDERS.get(message.kind)
-    return builder(message).url if builder else None
+    if builder is None:
+        return None
+    content = builder(message)
+    return content.url if content else None

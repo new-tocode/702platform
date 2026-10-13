@@ -264,6 +264,29 @@ td form { margin: 0; }
 .messages tr.unread td:first-child { box-shadow: inset 3px 0 0 var(--blue); }
 .messages tr.unread .t { font-weight: 600; }
 
+/* --- 私信 --- */
+/* 私信行标题右边那颗「快速回信」，只在私信行上出现 */
+.direct-reply { margin-left: 10px; }
+
+/* 写私信的小浮动窗：原生 <dialog>，居中由浏览器给（inset: 0 + margin: auto），
+   这里只管皮。里面那张表单自带内边距，所以窗口本体不加 padding；
+   窄屏时把宽度收在视口内，长正文超过一屏时窗口自己滚。 */
+.direct-compose {
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  margin: auto;
+  padding: 0;
+  overflow: auto;
+  border: 1px solid var(--line-2);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 24px 60px rgba(15, 26, 36, 0.24);
+}
+.direct-compose::backdrop { background: rgba(15, 26, 36, 0.42); }
+.direct-compose form { margin: 0; padding: 22px; }
+.direct-compose h2 { font-size: 16px; margin: 0 0 14px; }
+.direct-compose .direct-to { margin: 0 0 14px; font-size: 13px; }
+
 /* --- 表单 --- */
 .field { margin-bottom: 16px; }
 .field label, .field-label {

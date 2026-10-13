@@ -16,6 +16,14 @@
                 <h1>{{ display_name }}</h1>
                 {% if display_name != member.username %}<div class="sub">{{ member.username }}</div>{% endif %}
             </div>
+            {% if member.pk != user.pk %}
+                {# 私信入口：打开的浮动窗见 templates/includes/direct_compose.html。 #}
+                {# 对自己的资料页不显示——视图那边对「给自己发」也另有一道。 #}
+                <div class="head-actions">
+                    <a class="btn btn-primary" data-direct-compose data-direct-name="{{ display_name }}"
+                       href="{% url 'member_notices:direct_compose' member.pk %}?next={{ request.get_full_path|urlencode }}">{% translate "私信" %}</a>
+                </div>
+            {% endif %}
         </div>
     </div>
 
@@ -98,4 +106,6 @@
         <a class="btn" href="{% url 'discussion:space' %}">{% translate "返回社团空间" %}</a>
     </div>
 </div>
+
+{% include "includes/direct_compose.html" %}
 {% endblock %}
