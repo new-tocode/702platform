@@ -1,21 +1,41 @@
-"""Notice list and detail views with explicit visibility querysets."""
+"""成员侧的通知、消息与私信页面。
+
+可见性一律走 :mod:`notices.visibility` 的查询集（取不到就是 404）；私信一律按
+``recipient=request.user`` 取行——本模块没有 ``permissions.py``，成员页的门槛只有
+``@login_required`` 加上「这一条是不是我的」。
+"""
 
 import logging
 
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext_lazy as _
-from django.views.decorators.http import require_GET, require_POST
+from django.views.decorators.http import require_GET, require_POST, require_http_methods
 
 from . import services
+from .forms import DirectMessageForm
 from .models import Message, Notice
-from .selectors import message_rows, message_target_url, unread_message_count
+from .panels import direct_compose_context
+from .selectors import (
+    display_name,
+    message_rows,
+    message_target_url,
+    unread_message_count,
+)
 from .visibility import member_visible_notices, public_visible_notices
 
 
 logger = logging.getLogger(__name__)
+User = get_user_model()
+
+
+def _request_id(request):
+    return getattr(request, "request_id", "-")
 
 
 def public_list(request):
@@ -78,12 +98,14 @@ def internal_list(request):
         request.user.get_username(),
         extra={"request_id": getattr(request, "request_id", "-")},
     )
+    # 页面上的私信浮动窗（私信行上的「快速回信」要用它）；表单由 notices 自己给。
     return render(
         request,
         "notices/message_list.html",
         {
             "rows": rows,
             "unread_count": unread,
+            **direct_compose_context(),
         },
     )
 
@@ -127,6 +149,150 @@ def message_go(request, pk):
         extra={"request_id": getattr(request, "request_id", "-")},
     )
     return redirect(target)
+
+
+# --- 私信 -------------------------------------------------------------------
+
+
+def _direct_recipient(user_id):
+    """私信的收信人：只有仍在册的成员收得到（与只读资料页同一道门）。"""
+    return get_object_or_404(User.objects.filter(is_active=True), pk=user_id)
+
+
+def _back_to(request):
+    """发完、删完回哪儿：表单带的 ``next``（同站才认），没有就回「我的消息」。
+
+    与 accounts 的改密页同一个口径：``next`` 由页面给，服务端只接受站内地址。
+    """
+    requested = request.POST.get("next") or request.GET.get("next")
+    if requested and url_has_allowed_host_and_scheme(
+        requested,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return requested
+    return reverse("member_notices:internal_list")
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def direct_compose(request, user_id):
+    """写私信：GET 出表单，POST 发送。
+
+    一个地址两种外壳：**整页**（没有脚本时从成员资料页的「私信」、消息行上的
+    「快速回信」进来）与页面上的**小浮动窗**（同一个表单装在
+    ``includes/direct_compose.html`` 的 ``<dialog>`` 里，脚本把它的 action 指到
+    这一个地址）。成功一律 PRG + flash——窗口所在的那一页重新加载，窗口自己就
+    没了；失败时重渲染这一页，写过的正文还在。
+    """
+    recipient = _direct_recipient(user_id)
+    back_to = _back_to(request)
+    if recipient.pk == request.user.pk:
+        # 页面上的入口对自己不显示（模板那一层），这里是真正的边界。
+        # 业务拒绝不是 4xx：给一句话，回原来那页。
+        messages.error(request, _("不能给自己发私信。"))
+        return redirect(back_to)
+
+    if request.method == "POST":
+        form = DirectMessageForm(request.POST)
+        if form.is_valid():
+            message = services.send_direct_message(
+                sender=request.user,
+                recipient=recipient,
+                body=form.cleaned_data["body"],
+            )
+            logger.info(
+                "notice.messages.direct.send message_id=%s sender=%s recipient_id=%s chars=%s",
+                message.pk,
+                request.user.get_username(),
+                recipient.pk,
+                len(form.cleaned_data["body"]),
+                extra={"request_id": _request_id(request)},
+            )
+            messages.success(request, _("私信已发送。"))
+            return redirect(back_to)
+        logger.warning(
+            "notice.messages.direct.reject sender=%s recipient_id=%s errors=%s",
+            request.user.get_username(),
+            recipient.pk,
+            form.errors.as_json(),
+            extra={"request_id": _request_id(request)},
+        )
+    else:
+        form = DirectMessageForm()
+
+    return render(
+        request,
+        "notices/direct_compose.html",
+        {
+            "direct_form": form,
+            "recipient": recipient,
+            "recipient_display_name": display_name(recipient),
+            "back_to": back_to,
+        },
+    )
+
+
+def _own_direct_message(request, pk, *, related):
+    """按收件人取一条私信：不是我的、不是私信、正文缺了，都当取不到（404）。"""
+    message = get_object_or_404(
+        related,
+        pk=pk,
+        recipient=request.user,
+        kind=Message.DIRECT,
+    )
+    if message.direct_message_id is None:
+        raise Http404
+    return message
+
+
+@login_required
+@require_GET
+def direct_detail(request, pk):
+    """私信全文。点开即已读，但**读完不消失**——要它走，得自己在这一页删。"""
+    message = _own_direct_message(
+        request,
+        pk,
+        related=Message.objects.select_related("direct_message__sender__profile"),
+    )
+    services.mark_message_read(message=message)
+    direct = message.direct_message
+    logger.info(
+        "notice.messages.direct.view message_id=%s username=%s",
+        message.pk,
+        request.user.get_username(),
+        extra={"request_id": _request_id(request)},
+    )
+    return render(
+        request,
+        "notices/direct_detail.html",
+        {
+            "message": message,
+            "direct": direct,
+            "sender_display_name": display_name(direct.sender),
+            **direct_compose_context(),
+        },
+    )
+
+
+@login_required
+@require_POST
+def direct_delete(request, pk):
+    """收件人主动删除一条私信：正文与那条通知一起走。"""
+    message = _own_direct_message(
+        request,
+        pk,
+        related=Message.objects.select_related("direct_message"),
+    )
+    services.delete_direct_message(message=message)
+    logger.info(
+        "notice.messages.direct.delete message_id=%s username=%s",
+        pk,
+        request.user.get_username(),
+        extra={"request_id": _request_id(request)},
+    )
+    messages.success(request, _("私信已删除。"))
+    return redirect("member_notices:internal_list")
 
 
 @login_required

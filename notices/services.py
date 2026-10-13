@@ -1,14 +1,23 @@
-"""「我的消息」的写操作：标已读。
+"""「我的消息」的写操作：标已读、发私信。
 
-高频、个人、幂等，所以不写审计（与登录、评审提交不同），由视图记日志。
-「哪些通知算我的」仍归 :mod:`notices.visibility`，本模块不自己拼规则。
+已读是高频、个人、幂等的操作，所以不写审计（与登录、评审提交不同），由视图记日志；
+私信同理——正文与收发关系是成员之间的东西，不进那份只追加的账（理由见
+``../notices/README.md`` §5）。「哪些通知算我的」仍归 :mod:`notices.visibility`，
+本模块不自己拼规则。
+
+两类写入的事务边界不同，改之前先看清是哪一种：
+
+* ``notify_*`` 是**别的 app 在自己事务里**调进来的，本模块不开事务（原来只有这一种，
+  所以这里连 ``transaction`` 都不 import）；
+* 私信是**本模块自己发起**的写，正文与通知两行必须一起落，所以由本模块开事务。
 """
 
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
-from .models import Message, NoticeRead
+from .models import DirectMessage, Message, NoticeRead
 from .visibility import member_visible_notices
 
 
@@ -181,6 +190,45 @@ def notify_create_result(*, create_request, actor):
         create_request=create_request,
         defaults={"actor": actor},
     )
+
+
+def send_direct_message(*, sender, recipient, body):
+    """发一条私信：正文一行、收件人「我的消息」里那条通知一行，两行同一事务。
+
+    通知行照旧只记引用（``direct_message``）与状态，标题／来自／节选由
+    :mod:`notices.selectors` 现取现算——换个显示口径不用回填数据。
+
+    「不能给自己发私信」在这里再挡一次：页面上的按钮对自己不显示，视图也会给一句
+    flash，这里是给「绕过它们直接调服务层」准备的编程错误出口（``ValueError``，
+    与 accounts 的非法参数同一个口径）。
+    """
+    if sender.pk == recipient.pk:
+        raise ValueError("不能给自己发私信")
+    with transaction.atomic():
+        direct = DirectMessage.objects.create(
+            sender=sender,
+            recipient=recipient,
+            body=body,
+        )
+        return Message.objects.create(
+            recipient=recipient,
+            actor=sender,
+            kind=Message.DIRECT,
+            direct_message=direct,
+        )
+
+
+def delete_direct_message(*, message):
+    """收件人主动删除一条私信：连正文那一行一起删。
+
+    删的是 ``DirectMessage``——通知行跟着外键级联走（「来源删除即级联删行」）。
+    正文缺失的坏行（绕过 ``send_direct_message`` 建的）只删通知行，不留一条删不掉的行。
+    """
+    with transaction.atomic():
+        if message.direct_message_id:
+            message.direct_message.delete()
+        else:
+            message.delete()
 
 
 def mark_read(*, user, notice):
