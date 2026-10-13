@@ -25,7 +25,7 @@
                        href="{% url 'member_notices:direct_compose' direct.sender_id %}">{% translate "回复" %}</a>
                 {% endif %}
                 <form method="post" action="{% url 'member_notices:direct_delete' message.pk %}"
-                      data-confirm="{% translate '确定删除这条私信吗？删除后对方的那次发送也一并消失。' %}">
+                      data-confirm="{% translate '确定删除这条私信吗？删除后无法恢复。' %}">
                     {% csrf_token %}
                     <button class="btn btn-danger" type="submit">{% translate "删除私信" %}</button>
                 </form>

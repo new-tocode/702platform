@@ -4,6 +4,7 @@ from django.conf import settings
 from django.contrib.auth.models import Group
 from django.db import models
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 
 from media.models import MediaFile
 
@@ -138,7 +139,8 @@ class DirectMessage(models.Model):
     body = models.TextField(
         "正文",
         max_length=DIRECT_MESSAGE_MAX_CHARS,
-        help_text="最多 1500 字。",
+        # 这一句会出现在成员面上的表单里（verbose_name 只在后台出现），所以它是惰性译文。
+        help_text=_("最多 1500 字。"),
     )
     created_at = models.DateTimeField("发送时间", default=timezone.now)
 

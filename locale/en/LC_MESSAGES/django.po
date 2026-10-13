@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 702platform\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-10 20:59+0800\n"
+"POT-Creation-Date: 2026-10-13 19:18+0800\n"
 "PO-Revision-Date: 2026-09-19 18:39\n"
 "Last-Translator: 702platform\n"
 "Language-Team: 702platform\n"
@@ -64,7 +64,7 @@ msgid "头像"
 msgstr "Avatar"
 
 #: accounts/forms.py:163 accounts/forms.py:190 accounts/services.py:200
-#: core/uploads.py:107
+#: core/uploads.py:110
 msgid "请选择要上传的图片。"
 msgstr "Please choose an image to upload."
 
@@ -102,17 +102,17 @@ msgid "学号"
 msgstr "Student ID"
 
 #: accounts/models.py:121 projects/forms.py:98
-#: templates/accounts/member_profile_readonly.html:44
+#: templates/accounts/member_profile_readonly.html:52
 #: templates/projects/group_detail.html:64
-#: templates/projects/group_list.html:67
+#: templates/projects/group_list.html:68
 msgid "学院"
 msgstr "College"
 
-#: accounts/models.py:122 templates/accounts/member_profile_readonly.html:45
+#: accounts/models.py:122 templates/accounts/member_profile_readonly.html:53
 msgid "专业"
 msgstr "Major"
 
-#: accounts/models.py:124 templates/accounts/member_profile_readonly.html:46
+#: accounts/models.py:124 templates/accounts/member_profile_readonly.html:54
 msgid "特长"
 msgstr "Specialties"
 
@@ -120,15 +120,15 @@ msgstr "Specialties"
 msgid "可填写多项，用顿号或逗号分隔。"
 msgstr "You can list several, separated by commas."
 
-#: accounts/models.py:129 templates/accounts/member_profile_readonly.html:48
+#: accounts/models.py:129 templates/accounts/member_profile_readonly.html:56
 msgid "手机号"
 msgstr "Phone"
 
-#: accounts/models.py:130 templates/accounts/member_profile_readonly.html:49
+#: accounts/models.py:130 templates/accounts/member_profile_readonly.html:57
 msgid "其他联系方式"
 msgstr "Other contact"
 
-#: accounts/models.py:132 templates/accounts/member_profile_readonly.html:47
+#: accounts/models.py:132 templates/accounts/member_profile_readonly.html:55
 msgid "个人简介"
 msgstr "Bio"
 
@@ -159,7 +159,7 @@ msgstr "Administrator"
 #: accounts/roles.py:16 accounts/selectors.py:67
 #: templates/projects/group_detail.html:35
 #: templates/projects/group_detail.html:86
-#: templates/projects/group_list.html:64
+#: templates/projects/group_list.html:65
 #: templates/projects/group_manage.html:108
 msgid "项目组联系人"
 msgstr "Group contact"
@@ -208,23 +208,23 @@ msgstr "Gallery image"
 msgid "密码修改成功。"
 msgstr "Password updated."
 
-#: accounts/views.py:259
+#: accounts/views.py:266
 msgid "个人信息已保存。"
 msgstr "Profile saved."
 
-#: accounts/views.py:327
+#: accounts/views.py:334
 #, python-format
 msgid "1 张图像已加入图册。"
 msgid_plural "%(count)s 张图像已加入图册。"
 msgstr[0] "1 image added to your gallery."
 msgstr[1] "%(count)s images added to your gallery."
 
-#: accounts/views.py:335
+#: accounts/views.py:342
 #, python-format
 msgid "%(name)s：%(reason)s"
 msgstr "%(name)s: %(reason)s"
 
-#: accounts/views.py:342
+#: accounts/views.py:349
 #, python-format
 msgid ""
 "另有 1 张因图册容量不足未加入（已用 %(used)s / %(limit)s MB）：%(names)s"
@@ -238,40 +238,40 @@ msgstr[1] ""
 "%(count)s more images were not added because the gallery is full (using "
 "%(used)s / %(limit)s MB): %(names)s"
 
-#: accounts/views.py:374 accounts/views.py:395 projects/views.py:384
+#: accounts/views.py:381 accounts/views.py:402 projects/views.py:384
 #: projects/views.py:491
 msgid "未知操作"
 msgstr "Unknown action"
 
-#: accounts/views.py:379
+#: accounts/views.py:386
 msgid "顺序已调整。"
 msgstr "Order updated."
 
-#: accounts/views.py:383
+#: accounts/views.py:390
 msgid "已经是第一张了。"
 msgstr "That is already the first image."
 
-#: accounts/views.py:383
+#: accounts/views.py:390
 msgid "已经是最后一张了。"
 msgstr "That is already the last image."
 
-#: accounts/views.py:400
+#: accounts/views.py:407
 msgid "排布已更新。"
 msgstr "Layout updated."
 
-#: accounts/views.py:417
+#: accounts/views.py:424
 msgid "图像已删除。"
 msgstr "Image removed."
 
-#: accounts/views.py:440
+#: accounts/views.py:447
 msgid "头像已更新。"
 msgstr "Avatar updated."
 
-#: accounts/views.py:465
+#: accounts/views.py:472
 msgid "头像已删除。"
 msgstr "Avatar removed."
 
-#: accounts/views.py:467
+#: accounts/views.py:474
 msgid "当前没有头像。"
 msgstr "There is no avatar to delete."
 
@@ -415,7 +415,7 @@ msgstr "Winners / team"
 
 #: content/forms.py:69 templates/content/awards.html:97
 #: templates/projects/group_detail.html:65
-#: templates/projects/group_list.html:70
+#: templates/projects/group_list.html:71
 msgid "指导老师"
 msgstr "Advisors"
 
@@ -493,28 +493,28 @@ msgstr "Audit log"
 msgid "查看平台关键操作记录"
 msgstr "Review the platform's key operations"
 
-#: core/uploads.py:82 core/uploads.py:95
+#: core/uploads.py:85 core/uploads.py:98
 msgid "上传文件不是有效的图片。"
 msgstr "The uploaded file is not a valid image."
 
-#: core/uploads.py:88
+#: core/uploads.py:91
 #, python-format
 msgid "图片过大（%(width)s×%(height)s 像素），请压缩后再上传。"
 msgstr ""
 "The image is too large (%(width)s×%(height)s pixels). Please compress it and "
 "upload again."
 
-#: core/uploads.py:113
+#: core/uploads.py:116
 #, python-format
 msgid "%(label)s仅支持 %(allowed)s 格式。"
 msgstr "%(label)s supports only these formats: %(allowed)s."
 
-#: core/uploads.py:118
+#: core/uploads.py:121
 #, python-format
 msgid "%(label)s不能超过 %(limit)s MB。"
 msgstr "%(label)s cannot exceed %(limit)s MB."
 
-#: core/uploads.py:128
+#: core/uploads.py:131
 msgid "文件类型与图片不符，请确认选的是图片。"
 msgstr "That file is not an image."
 
@@ -556,7 +556,7 @@ msgstr "A post can have at most 3 images."
 msgid "每篇帖子最多保留 3 张图片。"
 msgstr "A post can contain at most 3 images."
 
-#: discussion/forms.py:100 notices/selectors.py:129
+#: discussion/forms.py:100 notices/selectors.py:147 notices/selectors.py:277
 #: templates/discussion/space.html:156 templates/discussion/space.html:157
 msgid "评论"
 msgstr "Comment"
@@ -612,7 +612,7 @@ msgstr "Updated"
 msgid "社团空间帖子"
 msgstr "Discussion post"
 
-#: discussion/models.py:86 discussion/models.py:140 notices/selectors.py:135
+#: discussion/models.py:86 discussion/models.py:140 notices/selectors.py:153
 msgid "帖子"
 msgstr "Post"
 
@@ -632,15 +632,15 @@ msgstr "Comment"
 msgid "评论时间"
 msgstr "Commented"
 
-#: discussion/models.py:152
+#: discussion/models.py:154
 msgid "删除时间"
 msgstr "Deleted at"
 
-#: discussion/models.py:159
+#: discussion/models.py:161
 msgid "删除人"
 msgstr "Deleted by"
 
-#: discussion/models.py:166 discussion/models.py:167
+#: discussion/models.py:168 discussion/models.py:169
 msgid "社团空间评论"
 msgstr "Discussion comment"
 
@@ -667,7 +667,7 @@ msgstr "The selected images are invalid."
 msgid "所选图片不属于这篇帖子。"
 msgstr "The selected image does not belong to this post."
 
-#: discussion/services.py:403
+#: discussion/services.py:404
 msgid "评论内容不能为空。"
 msgstr "A comment cannot be empty."
 
@@ -777,8 +777,9 @@ msgstr "This borrowing record has already been returned."
 msgid "已登记归还：%(name)s。"
 msgstr "Return recorded: %(name)s."
 
-#: notices/apps.py:17 templates/notices/message_list.html:4
-#: templates/notices/message_list.html:12
+#: notices/apps.py:17 templates/notices/direct_compose.html:10
+#: templates/notices/direct_detail.html:10
+#: templates/notices/message_list.html:4 templates/notices/message_list.html:12
 #: templates/notices/message_list.html:16
 msgid "我的消息"
 msgstr "My messages"
@@ -787,104 +788,139 @@ msgstr "My messages"
 msgid "查看发给你的通知与消息。"
 msgstr "See the notices and messages sent to you."
 
-#: notices/selectors.py:73
+#: notices/forms.py:48
+msgid "私信内容"
+msgstr "Message"
+
+#: notices/forms.py:50
+msgid "请输入私信内容。"
+msgstr "Enter a message."
+
+#: notices/models.py:143
+msgid "最多 1500 字。"
+msgstr "Up to 1500 characters."
+
+#: notices/selectors.py:86
 msgid "所有人"
 msgstr "Everyone"
 
-#: notices/selectors.py:75
+#: notices/selectors.py:88
 msgid "仅项目组联系人"
 msgstr "Project contacts only"
 
-#: notices/selectors.py:88 notices/views.py:34 templates/base.html:27
+#: notices/selectors.py:101 notices/views.py:54 templates/base.html:28
 #: templates/home.html:45 templates/home.html:76
 msgid "公开通知"
 msgstr "Public Notices"
 
-#: notices/selectors.py:88
+#: notices/selectors.py:101
 msgid "内部通知"
 msgstr "Internal notice"
 
-#: notices/selectors.py:106
+#: notices/selectors.py:119
 #, python-format
 msgid "%(name)s（第 %(round)s 轮）"
 msgstr "%(name)s (round %(round)s)"
 
-#: notices/selectors.py:146 reviews/lifecycle.py:68
+#: notices/selectors.py:181 reviews/lifecycle.py:68
 #: templates/projects/group_detail.html:141 templates/reviews/queue.html:73
 #: templates/reviews/queue.html:152
 msgid "待初审"
 msgstr "Pending preliminary"
 
-#: notices/selectors.py:146 reviews/lifecycle.py:71
+#: notices/selectors.py:181 reviews/lifecycle.py:71
 #: templates/projects/group_detail.html:169 templates/reviews/queue.html:79
 #: templates/reviews/queue.html:187
 msgid "待评审"
 msgstr "Pending review"
 
-#: notices/selectors.py:160 notices/selectors.py:185 notices/selectors.py:215
+#: notices/selectors.py:195 notices/selectors.py:220 notices/selectors.py:250
 #: reviews/lifecycle.py:30
 msgid "已通过"
 msgstr "Approved"
 
-#: notices/selectors.py:160 reviews/lifecycle.py:31 reviews/lifecycle.py:78
+#: notices/selectors.py:195 reviews/lifecycle.py:31 reviews/lifecycle.py:78
 msgid "需修改"
 msgstr "Needs revision"
 
-#: notices/selectors.py:171
+#: notices/selectors.py:206
 msgid "待你审核"
 msgstr "Awaiting your review"
 
-#: notices/selectors.py:185 notices/selectors.py:215
+#: notices/selectors.py:220 notices/selectors.py:250
 msgid "已拒绝"
 msgstr "Rejected"
 
-#: notices/selectors.py:196
+#: notices/selectors.py:231
 msgid "待审核"
 msgstr "Pending review"
 
-#: notices/selectors.py:221
+#: notices/selectors.py:266
+msgid "向你发送了一条私信"
+msgstr "Sent you a direct message"
+
+#: notices/selectors.py:276
 msgid "提及"
 msgstr "Mention"
 
-#: notices/selectors.py:222 notices/selectors.py:223 reviews/apps.py:19
+#: notices/selectors.py:278 templates/accounts/member_profile_readonly.html:24
+#: templates/notices/direct_detail.html:4
+#: templates/notices/direct_detail.html:12
+#: templates/notices/direct_detail.html:16
+msgid "私信"
+msgstr "Direct message"
+
+#: notices/selectors.py:279 notices/selectors.py:280 reviews/apps.py:19
 #: reviews/lifecycle.py:52 reviews/lifecycle.py:116
 #: templates/reviews/queue.html:4
 msgid "评审"
 msgstr "Review"
 
-#: notices/selectors.py:224
+#: notices/selectors.py:281
 msgid "评审结果"
 msgstr "Review result"
 
-#: notices/selectors.py:225 templates/projects/group_manage.html:59
+#: notices/selectors.py:282 templates/projects/group_manage.html:59
 msgid "入组申请"
 msgstr "Join requests"
 
-#: notices/selectors.py:226
+#: notices/selectors.py:283
 msgid "入组结果"
 msgstr "Join result"
 
-#: notices/selectors.py:227
+#: notices/selectors.py:284
 msgid "建组申请"
 msgstr "Group request"
 
-#: notices/selectors.py:228
+#: notices/selectors.py:285
 msgid "建组结果"
 msgstr "Group result"
 
-#: notices/views.py:35 templates/home.html:60
+#: notices/views.py:55 templates/home.html:60
 msgid "暂时没有公开通知。"
 msgstr "No public notices yet."
 
-#: notices/views.py:60
+#: notices/views.py:80
 msgid "返回公开通知"
 msgstr "Back to public notices"
 
-#: notices/views.py:105
+#: notices/views.py:127
 msgid "已将全部消息标为已读。"
 msgstr "All messages marked as read."
 
-#: notices/views.py:152
+#: notices/views.py:193
+msgid "不能给自己发私信。"
+msgstr "You can't send a direct message to yourself."
+
+#: notices/views.py:212
+msgid "私信已发送。"
+msgstr "Direct message sent."
+
+#: notices/views.py:294
+msgid "私信已删除。"
+msgstr "Direct message deleted."
+
+#: notices/views.py:318 templates/notices/direct_detail.html:41
 msgid "返回我的消息"
 msgstr "Back to my messages"
 
@@ -1491,13 +1527,13 @@ msgid "该评审任务没有批注版项目书。"
 msgstr "This review task has no annotated proposal."
 
 #: templates/accounts/member_home.html:4 templates/accounts/member_home.html:12
-#: templates/base.html:42 templates/discussion/space.html:16
+#: templates/base.html:43 templates/discussion/space.html:16
 msgid "成员中心"
 msgstr "Member Center"
 
 #: templates/accounts/member_home.html:4
 #: templates/accounts/password_change.html:4 templates/accounts/profile.html:4
-#: templates/base.html:6 templates/base.html:70
+#: templates/base.html:6 templates/base.html:71
 #: templates/competitions/list.html:4 templates/competitions/register.html:4
 #: templates/content/about.html:4 templates/content/award_form.html:4
 #: templates/content/awards.html:4 templates/content/page_detail.html:4
@@ -1505,8 +1541,9 @@ msgstr "Member Center"
 #: templates/discussion/space.html:4 templates/equipment/borrow_form.html:4
 #: templates/equipment/borrow_list.html:4 templates/equipment/list.html:4
 #: templates/home.html:4 templates/home.html:12 templates/notices/detail.html:4
-#: templates/notices/list.html:4 templates/notices/message_list.html:4
-#: templates/projects/group_apply.html:4
+#: templates/notices/direct_compose.html:4
+#: templates/notices/direct_detail.html:4 templates/notices/list.html:4
+#: templates/notices/message_list.html:4 templates/projects/group_apply.html:4
 #: templates/projects/group_create_request.html:4
 #: templates/projects/group_detail.html:4 templates/projects/group_list.html:4
 #: templates/projects/group_manage.html:4 templates/registration/login.html:4
@@ -1520,7 +1557,7 @@ msgid "你好，%(name)s。"
 msgstr "Hello, %(name)s."
 
 #: templates/accounts/member_home.html:20
-#: templates/accounts/member_profile_readonly.html:61
+#: templates/accounts/member_profile_readonly.html:69
 #: templates/accounts/profile.html:109
 msgid "当前身份"
 msgstr "Your role"
@@ -1656,7 +1693,7 @@ msgstr "Stop accepting %(role)s tasks"
 msgid "恢复接收%(role)s任务"
 msgstr "Start accepting %(role)s tasks"
 
-#: templates/accounts/member_profile_readonly.html:10 templates/base.html:29
+#: templates/accounts/member_profile_readonly.html:10 templates/base.html:30
 #: templates/discussion/post_form.html:4 templates/discussion/space.html:4
 #: templates/discussion/space.html:18 templates/discussion/space.html:22
 msgid "社团空间"
@@ -1666,40 +1703,40 @@ msgstr "Club Space"
 msgid "成员资料"
 msgstr "Member Profile"
 
-#: templates/accounts/member_profile_readonly.html:24
+#: templates/accounts/member_profile_readonly.html:32
 #: templates/discussion/space.html:31 templates/projects/group_detail.html:39
 #: templates/projects/group_detail.html:72
 #: templates/projects/group_detail.html:88
-#: templates/projects/group_list.html:65
+#: templates/projects/group_list.html:66
 #: templates/projects/group_manage.html:94
 #: templates/projects/group_manage.html:110
 msgid "成员"
 msgstr "Members"
 
-#: templates/accounts/member_profile_readonly.html:40
+#: templates/accounts/member_profile_readonly.html:48
 msgid "个人资料"
 msgstr "Profile"
 
-#: templates/accounts/member_profile_readonly.html:52
-#: templates/accounts/member_profile_readonly.html:55
+#: templates/accounts/member_profile_readonly.html:60
+#: templates/accounts/member_profile_readonly.html:63
 msgid "这位成员还没有填写个人资料。"
 msgstr "This member has not added any profile details yet."
 
-#: templates/accounts/member_profile_readonly.html:73
+#: templates/accounts/member_profile_readonly.html:81
 #: templates/accounts/profile.html:124
 msgid "暂无其他身份。"
 msgstr "No other roles."
 
-#: templates/accounts/member_profile_readonly.html:81
+#: templates/accounts/member_profile_readonly.html:89
 #: templates/accounts/profile.html:133
 msgid "个人图册"
 msgstr "Personal gallery"
 
-#: templates/accounts/member_profile_readonly.html:92
+#: templates/accounts/member_profile_readonly.html:100
 msgid "个人图册暂无照片。"
 msgstr "No photos in this gallery yet."
 
-#: templates/accounts/member_profile_readonly.html:98
+#: templates/accounts/member_profile_readonly.html:106
 msgid "返回社团空间"
 msgstr "Back to Club Space"
 
@@ -1824,60 +1861,60 @@ msgstr "Delete"
 msgid "图册还是空的，从上面选一张图开始。"
 msgstr "Your gallery is empty — start by choosing an image above."
 
-#: templates/base.html:17
+#: templates/base.html:18
 msgid "竞赛社团平台"
 msgstr "Competition Club"
 
-#: templates/base.html:22 templates/home.html:4
+#: templates/base.html:23 templates/home.html:4
 msgid "首页"
 msgstr "Home"
 
-#: templates/base.html:23 templates/content/about.html:4
+#: templates/base.html:24 templates/content/about.html:4
 #: templates/content/about.html:12 templates/content/about.html:16
 #: templates/home.html:72
 msgid "社团简介"
 msgstr "About the Club"
 
-#: templates/base.html:24 templates/content/awards.html:4
+#: templates/base.html:25 templates/content/awards.html:4
 #: templates/content/awards.html:17 templates/content/awards.html:21
 #: templates/home.html:73
 msgid "历年获奖"
 msgstr "Awards"
 
-#: templates/base.html:25 templates/content/showcase.html:4
+#: templates/base.html:26 templates/content/showcase.html:4
 #: templates/content/showcase.html:12 templates/content/showcase.html:16
 #: templates/home.html:74
 msgid "成员风采"
 msgstr "Members"
 
-#: templates/base.html:26 templates/content/page_index.html:4
+#: templates/base.html:27 templates/content/page_index.html:4
 #: templates/content/page_index.html:12 templates/content/page_index.html:16
 #: templates/home.html:75
 msgid "更多页面"
 msgstr "More Pages"
 
-#: templates/base.html:37
+#: templates/base.html:38
 msgid "切换到中文"
 msgstr "Switch to Chinese"
 
-#: templates/base.html:39
+#: templates/base.html:40
 msgid "切换到英文"
 msgstr "Switch to English"
 
-#: templates/base.html:43
+#: templates/base.html:44
 msgid "管理后台"
 msgstr "Admin"
 
-#: templates/base.html:46
+#: templates/base.html:47
 msgid "退出"
 msgstr "Log out"
 
-#: templates/base.html:49 templates/home.html:88
+#: templates/base.html:50 templates/home.html:88
 #: templates/registration/login.html:4 templates/registration/login.html:18
 msgid "成员登录"
 msgstr "Member Login"
 
-#: templates/base.html:71
+#: templates/base.html:72
 msgid "账号由管理员统一发放，不开放公开注册"
 msgstr "Accounts are issued by administrators; there is no public sign-up"
 
@@ -2182,6 +2219,8 @@ msgid "移除此图片"
 msgstr "Remove this image"
 
 #: templates/discussion/post_form.html:51
+#: templates/includes/direct_compose.html:35
+#: templates/notices/direct_compose.html:36
 msgid "取消"
 msgstr "Cancel"
 
@@ -2447,6 +2486,23 @@ msgstr "Go to member center"
 msgid "校验值 SHA-256"
 msgstr "SHA-256 checksum"
 
+#: templates/includes/direct_compose.html:25
+#: templates/notices/direct_compose.html:4
+#: templates/notices/direct_compose.html:12
+#: templates/notices/direct_compose.html:16
+msgid "写私信"
+msgstr "Write a direct message"
+
+#: templates/includes/direct_compose.html:26
+#: templates/notices/direct_compose.html:17
+msgid "收件人"
+msgstr "To"
+
+#: templates/includes/direct_compose.html:34
+#: templates/notices/direct_compose.html:35
+msgid "发送"
+msgstr "Send"
+
 #: templates/notices/detail.html:18
 msgid "置顶通知"
 msgstr "Pinned notice"
@@ -2455,6 +2511,22 @@ msgstr "Pinned notice"
 #, python-format
 msgid "发布时间 %(published)s · 发布人 %(publisher)s"
 msgstr "Published %(published)s · by %(publisher)s"
+
+#: templates/notices/direct_detail.html:18
+msgid "来自 %(name)s"
+msgstr "From %(name)s"
+
+#: templates/notices/direct_detail.html:25
+msgid "回复"
+msgstr "Reply"
+
+#: templates/notices/direct_detail.html:28
+msgid "确定删除这条私信吗？删除后无法恢复。"
+msgstr "Delete this direct message? This can't be undone."
+
+#: templates/notices/direct_detail.html:30
+msgid "删除私信"
+msgstr "Delete message"
 
 #: templates/notices/list.html:17 templates/notices/message_list.html:19
 #, python-format
@@ -2494,7 +2566,11 @@ msgstr "Details"
 msgid "时间"
 msgstr "Time"
 
-#: templates/notices/message_list.html:60
+#: templates/notices/message_list.html:56
+msgid "快速回信"
+msgstr "Quick reply"
+
+#: templates/notices/message_list.html:65
 msgid "暂时没有消息。"
 msgstr "No messages yet."
 
@@ -2570,7 +2646,7 @@ msgstr[0] "Contact %(contact)s · 1 member"
 msgstr[1] "Contact %(contact)s · %(counter)s members"
 
 #: templates/projects/group_detail.html:27
-#: templates/projects/group_list.html:92
+#: templates/projects/group_list.html:93
 msgid "管理项目组"
 msgstr "Manage group"
 
@@ -2821,46 +2897,46 @@ msgstr "Search project groups"
 msgid "我的项目组"
 msgstr "My project groups"
 
-#: templates/projects/group_list.html:65
+#: templates/projects/group_list.html:66
 #, python-format
 msgid "1 人"
 msgid_plural "%(counter)s 人"
 msgstr[0] "1 member"
 msgstr[1] "%(counter)s members"
 
-#: templates/projects/group_list.html:78
+#: templates/projects/group_list.html:79
 msgid "成员名单"
 msgstr "Member list"
 
-#: templates/projects/group_list.html:83
+#: templates/projects/group_list.html:84
 msgid "暂无成员"
 msgstr "No members"
 
-#: templates/projects/group_list.html:89
+#: templates/projects/group_list.html:90
 msgid "查看详情"
 msgstr "View details"
 
-#: templates/projects/group_list.html:97
+#: templates/projects/group_list.html:98
 msgid "已加入"
 msgstr "Joined"
 
-#: templates/projects/group_list.html:100
+#: templates/projects/group_list.html:101
 msgid "申请审核中"
 msgstr "Application under review"
 
-#: templates/projects/group_list.html:102
+#: templates/projects/group_list.html:103
 msgid "申请加入"
 msgstr "Apply to join"
 
-#: templates/projects/group_list.html:109
+#: templates/projects/group_list.html:110
 msgid "没有匹配的项目组。"
 msgstr "No project groups match your search."
 
-#: templates/projects/group_list.html:111
+#: templates/projects/group_list.html:112
 msgid "你还没有加入任何项目组。"
 msgstr "You have not joined any project group yet."
 
-#: templates/projects/group_list.html:113
+#: templates/projects/group_list.html:114
 msgid "暂时没有项目组。"
 msgstr "No project groups yet."
 
