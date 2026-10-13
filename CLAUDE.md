@@ -120,7 +120,7 @@ source env.local.sh
 单模块/单条测试、`runserver`、`collectstatic` 这些 `manage.py --help` 能列出，不在这里重复。
 
 **做完的定义**：上面三项（`check` + `makemigrations --check --dry-run` + `test`）全绿。
-这几条与 [`docs/更新维护/开发与部署.md`](docs/更新维护/开发与部署.md) §2 是同一份事实，**改这里必须同步改那里**。
+这三条**以这里为唯一的主**；[`docs/更新维护/开发与部署.md`](docs/更新维护/开发与部署.md) §2 只指向本处，不再复述。
 
 ---
 
