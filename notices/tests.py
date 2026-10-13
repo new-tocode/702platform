@@ -4,7 +4,7 @@ from datetime import timedelta
 from urllib.parse import quote
 
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Group
+from django.contrib.auth.models import Group, Permission
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -1277,3 +1277,122 @@ class DirectMessageEntryAcceptanceTests(TestCase):
             reverse("member_notices:direct_compose", args=(self.viewer.pk,)),
         )
         self.assertNotContains(response, "data-direct-dialog")
+
+
+class DirectMessageAdminAcceptanceTests(TestCase):
+    """后台的私信是一张只读表：查得到（按人、按时间、按正文），改不了、删不掉、加不出来。"""
+
+    def setUp(self):
+        self.superuser = User.objects.create_superuser(
+            username="dm-admin",
+            password="Admin-Password-123!",
+        )
+        self.sender = User.objects.create_user(
+            username="dm-admin-sender",
+            password="Sender-Password-123!",
+        )
+        self.sender.profile.full_name = "发信人"
+        self.sender.profile.save(update_fields=["full_name"])
+        self.recipient = User.objects.create_user(
+            username="dm-admin-recipient",
+            password="Recipient-Password-123!",
+        )
+        self.recipient.profile.full_name = "收信人"
+        self.recipient.profile.save(update_fields=["full_name"])
+        self.body = "后台要看得到的那条私信正文。"
+        self.message = send_direct_message(
+            sender=self.sender,
+            recipient=self.recipient,
+            body=self.body,
+        )
+        self.direct = self.message.direct_message
+        self.changelist = reverse("admin:notices_directmessage_changelist")
+        self.change = reverse(
+            "admin:notices_directmessage_change", args=(self.direct.pk,)
+        )
+        self.client.force_login(self.superuser)
+
+    def _staff(self, username):
+        staff = User.objects.create_user(
+            username=username,
+            password="Staff-Password-123!",
+            is_staff=True,
+        )
+        staff.must_change_password = False
+        staff.save(update_fields=["must_change_password"])
+        return staff
+
+    def test_changelist_lists_the_message_with_both_sides(self):
+        response = self.client.get(self.changelist)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "发信人")
+        self.assertContains(response, "收信人")
+        self.assertContains(response, self.body)
+
+    def test_detail_shows_the_whole_body_but_offers_no_editable_field(self):
+        response = self.client.get(self.change)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.body)
+        # 只读展示（div.readonly），不是可以下笔的控件。
+        self.assertNotContains(response, "<textarea")
+
+    def test_a_change_is_refused_and_nothing_is_written(self):
+        response = self.client.post(
+            self.change,
+            {
+                "sender": self.sender.pk,
+                "recipient": self.recipient.pk,
+                "body": "改过的正文",
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.direct.refresh_from_db()
+        self.assertEqual(self.direct.body, self.body)
+
+    def test_cannot_add_and_cannot_delete(self):
+        add = self.client.get(reverse("admin:notices_directmessage_add"))
+        delete = self.client.post(
+            reverse("admin:notices_directmessage_delete", args=(self.direct.pk,))
+        )
+
+        self.assertEqual(add.status_code, 403)
+        self.assertEqual(delete.status_code, 403)
+        self.assertTrue(DirectMessage.objects.filter(pk=self.direct.pk).exists())
+
+    def test_the_changelist_offers_no_bulk_delete(self):
+        response = self.client.get(self.changelist)
+
+        self.assertNotContains(response, "delete_selected")
+
+    def test_staff_without_the_view_permission_cannot_open_it(self):
+        self.client.force_login(self._staff("dm-admin-staff"))
+
+        response = self.client.get(self.changelist)
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_staff_granted_the_view_permission_can_read_but_not_write(self):
+        staff = self._staff("dm-admin-reader")
+        staff.user_permissions.add(
+            Permission.objects.get(
+                content_type__app_label="notices",
+                codename="view_directmessage",
+            )
+        )
+        self.client.force_login(staff)
+
+        detail = self.client.get(self.change)
+        write = self.client.post(self.change, {"body": "改过的正文"})
+
+        self.assertEqual(detail.status_code, 200)
+        self.assertContains(detail, self.body)
+        self.assertEqual(write.status_code, 403)
+
+    def test_reading_in_the_backend_writes_no_audit_row(self):
+        self.client.get(self.changelist)
+        self.client.get(self.change)
+
+        self.assertEqual(AuditLog.objects.count(), 0)

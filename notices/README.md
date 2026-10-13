@@ -27,7 +27,7 @@
 | 写操作 | `services.py`：标已读／全部已读，九个 kind 的消息写入与撤回，私信的发送与删除 |
 | 只读装配 | `selectors.py`：`MessageRow`、`message_rows`、`unread_message_count`、`message_target_url`、`display_name`、`direct_reply_target` |
 | 页面 | `views.py` + `templates/notices/`：公开公告栏 `notices:public_list` / `public_detail`（匿名可看，挂 `/notices/`）；「我的消息」`member_notices:internal_list` / `internal_detail` / `message_go` / `mark_all_read`；私信 `direct_compose`（整页与浮动窗共用）/ `direct_detail` / `direct_delete`（都挂 `/member/notices/`） |
-| 后台发布 | `admin.py` + `forms.py`：`NoticeAdminForm` 校验范围与用户组的搭配，`save_model` 补发布人并记审计 |
+| 后台 | `admin.py` + `forms.py`：`NoticeAdminForm` 校验公告范围与用户组的搭配，`save_model` 补发布人并记审计；`DirectMessageAdmin` 是**只读**的私信表（`core.admin.ReadOnlyAdminMixin`）——查得到，加／改／删都关着 |
 | 成员中心提醒 | `panels.member_home_context()` → `{"unread_messages": ...}` |
 | 别处页面上的写私信窗口 | `panels.direct_compose_context()` → `{"direct_form": ...}`；窗口本体在 `templates/includes/direct_compose.html`（跨应用共用件），打开它的是 `static/js/direct_compose.js` |
 | 入口登记 | `apps.py`：向 `core.registry` 注册 `notices.internal`（`sort_order=30`） |
@@ -43,7 +43,7 @@
 | 配图／视频的存储与可见性 | `media.MediaFile`：媒体库是**公开件**（落 `mediafiles/`、Nginx 直出、匿名可访问，见 `../docs/术语表.md`），公告附件没有权限判定 |
 | 强制改密的拦截 | `config.middleware.ForcePasswordChangeMiddleware`；本模块只是被它拦住的页面之一 |
 | 事务边界（**分两种，别按「一律」记**） | 别的 app 发起的消息写在**调用方**（`projects` / `reviews` / `discussion`）的事务里，本模块不开事务；已读是单条幂等写；**私信是本模块自己发起的写**，正文与通知两行必须一起落，所以那一处自己开事务。本模块不 `select_for_update` |
-| 私信的正文与收发关系 | 不进后台、不写审计（见 §5）：正文与「谁写给谁」是成员之间的东西，不是给运维留痕的。本模块因此也没有 `DirectMessageAdmin` |
+| 私信的**写** | 成员侧的三个视图是唯一的写入口；后台只有一只只读的表（无增改删），不写审计（见 §5）。出了争议，后台看得到「谁给谁发过什么」，但那是一条**可删**的记录——不是底账 |
 | 已读的审计 | 刻意不写（已读是高频、个人、幂等的操作）。全模块只有后台发布公告写 `notices.create` / `notices.update` |
 
 **依赖方向**
@@ -97,6 +97,7 @@
 | `member_notices:direct_detail` | 私信全文（读完**不消失**），GET 即已读 | 登录；`recipient=request.user` | 不是我的、不是私信、正文缺了 → 404；非 GET → 405 |
 | `member_notices:direct_delete` | 收件人主动删除一条私信（正文与通知一起走） | 登录；POST；`recipient=request.user` | 同上三条 → 404；GET → 405 |
 | 后台 `admin:notices_notice_add` / `change` | 发布／编辑公告 | Django admin 默认权限位（`NoticeAdmin` 没有自定义 `has_*`） | internal 通知没选用户组、或 public / contacts 通知选了用户组 → 200 重渲染 + 表单错误，不保存；成员 → 302 到后台登录 |
+| 后台 `admin:notices_directmessage_changelist` / `_change` | 只读地查私信：按人、按时间、按正文搜 | Django 的 `view_directmessage` 权限位（staff 也要单独授予，与别的模型一样） | 加（`_add`）、改（POST `_change`）、删（`_delete`）一律 **403**；列表页没有「删除所选」这个动作；匿名 → 302 到后台登录 |
 
 ---
 
@@ -269,6 +270,7 @@
 | 已登录 GET 打 `mark_all_read`、POST 打 `message_go` | 405 |
 | 后台表单里 internal 没用户组／public、contacts 带用户组 | 200 重渲染 + 表单错误，不保存 |
 | 成员打开 `/admin/` | 302 到后台登录 |
+| 后台对私信按「增加／保存／删除」下手 | 403（`DirectMessageAdmin` 只给看：`ReadOnlyAdminMixin` 关掉增与改，`has_delete_permission` 也返回 `False`） |
 | 数据里出现不认识的 kind | 列表跳过该行并记 warning，页面 200——不让降级部署留下的行把整页打成 500 |
 | 给自己发私信 | flash「不能给自己发私信。」+ 302 回原来那页（**业务拒绝不是 4xx**，与项目组那边的领域异常同一口径） |
 | 私信收信人不存在或已停用 | 404（`is_active=True` 的过滤，与只读资料页同一道门） |
@@ -333,7 +335,8 @@
 | `NoticeAdminAcceptanceTests` | 后台发布记 `published_by` 与 `notices.create` 审计；internal 没用户组、public / contacts 带用户组都拒绝保存；contacts 不带组可存；成员进不了后台 |
 | `DirectMessageSendTests` | 写私信那一页渲染出收件人与上限（`maxlength` 取自模型常量）；两行一起落；消息行的四个字段；（浮动窗与整页两条路都）发完回得来、外站 `next` 被忽略；超长／空正文被拒且写过的正文还在；给自己发被 flash 挡回；停用账号与匿名进不来 |
 | `DirectMessageInboxTests` | 行读什么（类型／标题／来自／节选／回信对象）；发信人自己没有行；未读计数与成员中心提醒条／徽标；点开即已读且**读完还在**；详情页给全文而不是节选；主动删除连正文一起删；越权 404；非私信的消息没有私信页；没有正文的坏行在列表与计数里都不出现；快速回信就是一条普通私信（反向送达）；发信人**注销**与**停用**后行上都没有「快速回信」，但私信正文照旧看得见；入口把来处带在地址上（没有脚本时回得到原页） |
-| `DirectMessageEntryAcceptanceTests` | 成员资料页对别人有「私信」入口与那扇窗（`data-direct-compose` / `data-direct-dialog` / 收件人姓名），对自己的资料页两者都没有 |
+| `DirectMessageEntryAcceptanceTests` | 成员资料页对别人有「私信」入口与那扇窗（`data-direct-compose` / `data-direct-dialog` / 收件人姓名），对自己的资料页两者都没有；入口把来处带在地址上 |
+| `DirectMessageAdminAcceptanceTests` | 后台那只只读表：列表里有双方账号与姓名、正文节选；详情给全文且**没有可编辑控件**；POST 改 → 403 且一个字没落库；增与删都 403；没有「删除所选」动作；staff 没授予 `view_directmessage` 打不开，授予了能看不能改；看一眼后台不写任何审计行 |
 
 ### 已知限制 / 当前不支持
 
@@ -363,8 +366,9 @@
   `CheckConstraint`，服务层与视图各挡一次。加约束要先想清存量数据与迁移，收益也不大。
 - **「快速回信」本身不标已读**：它只打开窗口，那条私信行仍旧是未读，直到点开详情页
   （或「全部已读」）。回复不等于读过——正文全文只有详情页给。
-- **私信不写审计也不进后台**（理由见 §5）：出了「谁给谁发过」的争议，平台这边**没有可查的底账**，
-  能查的只有收信人自己那一页。
+- **私信没有审计底账**：后台那只表只读、也不写审计（理由见 §5）。所以出了「谁给谁发过」的争议，
+  后台能看的是**现存的行**——收信人一删，那一行连同通知一起没了，后台与日志里都不会留下痕迹，
+  日志里只剩一句「某账号给某 id 发过一条、多少字」。要真的留痕就得写审计，那是另一条路（见 §5）。
 - **浮动窗要脚本才弹**：没有脚本时那几个入口是普通链接，落到 `direct_compose` 整页表单——
   功能不缺，少的是弹窗这一层观感（`static/js/direct_compose.js` 的第一句就 return 掉了）。
 - **`Message` 的六个引用没有组合约束**：哪一类消息挂哪个引用是 `services.py` 写入函数的责任
@@ -394,6 +398,10 @@
   或者让正文自己也当一次「来源」。选了后者：`DirectMessage` 是来源，`Message` 照旧只指过去，
   「来源删除即级联删行」这条口径一个字都不用改，删除就是删来源。
 - **为什么私信不写审计**：见 §5。**不写是决定，不是漏做**——只追加的表配私人往来，代价是永久留痕。
+- **为什么后台只给一只只读的表**：成员之间的事，后台的用途是「出了事能查」，不是「替成员管理」。
+  所以 `DirectMessageAdmin` 借了 `core.admin.ReadOnlyAdminMixin`，并且**连删除也关掉**——删一条私信会
+  连收信人「我的消息」里那一行一起带走（外键 `CASCADE`），那是在动成员自己那一页，不是运维的便利。
+  这是本轮唯一因为「有人要查」而破的口子，破得尽量小：不给写、不给删、也不留审计。
 - **为什么「读完」不改消息的存亡**：已读与存在是两件事。删掉一条私信是收信人的动作（他不想再看见），
   与「读过」无关；反过来，读过就消失会让人再也找不到对方说过的话。所以删除只留一个手动入口，
   且只有收信人有（发信人那边本来就没有行）。
