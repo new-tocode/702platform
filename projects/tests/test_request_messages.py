@@ -1,4 +1,4 @@
-"""申请类的消息：谁收到、状态是什么、点进哪里去。"""
+"""申请类的消息：谁收到、说明列写什么、点进哪里去。"""
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -114,7 +114,7 @@ class RequestMessageDeliveryTests(TestCase):
 
 
 class RequestMessageRenderingTests(TestCase):
-    """消息行与去向：状态文本现取，链接指到能办事的页面。"""
+    """消息行与去向：说明文本现取，链接指到能办事的页面。"""
 
     def setUp(self):
         self.admin = self._user("render-admin", is_staff=True)
@@ -191,7 +191,7 @@ class RequestMessageRenderingTests(TestCase):
 
 
 class RequestMessageStatusTests(TestCase):
-    """审批类的「状态」格：待办时是待办，处理完连处理人一起报出来。
+    """审批类的「说明」格：待办时是待办，处理完连处理人一起报出来。
 
     这一格与标题一样是**现取**的（``notices.selectors`` 每次装配时读申请行），
     所以别人处理掉之后用不着回填消息——测试也照这条路走。
@@ -219,7 +219,7 @@ class RequestMessageStatusTests(TestCase):
         return user
 
     def status_for(self, user, label):
-        """「我的消息」里那一行的「状态」格。"""
+        """那一行的「说明」格——审批类消息在这一格放状态。"""
         return next(
             row.context for row in message_rows(user) if row.type_label == label
         )

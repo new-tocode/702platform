@@ -4,7 +4,7 @@
 来源增减只改这里的装配。来源有两类——
 
 * **广播型通知**（``Notice``）：按可见集合实时查，已读来自 ``NoticeRead`` 回执；
-* **事件型消息**（``Message`` 表）：发生时就落了行，标题／链接／状态在这里现取
+* **事件型消息**（``Message`` 表）：发生时就落了行，标题／链接／说明在这里现取
   现算——帖子改了标题、轮次出了结论、申请被处理了，消息里跟着变，不存副本。
 
 只读不写，所以不叫 services；可见性判定仍归 :mod:`notices.visibility`，本模块
@@ -33,9 +33,9 @@ class MessageRow:
 
     ``type_label`` 是来源类型（内部通知／公开通知／提及／评审…，见
     :data:`_TYPE_LABELS`）；``actor`` 是「来自」列（发布人、@ 你的人、申请人，
-    没有合适的人就空着）；``context`` 是「状态」列——有状态机的消息放状态
-    （待初审、待审核、已由 X 审核通过…），没有的放那一行的性质（通知的受众、
-    帖子还是评论、正文节选）；``at`` 既排序也显示。
+    没有合适的人就空着）；``context`` 是「说明」列——它不只有状态：通知放受众、
+    提及放帖子/评论、评论与私信放正文节选，审批类（待审核、已由 X 审核通过…）
+    才放状态；``at`` 既排序也显示。
 
     ``reply_to_id`` 非空时行上多一个「快速回信」（值是要回给谁的账号 id，今天只有
     私信会给）；``url`` 照旧是这一行点开之后去哪。
@@ -82,7 +82,7 @@ def display_name(user):
 
 
 def _audience_text(notice):
-    """通知的「状态」列：通知没有状态机，这一格放它的受众。"""
+    """通知的「说明」列：这份通知发给谁。"""
     if notice.scope == Notice.PUBLIC:
         return _("所有人")
     if notice.scope == Notice.CONTACTS:
@@ -138,7 +138,7 @@ def _discussion_url(message, anchor):
 
 
 def _mention_content(message):
-    """@ 提及：标题是帖子，「状态」列写的是帖子还是评论，链接落到那一楼。"""
+    """@ 提及：标题是帖子，说明是帖子还是评论，链接落到那一楼。"""
     post = message.post
     if message.comment_id:
         return _EventContent(
@@ -155,13 +155,13 @@ def _mention_content(message):
     )
 
 
-#: 「状态」列里的节选上限（含末尾的省略号）：一格摘要，全文点开就是。
+#: 「说明」列里的节选上限（含末尾的省略号）：一格摘要，全文点开就是。
 #: 评论与私信共用——两者都只是让人认出「说的是哪一句」。
 _EXCERPT_CHARS = 40
 
 
 def _comment_content(message):
-    """有人评论了你的帖子：标题是帖子，「状态」列是那条评论的节选。"""
+    """有人评论了你的帖子：标题是帖子，说明是那条评论的节选。"""
     return _EventContent(
         message.post.title,
         _discussion_url(message, f"comment-{message.comment_id}"),
@@ -173,7 +173,7 @@ def _comment_content(message):
 
 
 def _review_content(message):
-    """评审任务：待初审与待评审共用一套，靠 kind 区分状态。"""
+    """评审任务：待初审与待评审共用一套，靠 kind 区分说明。"""
     submission = message.submission
     return _EventContent(
         _submission_title(submission),
@@ -198,7 +198,7 @@ def _review_result_content(message):
 
 
 def _decision_status(record, *, pending):
-    """审批类消息的「状态」列：等处理时是待办，有结论后连处理人一起报出来。
+    """审批类消息的「说明」格：等处理时是待办，有结论后连处理人一起报出来。
 
     ``record`` 是 ``GroupCreateRequest`` 或 ``GroupJoinRequest``——两者共用
     ``PENDING`` / ``APPROVED`` 两个状态常量与 ``decided_by``。
@@ -293,7 +293,7 @@ def direct_reply_target(direct):
 
 
 def _direct_content(message):
-    """有人给你发了私信：标题是「有人给你发了一条私信」，「状态」列是正文的节选。
+    """有人给你发了私信：标题是「有人给你发了一条私信」，说明是正文的节选。
 
     点开落到私信详情页（``member_notices:direct_detail``）——那是全文的家。行上的
     「快速回信」回给发信人，能不能回由 :func:`direct_reply_target` 说了算。

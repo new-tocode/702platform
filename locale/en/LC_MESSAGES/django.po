@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 702platform\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-14 22:37+0800\n"
+"POT-Creation-Date: 2026-10-14 23:50+0800\n"
 "PO-Revision-Date: 2026-09-19 18:39\n"
 "Last-Translator: 702platform\n"
 "Language-Team: 702platform\n"
@@ -2411,7 +2411,6 @@ msgid "计划归还"
 msgstr "Due back"
 
 #: templates/equipment/borrow_list.html:33
-#: templates/notices/message_list.html:43
 msgid "状态"
 msgstr "Status"
 
@@ -2569,6 +2568,10 @@ msgstr "Type"
 #: templates/notices/message_list.html:42
 msgid "来自"
 msgstr "From"
+
+#: templates/notices/message_list.html:43
+msgid "说明"
+msgstr "Details"
 
 #: templates/notices/message_list.html:44
 msgid "时间"

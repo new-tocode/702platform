@@ -682,12 +682,12 @@ class MessagePageAcceptanceTests(TestCase):
         self.notice.visible_groups.add(self.group)
         self.client.force_login(self.member)
 
-    def test_page_shows_the_five_columns_with_type_actor_and_status(self):
+    def test_page_shows_the_five_columns_with_type_actor_and_context(self):
         response = self.client.get(reverse("member_notices:internal_list"))
         html = response.content.decode()
 
         self.assertContains(response, "我的消息")
-        for header in ("类型", "标题", "来自", "状态", "时间"):
+        for header in ("类型", "标题", "来自", "说明", "时间"):
             self.assertIn(header, html)
         self.assertContains(response, "内部通知")
         self.assertContains(response, "通知管理员")
