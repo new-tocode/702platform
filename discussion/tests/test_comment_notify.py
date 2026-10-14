@@ -121,7 +121,7 @@ class CommentNotificationTests(TestCase):
 
 
 class CommentNotificationRowTests(TestCase):
-    """那条消息在「我的消息」里长什么样：类型、标题、来自、说明与落点。"""
+    """那条消息在「我的消息」里长什么样：类型、标题、来自、状态与落点。"""
 
     def setUp(self):
         self.author = make_user(username="crow-author", full_name="作者甲")
