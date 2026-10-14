@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 702platform\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-13 19:18+0800\n"
+"POT-Creation-Date: 2026-10-14 23:50+0800\n"
 "PO-Revision-Date: 2026-09-19 18:39\n"
 "Last-Translator: 702platform\n"
 "Language-Team: 702platform\n"
@@ -556,7 +556,7 @@ msgstr "A post can have at most 3 images."
 msgid "每篇帖子最多保留 3 张图片。"
 msgstr "A post can contain at most 3 images."
 
-#: discussion/forms.py:100 notices/selectors.py:147 notices/selectors.py:277
+#: discussion/forms.py:100 notices/selectors.py:148 notices/selectors.py:317
 #: templates/discussion/space.html:156 templates/discussion/space.html:157
 msgid "评论"
 msgstr "Comment"
@@ -612,7 +612,7 @@ msgstr "Updated"
 msgid "社团空间帖子"
 msgstr "Discussion post"
 
-#: discussion/models.py:86 discussion/models.py:140 notices/selectors.py:153
+#: discussion/models.py:86 discussion/models.py:140 notices/selectors.py:154
 msgid "帖子"
 msgstr "Post"
 
@@ -796,131 +796,141 @@ msgstr "Message"
 msgid "请输入私信内容。"
 msgstr "Enter a message."
 
-#: notices/models.py:143
+#: notices/models.py:144
 msgid "最多 1500 字。"
 msgstr "Up to 1500 characters."
 
-#: notices/selectors.py:86
+#: notices/selectors.py:87
 msgid "所有人"
 msgstr "Everyone"
 
-#: notices/selectors.py:88
+#: notices/selectors.py:89
 msgid "仅项目组联系人"
 msgstr "Project contacts only"
 
-#: notices/selectors.py:101 notices/views.py:54 templates/base.html:28
+#: notices/selectors.py:102 notices/views.py:55 templates/base.html:28
 #: templates/home.html:45 templates/home.html:76
 msgid "公开通知"
 msgstr "Public Notices"
 
-#: notices/selectors.py:101
+#: notices/selectors.py:102
 msgid "内部通知"
 msgstr "Internal notice"
 
-#: notices/selectors.py:119
+#: notices/selectors.py:120
 #, python-format
 msgid "%(name)s（第 %(round)s 轮）"
 msgstr "%(name)s (round %(round)s)"
 
-#: notices/selectors.py:181 reviews/lifecycle.py:68
+#: notices/selectors.py:182 reviews/lifecycle.py:68
 #: templates/projects/group_detail.html:141 templates/reviews/queue.html:73
 #: templates/reviews/queue.html:152
 msgid "待初审"
 msgstr "Pending preliminary"
 
-#: notices/selectors.py:181 reviews/lifecycle.py:71
+#: notices/selectors.py:182 reviews/lifecycle.py:71
 #: templates/projects/group_detail.html:169 templates/reviews/queue.html:79
 #: templates/reviews/queue.html:187
 msgid "待评审"
 msgstr "Pending review"
 
-#: notices/selectors.py:195 notices/selectors.py:220 notices/selectors.py:250
-#: reviews/lifecycle.py:30
+#: notices/selectors.py:196 notices/selectors.py:218 notices/selectors.py:243
+#: notices/selectors.py:277 reviews/lifecycle.py:30
 msgid "已通过"
 msgstr "Approved"
 
-#: notices/selectors.py:195 reviews/lifecycle.py:31 reviews/lifecycle.py:78
+#: notices/selectors.py:196 reviews/lifecycle.py:31 reviews/lifecycle.py:78
 msgid "需修改"
 msgstr "Needs revision"
 
-#: notices/selectors.py:206
-msgid "待你审核"
-msgstr "Awaiting your review"
+#: notices/selectors.py:218
+#, python-format
+msgid "已由 %(name)s 审核通过"
+msgstr "Approved by %(name)s"
 
-#: notices/selectors.py:220 notices/selectors.py:250
+#: notices/selectors.py:219
+#, python-format
+msgid "已被 %(name)s 拒绝"
+msgstr "Rejected by %(name)s"
+
+#: notices/selectors.py:219 notices/selectors.py:243 notices/selectors.py:277
 msgid "已拒绝"
 msgstr "Rejected"
 
-#: notices/selectors.py:231
+#: notices/selectors.py:229
+msgid "待你审核"
+msgstr "Awaiting your review"
+
+#: notices/selectors.py:258
 msgid "待审核"
 msgstr "Pending review"
 
-#: notices/selectors.py:266
+#: notices/selectors.py:306
 msgid "向你发送了一条私信"
 msgstr "Sent you a direct message"
 
-#: notices/selectors.py:276
+#: notices/selectors.py:316
 msgid "提及"
 msgstr "Mention"
 
-#: notices/selectors.py:278 templates/accounts/member_profile_readonly.html:24
+#: notices/selectors.py:318 templates/accounts/member_profile_readonly.html:24
 #: templates/notices/direct_detail.html:4
 #: templates/notices/direct_detail.html:12
 #: templates/notices/direct_detail.html:16
 msgid "私信"
 msgstr "Direct message"
 
-#: notices/selectors.py:279 notices/selectors.py:280 reviews/apps.py:19
+#: notices/selectors.py:319 notices/selectors.py:320 reviews/apps.py:19
 #: reviews/lifecycle.py:52 reviews/lifecycle.py:116
 #: templates/reviews/queue.html:4
 msgid "评审"
 msgstr "Review"
 
-#: notices/selectors.py:281
+#: notices/selectors.py:321
 msgid "评审结果"
 msgstr "Review result"
 
-#: notices/selectors.py:282 templates/projects/group_manage.html:59
+#: notices/selectors.py:322 templates/projects/group_manage.html:59
 msgid "入组申请"
 msgstr "Join requests"
 
-#: notices/selectors.py:283
+#: notices/selectors.py:323
 msgid "入组结果"
 msgstr "Join result"
 
-#: notices/selectors.py:284
+#: notices/selectors.py:324
 msgid "建组申请"
 msgstr "Group request"
 
-#: notices/selectors.py:285
+#: notices/selectors.py:325
 msgid "建组结果"
 msgstr "Group result"
 
-#: notices/views.py:55 templates/home.html:60
+#: notices/views.py:56 templates/home.html:60
 msgid "暂时没有公开通知。"
 msgstr "No public notices yet."
 
-#: notices/views.py:80
+#: notices/views.py:81
 msgid "返回公开通知"
 msgstr "Back to public notices"
 
-#: notices/views.py:127
+#: notices/views.py:128
 msgid "已将全部消息标为已读。"
 msgstr "All messages marked as read."
 
-#: notices/views.py:193
+#: notices/views.py:194
 msgid "不能给自己发私信。"
 msgstr "You can't send a direct message to yourself."
 
-#: notices/views.py:212
+#: notices/views.py:213
 msgid "私信已发送。"
 msgstr "Direct message sent."
 
-#: notices/views.py:294
+#: notices/views.py:297
 msgid "私信已删除。"
 msgstr "Direct message deleted."
 
-#: notices/views.py:318 templates/notices/direct_detail.html:41
+#: notices/views.py:321 templates/notices/direct_detail.html:41
 msgid "返回我的消息"
 msgstr "Back to my messages"
 
@@ -2513,6 +2523,7 @@ msgid "发布时间 %(published)s · 发布人 %(publisher)s"
 msgstr "Published %(published)s · by %(publisher)s"
 
 #: templates/notices/direct_detail.html:18
+#, python-format
 msgid "来自 %(name)s"
 msgstr "From %(name)s"
 

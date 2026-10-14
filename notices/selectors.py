@@ -5,7 +5,7 @@
 
 * **广播型通知**（``Notice``）：按可见集合实时查，已读来自 ``NoticeRead`` 回执；
 * **事件型消息**（``Message`` 表）：发生时就落了行，标题／链接／说明在这里现取
-  现算——帖子改了标题、轮次出了结论，消息里跟着变，不存副本。
+  现算——帖子改了标题、轮次出了结论、申请被处理了，消息里跟着变，不存副本。
 
 只读不写，所以不叫 services；可见性判定仍归 :mod:`notices.visibility`，本模块
 不自己拼规则。
@@ -33,8 +33,9 @@ class MessageRow:
 
     ``type_label`` 是来源类型（内部通知／公开通知／提及／评审…，见
     :data:`_TYPE_LABELS`）；``actor`` 是「来自」列（发布人、@ 你的人、申请人，
-    没有合适的人就空着）；``context`` 是「说明」列（用户组名、帖子/评论、
-    待初审…）；``at`` 既排序也显示。
+    没有合适的人就空着）；``context`` 是「说明」列——它不只有状态：通知放受众、
+    提及放帖子/评论、评论与私信放正文节选，审批类（待审核、已由 X 审核通过…）
+    才放状态；``at`` 既排序也显示。
 
     ``reply_to_id`` 非空时行上多一个「快速回信」（值是要回给谁的账号 id，今天只有
     私信会给）；``url`` 照旧是这一行点开之后去哪。
@@ -196,14 +197,36 @@ def _review_result_content(message):
     )
 
 
+def _decision_status(record, *, pending):
+    """审批类消息的「说明」格：等处理时是待办，有结论后连处理人一起报出来。
+
+    ``record`` 是 ``GroupCreateRequest`` 或 ``GroupJoinRequest``——两者共用
+    ``PENDING`` / ``APPROVED`` 两个状态常量与 ``decided_by``。
+
+    结论与处理人都**现取现算**（与标题同一条规矩，见 ``notices/README.md`` §2）：
+    处理掉之后，我这一行的「待审核」跟着变成「已由 X 审核通过」，既不用回填消息，
+    也不会让「谁处理的」在消息里另存一份。处理人正是收件人自己也照写名字——这条
+    消息本来就可能是别人（另一位管理员、换过手的联系人）替你处理的。
+
+    ``decided_by`` 为空的行（绕过服务层造的）退回不带名字的结论，不拼出
+    「已由  审核通过」这种半句话。
+    """
+    if record.status == record.PENDING:
+        return pending
+    name = display_name(record.decided_by)
+    if record.status == record.APPROVED:
+        return _("已由 %(name)s 审核通过") % {"name": name} if name else _("已通过")
+    return _("已被 %(name)s 拒绝") % {"name": name} if name else _("已拒绝")
+
+
 def _join_request_content(message):
-    """有人申请入组：给联系人，去项目组详情页处理。"""
+    """有人申请入组：给联系人，去项目组详情页处理；状态跟着申请走。"""
     join_request = message.join_request
     return _EventContent(
         join_request.group.name,
         _group_url(join_request.group_id),
         display_name(join_request.applicant),
-        _("待你审核"),
+        _decision_status(join_request, pending=_("待你审核")),
     )
 
 
@@ -222,13 +245,17 @@ def _join_result_content(message):
 
 
 def _create_request_content(message):
-    """有人申请创建项目组：给管理员，去评审页处理。"""
+    """有人申请创建项目组：给管理员，去评审页处理；状态跟着申请走。
+
+    别的管理员先处理掉之后，这一行从「待审核」变成「已由 X 审核通过」——那条申请
+    已经不在队列里了，收件人光看这一行就该知道，不必点进去扑个空。
+    """
     create_request = message.create_request
     return _EventContent(
         create_request.name,
         reverse("reviews:queue"),
         display_name(create_request.applicant),
-        _("待审核"),
+        _decision_status(create_request, pending=_("待审核")),
     )
 
 
@@ -334,7 +361,9 @@ def _event_rows(user):
         "submission__group",
         "join_request__group",
         "join_request__applicant__profile",
+        "join_request__decided_by__profile",
         "create_request__applicant__profile",
+        "create_request__decided_by__profile",
         "direct_message__sender__profile",
     )
     rows = []
