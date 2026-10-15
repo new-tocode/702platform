@@ -178,8 +178,11 @@ SUF="$(suffix)"
 # 媒体文件缺失」或反之。社团规模下这个窗口（秒级）可以接受；要严格一致就先停写。
 # 库导出与媒体打包同样先写 .part、成功才改名：磁盘满或 pg_dump/tar 中途报错会留下**半截
 # 的明文**（db-*.sql.gz、media-*.tar.gz）。半截的东西连解都解不开，处置与「加密失败时保留的
-# 明文」（那是完整可用的备份）正相反：必须清掉。（它们不会占保留名额——backups_of 的两条 glob
-# 都不匹配 .part；但库那份会被 deploy.sh 的体检当成「最近一份备份」，报 ✅ 假绿。）
+# 明文」（那是完整可用的备份）正相反：必须清掉。
+#
+# （清掉是**唯一**要做的：.part 既不占保留名额——backups_of 的两条 glob 都不匹配它；也不会
+# 骗过 deploy.sh 的体检——那里问的是 db-*.sql.gz 与 db-*.sql.gz.gpg 两条精确名字。别把这两处
+# 改成宽通配符，那正是它们当初被收窄的原因。）
 DB_PLAIN="$BACKUP_DIR/db-$STAMP.sql.gz"
 if ! PGPASSWORD="$DJANGO_DB_PASSWORD" pg_dump \
         --username "$DJANGO_DB_USER" \
