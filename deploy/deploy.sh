@@ -122,7 +122,10 @@ if [[ "$BACKUP_RESULT" == "exit-code" || "$BACKUP_RESULT" == "signal" || "$BACKU
     echo "       journalctl -u club702-backup -n 20" >&2
 fi
 if [[ -d "$BACKUP_DIR" ]]; then
-    NEWEST_TS="$(find "$BACKUP_DIR" -maxdepth 1 -name 'db-*.sql.gz' -printf '%T@\n' 2>/dev/null | sort -rn | head -1 || true)"
+    # 通配符结尾带 * 是有意的：启用备份加密（DJANGO_BACKUP_GPG_RECIPIENT）后产物叫
+    # db-*.sql.gz.gpg，而 find 的 -name 是**整名**匹配——写成 'db-*.sql.gz' 会把加密产物
+    # 一份都看不到，于是每次发版都亮一条「没有任何数据库备份产物」的假警报，把真警报淹掉。
+    NEWEST_TS="$(find "$BACKUP_DIR" -maxdepth 1 -name 'db-*.sql.gz*' -printf '%T@\n' 2>/dev/null | sort -rn | head -1 || true)"
     if [[ -z "$NEWEST_TS" ]]; then
         echo "    ⚠️  $BACKUP_DIR 下没有任何数据库备份产物" >&2
     else
