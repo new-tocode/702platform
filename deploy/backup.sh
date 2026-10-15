@@ -16,6 +16,13 @@
 #                        给了就加密（gpg 公钥），不给就明文并打印提醒。
 set -euo pipefail
 
+# 新建文件一律 600、目录 700 起。备份里是实名身份、学号手机号与全部评审意见，而默认
+# umask（常见 022）会让 gzip / tar / gpg 刚写出的那份先是 644——脚本末尾虽然会 chmod 600，
+# 但中途一失败（磁盘满、加密报错）就轮不到那一步，明文库导出就那样敞在同机其它账号眼前。
+# 目录权限是第二道（BACKUP_DIR 另按 700 收紧），而它收紧失败时只提醒、不退出，所以先在这里
+# 把默认值立好，别把安全性押在末尾那一次 chmod 上。
+umask 077
+
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$APP_DIR"
 
@@ -103,15 +110,28 @@ RETAIN="${DJANGO_BACKUP_RETAIN:-14}"
 #     可以接受，但别以为加了它就再不会因收件人失败。
 #
 # 私钥要留在备份机而不是生产机上——那条纪律见 docs/更新维护/开发与部署.md §5。
+#
+# 加密之后**不做内容校验**，因为在这台机器上做不到：密文只有收件人能解，生产机上只有公钥，
+# 连 gpg --list-packets 都会因缺私钥退出 2——照它判好坏会把好密文一起判成坏的，加密就等于
+# 永远不生效。能做的兜底是上面那条 "$1"、下面「失败即删残片」，以及让失败响亮。
 encrypt() {
-    if [[ -n "${DJANGO_BACKUP_GPG_RECIPIENT:-}" ]]; then
-        gpg --batch --yes --trust-model always --encrypt \
-            --recipient "$DJANGO_BACKUP_GPG_RECIPIENT" -o "$1.gpg" "$1" && rm -f "$1"
-    else
-        return 0
+    [[ -n "${DJANGO_BACKUP_GPG_RECIPIENT:-}" ]] || return 0
+    if ! gpg --batch --yes --trust-model always --encrypt \
+             --recipient "$DJANGO_BACKUP_GPG_RECIPIENT" -o "$1.gpg" "$1"; then
+        # 写了一半的密文不许留在目录里冒充备份：它按 mtime 算「最新」，会占掉一个 RETAIN
+        # 名额、把较旧的有效备份挤掉，而真去解密它只会报错。明文留着，失败照样往上抛。
+        rm -f "$1.gpg"
+        echo "  !! 加密失败：已删掉残缺的密文、保留明文 $1" >&2
+        echo "     收件人 $DJANGO_BACKUP_GPG_RECIPIENT 的公钥还在部署用户的钥匙串里吗？" >&2
+        return 1
     fi
+    rm -f "$1"
 }
 suffix() { [[ -n "${DJANGO_BACKUP_GPG_RECIPIENT:-}" ]] && echo ".gpg" || echo ""; }
+
+# 加密开启时产物名多一个 .gpg 后缀。**先算出来**：下面的产出清单要用它，而 set -u 会让
+# 「先用后定义」当场失败（这里踩过一次）。
+SUF="$(suffix)"
 
 # 数据库与媒体分两步导出，不是同一时间点的快照：恢复后可能出现「库里有记录、
 # 媒体文件缺失」或反之。社团规模下这个窗口（秒级）可以接受；要严格一致就先停写。
@@ -121,16 +141,25 @@ PGPASSWORD="$DJANGO_DB_PASSWORD" pg_dump \
     --port "${DJANGO_DB_PORT:-5432}" \
     "$DJANGO_DB_NAME" | gzip > "$BACKUP_DIR/db-$STAMP.sql.gz"
 encrypt "$BACKUP_DIR/db-$STAMP.sql.gz"
+# 结尾只报**真正产出**的那几份：媒体那一步可能整段跳过（两个目录都没有），把不存在的
+# 文件写进「备份完成」，读日志的人会以为媒体也备好了。
+PRODUCED=("$BACKUP_DIR/db-$STAMP.sql.gz$SUF")
 
 # 两个上传目录都要备份：mediafiles/ 是公开的媒体库配图，protected_media/ 是
 # 项目书、批注版、头像、图册这些受保护的文件（它们刻意不在 mediafiles/ 之下，
 # 所以只打包前者会把它们整批漏掉）。目录可能还不存在，缺一个就跳过那一个。
-tar -czf "$BACKUP_DIR/media-$STAMP.tar.gz" \
-    $( [ -d mediafiles ] && echo mediafiles/ ) \
-    $( [ -d protected_media ] && echo protected_media/ )
-encrypt "$BACKUP_DIR/media-$STAMP.tar.gz"
-
-SUF="$(suffix)"
+MEDIA_SOURCES=()
+if [[ -d mediafiles ]]; then MEDIA_SOURCES+=(mediafiles/); fi
+if [[ -d protected_media ]]; then MEDIA_SOURCES+=(protected_media/); fi
+if [[ ${#MEDIA_SOURCES[@]} -gt 0 ]]; then
+    tar -czf "$BACKUP_DIR/media-$STAMP.tar.gz" "${MEDIA_SOURCES[@]}"
+    encrypt "$BACKUP_DIR/media-$STAMP.tar.gz"
+    PRODUCED+=("$BACKUP_DIR/media-$STAMP.tar.gz$SUF")
+else
+    # 两个目录都没有时，别照旧把空清单交给 tar：它会以「Cowardly refusing to create an
+    # empty archive」退出 2，set -e 之下整轮备份就此中止——库明明已经备好了，却报成失败。
+    echo "  跳过媒体备份：mediafiles/ 与 protected_media/ 都不存在" >&2
+fi
 
 # 目录里同一类产物可能有两代：明文（加密关时产出）与 .gpg（加密开时产出）。**收紧权限与
 # 清理都要按两代一起收**，不能只按当前的 $SUF：只收一代的后果是另一代既不被 chmod、也不
@@ -160,7 +189,7 @@ prune() {
 prune db
 prune media
 
-echo "[$(date '+%F %T')] 备份完成: $BACKUP_DIR/db-$STAMP.sql.gz$SUF $BACKUP_DIR/media-$STAMP.tar.gz$SUF"
+echo "[$(date '+%F %T')] 备份完成: ${PRODUCED[*]}"
 
 # 两条提醒按「当下能不能被利用」排序：权限是本机账号立刻就能读走，
 # 加密防的是备份文件离开这台机器之后被读（要先有异地副本才有意义）。
