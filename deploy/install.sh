@@ -60,7 +60,13 @@ fi
 
 set -a
 # shellcheck disable=SC1090
-source "$ENV_FILE"
+# 读不出来时别让 set -e 把脚本闷死在一行 shell 报错上：最常见的原因是某个值里有空格又没加
+# 引号（典型是 gpg 指纹按 4 位一组从 `gpg --fingerprint` 抄了进来），而那句报错看不出该改哪儿。
+if ! source "$ENV_FILE"; then
+    fail "env.sh 读不出来，原因见上一行报错。最常见的是某个值里有空格却没有引号（例如 gpg 指纹）。"
+    fail "值要么加引号，要么去掉空格连写；文件: $ENV_FILE"
+    exit 1
+fi
 set +a
 
 # 校验必须在 env.sh 中显式存在的关键项
@@ -84,6 +90,21 @@ if [[ "$DJANGO_CSRF_TRUSTED_ORIGINS" == *"<"* || "$DJANGO_CSRF_TRUSTED_ORIGINS" 
     fail "请写上成员实际访问的每个入口（含协议），例如 https://club.example.com,https://1.2.3.4"
     exit 1
 fi
+
+# 备份加密的收件人只能填十六进制的指纹 / key id，且长度得对。从 `gpg --fingerprint` 抄来的
+# 指纹是 4 位一组带空格的，裸填进 env.sh（模板那一行没有引号）会被 shell 读成「赋值 + 执行
+# 命令」——值被截成第一组的 4 个字符，而那个报错还可能被后面能执行成功的行吞掉（source 的
+# 返回码取自最后一行）。填邮箱/名字则只提醒：那样仍能工作，只是 gpg 的 -r 是子串匹配，会
+# 静默挑中别的钥。
+case "${DJANGO_BACKUP_GPG_RECIPIENT:-}" in
+    "") ;;
+    *[!0-9A-Fa-f]*) warn "DJANGO_BACKUP_GPG_RECIPIENT 不是十六进制指纹/key id（$DJANGO_BACKUP_GPG_RECIPIENT）：gpg 的 -r 是子串匹配，名字写宽了会静默挑中别的钥，建议改成完整指纹" ;;
+    *) if [[ ! "$DJANGO_BACKUP_GPG_RECIPIENT" =~ ^([0-9A-Fa-f]{16}|[0-9A-Fa-f]{40})$ ]]; then
+           fail "DJANGO_BACKUP_GPG_RECIPIENT 像是被截断的指纹（当前是 '$DJANGO_BACKUP_GPG_RECIPIENT'）。"
+           fail "从 gpg --fingerprint 抄来的指纹带空格，去掉空格、连写 40 位再填。"
+           exit 1
+       fi ;;
+esac
 
 # ---------- 3. 依赖环境检测（只提示，不自动安装） ----------
 MISSING=()
@@ -119,6 +140,7 @@ need_cmd psql           "PostgreSQL 客户端，如 Ubuntu: sudo apt install pos
 need_cmd pg_isready     "PostgreSQL 客户端工具，如 Ubuntu: sudo apt install postgresql-client"
 need_cmd msgfmt         "界面英文翻译的编译工具（gettext 包），如 Ubuntu: sudo apt install gettext"
 need_cmd sudo           "本脚本需要 sudo 权限"
+need_cmd flock          "备份脚本用它保证同一时刻只跑一个 run（util-linux 提供），如 Ubuntu: sudo apt install util-linux"
 
 # PostgreSQL 服务本身
 need_cmd postgres       "PostgreSQL 服务端未安装，如 Ubuntu: sudo apt install postgresql"
@@ -162,15 +184,24 @@ fi
 if [[ -n "${DJANGO_BACKUP_GPG_RECIPIENT:-}" ]]; then
     need_cmd gpg "备份加密用（gpg），如 Ubuntu: sudo apt install gnupg"
     if command -v gpg >/dev/null 2>&1 && id -u "$DEPLOY_SYSTEM_USER" >/dev/null 2>&1; then
-        # HOME 显式给成部署用户的家目录：systemd 起 backup.service 时会这么设（User= 的
-        # 家目录），而 sudo 默认并不改 HOME——不显式指定就会去查错人的钥匙串。
-        DEPLOY_HOME="$(getent passwd "$DEPLOY_SYSTEM_USER" | cut -d: -f6)"
-        if ! sudo -u "$DEPLOY_SYSTEM_USER" env HOME="$DEPLOY_HOME" \
-                gpg --list-keys "$DJANGO_BACKUP_GPG_RECIPIENT" >/dev/null 2>&1; then
-            MISSING+=("部署用户 $DEPLOY_SYSTEM_USER 的钥匙串里没有收件人 $DJANGO_BACKUP_GPG_RECIPIENT 的公钥（导入: sudo -u $DEPLOY_SYSTEM_USER gpg --import <公钥文件>；启用步骤见 docs/更新维护/开发与部署.md §5）")
+        # HOME 显式给成部署用户的家目录：systemd 起 backup.service 时就是这么设的（User= 的
+        # 家目录），这里照它写成一样，检查与运行时找的才是同一个钥匙串；也省得去猜 sudoers
+        # 里 HOME 有没有进 env_keep（发行版默认会设成目标用户的家目录，但那是配置不是承诺）。
+        DEPLOY_HOME="$(getent passwd "$DEPLOY_SYSTEM_USER" 2>/dev/null | cut -d: -f6)"
+        if [[ -z "$DEPLOY_HOME" || ! -d "$DEPLOY_HOME" ]]; then
+            MISSING+=("查不到部署用户 $DEPLOY_SYSTEM_USER 的家目录（getent 给出 '$DEPLOY_HOME'），没法确认收件人公钥在不在它的钥匙串里")
+        elif ! GPG_OUT="$(sudo -u "$DEPLOY_SYSTEM_USER" env HOME="$DEPLOY_HOME" \
+                    gpg --list-keys "$DJANGO_BACKUP_GPG_RECIPIENT" 2>&1)"; then
+            # 「sudo 用不了」与「钥匙串里确实没有」都会落到这里，得分开说：混在一起会把人
+            # 引向反复重导公钥，而问题其实在别处。
+            if [[ "$GPG_OUT" == *"password is required"* || "$GPG_OUT" == *"terminal is required"* ]]; then
+                MISSING+=("以 $DEPLOY_SYSTEM_USER 执行 sudo 需要口令、或没有终端：确认不了收件人公钥是否已导入（请以 root 运行本脚本）")
+            else
+                MISSING+=("部署用户 $DEPLOY_SYSTEM_USER 的钥匙串里没有收件人 $DJANGO_BACKUP_GPG_RECIPIENT 的公钥（导入: sudo -u $DEPLOY_SYSTEM_USER gpg --import <公钥文件>；启用步骤见 docs/更新维护/开发与部署.md §5）")
+            fi
         elif ! printf probe | sudo -u "$DEPLOY_SYSTEM_USER" env HOME="$DEPLOY_HOME" \
-                gpg --batch --yes --trust-model always --encrypt \
-                    --recipient "$DJANGO_BACKUP_GPG_RECIPIENT" -o /dev/null >/dev/null 2>&1; then
+                    gpg --batch --yes --trust-model always --encrypt \
+                        --recipient "$DJANGO_BACKUP_GPG_RECIPIENT" -o /dev/null >/dev/null 2>&1; then
             MISSING+=("收件人 $DJANGO_BACKUP_GPG_RECIPIENT 的公钥无法加密（只有签名子钥？已过期或被吊销？请核对指纹并换一把带加密子钥的公钥）")
         fi
     fi
