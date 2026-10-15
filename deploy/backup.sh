@@ -85,16 +85,31 @@ fi
 
 # 同一分钟里可能有两个 run 同时在跑：timer 到点、deploy.sh 的第 1/6 步、运维手工，各算一次。
 # 它们会写同名文件（时间戳只到分钟）并互相覆盖与删除，最坏的结果是这一分钟一个备份都不剩。
-# 这里用一把排他锁把「同一时刻只跑一个」变成硬保证：第二个进来的说明情况后直接退出——
-# 退出码是 0，因为它没出错，只是没必要再跑一遍。
+# 这里用一把排他锁串行化，**后来者等待而不是跳过**——deploy.sh 的规矩是「任何 migrate 之前
+# 先备份」，跳过就等于它那份发布前快照不存在；timer 撞上时等一会儿再跑也无妨。
+#
+# 等不到、或加锁本身失败，都**响亮退出**（退出码 1）。不装作成功：exit 0 会让「备份其实没在
+# 跑」这件事一直藏着，直到某天发版时体检说产物太旧。flock 在锁冲突时给 1，其它错误（二进制
+# 不在、文件系统不支持锁）给别的码——两种要分开说，否则「另一次备份正在进行」会掩盖掉
+# 「flock 根本用不了」。
 #
 # 锁内顺手清掉上一轮被 kill 留下的 .part（「写了一半」的东西，不该留在目录里冒充备份、
 # 也不该被保留份数算进去）。此刻持有锁，所以不会误删另一个 run 正在写的那一份。
+#
+# 别手工删 $BACKUP_DIR/.lock：它是承重件——删掉之后第二个 run 会在新 inode 上成功上锁，
+# 互斥就失效了。
 LOCK_FILE="$BACKUP_DIR/.lock"
+LOCK_WAIT=300
 exec 9>"$LOCK_FILE"
-if ! flock -n 9; then
-    echo "[$(date '+%F %T')] 另一次备份正在进行（锁 $LOCK_FILE），本次跳过。" >&2
-    exit 0
+LOCK_RC=0
+flock -w "$LOCK_WAIT" 9 || LOCK_RC=$?
+if (( LOCK_RC != 0 )); then
+    if (( LOCK_RC == 1 )); then
+        echo "  !! 另一次备份超过 ${LOCK_WAIT} 秒还没结束，本次放弃（这一轮没有产出任何备份）。" >&2
+    else
+        echo "  !! 加锁失败（flock 退出码 $LOCK_RC），本次不备份：确认 flock 命令可用、且 $BACKUP_DIR 所在的文件系统支持锁。" >&2
+    fi
+    exit 1
 fi
 find "$BACKUP_DIR" -maxdepth 1 -name '*.part' -delete 2>/dev/null || true
 
@@ -105,7 +120,7 @@ RETAIN="${DJANGO_BACKUP_RETAIN:-14}"
 # 配置里错一个值就能静默毁掉所有备份，所以拦一道，退回默认 14 份。（非数字原本还会以
 # 「unbound variable」中止在算术展开上，同样在这里一并解决。）
 if [[ ! "$RETAIN" =~ ^[1-9][0-9]*$ ]]; then
-    echo "  !! DJANGO_BACKUP_RETAIN 必须是正整数（当前是 '$RETAIN'），本次按 14 份保留。" >&2
+    echo "  !! DJANGO_BACKUP_RETAIN 必须是正整数、且不要前导零（当前是 '$RETAIN'；shell 算术会把 014 当八进制），本次按 14 份保留。" >&2
     RETAIN=14
 fi
 
@@ -219,24 +234,43 @@ backups_of() {  # $1 = db 或 media；输出用 NUL 分隔（备份目录的路�
     done
 }
 
+# 这个路径是不是**本轮刚产出**的那份（PRODUCED 在调用 prune 之前就填好了）
+produced() {
+    local x
+    for x in "${PRODUCED[@]:-}"; do
+        [[ -n "$x" && "$x" == "$1" ]] && return 0
+    done
+    return 1
+}
+
 # 按保留份数清理旧的 db 与 media 备份（各自独立保留 RETAIN 份）
 prune() {
-    local files=() doomed=() f i=0
+    local files=() records=() doomed=() f rec i=0
     mapfile -t -d '' files < <(backups_of "$1")
     [[ ${#files[@]} -gt 0 ]] || return 0
     # 刚写出的那几份也要一并收紧权限：gzip/tar 按 umask 创建（常见 644 = 同机所有账号
     # 可读），目录里更早的历史备份同样不该因为「那时还没加这一步」而一直敞着。
     chmod 600 "${files[@]}" 2>/dev/null || true
 
-    # 挑出该删的，**全程 NUL 分隔，不借 ls -1t 排序**：ls 的输出按行，名字里一旦有空格
-    # （备份目录的路径本身就带空格时就会）或换行，后面的 rm 会把它拆成两半——而脚本开头
-    # cd 到了 $APP_DIR，那些碎片于是当**相对路径**解析，会误删应用目录下的同名文件；同时
-    # rm 报错让 xargs 以 123 退出，整轮在生产完备份之后中止（保留份数从此再也不生效）。
-    # 按文件名倒序即可：产物名里就带时间戳（<前缀>-<日期>-<时分>），字典序即时间序。
-    while IFS= read -r -d '' f; do
-        (( i < RETAIN )) || doomed+=("$f")
+    # 挑出该删的，**全程 NUL 分隔，不借 ls -1t**：ls 的输出按行，名字里一旦有空格（备份目录
+    # 的路径本身就带空格时就会）或换行，后面的 rm 会把它拆成两半——脚本开头 cd 到了
+    # $APP_DIR，那些碎片于是当**相对路径**解析，会误删应用目录下的同名文件；同时 rm 报错让
+    # xargs 以 123 退出，整轮在备份做完之后中止（保留份数从此再也不生效）。
+    #
+    # 排序以 **mtime** 为准，不看文件名：文件名可能不是本脚本给的（手工 pg_dump 出来的
+    # db-manual.sql.gz、从别的机器拷回来的备份、时钟回拨后攒下的「未来」日期），按名字排会
+    # 让刚做好的那份排到队尾、被同一轮 prune 删掉——脚本紧接着还会打印
+    # 「备份完成: <那个已经不存在的路径>」。
+    for f in "${files[@]}"; do
+        records+=("$(stat -c '%Y' -- "$f" 2>/dev/null || echo 0)"$'\t'"$f")
+    done
+    while IFS= read -r -d '' rec; do
+        f="${rec#*$'\t'}"
+        # 本轮刚产出的那几份**绝不删**：保留份数被填得很小、或目录里有 mtime 更「新」的杂物
+        # 时，也不该出现「脚本删掉了自己刚做好的备份」。
+        if (( i >= RETAIN )) && ! produced "$f"; then doomed+=("$f"); fi
         i=$((i + 1))
-    done < <(printf '%s\0' "${files[@]}" | sort -zr)
+    done < <(printf '%s\0' "${records[@]}" | sort -z -t $'\t' -k1,1nr)
     (( ${#doomed[@]} > 0 )) && rm -f -- "${doomed[@]}"
     return 0
 }
