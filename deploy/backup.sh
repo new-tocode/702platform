@@ -132,13 +132,33 @@ encrypt "$BACKUP_DIR/media-$STAMP.tar.gz"
 
 SUF="$(suffix)"
 
-# 收紧备份文件权限。gzip/tar 按 umask 创建（常见 644 = 同机所有账号可读）；
-# 顺带把目录里已有的历史备份一并收紧——它们不该因为「那时还没加这一步」而一直敞着。
-chmod 600 "$BACKUP_DIR"/db-*.sql.gz"$SUF" "$BACKUP_DIR"/media-*.tar.gz"$SUF" 2>/dev/null || true
+# 目录里同一类产物可能有两代：明文（加密关时产出）与 .gpg（加密开时产出）。**收紧权限与
+# 清理都要按两代一起收**，不能只按当前的 $SUF：只收一代的后果是另一代既不被 chmod、也不
+# 受 RETAIN 约束——于是某次把加密开关一拨，此前攒下的那批明文备份就永远留在盘上，正是
+# 加密要防的东西。两类一起数还顺带避免了「开关切换后两代各留 RETAIN 份」的加倍占用。
+#
+# 用函数列出**实际存在**的文件，而不是把两个通配符直接交给 ls：通配符不匹配时 bash 会把
+# 它原样传给 ls，ls 报错退出 2，而本脚本带 pipefail——那条管道失败会让整轮备份在清理这
+# 一步中止（备份其实已经做完了）。
+backups_of() {  # $1 = db 或 media
+    local f
+    for f in "$BACKUP_DIR/$1-"*.gz "$BACKUP_DIR/$1-"*.gz.gpg; do
+        [[ -e "$f" ]] && printf '%s\n' "$f"
+    done
+}
 
 # 按保留份数清理旧的 db 与 media 备份（各自独立保留 RETAIN 份）
-ls -1t "$BACKUP_DIR"/db-*.sql.gz"$SUF"    2>/dev/null | tail -n +$((RETAIN + 1)) | xargs -r rm --
-ls -1t "$BACKUP_DIR"/media-*.tar.gz"$SUF" 2>/dev/null | tail -n +$((RETAIN + 1)) | xargs -r rm --
+prune() {
+    local files=()
+    mapfile -t files < <(backups_of "$1")
+    [[ ${#files[@]} -gt 0 ]] || return 0
+    # 刚写出的那几份也要一并收紧权限：gzip/tar 按 umask 创建（常见 644 = 同机所有账号
+    # 可读），目录里更早的历史备份同样不该因为「那时还没加这一步」而一直敞着。
+    chmod 600 "${files[@]}" 2>/dev/null || true
+    ls -1t "${files[@]}" | tail -n +$((RETAIN + 1)) | xargs -r rm --
+}
+prune db
+prune media
 
 echo "[$(date '+%F %T')] 备份完成: $BACKUP_DIR/db-$STAMP.sql.gz$SUF $BACKUP_DIR/media-$STAMP.tar.gz$SUF"
 
