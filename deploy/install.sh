@@ -59,17 +59,22 @@ if [[ -n "$UNFILLED" ]]; then
 fi
 
 # env.sh 的每一行都是 shell 赋值语句，**值里有空格又没加引号**的行会被读成「赋值 + 执行
-# 命令」：那个命令不存在时报一行错，但① 变量**根本不会被赋值**（值连同那行一起废掉），
-# ② 这个错既不会中止脚本（失败行后面还有能成功的行时 source 仍返回 0），也未必是最后一行
-# ——靠 source 的返回码判断不住。最常见的来源是 `gpg --fingerprint` 那串 4 位一组的指纹。
-# 所以这里静态查一遍再用。
-UNQUOTED=$(grep -nE '^[A-Za-z_][A-Za-z0-9_]*=[^"'"'"']*[[:space:]]' "$ENV_FILE" || true)
+# 命令」：那个命令不存在时报一行 `XX: command not found`，变量**根本不会被赋值**（值连同那
+# 行一起废掉），下面那句 source 会（set -e 之下）当场中止——中止本身是响亮的，但 bash 只会
+# 说「某某不是命令」，看不出该改哪儿。这条静态扫描就是给它一个能看懂的原因。最常见的来源是
+# `gpg --fingerprint` 那串 4 位一组的指纹。
+#
+# 正则刻意收窄成「空格之后还有**第二个词**」：行尾注释（`X=30  # 注释`）、行尾空白、CRLF 行尾
+# 都不算问题。写宽过一次（`=[^"']*[[:space:]]`），于是 CRLF 的 env.sh 会把每一行都列出来——
+# 而这里打印的是整行，等于把 SECRET_KEY 与口令打到 stderr。所以下面**只报变量名，不打印值**。
+UNQUOTED=$(grep -nE '^[A-Za-z_][A-Za-z0-9_]*=[^"'"'"'#]*[[:space:]]+[^#[:space:]]' "$ENV_FILE" || true)
 if [[ -n "$UNQUOTED" ]]; then
-    fail "env.sh 里这些行的值没加引号却含空格，会被 shell 当成「赋值 + 执行命令」（变量不会被赋值）:"
+    fail "env.sh 里这些行不会被 shell 读成赋值（值里带空格却没加引号），变量实际上取不到值:"
     while IFS= read -r line; do
-        fail "  - $line"
+        fail "  - ${line%%=*}"
     done <<< "$UNQUOTED"
-    fail "gpg 指纹请去掉空格、连写 40 位十六进制；其它值若确实需要空格，加引号。"
+    fail "（只列变量名：那一行右边可能有口令，不打出来。）"
+    fail "gpg 指纹请去掉空格、连写 40 位十六进制；其它值若确实含空格，用引号把值括起来。"
     exit 1
 fi
 
@@ -207,7 +212,8 @@ if [[ -n "${DJANGO_BACKUP_GPG_RECIPIENT:-}" ]]; then
             # 引向反复重导公钥，而问题其实在别处。按 sudo 自己的报错前缀判，比认那两句英文
             # 文案稳（sudo 带 NLS，文案随 locale 变，还有 requiretty / targetpw 等别的失败法）。
             if [[ "$GPG_OUT" == *"sudo:"* ]]; then
-                MISSING+=("以 $DEPLOY_SYSTEM_USER 执行 sudo 失败（见上面的 sudo 报错）：确认不了收件人公钥是否已导入（请以 root 运行本脚本）")
+                # 把 sudo 那行报错摘进来：它被这个 $() 捕获了，不会自己打到屏幕上。
+                MISSING+=("以 $DEPLOY_SYSTEM_USER 执行 sudo 失败（${GPG_OUT%%$'\n'*}）：确认不了收件人公钥是否已导入，请以 root 运行本脚本")
             else
                 MISSING+=("部署用户 $DEPLOY_SYSTEM_USER 的钥匙串里没有收件人 $DJANGO_BACKUP_GPG_RECIPIENT 的公钥（导入: sudo -u $DEPLOY_SYSTEM_USER gpg --import <公钥文件>；启用步骤见 docs/更新维护/开发与部署.md §5）")
             fi
