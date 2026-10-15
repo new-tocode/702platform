@@ -58,6 +58,33 @@ if [[ -n "$UNFILLED" ]]; then
     exit 1
 fi
 
+# env.sh 的每一行都是 shell 赋值语句。**值由几个纯词用空格拼起来**时（典型是 `gpg
+# --fingerprint` 那串 4 位一组的指纹），shell 把它读成「赋值 + 执行命令」：第二个词被当成命令，
+# 变量**取不到值**。这种情况多半报一行 `XX: command not found` 并以 set -e 中止——响亮，但只有
+# bash 那句「某某不是命令」，看不出该改哪儿；而**若第二个词恰好是个能成功的命令**（`:`、`true`），
+# 就是一个字节都不输出的静默失败。所以这条扫描是防线，不是锦上添花。
+#
+# 正则刻意只认「纯词 + 空格」这一种形状，两个方向都有理由：
+#   · 值里一旦出现 `$`、`\`、引号、括号等 shell 语法就一律放行——`VAR=a\ b`、`VAR=$(echo a b)`、
+#     `VAR=$((1 + 2))` 都是**对的**写法，正则判不准，交给 shell 自己去报；
+#   · 行尾注释、行尾空白、CRLF 行尾也不再命中。曾经写宽过一次（`=[^"']*[[:space:]]`），
+#     于是 CRLF 的 env.sh 让每一行都命中，而当时打印的是整行——等于把 SECRET_KEY 与口令
+#     打到 stderr。所以下面**只报行号与变量名，绝不打印值**。
+# 代价：值里带 `#` 又有第二个词的（`VAR=a#b c`）漏报，那种由 shell 以 `command not found` 中止。
+UNQUOTED=$(grep -nE '^[[:space:]]*(export[[:space:]]+)?[A-Za-z_][A-Za-z0-9_]*=[A-Za-z0-9._/@%+,:~-]+([[:space:]]+[A-Za-z0-9._/@%+,:~-]+)+$' "$ENV_FILE" || true)
+if [[ -n "$UNQUOTED" ]]; then
+    fail "env.sh 里这些行不会被 shell 读成赋值（值是空格分开的几个词），变量实际上取不到值:"
+    while IFS= read -r line; do
+        # 只报行号与变量名（形如 12:DJANGO_BACKUP_GPG_RECIPIENT），值一律不打——那一行右边
+        # 可能有 SECRET_KEY 或口令。grep -n 的前缀、可选的行首缩进与 export 都去掉。
+        pretty="${line%%=*}"
+        pretty="${pretty/export /}"; pretty="${pretty// /}"
+        fail "  - $pretty"
+    done <<< "$UNQUOTED"
+    fail "gpg 指纹请去掉空格、连写 40 位十六进制；其它值若确实含空格，用引号把值括起来。"
+    exit 1
+fi
+
 set -a
 # shellcheck disable=SC1090
 source "$ENV_FILE"
@@ -84,6 +111,21 @@ if [[ "$DJANGO_CSRF_TRUSTED_ORIGINS" == *"<"* || "$DJANGO_CSRF_TRUSTED_ORIGINS" 
     fail "请写上成员实际访问的每个入口（含协议），例如 https://club.example.com,https://1.2.3.4"
     exit 1
 fi
+
+# 备份加密的收件人只能填十六进制的指纹 / key id，且长度得对。从 `gpg --fingerprint` 抄来的
+# 指纹是 4 位一组带空格的，裸填进 env.sh（模板那一行没有引号）会被 shell 读成「赋值 + 执行
+# 命令」——值被截成第一组的 4 个字符，而那个报错还可能被后面能执行成功的行吞掉（source 的
+# 返回码取自最后一行）。填邮箱/名字则只提醒：那样仍能工作，只是 gpg 的 -r 是子串匹配，会
+# 静默挑中别的钥。
+case "${DJANGO_BACKUP_GPG_RECIPIENT:-}" in
+    "") ;;
+    *[!0-9A-Fa-f]*) warn "DJANGO_BACKUP_GPG_RECIPIENT 不是十六进制指纹 / key id（$DJANGO_BACKUP_GPG_RECIPIENT）：建议改成连写的完整指纹——名字与邮箱在 gpg 的 -r 下是子串匹配，会静默挑中别的钥；带空格的指纹则会被 env.sh 的解析弄坏" ;;
+    *) if [[ ! "$DJANGO_BACKUP_GPG_RECIPIENT" =~ ^([0-9A-Fa-f]{8}|[0-9A-Fa-f]{16}|[0-9A-Fa-f]{40}|[0-9A-Fa-f]{64})$ ]]; then
+           fail "DJANGO_BACKUP_GPG_RECIPIENT 像是被截断的指纹（当前是 '$DJANGO_BACKUP_GPG_RECIPIENT'）。"
+           fail "从 gpg --fingerprint 抄来的指纹带空格，去掉空格、连写 40 位再填。"
+           exit 1
+       fi ;;
+esac
 
 # ---------- 3. 依赖环境检测（只提示，不自动安装） ----------
 MISSING=()
@@ -119,6 +161,7 @@ need_cmd psql           "PostgreSQL 客户端，如 Ubuntu: sudo apt install pos
 need_cmd pg_isready     "PostgreSQL 客户端工具，如 Ubuntu: sudo apt install postgresql-client"
 need_cmd msgfmt         "界面英文翻译的编译工具（gettext 包），如 Ubuntu: sudo apt install gettext"
 need_cmd sudo           "本脚本需要 sudo 权限"
+need_cmd flock          "备份脚本用它保证同一时刻只跑一个 run（util-linux 提供），如 Ubuntu: sudo apt install util-linux"
 
 # PostgreSQL 服务本身
 need_cmd postgres       "PostgreSQL 服务端未安装，如 Ubuntu: sudo apt install postgresql"
@@ -149,6 +192,47 @@ fi
 # 部署目标用户必须真实存在
 if ! id -u "$DEPLOY_SYSTEM_USER" >/dev/null 2>&1; then
     MISSING+=("系统用户 $DEPLOY_SYSTEM_USER 不存在（请先: sudo useradd -m -s /bin/bash $DEPLOY_SYSTEM_USER）")
+fi
+
+# 备份加密：填了收件人就必须**在部署用户的钥匙串里**能找到一把能加密的公钥，否则 backup.sh
+# 每夜都会失败——而失败只在 journal 里，往往几天后才发现。安装期先拦下。
+#
+# 两个检查都要做，它们对应两种不同的补救：
+#   · 找不到公钥           → 公钥没导入（或导进了别人的钥匙串）
+#   · 找得到但加密不了     → 只有签名子钥（用 gpg --quick-generate-key ... default 生成的就是
+#                            这样）、或公钥已过期/被吊销
+# 加密与 backup.sh 用同一组参数，是**故意**的：收件人能不能加密，只有真加一次才知道。
+if [[ -n "${DJANGO_BACKUP_GPG_RECIPIENT:-}" ]]; then
+    need_cmd gpg "备份加密用（gpg），如 Ubuntu: sudo apt install gnupg"
+    if command -v gpg >/dev/null 2>&1 && id -u "$DEPLOY_SYSTEM_USER" >/dev/null 2>&1; then
+        # HOME 显式给成部署用户的家目录：systemd 起 backup.service 时就是这么设的（User= 的
+        # 家目录），这里照它写成一样，检查与运行时找的才是同一个钥匙串；也省得去猜 sudoers
+        # 里 HOME 有没有进 env_keep（发行版默认会设成目标用户的家目录，但那是配置不是承诺）。
+        # 末尾的 || true 是给 pipefail 的：getent 自己失败（LDAP/nsswitch 抖动）时别让 set -e
+        # 把脚本无声掐断，交给下面那句「查不到家目录」去报。
+        DEPLOY_HOME="$(getent passwd "$DEPLOY_SYSTEM_USER" 2>/dev/null | cut -d: -f6 || true)"
+        if [[ -z "$DEPLOY_HOME" || ! -d "$DEPLOY_HOME" ]]; then
+            MISSING+=("查不到部署用户 $DEPLOY_SYSTEM_USER 的家目录（getent 给出 '$DEPLOY_HOME'），没法确认收件人公钥在不在它的钥匙串里")
+        elif ! GPG_OUT="$(sudo -u "$DEPLOY_SYSTEM_USER" env HOME="$DEPLOY_HOME" \
+                    gpg --list-keys "$DJANGO_BACKUP_GPG_RECIPIENT" 2>&1)"; then
+            # 「sudo 跑不通」与「钥匙串里确实没有」都会落到这里，得分开说：混在一起会把人
+            # 引向反复重导公钥，而问题其实在别处。按 sudo 自己的报错前缀判，比认那两句英文
+            # 文案稳（sudo 带 NLS，文案随 locale 变，还有 requiretty / targetpw 等别的失败法）。
+            if [[ "$GPG_OUT" == *"sudo:"* ]]; then
+                # 把 sudo 那行报错摘进消息里：它被这个 $() 捕获了，自己不会出现在屏幕上。
+                # 取**以 sudo: 开头的那一行**，不是第一行——首行可能是 sudo 的 lecture、也可能是
+                # 空行（那样消息会变成一对空括号）。
+                SUDO_LINE="$(printf '%s\n' "$GPG_OUT" | grep -m1 'sudo:' || true)"
+                MISSING+=("以 $DEPLOY_SYSTEM_USER 执行 sudo 失败（${SUDO_LINE:-sudo 没给出原因}）：确认不了收件人公钥是否已导入，请以 root 运行本脚本")
+            else
+                MISSING+=("部署用户 $DEPLOY_SYSTEM_USER 的钥匙串里没有收件人 $DJANGO_BACKUP_GPG_RECIPIENT 的公钥（导入: sudo -u $DEPLOY_SYSTEM_USER gpg --import <公钥文件>；启用步骤见 docs/更新维护/开发与部署.md §5）")
+            fi
+        elif ! printf probe | sudo -u "$DEPLOY_SYSTEM_USER" env HOME="$DEPLOY_HOME" \
+                    gpg --batch --yes --trust-model always --encrypt \
+                        --recipient "$DJANGO_BACKUP_GPG_RECIPIENT" -o /dev/null >/dev/null 2>&1; then
+            MISSING+=("收件人 $DJANGO_BACKUP_GPG_RECIPIENT 的公钥无法加密（只有签名子钥？已过期或被吊销？请核对指纹并换一把带加密子钥的公钥）")
+        fi
+    fi
 fi
 
 if [[ "${#MISSING[@]}" -gt 0 ]]; then

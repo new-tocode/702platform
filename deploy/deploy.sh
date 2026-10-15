@@ -122,7 +122,13 @@ if [[ "$BACKUP_RESULT" == "exit-code" || "$BACKUP_RESULT" == "signal" || "$BACKU
     echo "       journalctl -u club702-backup -n 20" >&2
 fi
 if [[ -d "$BACKUP_DIR" ]]; then
-    NEWEST_TS="$(find "$BACKUP_DIR" -maxdepth 1 -name 'db-*.sql.gz' -printf '%T@\n' 2>/dev/null | sort -rn | head -1 || true)"
+    # 两条 -name 精确列出，别用 'db-*.sql.gz*'：那个尾部通配符还会命中备份脚本写到一半的
+    # db-*.sql.gz.part——于是这里可能拿着**一份半成品**报「✅ 最近一份数据库备份在 0 小时
+    # 前」，而真备份已经是几天前的了。这条体检的全部意义就在于别报假绿。（加密开启后产物
+    # 叫 db-*.sql.gz.gpg，所以两条都要。）
+    NEWEST_TS="$(find "$BACKUP_DIR" -maxdepth 1 \
+        \( -name 'db-*.sql.gz' -o -name 'db-*.sql.gz.gpg' \) \
+        -printf '%T@\n' 2>/dev/null | sort -rn | head -1 || true)"
     if [[ -z "$NEWEST_TS" ]]; then
         echo "    ⚠️  $BACKUP_DIR 下没有任何数据库备份产物" >&2
     else

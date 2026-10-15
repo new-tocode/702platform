@@ -16,6 +16,13 @@
 #                        给了就加密（gpg 公钥），不给就明文并打印提醒。
 set -euo pipefail
 
+# 新建文件一律 600、目录 700 起。备份里是实名身份、学号手机号与全部评审意见，而默认
+# umask（常见 022）会让 gzip / tar / gpg 刚写出的那份先是 644——脚本末尾虽然会 chmod 600，
+# 但中途一失败（磁盘满、加密报错）就轮不到那一步，明文库导出就那样敞在同机其它账号眼前。
+# 目录权限是第二道（BACKUP_DIR 另按 700 收紧），而它收紧失败时只提醒、不退出，所以先在这里
+# 把默认值立好，别把安全性押在末尾那一次 chmod 上。
+umask 077
+
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$APP_DIR"
 
@@ -76,47 +83,203 @@ if [[ "$(stat -c '%a' "$BACKUP_DIR")" != "700" ]]; then
     }
 fi
 
+# 同一分钟里可能有两个 run 同时在跑：timer 到点、deploy.sh 的第 1/6 步、运维手工，各算一次。
+# 它们会写同名文件（时间戳只到分钟）并互相覆盖与删除，最坏的结果是这一分钟一个备份都不剩。
+# 这里用一把排他锁串行化，**后来者等待而不是跳过**——deploy.sh 的规矩是「任何 migrate 之前
+# 先备份」，跳过就等于它那份发布前快照不存在；timer 撞上时等一会儿再跑也无妨。
+#
+# 等不到、或加锁本身失败，都**响亮退出**（退出码 1）。不装作成功：exit 0 会让「备份其实没在
+# 跑」这件事一直藏着，直到某天发版时体检说产物太旧。flock 在锁冲突时给 1，其它错误（二进制
+# 不在、文件系统不支持锁）给别的码——两种要分开说，否则「另一次备份正在进行」会掩盖掉
+# 「flock 根本用不了」。
+#
+# 锁内顺手清掉上一轮被 kill 留下的 .part（「写了一半」的东西，不该留在目录里冒充备份、
+# 也不该被保留份数算进去）。此刻持有锁，所以不会误删另一个 run 正在写的那一份。
+#
+# 别手工删 $BACKUP_DIR/.lock：它是承重件——删掉之后第二个 run 会在新 inode 上成功上锁，
+# 互斥就失效了。
+LOCK_FILE="$BACKUP_DIR/.lock"
+LOCK_WAIT=300
+exec 9>"$LOCK_FILE"
+LOCK_RC=0
+flock -w "$LOCK_WAIT" 9 || LOCK_RC=$?
+if (( LOCK_RC != 0 )); then
+    if (( LOCK_RC == 1 )); then
+        echo "  !! 另一次备份超过 ${LOCK_WAIT} 秒还没结束，本次放弃（这一轮没有产出任何备份）。" >&2
+    else
+        echo "  !! 加锁失败（flock 退出码 $LOCK_RC），本次不备份：确认 flock 命令可用、且 $BACKUP_DIR 所在的文件系统支持锁。" >&2
+    fi
+    exit 1
+fi
+find "$BACKUP_DIR" -maxdepth 1 -name '*.part' -delete 2>/dev/null || true
+
 STAMP="$(date +%F-%H%M)"
 RETAIN="${DJANGO_BACKUP_RETAIN:-14}"
+# 保留份数必须是正整数。0（很容易被读成「不限制」）、负数或非数字都会让下面的挑拣从第一份
+# 就开始删——**把刚做好的备份连同全部历史一起删光，而脚本照旧打印「备份完成」、以 0 退出**。
+# 配置里错一个值就能静默毁掉所有备份，所以拦一道，退回默认 14 份。（非数字原本还会以
+# 「unbound variable」中止在算术展开上，同样在这里一并解决。）
+if [[ ! "$RETAIN" =~ ^[1-9][0-9]*$ ]]; then
+    echo "  !! DJANGO_BACKUP_RETAIN 必须是正整数、且不要前导零（当前是 '$RETAIN'；shell 算术会把 014 当八进制），本次按 14 份保留。" >&2
+    RETAIN=14
+fi
 
 # 加密：给了收件人就用它，否则明文并在结尾提醒。备份不该以明文长期躺在磁盘上。
+#
+# 加密那行有两处**不能省**，都是踩出来的：
+#
+# 1) 末尾的 "$1" 是输入文件。gpg 少了它就去读 stdin，而 systemd 下 stdin 是 /dev/null：
+#    它「成功」加密了一段空内容（退出码 0），紧接着的 rm -f 把真正的明文备份删掉——
+#    留下的是一份能解密、解出来却是空的 .gpg，真备份没了。**加密开关一打开就生效**，
+#    且整轮备份还报「完成」。改这一行时别把最后的 "$1" 当多余参数删掉。
+# 2) --trust-model always：生产机上按纪律只放公钥（私钥留在备份机），而别处导入的公钥
+#    在本机信任模型里是 untrusted。交互式 gpg 这时会问一句「still use this key?」，本
+#    脚本带 --batch，问不出来就成了硬失败（no assurance this key belongs to the named
+#    user），set -e 之下这一轮备份当场中断，只在 journal 里留一行。另一条路是导入后把
+#    公钥标成 ultimate trust，但那要靠一次手工步骤，trustdb 一丢就变成**每天静默失败**
+#    ——对无人值守的备份，写死在命令里更牢靠。
+#
+# 收件人是管理员在 env.sh 里写死的、不是外部输入，跳过信任检查不引入新的攻击面。用它有
+# 两点代价要认：
+#   · **收件人填完整指纹，别填邮箱或裸名字**。gpg 的 -r 是子串匹配：写成 club702 这种宽
+#     名字时它会**静默**挑中一把（退出码 0、不报歧义），挑错了就等于加密给一个解不开的
+#     人——而这条静默路径正是 --trust-model always 关掉「收件人不可信」那道硬失败后放行的。
+#   · --trust-model always **不豁免有效期**：公钥过期或被吊销仍是硬失败。这条是响亮的，
+#     可以接受，但别以为加了它就再不会因收件人失败。
+#
+# 私钥要留在备份机而不是生产机上——那条纪律见 docs/更新维护/开发与部署.md §5。
+#
+# 加密之后**不做内容校验**，因为在这台机器上做不到：密文只有收件人能解，生产机上只有公钥，
+# 连 gpg --list-packets 都会因缺私钥退出 2——照它判好坏会把好密文一起判成坏的，加密就等于
+# 永远不生效。能做的兜底是上面那条 "$1"、下面「失败即删残片」，以及让失败响亮。
 encrypt() {
-    if [[ -n "${DJANGO_BACKUP_GPG_RECIPIENT:-}" ]]; then
-        gpg --batch --yes --encrypt --recipient "$DJANGO_BACKUP_GPG_RECIPIENT" -o "$1.gpg" && rm -f "$1"
-    else
-        return 0
+    [[ -n "${DJANGO_BACKUP_GPG_RECIPIENT:-}" ]] || return 0
+    # 写 .part、成功才改名上位，失败时删掉的**一定是本次自己写的半成品**。直接写 "$1.gpg"
+    # 再在失败时删它是不行的：时间戳只到分钟，同一分钟里另一个 run（timer 与手工、或
+    # deploy.sh 的第 1/6 步）可能已经写好同名成品，那样删掉的是**别人的有效密文**——这一
+    # 分钟就一个备份都不剩，而成功的那轮早已打印过「备份完成」。
+    if ! gpg --batch --yes --trust-model always --encrypt \
+             --recipient "$DJANGO_BACKUP_GPG_RECIPIENT" -o "$1.gpg.part" "$1"; then
+        rm -f "$1.gpg.part"
+        echo "  !! 加密失败：已删掉残缺的密文、保留明文 $1" >&2
+        echo "     收件人 $DJANGO_BACKUP_GPG_RECIPIENT 的公钥还在部署用户的钥匙串里吗？" >&2
+        return 1
     fi
+    mv -f "$1.gpg.part" "$1.gpg"
+    rm -f "$1"
 }
 suffix() { [[ -n "${DJANGO_BACKUP_GPG_RECIPIENT:-}" ]] && echo ".gpg" || echo ""; }
 
+# 加密开启时产物名多一个 .gpg 后缀。**先算出来**：下面的产出清单要用它，而 set -u 会让
+# 「先用后定义」当场失败（这里踩过一次）。
+SUF="$(suffix)"
+
 # 数据库与媒体分两步导出，不是同一时间点的快照：恢复后可能出现「库里有记录、
 # 媒体文件缺失」或反之。社团规模下这个窗口（秒级）可以接受；要严格一致就先停写。
-PGPASSWORD="$DJANGO_DB_PASSWORD" pg_dump \
-    --username "$DJANGO_DB_USER" \
-    --host "${DJANGO_DB_HOST:-127.0.0.1}" \
-    --port "${DJANGO_DB_PORT:-5432}" \
-    "$DJANGO_DB_NAME" | gzip > "$BACKUP_DIR/db-$STAMP.sql.gz"
-encrypt "$BACKUP_DIR/db-$STAMP.sql.gz"
+# 库导出与媒体打包同样先写 .part、成功才改名：磁盘满或 pg_dump/tar 中途报错会留下**半截
+# 的明文**（db-*.sql.gz、media-*.tar.gz）。半截的东西连解都解不开，处置与「加密失败时保留的
+# 明文」（那是完整可用的备份）正相反：必须清掉。
+#
+# （清掉是**唯一**要做的：.part 既不占保留名额——backups_of 的两条 glob 都不匹配它；也不会
+# 骗过 deploy.sh 的体检——那里问的是 db-*.sql.gz 与 db-*.sql.gz.gpg 两条精确名字。别把这两处
+# 改成宽通配符，那正是它们当初被收窄的原因。）
+DB_PLAIN="$BACKUP_DIR/db-$STAMP.sql.gz"
+if ! PGPASSWORD="$DJANGO_DB_PASSWORD" pg_dump \
+        --username "$DJANGO_DB_USER" \
+        --host "${DJANGO_DB_HOST:-127.0.0.1}" \
+        --port "${DJANGO_DB_PORT:-5432}" \
+        "$DJANGO_DB_NAME" | gzip > "$DB_PLAIN.part"; then
+    rm -f "$DB_PLAIN.part"
+    echo "  !! 数据库导出失败（磁盘满？连接断了？）：已清掉半成品，本次没有库备份。" >&2
+    exit 1
+fi
+mv -f "$DB_PLAIN.part" "$DB_PLAIN"
+encrypt "$DB_PLAIN"
+# 结尾只报**真正产出**的那几份：媒体那一步可能整段跳过（两个目录都没有），把不存在的
+# 文件写进「备份完成」，读日志的人会以为媒体也备好了。
+PRODUCED=("$DB_PLAIN$SUF")
 
 # 两个上传目录都要备份：mediafiles/ 是公开的媒体库配图，protected_media/ 是
 # 项目书、批注版、头像、图册这些受保护的文件（它们刻意不在 mediafiles/ 之下，
 # 所以只打包前者会把它们整批漏掉）。目录可能还不存在，缺一个就跳过那一个。
-tar -czf "$BACKUP_DIR/media-$STAMP.tar.gz" \
-    $( [ -d mediafiles ] && echo mediafiles/ ) \
-    $( [ -d protected_media ] && echo protected_media/ )
-encrypt "$BACKUP_DIR/media-$STAMP.tar.gz"
+MEDIA_SOURCES=()
+if [[ -d mediafiles ]]; then MEDIA_SOURCES+=(mediafiles/); fi
+if [[ -d protected_media ]]; then MEDIA_SOURCES+=(protected_media/); fi
+MEDIA_PLAIN="$BACKUP_DIR/media-$STAMP.tar.gz"
+if [[ ${#MEDIA_SOURCES[@]} -gt 0 ]]; then
+    if ! tar -czf "$MEDIA_PLAIN.part" "${MEDIA_SOURCES[@]}"; then
+        rm -f "$MEDIA_PLAIN.part"
+        echo "  !! 媒体打包失败（某个上传件读不了？磁盘满？）：已清掉半成品。" >&2
+        exit 1
+    fi
+    mv -f "$MEDIA_PLAIN.part" "$MEDIA_PLAIN"
+    encrypt "$MEDIA_PLAIN"
+    PRODUCED+=("$MEDIA_PLAIN$SUF")
+else
+    # 两个目录都没有时，别照旧把空清单交给 tar：它会以「Cowardly refusing to create an
+    # empty archive」退出 2，set -e 之下整轮备份就此中止——库明明已经备好了，却报成失败。
+    echo "  跳过媒体备份：mediafiles/ 与 protected_media/ 都不存在" >&2
+fi
 
-SUF="$(suffix)"
+# 目录里同一类产物可能有两代：明文（加密关时产出）与 .gpg（加密开时产出）。**收紧权限与
+# 清理都要按两代一起收**，不能只按当前的 $SUF：只收一代的后果是另一代既不被 chmod、也不
+# 受 RETAIN 约束——于是某次把加密开关一拨，此前攒下的那批明文备份就永远留在盘上，正是
+# 加密要防的东西。两类一起数还顺带避免了「开关切换后两代各留 RETAIN 份」的加倍占用。
+#
+# 用函数列出**实际存在**的文件，而不是把两个通配符直接交给 ls：通配符不匹配时 bash 会把
+# 它原样传给 ls，ls 报错退出 2，而本脚本带 pipefail——那条管道失败会让整轮备份在清理这
+# 一步中止（备份其实已经做完了）。
+backups_of() {  # $1 = db 或 media；输出用 NUL 分隔（备份目录的路径里可能有空格）
+    local f
+    for f in "$BACKUP_DIR/$1-"*.gz "$BACKUP_DIR/$1-"*.gz.gpg; do
+        [[ -e "$f" ]] && printf '%s\0' "$f"
+    done
+}
 
-# 收紧备份文件权限。gzip/tar 按 umask 创建（常见 644 = 同机所有账号可读）；
-# 顺带把目录里已有的历史备份一并收紧——它们不该因为「那时还没加这一步」而一直敞着。
-chmod 600 "$BACKUP_DIR"/db-*.sql.gz"$SUF" "$BACKUP_DIR"/media-*.tar.gz"$SUF" 2>/dev/null || true
+# 这个路径是不是**本轮刚产出**的那份（PRODUCED 在调用 prune 之前就填好了）
+produced() {
+    local x
+    for x in "${PRODUCED[@]:-}"; do
+        [[ -n "$x" && "$x" == "$1" ]] && return 0
+    done
+    return 1
+}
 
 # 按保留份数清理旧的 db 与 media 备份（各自独立保留 RETAIN 份）
-ls -1t "$BACKUP_DIR"/db-*.sql.gz"$SUF"    2>/dev/null | tail -n +$((RETAIN + 1)) | xargs -r rm --
-ls -1t "$BACKUP_DIR"/media-*.tar.gz"$SUF" 2>/dev/null | tail -n +$((RETAIN + 1)) | xargs -r rm --
+prune() {
+    local files=() records=() doomed=() f rec i=0
+    mapfile -t -d '' files < <(backups_of "$1")
+    [[ ${#files[@]} -gt 0 ]] || return 0
+    # 刚写出的那几份也要一并收紧权限：gzip/tar 按 umask 创建（常见 644 = 同机所有账号
+    # 可读），目录里更早的历史备份同样不该因为「那时还没加这一步」而一直敞着。
+    chmod 600 "${files[@]}" 2>/dev/null || true
 
-echo "[$(date '+%F %T')] 备份完成: $BACKUP_DIR/db-$STAMP.sql.gz$SUF $BACKUP_DIR/media-$STAMP.tar.gz$SUF"
+    # 挑出该删的，**全程 NUL 分隔，不借 ls -1t**：ls 的输出按行，名字里一旦有空格（备份目录
+    # 的路径本身就带空格时就会）或换行，后面的 rm 会把它拆成两半——脚本开头 cd 到了
+    # $APP_DIR，那些碎片于是当**相对路径**解析，会误删应用目录下的同名文件；同时 rm 报错让
+    # xargs 以 123 退出，整轮在备份做完之后中止（保留份数从此再也不生效）。
+    #
+    # 排序以 **mtime** 为准，不看文件名：文件名可能不是本脚本给的（手工 pg_dump 出来的
+    # db-manual.sql.gz、从别的机器拷回来的备份、时钟回拨后攒下的「未来」日期），按名字排会
+    # 让刚做好的那份排到队尾、被同一轮 prune 删掉——脚本紧接着还会打印
+    # 「备份完成: <那个已经不存在的路径>」。
+    for f in "${files[@]}"; do
+        records+=("$(stat -c '%Y' -- "$f" 2>/dev/null || echo 0)"$'\t'"$f")
+    done
+    while IFS= read -r -d '' rec; do
+        f="${rec#*$'\t'}"
+        # 本轮刚产出的那几份**绝不删**：保留份数被填得很小、或目录里有 mtime 更「新」的杂物
+        # 时，也不该出现「脚本删掉了自己刚做好的备份」。
+        if (( i >= RETAIN )) && ! produced "$f"; then doomed+=("$f"); fi
+        i=$((i + 1))
+    done < <(printf '%s\0' "${records[@]}" | sort -z -t $'\t' -k1,1nr)
+    (( ${#doomed[@]} > 0 )) && rm -f -- "${doomed[@]}"
+    return 0
+}
+prune db
+prune media
+
+echo "[$(date '+%F %T')] 备份完成: ${PRODUCED[*]}"
 
 # 两条提醒按「当下能不能被利用」排序：权限是本机账号立刻就能读走，
 # 加密防的是备份文件离开这台机器之后被读（要先有异地副本才有意义）。
