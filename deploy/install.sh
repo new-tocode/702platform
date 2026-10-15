@@ -58,15 +58,24 @@ if [[ -n "$UNFILLED" ]]; then
     exit 1
 fi
 
-set -a
-# shellcheck disable=SC1090
-# 读不出来时别让 set -e 把脚本闷死在一行 shell 报错上：最常见的原因是某个值里有空格又没加
-# 引号（典型是 gpg 指纹按 4 位一组从 `gpg --fingerprint` 抄了进来），而那句报错看不出该改哪儿。
-if ! source "$ENV_FILE"; then
-    fail "env.sh 读不出来，原因见上一行报错。最常见的是某个值里有空格却没有引号（例如 gpg 指纹）。"
-    fail "值要么加引号，要么去掉空格连写；文件: $ENV_FILE"
+# env.sh 的每一行都是 shell 赋值语句，**值里有空格又没加引号**的行会被读成「赋值 + 执行
+# 命令」：那个命令不存在时报一行错，但① 变量**根本不会被赋值**（值连同那行一起废掉），
+# ② 这个错既不会中止脚本（失败行后面还有能成功的行时 source 仍返回 0），也未必是最后一行
+# ——靠 source 的返回码判断不住。最常见的来源是 `gpg --fingerprint` 那串 4 位一组的指纹。
+# 所以这里静态查一遍再用。
+UNQUOTED=$(grep -nE '^[A-Za-z_][A-Za-z0-9_]*=[^"'"'"']*[[:space:]]' "$ENV_FILE" || true)
+if [[ -n "$UNQUOTED" ]]; then
+    fail "env.sh 里这些行的值没加引号却含空格，会被 shell 当成「赋值 + 执行命令」（变量不会被赋值）:"
+    while IFS= read -r line; do
+        fail "  - $line"
+    done <<< "$UNQUOTED"
+    fail "gpg 指纹请去掉空格、连写 40 位十六进制；其它值若确实需要空格，加引号。"
     exit 1
 fi
+
+set -a
+# shellcheck disable=SC1090
+source "$ENV_FILE"
 set +a
 
 # 校验必须在 env.sh 中显式存在的关键项
@@ -98,8 +107,8 @@ fi
 # 静默挑中别的钥。
 case "${DJANGO_BACKUP_GPG_RECIPIENT:-}" in
     "") ;;
-    *[!0-9A-Fa-f]*) warn "DJANGO_BACKUP_GPG_RECIPIENT 不是十六进制指纹/key id（$DJANGO_BACKUP_GPG_RECIPIENT）：gpg 的 -r 是子串匹配，名字写宽了会静默挑中别的钥，建议改成完整指纹" ;;
-    *) if [[ ! "$DJANGO_BACKUP_GPG_RECIPIENT" =~ ^([0-9A-Fa-f]{16}|[0-9A-Fa-f]{40})$ ]]; then
+    *[!0-9A-Fa-f]*) warn "DJANGO_BACKUP_GPG_RECIPIENT 不是十六进制指纹 / key id（$DJANGO_BACKUP_GPG_RECIPIENT）：建议改成连写的完整指纹——名字与邮箱在 gpg 的 -r 下是子串匹配，会静默挑中别的钥；带空格的指纹则会被 env.sh 的解析弄坏" ;;
+    *) if [[ ! "$DJANGO_BACKUP_GPG_RECIPIENT" =~ ^([0-9A-Fa-f]{8}|[0-9A-Fa-f]{16}|[0-9A-Fa-f]{40}|[0-9A-Fa-f]{64})$ ]]; then
            fail "DJANGO_BACKUP_GPG_RECIPIENT 像是被截断的指纹（当前是 '$DJANGO_BACKUP_GPG_RECIPIENT'）。"
            fail "从 gpg --fingerprint 抄来的指纹带空格，去掉空格、连写 40 位再填。"
            exit 1
@@ -187,15 +196,18 @@ if [[ -n "${DJANGO_BACKUP_GPG_RECIPIENT:-}" ]]; then
         # HOME 显式给成部署用户的家目录：systemd 起 backup.service 时就是这么设的（User= 的
         # 家目录），这里照它写成一样，检查与运行时找的才是同一个钥匙串；也省得去猜 sudoers
         # 里 HOME 有没有进 env_keep（发行版默认会设成目标用户的家目录，但那是配置不是承诺）。
-        DEPLOY_HOME="$(getent passwd "$DEPLOY_SYSTEM_USER" 2>/dev/null | cut -d: -f6)"
+        # 末尾的 || true 是给 pipefail 的：getent 自己失败（LDAP/nsswitch 抖动）时别让 set -e
+        # 把脚本无声掐断，交给下面那句「查不到家目录」去报。
+        DEPLOY_HOME="$(getent passwd "$DEPLOY_SYSTEM_USER" 2>/dev/null | cut -d: -f6 || true)"
         if [[ -z "$DEPLOY_HOME" || ! -d "$DEPLOY_HOME" ]]; then
             MISSING+=("查不到部署用户 $DEPLOY_SYSTEM_USER 的家目录（getent 给出 '$DEPLOY_HOME'），没法确认收件人公钥在不在它的钥匙串里")
         elif ! GPG_OUT="$(sudo -u "$DEPLOY_SYSTEM_USER" env HOME="$DEPLOY_HOME" \
                     gpg --list-keys "$DJANGO_BACKUP_GPG_RECIPIENT" 2>&1)"; then
-            # 「sudo 用不了」与「钥匙串里确实没有」都会落到这里，得分开说：混在一起会把人
-            # 引向反复重导公钥，而问题其实在别处。
-            if [[ "$GPG_OUT" == *"password is required"* || "$GPG_OUT" == *"terminal is required"* ]]; then
-                MISSING+=("以 $DEPLOY_SYSTEM_USER 执行 sudo 需要口令、或没有终端：确认不了收件人公钥是否已导入（请以 root 运行本脚本）")
+            # 「sudo 跑不通」与「钥匙串里确实没有」都会落到这里，得分开说：混在一起会把人
+            # 引向反复重导公钥，而问题其实在别处。按 sudo 自己的报错前缀判，比认那两句英文
+            # 文案稳（sudo 带 NLS，文案随 locale 变，还有 requiretty / targetpw 等别的失败法）。
+            if [[ "$GPG_OUT" == *"sudo:"* ]]; then
+                MISSING+=("以 $DEPLOY_SYSTEM_USER 执行 sudo 失败（见上面的 sudo 报错）：确认不了收件人公钥是否已导入（请以 root 运行本脚本）")
             else
                 MISSING+=("部署用户 $DEPLOY_SYSTEM_USER 的钥匙串里没有收件人 $DJANGO_BACKUP_GPG_RECIPIENT 的公钥（导入: sudo -u $DEPLOY_SYSTEM_USER gpg --import <公钥文件>；启用步骤见 docs/更新维护/开发与部署.md §5）")
             fi
