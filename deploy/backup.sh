@@ -80,9 +80,33 @@ STAMP="$(date +%F-%H%M)"
 RETAIN="${DJANGO_BACKUP_RETAIN:-14}"
 
 # 加密：给了收件人就用它，否则明文并在结尾提醒。备份不该以明文长期躺在磁盘上。
+#
+# 加密那行有两处**不能省**，都是踩出来的：
+#
+# 1) 末尾的 "$1" 是输入文件。gpg 少了它就去读 stdin，而 systemd 下 stdin 是 /dev/null：
+#    它「成功」加密了一段空内容（退出码 0），紧接着的 rm -f 把真正的明文备份删掉——
+#    留下的是一份能解密、解出来却是空的 .gpg，真备份没了。**加密开关一打开就生效**，
+#    且整轮备份还报「完成」。改这一行时别把最后的 "$1" 当多余参数删掉。
+# 2) --trust-model always：生产机上按纪律只放公钥（私钥留在备份机），而别处导入的公钥
+#    在本机信任模型里是 untrusted。交互式 gpg 这时会问一句「still use this key?」，本
+#    脚本带 --batch，问不出来就成了硬失败（no assurance this key belongs to the named
+#    user），set -e 之下这一轮备份当场中断，只在 journal 里留一行。另一条路是导入后把
+#    公钥标成 ultimate trust，但那要靠一次手工步骤，trustdb 一丢就变成**每天静默失败**
+#    ——对无人值守的备份，写死在命令里更牢靠。
+#
+# 收件人是管理员在 env.sh 里写死的、不是外部输入，跳过信任检查不引入新的攻击面。用它有
+# 两点代价要认：
+#   · **收件人填完整指纹，别填邮箱或裸名字**。gpg 的 -r 是子串匹配：写成 club702 这种宽
+#     名字时它会**静默**挑中一把（退出码 0、不报歧义），挑错了就等于加密给一个解不开的
+#     人——而这条静默路径正是 --trust-model always 关掉「收件人不可信」那道硬失败后放行的。
+#   · --trust-model always **不豁免有效期**：公钥过期或被吊销仍是硬失败。这条是响亮的，
+#     可以接受，但别以为加了它就再不会因收件人失败。
+#
+# 私钥要留在备份机而不是生产机上——那条纪律见 docs/更新维护/开发与部署.md §5。
 encrypt() {
     if [[ -n "${DJANGO_BACKUP_GPG_RECIPIENT:-}" ]]; then
-        gpg --batch --yes --encrypt --recipient "$DJANGO_BACKUP_GPG_RECIPIENT" -o "$1.gpg" && rm -f "$1"
+        gpg --batch --yes --trust-model always --encrypt \
+            --recipient "$DJANGO_BACKUP_GPG_RECIPIENT" -o "$1.gpg" "$1" && rm -f "$1"
     else
         return 0
     fi
