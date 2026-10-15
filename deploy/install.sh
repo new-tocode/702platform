@@ -151,6 +151,31 @@ if ! id -u "$DEPLOY_SYSTEM_USER" >/dev/null 2>&1; then
     MISSING+=("系统用户 $DEPLOY_SYSTEM_USER 不存在（请先: sudo useradd -m -s /bin/bash $DEPLOY_SYSTEM_USER）")
 fi
 
+# 备份加密：填了收件人就必须**在部署用户的钥匙串里**能找到一把能加密的公钥，否则 backup.sh
+# 每夜都会失败——而失败只在 journal 里，往往几天后才发现。安装期先拦下。
+#
+# 两个检查都要做，它们对应两种不同的补救：
+#   · 找不到公钥           → 公钥没导入（或导进了别人的钥匙串）
+#   · 找得到但加密不了     → 只有签名子钥（用 gpg --quick-generate-key ... default 生成的就是
+#                            这样）、或公钥已过期/被吊销
+# 加密与 backup.sh 用同一组参数，是**故意**的：收件人能不能加密，只有真加一次才知道。
+if [[ -n "${DJANGO_BACKUP_GPG_RECIPIENT:-}" ]]; then
+    need_cmd gpg "备份加密用（gpg），如 Ubuntu: sudo apt install gnupg"
+    if command -v gpg >/dev/null 2>&1 && id -u "$DEPLOY_SYSTEM_USER" >/dev/null 2>&1; then
+        # HOME 显式给成部署用户的家目录：systemd 起 backup.service 时会这么设（User= 的
+        # 家目录），而 sudo 默认并不改 HOME——不显式指定就会去查错人的钥匙串。
+        DEPLOY_HOME="$(getent passwd "$DEPLOY_SYSTEM_USER" | cut -d: -f6)"
+        if ! sudo -u "$DEPLOY_SYSTEM_USER" env HOME="$DEPLOY_HOME" \
+                gpg --list-keys "$DJANGO_BACKUP_GPG_RECIPIENT" >/dev/null 2>&1; then
+            MISSING+=("部署用户 $DEPLOY_SYSTEM_USER 的钥匙串里没有收件人 $DJANGO_BACKUP_GPG_RECIPIENT 的公钥（导入: sudo -u $DEPLOY_SYSTEM_USER gpg --import <公钥文件>；启用步骤见 docs/更新维护/开发与部署.md §5）")
+        elif ! printf probe | sudo -u "$DEPLOY_SYSTEM_USER" env HOME="$DEPLOY_HOME" \
+                gpg --batch --yes --trust-model always --encrypt \
+                    --recipient "$DJANGO_BACKUP_GPG_RECIPIENT" -o /dev/null >/dev/null 2>&1; then
+            MISSING+=("收件人 $DJANGO_BACKUP_GPG_RECIPIENT 的公钥无法加密（只有签名子钥？已过期或被吊销？请核对指纹并换一把带加密子钥的公钥）")
+        fi
+    fi
+fi
+
 if [[ "${#MISSING[@]}" -gt 0 ]]; then
     fail "依赖环境检查未通过，以下项需要你先手动处理（本脚本不会自动安装）:"
     for m in "${MISSING[@]}"; do
