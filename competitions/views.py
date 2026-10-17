@@ -67,12 +67,14 @@ def _member_group_map(form):
 def competition_list(request):
     competitions = Competition.objects.select_related("published_by").all()
 
-    # Managers (contacts/administrators) also see the registrations they can
-    # edit or withdraw, fetched once and grouped to avoid per-row queries.
-    manageable_ids = manageable_group_ids(request.user)
+    # Every member sees which groups are registered for each competition (the
+    # roster is public to logged-in members, like the project-group list). The
+    # rows a viewer may edit or withdraw are picked per row in the template
+    # against ``manageable_group_ids`` -- visibility and the write permission
+    # are deliberately not the same question. Fetched once and grouped to avoid
+    # per-row queries.
     registrations = (
-        CompetitionRegistration.objects.filter(group_id__in=manageable_ids)
-        .select_related("group", "team_leader__profile")
+        CompetitionRegistration.objects.select_related("group", "team_leader__profile")
         .order_by("group__name", "id")
     )
     by_competition = defaultdict(list)
@@ -95,7 +97,10 @@ def competition_list(request):
     return render(
         request,
         "competitions/list.html",
-        {"competition_rows": competition_rows},
+        {
+            "competition_rows": competition_rows,
+            "manageable_group_ids": manageable_group_ids(request.user),
+        },
     )
 
 

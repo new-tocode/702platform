@@ -14,7 +14,7 @@
         <div class="head-row">
             <div>
                 <h1>{% translate "竞赛信息" %}</h1>
-                <div class="sub">{% translate "所有成员均可查看；仅项目组联系人可为自己的项目组报名。" %}</div>
+                <div class="sub">{% translate "所有成员均可查看各场竞赛的已报名项目组；仅项目组联系人可为自己的项目组报名。" %}</div>
             </div>
         </div>
     </div>
@@ -62,16 +62,20 @@
                                             {% endif %}
                                         </td>
                                         <td class="right">
-                                            {% if row.competition.is_registration_open %}
-                                                <div class="btn-row btn-row-end">
-                                                    <a class="btn btn-sm" href="{% url 'competitions:registration_edit' registration.pk %}">{% translate "修改报名信息" %}</a>
-                                                    <form method="post" action="{% url 'competitions:registration_withdraw' registration.pk %}">
-                                                        {% csrf_token %}
-                                                        <button class="btn btn-danger btn-sm" type="submit">{% translate "放弃报名" %}</button>
-                                                    </form>
-                                                </div>
+                                            {% if registration.group_id in manageable_group_ids %}
+                                                {% if row.competition.is_registration_open %}
+                                                    <div class="btn-row btn-row-end">
+                                                        <a class="btn btn-sm" href="{% url 'competitions:registration_edit' registration.pk %}">{% translate "修改报名信息" %}</a>
+                                                        <form method="post" action="{% url 'competitions:registration_withdraw' registration.pk %}">
+                                                            {% csrf_token %}
+                                                            <button class="btn btn-danger btn-sm" type="submit">{% translate "放弃报名" %}</button>
+                                                        </form>
+                                                    </div>
+                                                {% else %}
+                                                    <span class="muted">{% translate "已截止，无法修改" %}</span>
+                                                {% endif %}
                                             {% else %}
-                                                <span class="muted">{% translate "已截止，无法修改" %}</span>
+                                                <span class="muted">—</span>
                                             {% endif %}
                                         </td>
                                     </tr>
