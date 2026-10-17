@@ -13,6 +13,7 @@
 | 不做 | 落在哪 |
 |---|---|
 | 评审本身：送审轮次、初审／评审任务、结论、评审回复、归档 | `reviews`。本模块只在 `group_submit_review` 里转交 `reviews.services.submit_for_review`，详情页的评审区块由 `reviews.panels.group_detail_context` 装配 |
+| 详情页上的「竞赛报名」区块（本组报了哪几场竞赛） | `competitions`。`projects.views.group_detail` 在函数体内局部 import `competitions.panels.group_detail_context` 装配它，与评审那一半同理 |
 | 评审资格判定，以及「凭评审身份能不能看这个组」 | `reviews.permissions`（`has_review_claim`）。`can_view_group` 只委托这一次，不在本模块重写 |
 | 教师账号、把指导老师关联成用户 | 不做：指导老师是纯文本姓名，没有可指向的账号 |
 | 存联系人／成员身份（auth 用户组、独立 membership 表） | 不做：身份由 `ProjectGroup.leader` / `.members` 计算；后台只给只读名册，不给分配入口 |
@@ -62,6 +63,9 @@
   两处补偿。`QuerySet.update()`、直接 `members.remove(leader)`、或任何跳过 `save()` 的写入都会破坏它。
 - **提高指导老师上限要动迁移**：`GroupCreateRequest.advisor_1..3` 是三个固定列，
   `GroupCreateRequestForm` / `GroupInfoForm` 也各自显式声明三个字段；常量之外这些地方都要跟着改。
+- **详情页的「竞赛报名」区块不另判可见性**：能打开详情页的人（成员、管理员、凭任务的评审人）
+  就看得到本组报了哪些竞赛。这是现状而非疏漏——「竞赛信息」页对全体成员列出每场竞赛的
+  已报名项目组，所以这里不算额外暴露；**竞赛侧哪天收紧了口径，这里要跟着重新想**。
 - **项目资料原文件名不留存**：落盘名是 uuid + 扩展名，页面展示与下载头里都是它——上传时的文件名
   （常带组名、人名）平台根本不保存。
 - **500 MB 这个数字有两处主**：上限在 `projects/validators.MATERIALS_MAX_BYTES`（评审回复同档，在
