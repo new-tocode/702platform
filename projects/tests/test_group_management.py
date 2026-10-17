@@ -11,7 +11,7 @@ from ..models import (
     ProjectGroup,
 )
 from ..services import GroupManagementError, update_group_info
-from .base import ProjectViewTestCase, proposal_upload
+from .base import ProjectViewTestCase, materials_upload
 
 
 class GroupManagementViewTests(ProjectViewTestCase):
@@ -74,21 +74,21 @@ class GroupManagementViewTests(ProjectViewTestCase):
             "成员",
             "项目组介绍",
             "学院与指导老师",
-            "项目书",
+            "项目资料",
             "提交审核",
             "转让联系人",
         ):
             self.assertContains(response, section)
-    def test_uploading_a_proposal_records_its_sha256(self):
-        """项目书是唯一一条走 ``ModelForm.save()`` 落盘的受保护上传。"""
-        upload = proposal_upload()
+    def test_uploading_materials_records_its_sha256(self):
+        """项目资料是唯一一条走 ``ModelForm.save()`` 落盘的受保护上传。"""
+        upload = materials_upload()
         payload = upload.read()
         upload.seek(0)
         self.client.force_login(self.leader)
 
         response = self.client.post(
-            reverse("projects:group_proposal_update", args=(self.group.pk,)),
-            {"proposal": upload},
+            reverse("projects:group_materials_update", args=(self.group.pk,)),
+            {"materials": upload},
         )
 
         self.assertRedirects(
@@ -104,13 +104,13 @@ class GroupManagementViewTests(ProjectViewTestCase):
         ——模板里把字段名写错一个字母，整块校验值就会无声消失。所以这里断言的是
         页面上出现了那串值，而不是「没有报错」。
         """
-        upload = proposal_upload()
+        upload = materials_upload()
         payload = upload.read()
         upload.seek(0)
         self.client.force_login(self.leader)
         self.client.post(
-            reverse("projects:group_proposal_update", args=(self.group.pk,)),
-            {"proposal": upload},
+            reverse("projects:group_materials_update", args=(self.group.pk,)),
+            {"materials": upload},
         )
 
         response = self.client.get(
@@ -123,14 +123,14 @@ class GroupManagementViewTests(ProjectViewTestCase):
         # 默认收起：展开与否交给 <details>，不在服务端加 open。
         self.assertContains(response, '<details class="checksum">')
 
-    def test_manage_page_lists_pending_request_and_real_proposal_file(self):
+    def test_manage_page_lists_pending_request_and_real_materials_file(self):
         GroupJoinRequest.objects.create(
             group=self.group,
             applicant=self.no_group_user,
             message="希望加入机器人组。",
         )
-        self.group.proposal = "project_proposals/2026/09/开题报告.docx"
-        self.group.save(update_fields=["proposal"])
+        self.group.materials = "project_proposals/2026/09/开题资料.zip"
+        self.group.save(update_fields=["materials"])
         self.client.force_login(self.leader)
 
         response = self.client.get(
@@ -141,8 +141,8 @@ class GroupManagementViewTests(ProjectViewTestCase):
         self.assertContains(response, self.no_group_user.username)
         self.assertContains(response, "希望加入机器人组。")
         # 角标与文件名取自真实路径，不是写死的占位符
-        self.assertContains(response, "开题报告.docx")
-        self.assertContains(response, "DOCX")
+        self.assertContains(response, "开题资料.zip")
+        self.assertContains(response, "ZIP")
         self.assertNotContains(response, ">DOC</span>")
     def test_contact_can_update_description(self):
         self.client.force_login(self.leader)

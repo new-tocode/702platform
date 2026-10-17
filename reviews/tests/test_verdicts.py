@@ -1,6 +1,6 @@
-"""结论汇总与批注版：评审人交卷之后发生的事。
+"""结论汇总与评审回复：评审人交卷之后发生的事。
 
-「全员通过才算通过」「需修改就打回」「批注版随通过归档且只归档一次」都在这
+「全员通过才算通过」「需修改就打回」「评审回复随通过归档且只归档一次」都在这
 里；下载入口的权限也归这一块，因为它们是同一批文件的出口。
 """
 
@@ -13,7 +13,7 @@ from .. import lifecycle
 from ..forms import ReviewForm
 from ..models import (
     REVIEW_TYPE_INNOVATION_START,
-    ArchivedProposal,
+    ArchivedReply,
     ProjectSubmission,
     ReviewTask,
 )
@@ -24,13 +24,13 @@ from ..services import (
 )
 from .base import ReviewTestCase
 from .factories import (
-    PROPOSAL_BYTES,
+    MATERIALS_BYTES,
     make_admin,
     make_group,
     make_preliminary_reviewer,
     make_reviewer,
     make_user,
-    pdf,
+    materials_upload,
 )
 
 
@@ -52,14 +52,14 @@ class VerdictTests(ReviewTestCase):
             reviewer=self.reviewer_one,
             decision=ReviewTask.APPROVE,
             comment="方案可行。",
-            annotated_file=files.get("reviewer_one"),
+            reply_file=files.get("reviewer_one"),
         )
         submit_verdict(
             task=self._assignment(submission, self.reviewer_two),
             reviewer=self.reviewer_two,
             decision=ReviewTask.APPROVE,
             comment="同意开题。",
-            annotated_file=files.get("reviewer_two"),
+            reply_file=files.get("reviewer_two"),
         )
 
     # --- verdict aggregation -------------------------------------------------
@@ -197,27 +197,27 @@ class VerdictTests(ReviewTestCase):
         assignment.refresh_from_db()
         self.assertEqual(assignment.status, ReviewTask.PENDING)
 
-    # --- annotated proposals and archiving -----------------------------------
+    # --- reply archives and archiving ----------------------------------------
 
-    def test_annotated_file_is_optional(self):
+    def test_reply_file_is_optional(self):
         submission = self._submit()
 
         self._approve_both(submission)
 
         submission.refresh_from_db()
         self.assertEqual(submission.status, ProjectSubmission.APPROVED)
-        self.assertFalse(self._assignment(submission, self.reviewer_one).annotated_file)
+        self.assertFalse(self._assignment(submission, self.reviewer_one).reply_file)
 
-    def test_approved_submission_archives_annotated_proposals(self):
+    def test_approved_submission_archives_replies(self):
         submission = self._submit()
 
         self._approve_both(
             submission,
-            reviewer_one=pdf("annotated-one.pdf"),
-            reviewer_two=pdf("annotated-two.pdf"),
+            reviewer_one=materials_upload("reply-one.zip"),
+            reviewer_two=materials_upload("reply-two.zip"),
         )
 
-        archived = ArchivedProposal.objects.filter(submission=submission)
+        archived = ArchivedReply.objects.filter(submission=submission)
         self.assertEqual(archived.count(), 2)
         self.assertEqual(
             set(archived.values_list("source_task_id", flat=True)),
@@ -227,39 +227,39 @@ class VerdictTests(ReviewTestCase):
             self.assertEqual(record.group_id, self.group.pk)
             self.assertTrue(record.file.name)
 
-    def test_annotated_copy_and_its_archive_share_one_digest(self):
-        """批注版落库时留指纹；归档是它的副本，两份指纹因此相同。
+    def test_reply_and_its_archive_share_one_digest(self):
+        """评审回复落库时留指纹；归档是它的副本，两份指纹因此相同。
 
-        归档走的是 ``ArchivedProposal.file.save(name, 已上传的件)``——同一份
+        归档走的是 ``ArchivedReply.file.save(name, 已上传的件)``——同一份
         字节再落一次盘，是平台上唯一的「服务端二次落盘」。两份指纹一致，也
         就是「归档之后没人动过它」。
         """
         submission = self._submit()
 
-        self._approve_both(submission, reviewer_one=pdf("annotated.pdf"))
+        self._approve_both(submission, reviewer_one=materials_upload("reply.zip"))
 
         task = self._assignment(submission, self.reviewer_one)
-        archived = ArchivedProposal.objects.get(
+        archived = ArchivedReply.objects.get(
             submission=submission, source_task=task
         )
-        expected = hashlib.sha256(PROPOSAL_BYTES).hexdigest()
+        expected = hashlib.sha256(MATERIALS_BYTES).hexdigest()
         self.assertEqual(task.sha256, expected)
         self.assertEqual(archived.sha256, expected)
 
-    def test_group_detail_renders_both_the_annotated_and_the_archived_digest(self):
-        """批注版与归档件各自的校验值都要渲染出来，各出现在自己那一块。
+    def test_group_detail_renders_both_the_reply_and_the_archived_digest(self):
+        """评审回复与归档件各自的校验值都要渲染出来，各出现在自己那一块。
 
-        项目书用的是同一串字节，拿它的指纹做断言会被项目书那一块满足、测不出批注
-        版写错字段名。这里给批注版换一份不同的内容，再数它出现的次数——两处（评审
-        任务上的、归档里的）都渲染了才对。
+        项目资料用的是同一串字节，拿它的指纹做断言会被项目资料那一块满足、测不出
+        评审回复写错字段名。这里给评审回复换一份不同的内容，再数它出现的次数——
+        两处（评审任务上的、归档里的）都渲染了才对。
         """
         submission = self._submit()
-        annotated = SimpleUploadedFile(
-            "annotated.pdf",
-            b"%PDF-1.4 annotated copy",
-            content_type="application/pdf",
+        reply = SimpleUploadedFile(
+            "reply.zip",
+            b"PK\x03\x04reply archive",
+            content_type="application/zip",
         )
-        self._approve_both(submission, reviewer_one=annotated)
+        self._approve_both(submission, reviewer_one=reply)
         self.client.force_login(self.contact)
 
         response = self.client.get(
@@ -268,10 +268,10 @@ class VerdictTests(ReviewTestCase):
 
         body = response.content.decode()
         self.assertEqual(
-            body.count(hashlib.sha256(b"%PDF-1.4 annotated copy").hexdigest()), 2
+            body.count(hashlib.sha256(b"PK\x03\x04reply archive").hexdigest()), 2
         )
-        # 项目书那份也在：三个下载入口各带各的校验值。
-        self.assertIn(hashlib.sha256(PROPOSAL_BYTES).hexdigest(), body)
+        # 项目资料那份也在：三个下载入口各带各的校验值。
+        self.assertIn(hashlib.sha256(MATERIALS_BYTES).hexdigest(), body)
 
     def test_written_only_verdicts_leave_no_digest(self):
         """没附件就没有指纹——空字段配空指纹，不编一个出来。"""
@@ -286,19 +286,21 @@ class VerdictTests(ReviewTestCase):
     def test_archive_filename_does_not_leak_the_reviewer(self):
         submission = self._submit()
 
-        self._approve_both(submission, reviewer_one=pdf("reviewer-one-批注.pdf"))
+        self._approve_both(
+            submission, reviewer_one=materials_upload("reviewer-one-回复.zip")
+        )
 
-        record = ArchivedProposal.objects.get(submission=submission)
-        self.assertTrue(record.file.name.endswith(".pdf"))
+        record = ArchivedReply.objects.get(submission=submission)
+        self.assertTrue(record.file.name.endswith(".zip"))
         self.assertNotIn("reviewer-one", record.file.name)
-        self.assertNotIn("批注", record.file.name)
+        self.assertNotIn("回复", record.file.name)
 
     def test_only_uploaders_produce_archive_entries(self):
         submission = self._submit()
 
-        self._approve_both(submission, reviewer_one=pdf("annotated.pdf"))
+        self._approve_both(submission, reviewer_one=materials_upload("reply.zip"))
 
-        record = ArchivedProposal.objects.get(submission=submission)
+        record = ArchivedReply.objects.get(submission=submission)
         self.assertEqual(
             record.source_task,
             self._assignment(submission, self.reviewer_one),
@@ -306,12 +308,12 @@ class VerdictTests(ReviewTestCase):
 
     def test_archive_is_idempotent(self):
         submission = self._submit()
-        self._approve_both(submission, reviewer_one=pdf("annotated.pdf"))
+        self._approve_both(submission, reviewer_one=materials_upload("reply.zip"))
 
         submission.refresh_from_db()
         _settle_submission(submission)
 
-        self.assertEqual(ArchivedProposal.objects.filter(submission=submission).count(), 1)
+        self.assertEqual(ArchivedReply.objects.filter(submission=submission).count(), 1)
 
     def test_needs_revision_does_not_archive(self):
         submission = self._submit()
@@ -321,7 +323,7 @@ class VerdictTests(ReviewTestCase):
             reviewer=self.reviewer_one,
             decision=ReviewTask.APPROVE,
             comment="可以。",
-            annotated_file=pdf("annotated.pdf"),
+            reply_file=materials_upload("reply.zip"),
         )
         submit_verdict(
             task=self._assignment(submission, self.reviewer_two),
@@ -332,32 +334,32 @@ class VerdictTests(ReviewTestCase):
 
         submission.refresh_from_db()
         self.assertEqual(submission.status, ProjectSubmission.NEEDS_REVISION)
-        self.assertFalse(ArchivedProposal.objects.filter(submission=submission).exists())
-        # The annotated copy is still reachable on the assignment itself.
+        self.assertFalse(ArchivedReply.objects.filter(submission=submission).exists())
+        # The reply archive is still reachable on the assignment itself.
         self.assertTrue(
-            self._assignment(submission, self.reviewer_one).annotated_file
+            self._assignment(submission, self.reviewer_one).reply_file
         )
 
-    def test_annotated_file_validator_rejects_unsupported_extension(self):
+    def test_reply_file_validator_rejects_unsupported_extension(self):
         form = ReviewForm(
             data={"decision": ReviewTask.APPROVE, "comment": "可以。"},
-            files={"annotated_file": SimpleUploadedFile("notes.txt", b"hello")},
+            files={"reply_file": SimpleUploadedFile("notes.txt", b"hello")},
         )
 
         self.assertFalse(form.is_valid())
-        self.assertIn("annotated_file", form.errors)
+        self.assertIn("reply_file", form.errors)
 
-    def test_annotated_download_honours_group_visibility(self):
+    def test_reply_download_honours_group_visibility(self):
         submission = self._submit()
         assignment = self._assignment(submission, self.reviewer_one)
         submit_verdict(
             task=assignment,
             reviewer=self.reviewer_one,
             decision=ReviewTask.APPROVE,
-            comment="已批注。",
-            annotated_file=pdf("annotated.pdf"),
+            comment="已附回复。",
+            reply_file=materials_upload("reply.zip"),
         )
-        url = reverse("reviews:annotated", args=(assignment.pk,))
+        url = reverse("reviews:reply", args=(assignment.pk,))
 
         for user in (self.member, self.admin, self.reviewer_one):
             with self.subTest(user=user.get_username()):
@@ -367,10 +369,10 @@ class VerdictTests(ReviewTestCase):
         self.client.force_login(self.outsider)
         self.assertEqual(self.client.get(url).status_code, 403)
 
-    def test_archived_proposal_download_honours_group_visibility(self):
+    def test_archived_reply_download_honours_group_visibility(self):
         submission = self._submit()
-        self._approve_both(submission, reviewer_one=pdf("annotated.pdf"))
-        record = ArchivedProposal.objects.get(submission=submission)
+        self._approve_both(submission, reviewer_one=materials_upload("reply.zip"))
+        record = ArchivedReply.objects.get(submission=submission)
         url = reverse("reviews:archive_download", args=(record.pk,))
 
         for user in (self.member, self.admin):
@@ -381,9 +383,9 @@ class VerdictTests(ReviewTestCase):
         self.client.force_login(self.outsider)
         self.assertEqual(self.client.get(url).status_code, 403)
 
-    def test_group_detail_lists_archived_proposals(self):
+    def test_group_detail_lists_archived_replies(self):
         submission = self._submit()
-        self._approve_both(submission, reviewer_one=pdf("annotated.pdf"))
+        self._approve_both(submission, reviewer_one=materials_upload("reply.zip"))
         self.client.force_login(self.member)
 
         response = self.client.get(
@@ -391,4 +393,4 @@ class VerdictTests(ReviewTestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.context["archived_proposals"]), 1)
+        self.assertEqual(len(response.context["archived_replies"]), 1)

@@ -15,7 +15,7 @@ from ..forms import PreliminaryReviewForm
 from .. import lifecycle
 from ..models import (
     REVIEW_TYPE_COMPETITION_PROJECT,
-    ArchivedProposal,
+    ArchivedReply,
     ReviewTask,
     ProjectSubmission,
     preliminary_task_of,
@@ -151,7 +151,7 @@ class PreliminaryReviewTests(ReviewTestCase):
         self.assertEqual(submission.status, ProjectSubmission.NEEDS_REVISION)
         self.assertIsNotNone(submission.decided_at)
         self.assertEqual(self.review_tasks(submission).count(), 0)
-        self.assertFalse(ArchivedProposal.objects.filter(submission=submission).exists())
+        self.assertFalse(ArchivedReply.objects.filter(submission=submission).exists())
         # 打回不花评审人的时间：这一轮从头到尾没分配过评审任务。
         audit = AuditLog.objects.get(action="reviews.preliminary.complete")
         self.assertEqual(audit.detail["reviewer_ids"], [])
@@ -269,7 +269,7 @@ class PreliminaryReviewTests(ReviewTestCase):
             )
 
     def test_the_gate_uses_the_same_verdicts_as_a_review(self):
-        """同一对结论、同一套取值；初审只是没有批注版——它给的是理由，不是稿子。
+        """同一对结论、同一套取值；初审只是没有评审回复——它给的是理由，不是稿子。
 
         「同一套」钉在表单的结论字段上：它若被换成自己的子集（比如初审只留
         「打回」），这条就该红。
@@ -278,7 +278,7 @@ class PreliminaryReviewTests(ReviewTestCase):
             list(PreliminaryReviewForm().fields["decision"].choices),
             list(ReviewTask.DECISION_CHOICES),
         )
-        self.assertNotIn("annotated_file", PreliminaryReviewForm().fields)
+        self.assertNotIn("reply_file", PreliminaryReviewForm().fields)
 
     def test_the_group_is_pointed_at_the_preliminary_opinion_after_a_bounce(self):
         """初审打回时没有评审意见可看，页面不能让人去找不存在的东西。"""

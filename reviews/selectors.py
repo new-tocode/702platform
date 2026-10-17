@@ -36,18 +36,18 @@ class PendingTasks(NamedTuple):
 
     @property
     def parts(self):
-        """整句措辞：``["2 份项目书待初审", "1 份项目书待评审"]``（模板按条渲染）。"""
+        """整句措辞：``["2 份项目资料待初审", "1 份项目资料待评审"]``（模板按条渲染）。"""
         parts = []
         # 中文单复数同形，所以单数那一半直接写死 1（数量在句首，中文读起来一样）；
-        # 英文才分得清 1 proposal / 2 proposals。
+        # 英文才分得清单复数。
         if self.preliminary:
             parts.append(
-                ngettext("1 份项目书待初审", "%(count)s 份项目书待初审", self.preliminary)
+                ngettext("1 份项目资料待初审", "%(count)s 份项目资料待初审", self.preliminary)
                 % {"count": self.preliminary}
             )
         if self.review:
             parts.append(
-                ngettext("1 份项目书待评审", "%(count)s 份项目书待评审", self.review)
+                ngettext("1 份项目资料待评审", "%(count)s 份项目资料待评审", self.review)
                 % {"count": self.review}
             )
         return parts
@@ -56,16 +56,16 @@ class PendingTasks(NamedTuple):
     def headline(self):
         """成员中心卡片用；数字由模板单独渲染，这里只给后面那半句。"""
         if self.preliminary and self.review:
-            return _("份项目书待你处理（初审 %(preliminary)s · 评审 %(review)s）") % {
+            return _("份项目资料待你处理（初审 %(preliminary)s · 评审 %(review)s）") % {
                 "preliminary": self.preliminary,
                 "review": self.review,
             }
         if self.preliminary:
             # 数字由模板单独渲染（<span class="n">），句子这边不带数量，英文因此
             # 没法按单复数变形——译文才用不带名词的写法，中文一字未动。
-            return _("份项目书待你初审")
+            return _("份项目资料待你初审")
         if self.review:
-            return _("份项目书待你评审")
+            return _("份项目资料待你评审")
         return ""
 
 

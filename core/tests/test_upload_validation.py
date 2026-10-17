@@ -1,4 +1,4 @@
-"""上传校验：解压炸弹一律翻成 ValidationError；用户可控文本有长度上限。"""
+"""上传校验：解压炸弹一律翻成 ValidationError；压缩包只收三种格式；用户可控文本有长度上限。"""
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -258,3 +258,109 @@ class UserSuppliedTextLimitAcceptanceTests(TestCase):
 
         self.assertFalse(form.is_valid())
         self.assertIn("comment", form.errors)
+
+
+class ArchiveUploadAcceptanceTests(TestCase):
+    """项目资料与评审回复只收 zip、7z、tgz，上限 500 MB，且按内容验一次。
+
+    两个字段共用 :func:`core.uploads.validate_archive_upload`，各自只带一个名字
+    （「项目资料」「评审回复」）与上限——所以这里逐条钉的是**口径**：收哪三种、
+    拒哪些（含过去收过的 doc/docx/pdf）、多大算超、扩展名与内容不符时怎么办。
+    """
+
+    #: 三种格式各一份「够真」的文件头：zip 是本地文件头，7z 是它的魔数，
+    #: tgz 就是 gzip 的 ``\x1f\x8b``。后面跟什么无所谓，校验只看开头几个字节。
+    VALID = {
+        "zip": b"PK\x03\x04rest of the archive",
+        "7z": b"7z\xbc\xaf\x27\x1crest",
+        "tgz": b"\x1f\x8b\x08rest",
+    }
+
+    def _upload(self, name, content):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        return SimpleUploadedFile(name, content)
+
+    def _assert_rejected(self, validator, upload, *, mentions):
+        from django.core.exceptions import ValidationError
+
+        with self.assertRaises(ValidationError) as caught:
+            validator(upload)
+        self.assertIn(mentions, caught.exception.messages[0])
+
+    def test_every_archive_format_is_accepted(self):
+        from projects.validators import validate_materials_file
+
+        for extension, content in self.VALID.items():
+            with self.subTest(extension=extension):
+                validate_materials_file(self._upload(f"materials.{extension}", content))
+
+    def test_the_old_document_formats_are_no_longer_accepted(self):
+        """doc、docx、pdf 是「项目书」时代的格式，现在一律拒。
+
+        钉住它是为了防「顺手把旧格式加回白名单」：收下的东西会原样进评审人的
+        下载目录，而 zip 之外的东西平台解不开也看不了。
+        """
+        from projects.validators import validate_materials_file
+
+        for name in ("proposal.pdf", "proposal.docx", "proposal.doc", "plan.txt"):
+            with self.subTest(name=name):
+                self._assert_rejected(
+                    validate_materials_file,
+                    self._upload(name, b"%PDF-1.4 whatever"),
+                    mentions="仅支持",
+                )
+
+    def test_a_renamed_file_is_rejected_by_its_content(self):
+        """扩展名是自报的：改了后缀的别的东西一样进不来。"""
+        from projects.validators import validate_materials_file
+
+        self._assert_rejected(
+            validate_materials_file,
+            self._upload("materials.zip", b"%PDF-1.4 not a zip at all"),
+            mentions="zip",
+        )
+
+    def test_the_limit_is_five_hundred_megabytes(self):
+        """真造一个 500 MB 的文件会让整套测试慢到没人愿意跑，所以用替身谎报大小。"""
+        from projects.validators import MATERIALS_MAX_BYTES, validate_materials_file
+
+        class Huge:
+            """只报大小与名字：大小那一关在读签名之前就拦下了。"""
+
+            def __init__(self, size):
+                self.name = "materials.zip"
+                self.size = size
+
+            def read(self, amount=-1):
+                return b"PK"
+
+            def seek(self, position):
+                pass
+
+        validate_materials_file(Huge(MATERIALS_MAX_BYTES))
+        self._assert_rejected(
+            validate_materials_file,
+            Huge(MATERIALS_MAX_BYTES + 1),
+            mentions="不能超过 500 MB",
+        )
+
+    def test_each_field_says_its_own_name(self):
+        """同一个校验器，两个字段各自的文案：说「项目资料」「评审回复」，不说项目书。"""
+        from reviews.validators import validate_reply_file
+
+        self._assert_rejected(
+            validate_reply_file,
+            self._upload("reply.pdf", b"%PDF-1.4"),
+            mentions="评审回复仅支持",
+        )
+
+    def test_historical_migrations_still_resolve_the_frozen_validator_name(self):
+        """``projects.validators.validate_proposal_file`` 是历史迁移按名引用的旧名。
+
+        它已经没有任何调用点了，删掉却会让 Django 加载迁移时抛 AttributeError——
+        也就是 `manage.py` 的任何一条命令都起不来。这条断言就是那个「删不得」。
+        """
+        from projects import validators
+
+        self.assertIs(validators.validate_proposal_file, validators.validate_materials_file)

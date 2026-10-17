@@ -18,10 +18,10 @@ urlpatterns = [
     ),
     path("<int:pk>/complete/", views.complete_task, name="complete"),
     path("override/<int:pk>/", views.override_submission, name="override"),
-    path("<int:pk>/annotated/", views.annotated_file_download, name="annotated"),
+    path("<int:pk>/reply/", views.reply_file_download, name="reply"),
     path(
         "archive/<int:pk>/download/",
-        views.archived_proposal_download,
+        views.archived_reply_download,
         name="archive_download",
     ),
 ]

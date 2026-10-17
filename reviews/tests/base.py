@@ -35,7 +35,7 @@ class ReviewTestCase(TestCase):
     """Base for the review tests: a private MEDIA_ROOT and stage helpers.
 
     Each test class gets its own temporary MEDIA_ROOT, removed with the class.
-    项目书与批注版总得落在某个目录里，让它们落进仓库的 media 目录、或者落进一个
+    项目资料与评审回复总得落在某个目录里，让它们落进仓库的 media 目录、或者落进一个
     由别的类负责清理的共享目录，就是测试开始「按运行顺序随机红」的原因。
     """
 
@@ -48,7 +48,7 @@ class ReviewTestCase(TestCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.media_root = tempfile.mkdtemp()
-        # 受保护的上传件（项目书、批注版）落在 PRIVATE_MEDIA_ROOT，不在 MEDIA_ROOT
+        # 受保护的上传件（项目资料、评审回复）落在 PRIVATE_MEDIA_ROOT，不在 MEDIA_ROOT
         # 之下，所以两个根都要给临时目录：只覆盖一个，另一个就会把测试文件写进
         # 仓库里的真实目录。
         cls.private_media_root = tempfile.mkdtemp()

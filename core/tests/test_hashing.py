@@ -128,7 +128,7 @@ class FileDigestMixinTests(TestCase):
         self.assertEqual(probe.attachment.read(), payload)
 
     def test_unchanged_file_keeps_existing_digest(self):
-        """文件没换就不重算：改一句简介不该重读一遍 20 MB 的项目书。"""
+        """文件没换就不重算：改一句简介不该重读一遍 500 MB 的项目资料。"""
         probe = ProbeFile(label="x")
         probe.attachment = SimpleUploadedFile("a.bin", b"first")
         probe.save()

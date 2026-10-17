@@ -150,7 +150,7 @@ class ReviewMessageDeliveryTests(ReviewTestCase):
 
         self.assertContains(response, "1 条未读消息")
         # 旧的待办卡片已撤：这个措辞不再出现。
-        self.assertNotContains(response, "份项目书待你初审")
+        self.assertNotContains(response, "份项目资料待你初审")
         self.assertNotContains(response, "点击前往处理")
 
     def test_login_no_longer_flashes_a_review_nudge(self):
@@ -162,7 +162,7 @@ class ReviewMessageDeliveryTests(ReviewTestCase):
             follow=True,
         )
 
-        self.assertNotContains(response, "份项目书待初审")
+        self.assertNotContains(response, "份项目资料待初审")
         self.assertNotContains(response, "请前往「评审」处理")
 
     def test_queue_page_still_lists_the_task(self):

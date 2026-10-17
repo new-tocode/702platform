@@ -7,12 +7,12 @@ from django.db import models
 from core.hashing import FileDigestMixin
 from core.storage import neutral_upload_to, private_storage
 
-from .validators import validate_proposal_file
+from .validators import MATERIALS_HELP_TEXT, validate_materials_file
 
 
 class ProjectGroup(FileDigestMixin, models.Model):
-    #: 项目书是评审结论的依据，下载页上会附出它的 SHA-256 供人比对。
-    digest_field = "proposal"
+    #: 项目资料是评审结论的依据，下载页上会附出它的 SHA-256 供人比对。
+    digest_field = "materials"
 
     name = models.CharField("组名", max_length=200)
     leader = models.ForeignKey(
@@ -29,16 +29,18 @@ class ProjectGroup(FileDigestMixin, models.Model):
     )
     description = models.TextField("简介", max_length=2000, blank=True)
     college = models.CharField("学院", max_length=128, blank=True)
-    proposal = models.FileField(
-        "项目书",
-        # 落盘名与用户填的名字脱钩：原名常带组名与人名（「项目书 终版-张三.docx」
+    materials = models.FileField(
+        "项目资料",
+        # 落盘名与用户填的名字脱钩：原名常带组名与人名（「项目资料 终版-张三.zip」
         # 是典型叫法），而文件名会跟着文件走进备份、走进运维的 ls、走进下载头。
-        # 存放在私有根下，取件走 projects.views.group_proposal_download。
+        # 存放在私有根下，取件走 projects.views.group_materials_download。
+        # 目录前缀沿用 project_proposals：改名会让已有文件与新文件分居两处，
+        # 而这是存储内部的路径，不对外，也没有任何文案引用它。
         upload_to=neutral_upload_to("project_proposals"),
         storage=private_storage,
         blank=True,
-        validators=[validate_proposal_file],
-        help_text="支持 doc、docx、pdf；由项目组联系人维护，用于提交同行评审。",
+        validators=[validate_materials_file],
+        help_text=MATERIALS_HELP_TEXT,
     )
     created_at = models.DateTimeField("创建时间", auto_now_add=True)
     updated_at = models.DateTimeField("更新时间", auto_now=True)

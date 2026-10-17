@@ -15,12 +15,12 @@ urlpatterns = [
     ),
     path("<int:pk>/", views.group_detail, name="group_detail"),
     path("<int:pk>/apply/", views.group_apply, name="group_apply"),
-    path("<int:pk>/proposal/", views.group_proposal_download, name="group_proposal_download"),
+    path("<int:pk>/materials/", views.group_materials_download, name="group_materials_download"),
     path("<int:pk>/manage/", views.group_manage, name="group_manage"),
     path(
-        "<int:pk>/manage/proposal/",
-        views.group_proposal_update,
-        name="group_proposal_update",
+        "<int:pk>/manage/materials/",
+        views.group_materials_update,
+        name="group_materials_update",
     ),
     path(
         "<int:pk>/manage/submit/",

@@ -9,7 +9,7 @@ from django.urls import reverse
 from core.models import AuditLog
 
 from ..models import (
-    ArchivedProposal,
+    ArchivedReply,
     ReviewTask,
     ProjectSubmission,
 )
@@ -38,8 +38,8 @@ class AdminRoundDeletionTests(ReviewTestCase):
         self.reviewer_one = make_reviewer("del-reviewer-one")
         self.reviewer_two = make_reviewer("del-reviewer-two")
         self.preliminary = make_preliminary_reviewer("del-preliminary")
-        # 只需要「有项目书」这一事实，不读文件内容，所以不落盘。
-        self.group = make_group("删除项目组", leader=self.contact, write_proposal=False)
+        # 只需要「有项目资料」这一事实，不读文件内容，所以不落盘。
+        self.group = make_group("删除项目组", leader=self.contact, write_materials=False)
     """A round is deleted as a whole, together with its review tasks.
 
     ``ReviewTaskAdmin`` still refuses to delete a single task — that would
@@ -92,11 +92,11 @@ class AdminRoundDeletionTests(ReviewTestCase):
 
     def test_admin_deletion_is_refused_once_the_round_is_archived(self):
         submission = self._submit()
-        ArchivedProposal.objects.create(
+        ArchivedReply.objects.create(
             group=self.group,
             submission=submission,
             source_task=self.review_tasks(submission).first(),
-            file="review_archives/kept.pdf",
+            file="review_archives/kept.zip",
         )
         submission_pk = submission.pk
         self.client.force_login(self.admin)

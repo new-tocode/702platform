@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 702platform\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-14 23:50+0800\n"
+"POT-Creation-Date: 2026-10-17 19:19+0800\n"
 "PO-Revision-Date: 2026-09-19 18:39\n"
 "Last-Translator: 702platform\n"
 "Language-Team: 702platform\n"
@@ -64,7 +64,7 @@ msgid "头像"
 msgstr "Avatar"
 
 #: accounts/forms.py:163 accounts/forms.py:190 accounts/services.py:200
-#: core/uploads.py:110
+#: core/uploads.py:125
 msgid "请选择要上传的图片。"
 msgstr "Please choose an image to upload."
 
@@ -493,30 +493,46 @@ msgstr "Audit log"
 msgid "查看平台关键操作记录"
 msgstr "Review the platform's key operations"
 
-#: core/uploads.py:85 core/uploads.py:98
+#: core/uploads.py:47
+msgid "文件不是有效的 zip。"
+msgstr "The file is not a valid zip archive."
+
+#: core/uploads.py:48
+msgid "文件不是有效的 7z。"
+msgstr "The file is not a valid 7z archive."
+
+#: core/uploads.py:49
+msgid "文件不是有效的 tgz。"
+msgstr "The file is not a valid tgz archive."
+
+#: core/uploads.py:100 core/uploads.py:113
 msgid "上传文件不是有效的图片。"
 msgstr "The uploaded file is not a valid image."
 
-#: core/uploads.py:91
+#: core/uploads.py:106
 #, python-format
 msgid "图片过大（%(width)s×%(height)s 像素），请压缩后再上传。"
 msgstr ""
 "The image is too large (%(width)s×%(height)s pixels). Please compress it and "
 "upload again."
 
-#: core/uploads.py:116
+#: core/uploads.py:131 core/uploads.py:170
 #, python-format
 msgid "%(label)s仅支持 %(allowed)s 格式。"
 msgstr "%(label)s supports only these formats: %(allowed)s."
 
-#: core/uploads.py:121
+#: core/uploads.py:136 core/uploads.py:175
 #, python-format
 msgid "%(label)s不能超过 %(limit)s MB。"
 msgstr "%(label)s cannot exceed %(limit)s MB."
 
-#: core/uploads.py:131
+#: core/uploads.py:146
 msgid "文件类型与图片不符，请确认选的是图片。"
 msgstr "That file is not an image."
+
+#: core/uploads.py:165
+msgid "请选择要上传的文件。"
+msgstr "Please choose a file to upload."
 
 #: discussion/forms.py:18 discussion/models.py:14
 msgid "中文名称"
@@ -983,24 +999,21 @@ msgstr "Advisor 2"
 msgid "指导老师 3"
 msgstr "Advisor 3"
 
-#: projects/forms.py:116 templates/projects/group_detail.html:189
+#: projects/forms.py:116 projects/validators.py:26
+#: templates/projects/group_detail.html:189
 #: templates/projects/group_manage.html:180
-msgid "项目书"
-msgstr "Proposal"
+msgid "项目资料"
+msgstr "Materials"
 
-#: projects/forms.py:117
-msgid "支持 doc、docx、pdf，上传后即可提交审核。"
-msgstr "Accepts doc, docx and pdf; upload it to submit for review."
-
-#: projects/forms.py:124
+#: projects/forms.py:123
 msgid "新联系人"
 msgstr "New contact"
 
-#: projects/forms.py:126
+#: projects/forms.py:125
 msgid "只能从当前项目组成员中选择。"
 msgstr "Only current members of this group can be chosen."
 
-#: projects/forms.py:141 projects/services.py:335
+#: projects/forms.py:140 projects/services.py:335
 msgid "新联系人必须是该项目组成员。"
 msgstr "The new contact must be a member of this project group."
 
@@ -1036,30 +1049,11 @@ msgstr ""
 msgid "不能移除项目组联系人，请先转让联系人。"
 msgstr "The group contact cannot be removed; transfer the contact role first."
 
-#: projects/validators.py:14
-msgid "文件不是有效的 PDF。"
-msgstr "The file is not a valid PDF."
-
-#: projects/validators.py:15
-msgid "文件不是有效的 docx。"
-msgstr "The file is not a valid docx."
-
-#: projects/validators.py:16
-msgid "文件不是有效的 doc。"
-msgstr "The file is not a valid doc."
-
-#: projects/validators.py:23
-msgid "请选择项目书文件。"
-msgstr "Please choose a proposal file."
-
-#: projects/validators.py:27
-msgid "项目书仅支持 doc、docx、pdf 格式。"
-msgstr "A proposal must be a doc, docx or pdf file."
-
-#: projects/validators.py:30
-#, python-format
-msgid "项目书不能超过 %(limit)s MB。"
-msgstr "The proposal cannot exceed %(limit)s MB."
+#: projects/validators.py:18
+msgid "支持 zip、7z、tgz；由项目组联系人维护，用于提交同行评审。"
+msgstr ""
+"Accepts zip, 7z and tgz archives; maintained by the group contact and "
+"used to submit for peer review."
 
 #: projects/views.py:72
 #, python-format
@@ -1077,12 +1071,12 @@ msgstr[1] ""
 "looks at it first; once it passes, %(count)s reviewers are drawn at random."
 
 #: projects/views.py:218
-msgid "项目书已上传/更新。"
-msgstr "Proposal uploaded/updated."
+msgid "项目资料已上传/更新。"
+msgstr "Materials uploaded/updated."
 
 #: projects/views.py:265
-msgid "该项目组尚未上传项目书。"
-msgstr "This project group has not uploaded a proposal yet."
+msgid "该项目组尚未上传项目资料。"
+msgstr "This project group has not uploaded its materials yet."
 
 #: projects/views.py:306
 #, python-format
@@ -1139,9 +1133,10 @@ msgstr "%(name)s has been removed from the project group."
 
 #: reviews/apps.py:20
 msgid ""
-"初审并审阅分配给你的项目书，给出初审或评审意见；管理员在此处理项目组创建申请"
+"初审并审阅分配给你的项目资料，给出初审或评审意见；管理员在此处理项目组创建申"
+"请"
 msgstr ""
-"Run preliminary reviews and review the proposals assigned to you; "
+"Run preliminary reviews and review the materials assigned to you; "
 "administrators handle project-group creation requests here"
 
 #: reviews/draw.py:97
@@ -1168,12 +1163,12 @@ msgstr "%(shortfall)s%(closed)s — %(hint)s"
 msgid "无法提交审核。"
 msgstr "cannot submit for review."
 
-#: reviews/forms.py:21 templates/projects/group_detail.html:43
+#: reviews/forms.py:20 templates/projects/group_detail.html:43
 #: templates/projects/group_detail.html:243
 msgid "评审类型"
 msgstr "Review type"
 
-#: reviews/forms.py:24
+#: reviews/forms.py:23
 msgid ""
 "决定初审通过后需要几名评审人：竞赛类 3 人；大创中期、结题 2 人；大创立项 1 "
 "人。"
@@ -1182,35 +1177,35 @@ msgstr ""
 "competitions, 2 for innovation-program midterm and final, 1 for innovation-"
 "program start."
 
-#: reviews/forms.py:29
+#: reviews/forms.py:28
 msgid "提交说明"
 msgstr "Submission note"
 
-#: reviews/forms.py:35
+#: reviews/forms.py:34
 msgid "例如：申请开题、申请参加 XX 竞赛"
 msgstr "e.g. starting the project, or entering competition XX"
 
-#: reviews/forms.py:49
+#: reviews/forms.py:48
 msgid "评审决定"
 msgstr "Review decision"
 
-#: reviews/forms.py:50
+#: reviews/forms.py:49
 msgid "评审意见"
 msgstr "Review comment"
 
-#: reviews/forms.py:51 reviews/forms.py:92
+#: reviews/forms.py:50 reviews/forms.py:95
 msgid "请说明通过或需要修改的理由。"
 msgstr "Explain why it should be approved or needs revision."
 
-#: reviews/forms.py:76
+#: reviews/forms.py:75
 msgid "初审决定"
 msgstr "Preliminary decision"
 
-#: reviews/forms.py:77
+#: reviews/forms.py:76
 msgid "初审意见"
 msgstr "Preliminary comment"
 
-#: reviews/forms.py:79
+#: reviews/forms.py:78
 msgid ""
 "通过后按送审类型随机分配评审人，进入正式评审；需修改则本轮直接打回项目组，不"
 "分配评审人。"
@@ -1219,25 +1214,16 @@ msgstr ""
 "and the round moves to review; if it needs revision, the round goes straight "
 "back to the group with no reviewers assigned."
 
-#: reviews/forms.py:82
-msgid "请说明通过或需要修改的理由；打回时项目组会据此修改项目书。"
+#: reviews/forms.py:81
+msgid "请说明通过或需要修改的理由；打回时项目组会据此修改项目资料。"
 msgstr ""
 "Explain why it should be approved or needs revision; if you send it back, "
-"the group will revise the proposal accordingly."
+"the group will revise the materials accordingly."
 
-#: reviews/forms.py:95 templates/projects/group_detail.html:211
+#: reviews/forms.py:98 reviews/validators.py:30
 #: templates/projects/group_detail.html:221
-msgid "批注版项目书"
-msgstr "Annotated proposal"
-
-#: reviews/forms.py:99
-msgid ""
-"选填；支持 doc、docx、pdf。可在项目书上直接批注后上传，也可只填文字意见。请勿"
-"在文件属性中保留可识别个人身份的信息。"
-msgstr ""
-"Optional; accepts doc, docx and pdf. Upload a proposal with your "
-"annotations, or just give a written comment. Please do not leave identifying "
-"information in the file's properties."
+msgid "评审回复"
+msgstr "Review reply"
 
 #: reviews/lifecycle.py:28
 msgid "初审中"
@@ -1340,30 +1326,28 @@ msgid "大创结题"
 msgstr "Innovation program — final"
 
 #: reviews/selectors.py:45
-#, python-format
-msgid "1 份项目书待初审"
-msgid_plural "%(count)s 份项目书待初审"
-msgstr[0] "1 proposal awaiting preliminary review"
-msgstr[1] "%(count)s proposals awaiting preliminary review"
+msgid "1 份项目资料待初审"
+msgid_plural "%(count)s 份项目资料待初审"
+msgstr[0] "1 submission awaiting preliminary review"
+msgstr[1] "%(count)s submissions awaiting preliminary review"
 
 #: reviews/selectors.py:50
-#, python-format
-msgid "1 份项目书待评审"
-msgid_plural "%(count)s 份项目书待评审"
-msgstr[0] "1 proposal awaiting review"
-msgstr[1] "%(count)s proposals awaiting review"
+msgid "1 份项目资料待评审"
+msgid_plural "%(count)s 份项目资料待评审"
+msgstr[0] "1 submission awaiting review"
+msgstr[1] "%(count)s submissions awaiting review"
 
 #: reviews/selectors.py:59
-#, python-format
-msgid "份项目书待你处理（初审 %(preliminary)s · 评审 %(review)s）"
-msgstr "proposals to handle (preliminary %(preliminary)s · review %(review)s)"
+msgid "份项目资料待你处理（初审 %(preliminary)s · 评审 %(review)s）"
+msgstr ""
+"submissions to handle (preliminary %(preliminary)s · review %(review)s)"
 
 #: reviews/selectors.py:66
-msgid "份项目书待你初审"
+msgid "份项目资料待你初审"
 msgstr "awaiting your preliminary review"
 
 #: reviews/selectors.py:68
-msgid "份项目书待你评审"
+msgid "份项目资料待你评审"
 msgstr "awaiting your review"
 
 #: reviews/selectors.py:107
@@ -1398,8 +1382,8 @@ msgid "请选择评审类型。"
 msgstr "Please choose a review type."
 
 #: reviews/services.py:92
-msgid "请先上传项目书，再提交审核。"
-msgstr "Upload the proposal before submitting it for review."
+msgid "请先上传项目资料，再提交审核。"
+msgstr "Upload the project materials before submitting them for review."
 
 #: reviews/services.py:106
 #, python-format
@@ -1445,16 +1429,14 @@ msgid "%(role)s没有变化。"
 msgstr "%(role)s is unchanged."
 
 #: reviews/services.py:504
-#, python-format
-msgid "提交人不能%(stage)s自己的项目书。"
-msgstr "The submitter cannot take the %(stage)s task for their own proposal."
+msgid "提交人不能%(stage)s自己的项目资料。"
+msgstr "The submitter cannot take the %(stage)s task for their own materials."
 
 #: reviews/services.py:506
-#, python-format
-msgid "该项目组成员不能%(stage)s本组的项目书。"
+msgid "该项目组成员不能%(stage)s本组的项目资料。"
 msgstr ""
-"A member of this group cannot take the %(stage)s task for their own group's "
-"proposal."
+"A member of this group cannot take the %(stage)s task for their group's "
+"materials."
 
 #: reviews/services.py:523
 #, python-format
@@ -1485,10 +1467,15 @@ msgstr ""
 "%(count)s %(stage)s tasks are still open; submit them or have them "
 "reassigned before closing this switch."
 
+#: reviews/validators.py:22
+msgid "选填；支持 zip、7z、tgz。请勿在文件属性中保留可识别个人身份的信息。"
+msgstr ""
+"Optional; accepts zip, 7z and tgz archives. Please do not leave "
+"identifying information in the file's properties."
+
 #: reviews/views.py:88
-#, python-format
-msgid "批注版项目书_R%(round)s%(ext)s"
-msgstr "Annotated proposal_R%(round)s%(ext)s"
+msgid "评审回复_R%(round)s%(ext)s"
+msgstr "Review reply_R%(round)s%(ext)s"
 
 #: reviews/views.py:135
 #, python-format
@@ -1507,9 +1494,9 @@ msgstr[1] ""
 "Preliminary review passed; %(count)s reviewers have been drawn at random."
 
 #: reviews/views.py:155
-msgid "初审已打回，项目组修改项目书后可重新提交。"
+msgid "初审已打回，项目组修改项目资料后可重新提交。"
 msgstr ""
-"Sent back at preliminary review; the group can revise the proposal and "
+"Sent back at preliminary review; the group can revise the materials and "
 "resubmit."
 
 #: reviews/views.py:156
@@ -1533,8 +1520,8 @@ msgstr ""
 "switch it back on at any time."
 
 #: reviews/views.py:251
-msgid "该评审任务没有批注版项目书。"
-msgstr "This review task has no annotated proposal."
+msgid "该评审任务没有评审回复。"
+msgstr "This review task has no review reply."
 
 #: templates/accounts/member_home.html:4 templates/accounts/member_home.html:12
 #: templates/base.html:43 templates/discussion/space.html:16
@@ -2712,8 +2699,8 @@ msgid "评审人 %(number)s"
 msgstr "Reviewer %(number)s"
 
 #: templates/projects/group_detail.html:161
-msgid "下载批注版"
-msgstr "Download annotated copy"
+msgid "下载评审回复"
+msgstr "Download review reply"
 
 #: templates/projects/group_detail.html:167
 msgid "本轮已由超级评审敲定，该评审任务随之结束"
@@ -2739,22 +2726,26 @@ msgstr "Click to download the full text"
 #: templates/projects/group_detail.html:287
 #: templates/projects/group_detail.html:333
 #: templates/projects/group_detail.html:368
-msgid "下载项目书"
-msgstr "Download proposal"
+msgid "下载项目资料"
+msgstr "Download materials"
 
 #: templates/projects/group_detail.html:204
 #: templates/projects/group_manage.html:197
-msgid "尚未上传项目书。"
-msgstr "No proposal uploaded yet."
+msgid "尚未上传项目资料。"
+msgstr "No materials uploaded yet."
+
+#: templates/projects/group_detail.html:211
+msgid "评审回复归档"
+msgstr "Archived review replies"
 
 #: templates/projects/group_detail.html:225
 msgid "下载"
 msgstr "Download"
 
 #: templates/projects/group_detail.html:231
-msgid "评审通过后，评审人上传的批注版项目书会归档到这里。"
+msgid "评审通过后，评审人上传的评审回复会归档到这里。"
 msgstr ""
-"Once a round is approved, annotated proposals uploaded by reviewers are "
+"Once a round is approved, the review replies uploaded by reviewers are "
 "archived here."
 
 #: templates/projects/group_detail.html:238
@@ -2785,14 +2776,14 @@ msgid "方案已通过，可按此推进项目。"
 msgstr "The proposal is approved — go ahead with the project."
 
 #: templates/projects/group_detail.html:256
-msgid "请根据评审意见修改项目书后重新提交。"
-msgstr "Revise the proposal according to the review comments and resubmit."
+msgid "请根据评审意见修改项目资料后重新提交。"
+msgstr "Revise the materials according to the review comments and resubmit."
 
 #: templates/projects/group_detail.html:258
-msgid "本轮由初审打回（没有进入评审），请根据初审意见修改项目书后重新提交。"
+msgid "本轮由初审打回（没有进入评审），请根据初审意见修改项目资料后重新提交。"
 msgstr ""
 "This round was sent back at preliminary review (it never reached the "
-"reviewers); revise the proposal accordingly and resubmit."
+"reviewers); revise the materials accordingly and resubmit."
 
 #: templates/projects/group_detail.html:261
 #, python-format
@@ -2825,21 +2816,21 @@ msgid "一票决定"
 msgstr "One vote decides"
 
 #: templates/projects/group_detail.html:280
-#, python-format
 msgid ""
 "你的决定会立即敲定第 %(round)s 轮，本轮尚未提交的 1 个任务（初审／评审）会随"
-"即被释放。请先下载项目书阅读，需要时附上批注版。"
+"即被释放。请先下载项目资料阅读，需要时附上评审回复。"
 msgid_plural ""
 "你的决定会立即敲定第 %(round)s 轮，本轮尚未提交的 %(counter)s 个任务（初审／"
-"评审）会随即被释放。请先下载项目书阅读，需要时附上批注版。"
+"评审）会随即被释放。请先下载项目资料阅读，需要时附上评审回复。"
 msgstr[0] ""
-"Your decision settles round %(round)s immediately, and the task still open "
-"this round (preliminary or review) is released right away. Download the "
-"proposal first, and attach an annotated copy if you wish."
+"Your decision settles round %(round)s immediately, and the task still "
+"open this round (preliminary or review) is released right away. Download "
+"the materials first, and attach a review reply if you wish."
 msgstr[1] ""
-"Your decision settles round %(round)s immediately, and the %(counter)s tasks "
-"still open this round (preliminary and review) are released right away. "
-"Download the proposal first, and attach an annotated copy if you wish."
+"Your decision settles round %(round)s immediately, and the %(counter)s "
+"tasks still open this round (preliminary and review) are released right "
+"away. Download the materials first, and attach a review reply if you "
+"wish."
 
 #: templates/projects/group_detail.html:310
 msgid "提交超级评审"
@@ -2850,16 +2841,16 @@ msgid "我的初审"
 msgstr "My preliminary review"
 
 #: templates/projects/group_detail.html:325
-#, python-format
 msgid ""
-"你是第 %(round)s 轮的初审人：请先下载项目书阅读， 再决定放行还是打回。通过后"
-"系统会按送审类型随机分配 %(required)s 名评审人；打回则本轮直接结束， 项目组修"
-"改后可重新提交。"
+"你是第 %(round)s 轮的初审人：请先下载项目资料阅读， 再决定放行还是打回。通过"
+"后系统会按送审类型随机分配 %(required)s 名评审人；打回则本轮直接结束， 项目组"
+"修改后可重新提交。"
 msgstr ""
-"You are the preliminary reviewer for round %(round)s: download the proposal "
-"first, then decide whether to pass it or send it back. If you pass it, "
-"%(required)s reviewers are drawn at random according to the submission type; "
-"if you send it back, the round ends and the group can revise and resubmit."
+"You are the preliminary reviewer for round %(round)s: download the "
+"materials first, then decide whether to pass them or send them back. If "
+"you pass, %(required)s reviewers are drawn at random according to the "
+"submission type; if you send it back, the round ends and the group can "
+"revise and resubmit."
 
 #: templates/projects/group_detail.html:352
 msgid "提交初审"
@@ -2871,11 +2862,11 @@ msgstr "My reviews"
 
 #: templates/projects/group_detail.html:366
 msgid ""
-"请先下载本轮项目书，阅读后填写评审意见与决定；如已在项目书上批注，可一并上传"
-"批注版。"
+"请先下载本轮项目资料，阅读后填写评审意见与决定；如有需要补充的材料，可作为评"
+"审回复一并上传。"
 msgstr ""
-"Download this round's proposal, then record your decision and comments; if "
-"you annotated the file, upload the annotated copy too."
+"Download this round's materials, then record your decision and comments; "
+"if you have supporting files, upload them as a review reply."
 
 #: templates/projects/group_detail.html:391
 msgid "完成评审"
@@ -3020,16 +3011,16 @@ msgid "保存学院与指导老师"
 msgstr "Save college and advisors"
 
 #: templates/projects/group_manage.html:189
-msgid "不超过 20 MB"
-msgstr "up to 20 MB"
+msgid "不超过 500 MB"
+msgstr "up to 500 MB"
 
 #: templates/projects/group_manage.html:193
-msgid "下载当前项目书"
-msgstr "Download current proposal"
+msgid "下载当前项目资料"
+msgstr "Download current materials"
 
 #: templates/projects/group_manage.html:208
-msgid "上传 / 更新项目书"
-msgstr "Upload / update proposal"
+msgid "上传 / 更新项目资料"
+msgstr "Upload / update materials"
 
 #: templates/projects/group_manage.html:216
 #: templates/projects/group_manage.html:258
@@ -3073,10 +3064,10 @@ msgstr ""
 "proposal is approved when all of them approve."
 
 #: templates/projects/group_manage.html:253
-msgid "初审人、评审人身份对项目组匿名，评审人可另附批注版项目书。"
+msgid "初审人、评审人身份对项目组匿名，评审人可另附评审回复。"
 msgstr ""
-"Preliminary reviewers and reviewers stay anonymous to the group; reviewers "
-"may attach an annotated proposal."
+"Preliminary reviewers and reviewers stay anonymous to the group; "
+"reviewers may attach a review reply."
 
 #: templates/projects/group_manage.html:266
 msgid "转让联系人"
@@ -3104,12 +3095,12 @@ msgstr "Log in"
 
 #: templates/reviews/queue.html:18
 msgid ""
-"初审或审阅分配给你的项目书并给出意见；初审人、评审人与超级评审对项目组一律匿"
-"名。"
+"初审或审阅分配给你的项目资料并给出意见；初审人、评审人与超级评审对项目组一律"
+"匿名。"
 msgstr ""
-"Run preliminary reviews or review the proposals assigned to you and give "
-"your decision; preliminary reviewers, reviewers and super reviewers are all "
-"anonymous to the group."
+"Run preliminary reviews or review the materials assigned to you and give "
+"your decision; preliminary reviewers, reviewers and super reviewers are "
+"all anonymous to the group."
 
 #: templates/reviews/queue.html:19
 msgid "项目组创建申请由全体管理员在这里共同处理，任一人同意即通过。"
@@ -3184,12 +3175,12 @@ msgid "超级评审不可行使：%(reason)s。"
 msgstr "The super reviewer power cannot be used: %(reason)s."
 
 #: templates/reviews/queue.html:134
-msgid "查看项目书"
-msgstr "View proposal"
+msgid "查看项目资料"
+msgstr "View materials"
 
 #: templates/reviews/queue.html:134
-msgid "查看项目书并决定"
-msgstr "View proposal and decide"
+msgid "查看项目资料并决定"
+msgstr "View materials and decide"
 
 #: templates/reviews/queue.html:140
 msgid "当前没有进行中的评审。"
@@ -3207,8 +3198,8 @@ msgid "进入项目组详情并初审"
 msgstr "Open the group and review"
 
 #: templates/reviews/queue.html:177
-msgid "暂无待初审的项目书。"
-msgstr "No proposals awaiting preliminary review."
+msgid "暂无待初审的项目资料。"
+msgstr "No materials awaiting preliminary review."
 
 #: templates/reviews/queue.html:204
 #, python-format
@@ -3222,8 +3213,8 @@ msgid "进入项目组详情并评审"
 msgstr "Open the group and review"
 
 #: templates/reviews/queue.html:212
-msgid "暂无待评审的项目书。"
-msgstr "No proposals awaiting review."
+msgid "暂无待评审的项目资料。"
+msgstr "No materials awaiting review."
 
 #: templates/reviews/queue.html:224
 msgid "已完成的初审"

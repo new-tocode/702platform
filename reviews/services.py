@@ -1,11 +1,11 @@
-"""Transactional project-proposal review operations.
+"""Transactional project-materials review operations.
 
 Reviewer assignment, verdict aggregation and archiving live here so the rules
 "a round needs as many reviewers as its type demands" and "every reviewer must
 approve" each have exactly one implementation.
 
 A round has two stages, and both are :class:`~reviews.models.ReviewTask` rows
-distinguished by ``stage``: one 初审人 gets the proposal first, and only their
+distinguished by ``stage``: one 初审人 gets the materials first, and only their
 通过 draws the ordinary reviewers (:func:`_open_review_stage`). Everything that
 is not stage-specific — who may hold a task, what a task may do next, how a
 verdict is recorded — is therefore written once (:func:`submit_verdict`) and
@@ -49,7 +49,7 @@ from .selectors import (
 
 from .models import (
     REVIEWER_QUOTA,
-    ArchivedProposal,
+    ArchivedReply,
     ReviewTask,
     ProjectSubmission,
 )
@@ -76,7 +76,7 @@ def submit_for_review(*, group, submitter, review_type, message="", request=None
     """Open a new review round and hand it to one 初审人.
 
     The round starts in 初审中 with no reviewers: the type's quota is spent by
-    :func:`_open_review_stage` once the 初审 passes, so a proposal that is not
+    :func:`_open_review_stage` once the 初审 passes, so materials that are not
     ready never occupies the panel.
 
     The reviewers themselves are *not* reserved here, but the round is only
@@ -88,8 +88,8 @@ def submit_for_review(*, group, submitter, review_type, message="", request=None
     """
     if review_type not in REVIEWER_QUOTA:
         raise ReviewError(_("请选择评审类型。"))
-    if not group.proposal:
-        raise ReviewError(_("请先上传项目书，再提交审核。"))
+    if not group.materials:
+        raise ReviewError(_("请先上传项目资料，再提交审核。"))
 
     with transaction.atomic():
         # Lock the group: without it, two submissions for the same group could
@@ -169,34 +169,34 @@ def submit_for_review(*, group, submitter, review_type, message="", request=None
     return submission
 
 
-def _archive_annotated_proposals(submission):
-    """Copy every annotated proposal of an approved round into the archive.
+def _archive_replies(submission):
+    """Copy every reply archive of an approved round into the archive.
 
     Reviewers who answered with text only leave no row: an archive entry
     without a file would carry no information. ``get_or_create`` plus the
     uniqueness on ``source_task`` keeps a retried aggregation idempotent.
     """
-    annotated = submission.tasks.filter(
+    replies = submission.tasks.filter(
         status=ReviewTask.COMPLETED,
         decision=ReviewTask.APPROVE,
-    ).exclude(annotated_file="")
+    ).exclude(reply_file="")
     archived_count = 0
-    for assignment in annotated:
-        archived, created = ArchivedProposal.objects.get_or_create(
+    for assignment in replies:
+        archived, created = ArchivedReply.objects.get_or_create(
             source_task=assignment,
             defaults={"group": submission.group, "submission": submission},
         )
         if not created:
             continue
         archived.file.save(
-            os.path.basename(assignment.annotated_file.name),
-            assignment.annotated_file,
+            os.path.basename(assignment.reply_file.name),
+            assignment.reply_file,
             save=True,
         )
         archived_count += 1
     if archived_count:
         logger.info(
-            "reviews.proposal.archive submission_id=%s group_id=%s count=%s",
+            "reviews.reply.archive submission_id=%s group_id=%s count=%s",
             submission.pk,
             submission.group_id,
             archived_count,
@@ -241,7 +241,7 @@ def _settle_submission(submission):
     )
 
     if submission.status == ProjectSubmission.APPROVED:
-        _archive_annotated_proposals(submission)
+        _archive_replies(submission)
     return submission
 
 
@@ -251,7 +251,7 @@ def submit_verdict(
     reviewer,
     decision,
     comment,
-    annotated_file=None,
+    reply_file=None,
     request=None,
 ):
     """交一张任务卡：写下结论，并让这一轮该发生的后续发生。
@@ -264,7 +264,7 @@ def submit_verdict(
     * 初审**打回** → 本轮结束，项目组改稿后再送新一轮；
     * 评审**交卷** → 尝试汇总本轮（:func:`_settle_submission`），全员通过才算通过。
 
-    批注版项目书只有评审阶段接收：初审给的是理由，不是稿子（表单也不给这个字段）。
+    评审回复只有评审阶段接收：初审给的是理由，不是稿子（表单也不给这个字段）。
     """
     stage = task.stage
     rules = lifecycle.STAGES[stage]
@@ -306,9 +306,9 @@ def submit_verdict(
         locked.comment = comment
         locked.completed_at = now
         update_fields = ["status", "decision", "comment", "completed_at"]
-        if stage == ReviewTask.REVIEW and annotated_file is not None:
-            locked.annotated_file = annotated_file
-            update_fields.append("annotated_file")
+        if stage == ReviewTask.REVIEW and reply_file is not None:
+            locked.reply_file = reply_file
+            update_fields.append("reply_file")
         locked.save(update_fields=update_fields)
 
         # 这张卡交掉了：对应的「待办」消息撤掉——消息只负责「有事等你」，
@@ -336,21 +336,21 @@ def submit_verdict(
             "stage": stage,
             "decision": decision,
             "submission_status": submission.status,
-            "annotated": annotated_file is not None,
+            "reply": reply_file is not None,
             # 初审通过时一并记下抽到的评审人（名单本身就是这一刻的结果）。
             "reviewer_ids": [user.pk for user in drawn],
         },
         request=request,
     )
     logger.info(
-        "%s task_id=%s submission_id=%s stage=%s decision=%s submission_status=%s annotated=%s reviewer=%s",
+        "%s task_id=%s submission_id=%s stage=%s decision=%s submission_status=%s reply=%s reviewer=%s",
         rules.submit_action,
         locked.pk,
         locked.submission_id,
         stage,
         decision,
         submission.status,
-        annotated_file is not None,
+        reply_file is not None,
         reviewer.get_username(),
         extra={"request_id": getattr(request, "request_id", "-")},
     )
@@ -390,7 +390,7 @@ def override_review(
     super_reviewer,
     decision,
     comment,
-    annotated_file=None,
+    reply_file=None,
     request=None,
 ):
     """Settle a round outright with a super reviewer's single vote.
@@ -418,7 +418,7 @@ def override_review(
             status=ReviewTask.COMPLETED,
             decision=decision,
             comment=comment,
-            annotated_file=annotated_file or "",
+            reply_file=reply_file or "",
             completed_at=now,
             is_override=True,
         )
@@ -437,7 +437,7 @@ def override_review(
         )
 
         if locked.status == ProjectSubmission.APPROVED:
-            _archive_annotated_proposals(locked)
+            _archive_replies(locked)
 
         # 一票定论：等待中的任务刚被释放，他们的「待办」消息一并撤掉；
         # 结论给项目组联系人写一条结果。
@@ -476,7 +476,7 @@ def reassign_task(*, task, new_reviewer, actor, request=None):
 
     Only a pending task on a round that has not moved past its stage may be
     swapped. Once the round moves on, the row records who decided — swapping the
-    holder would re-attribute that decision (and its comment and annotated file)
+    holder would re-attribute that decision (and its comment and reply archive)
     to somebody who never made it.
     """
     rules = lifecycle.STAGES[task.stage]
@@ -501,9 +501,9 @@ def reassign_task(*, task, new_reviewer, actor, request=None):
         # The admin form limits the choices already; these checks are what make
         # the rule hold for any other caller too.
         if new_reviewer.pk == submission.submitted_by_id:
-            raise ReviewError(_("提交人不能%(stage)s自己的项目书。") % {"stage": rules.label})
+            raise ReviewError(_("提交人不能%(stage)s自己的项目资料。") % {"stage": rules.label})
         if submission.group.members.filter(pk=new_reviewer.pk).exists():
-            raise ReviewError(_("该项目组成员不能%(stage)s本组的项目书。") % {"stage": rules.label})
+            raise ReviewError(_("该项目组成员不能%(stage)s本组的项目资料。") % {"stage": rules.label})
         # 一人一轮一席：他要是已经持有本轮的（任何一条）任务，换过去就破了这条
         # 不变式——同一条检查对两道关都成立，文案取自 StageRules。
         if (

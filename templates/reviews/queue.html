@@ -15,7 +15,7 @@
             <div>
                 <h1>{% translate "我的评审" %}</h1>
                 <div class="sub">
-                    {% translate "初审或审阅分配给你的项目书并给出意见；初审人、评审人与超级评审对项目组一律匿名。" %}
+                    {% translate "初审或审阅分配给你的项目资料并给出意见；初审人、评审人与超级评审对项目组一律匿名。" %}
                     {% if create_requests %}{% translate "项目组创建申请由全体管理员在这里共同处理，任一人同意即通过。" %}{% endif %}
                     {% if open_rounds %}{% translate "作为超级评审，你还可以看到全部进行中的评审，并对其直接通过或打回。" %}{% endif %}
                 </div>
@@ -131,7 +131,7 @@
                                 {% endif %}
                                 <div class="btn-row">
                                     <a class="btn {% if not row.blocker %}btn-primary {% endif %}btn-sm" href="{% url 'projects:group_detail' row.submission.group.pk %}">
-                                        {% if row.blocker %}{% translate "查看项目书" %}{% else %}{% translate "查看项目书并决定" %}{% endif %}
+                                        {% if row.blocker %}{% translate "查看项目资料" %}{% else %}{% translate "查看项目资料并决定" %}{% endif %}
                                     </a>
                                 </div>
                             </div>
@@ -174,7 +174,7 @@
                                     </div>
                                 </div>
                             {% empty %}
-                                <div class="empty">{% translate "暂无待初审的项目书。" %}</div>
+                                <div class="empty">{% translate "暂无待初审的项目资料。" %}</div>
                             {% endfor %}
                         </div>
                     </div>
@@ -209,7 +209,7 @@
                                     </div>
                                 </div>
                             {% empty %}
-                                <div class="empty">{% translate "暂无待评审的项目书。" %}</div>
+                                <div class="empty">{% translate "暂无待评审的项目资料。" %}</div>
                             {% endfor %}
                         </div>
                     </div>

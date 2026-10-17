@@ -156,9 +156,9 @@
                                                 <dd>
                                                     {% if assignment.is_completed %}
                                                         {{ assignment.get_decision_display }} · {{ assignment.comment|default:"—" }}
-                                                        {% if assignment.annotated_file %}
+                                                        {% if assignment.reply_file %}
                                                             <div class="btn-row">
-                                                                <a class="btn btn-sm" href="{% url 'reviews:annotated' assignment.pk %}">{% translate "下载批注版" %}</a>
+                                                                <a class="btn btn-sm" href="{% url 'reviews:reply' assignment.pk %}">{% translate "下载评审回复" %}</a>
                                                             </div>
                                                             {% include "includes/checksum.html" with digest=assignment.sha256 %}
                                                         {% endif %}
@@ -186,39 +186,39 @@
 
         <div class="stack reveal">
             <div class="panel">
-                <div class="panel-head"><h2>{% translate "项目书" %}</h2></div>
+                <div class="panel-head"><h2>{% translate "项目资料" %}</h2></div>
                 <div class="panel-body">
-                    {% if group.proposal %}
+                    {% if group.materials %}
                         <div class="doc-file">
-                            <span class="doc-ext">{{ group.proposal.name|file_ext }}</span>
+                            <span class="doc-ext">{{ group.materials.name|file_ext }}</span>
                             <div>
-                                <div class="doc-name">{{ group.proposal.name|basename }}</div>
+                                <div class="doc-name">{{ group.materials.name|basename }}</div>
                                 <div class="doc-spec">{% translate "点击下载查看全文" %}</div>
                             </div>
                         </div>
                         <div class="btn-row">
-                            <a class="btn btn-sm" href="{% url 'projects:group_proposal_download' group.pk %}">{% translate "下载项目书" %}</a>
+                            <a class="btn btn-sm" href="{% url 'projects:group_materials_download' group.pk %}">{% translate "下载项目资料" %}</a>
                         </div>
                         {% include "includes/checksum.html" with digest=group.sha256 %}
                     {% else %}
-                        <p class="muted">{% translate "尚未上传项目书。" %}</p>
+                        <p class="muted">{% translate "尚未上传项目资料。" %}</p>
                     {% endif %}
                 </div>
             </div>
 
             <div class="panel">
                 <div class="panel-head">
-                    <h2>{% translate "批注版项目书" %}</h2>
-                    <span class="count">{{ archived_proposals|length }} archived</span>
+                    <h2>{% translate "评审回复归档" %}</h2>
+                    <span class="count">{{ archived_replies|length }} archived</span>
                 </div>
                 <div class="panel-body tight">
                     <div class="queue">
-                        {% for archived in archived_proposals %}
+                        {% for archived in archived_replies %}
                             <div class="qitem">
                                 <span class="idx">R{{ archived.submission.round }}</span>
                                 <div class="grow">
                                     <div>
-                                        <span class="who">{% translate "批注版项目书" %}</span>
+                                        <span class="who">{% translate "评审回复" %}</span>
                                         <span class="when">{{ archived.archived_at|date:"Y-m-d H:i" }}</span>
                                     </div>
                                     <div class="btn-row">
@@ -228,7 +228,7 @@
                                 </div>
                             </div>
                         {% empty %}
-                            <div class="empty">{% translate "评审通过后，评审人上传的批注版项目书会归档到这里。" %}</div>
+                            <div class="empty">{% translate "评审通过后，评审人上传的评审回复会归档到这里。" %}</div>
                         {% endfor %}
                     </div>
                 </div>
@@ -253,9 +253,9 @@
                                 {% translate "方案已通过，可按此推进项目。" %}
                             {% elif latest_submission.is_needs_revision %}
                                 {% if latest_submission.review_tasks %}
-                                    {% translate "请根据评审意见修改项目书后重新提交。" %}
+                                    {% translate "请根据评审意见修改项目资料后重新提交。" %}
                                 {% else %}
-                                    {% translate "本轮由初审打回（没有进入评审），请根据初审意见修改项目书后重新提交。" %}
+                                    {% translate "本轮由初审打回（没有进入评审），请根据初审意见修改项目资料后重新提交。" %}
                                 {% endif %}
                             {% elif latest_submission.is_preliminary_pending %}
                                 {% blocktranslate count counter=latest_submission.required_reviewers %}等待初审人给出意见；初审通过后会随机分配 1 名评审人。{% plural %}等待初审人给出意见；初审通过后会随机分配 {{ counter }} 名评审人。{% endblocktranslate %}
@@ -278,13 +278,13 @@
                     <div class="panel-body">
                         <p class="help">
                             {% blocktranslate trimmed with round=latest_submission.round count counter=latest_submission.open_task_count %}
-                                你的决定会立即敲定第 {{ round }} 轮，本轮尚未提交的 1 个任务（初审／评审）会随即被释放。请先下载项目书阅读，需要时附上批注版。
+                                你的决定会立即敲定第 {{ round }} 轮，本轮尚未提交的 1 个任务（初审／评审）会随即被释放。请先下载项目资料阅读，需要时附上评审回复。
                             {% plural %}
-                                你的决定会立即敲定第 {{ round }} 轮，本轮尚未提交的 {{ counter }} 个任务（初审／评审）会随即被释放。请先下载项目书阅读，需要时附上批注版。
+                                你的决定会立即敲定第 {{ round }} 轮，本轮尚未提交的 {{ counter }} 个任务（初审／评审）会随即被释放。请先下载项目资料阅读，需要时附上评审回复。
                             {% endblocktranslate %}
                         </p>
                         <div class="btn-row">
-                            <a class="btn btn-sm" href="{% url 'projects:group_proposal_download' group.pk %}">{% translate "下载项目书" %}</a>
+                            <a class="btn btn-sm" href="{% url 'projects:group_materials_download' group.pk %}">{% translate "下载项目资料" %}</a>
                         </div>
                         {% include "includes/checksum.html" with digest=group.sha256 %}
                         <form method="post" action="{% url 'reviews:override' latest_submission.pk %}" enctype="multipart/form-data">
@@ -301,10 +301,10 @@
                                 {{ override_form.comment.errors }}
                             </div>
                             <div class="field">
-                                <label for="{{ override_form.annotated_file.id_for_label }}">{{ override_form.annotated_file.label }}</label>
-                                {{ override_form.annotated_file }}
-                                {% if override_form.annotated_file.help_text %}<p class="help">{{ override_form.annotated_file.help_text }}</p>{% endif %}
-                                {{ override_form.annotated_file.errors }}
+                                <label for="{{ override_form.reply_file.id_for_label }}">{{ override_form.reply_file.label }}</label>
+                                {{ override_form.reply_file }}
+                                {% if override_form.reply_file.help_text %}<p class="help">{{ override_form.reply_file.help_text }}</p>{% endif %}
+                                {{ override_form.reply_file.errors }}
                             </div>
                             <div class="form-actions">
                                 <button class="btn btn-primary" type="submit">{% translate "提交超级评审" %}</button>
@@ -323,14 +323,14 @@
                     <div class="panel-body">
                         <p class="muted">
                             {% blocktranslate trimmed with round=latest_submission.round required=latest_submission.required_reviewers %}
-                                你是第 {{ round }} 轮的初审人：请先下载项目书阅读，
+                                你是第 {{ round }} 轮的初审人：请先下载项目资料阅读，
                                 再决定放行还是打回。通过后系统会按送审类型随机分配
                                 {{ required }} 名评审人；打回则本轮直接结束，
                                 项目组修改后可重新提交。
                             {% endblocktranslate %}
                         </p>
                         <div class="btn-row">
-                            <a class="btn btn-sm" href="{% url 'projects:group_proposal_download' group.pk %}">{% translate "下载项目书" %}</a>
+                            <a class="btn btn-sm" href="{% url 'projects:group_materials_download' group.pk %}">{% translate "下载项目资料" %}</a>
                         </div>
                         {% include "includes/checksum.html" with digest=group.sha256 %}
                         <form method="post" action="{% url 'reviews:preliminary_complete' my_preliminary.pk %}">
@@ -363,9 +363,9 @@
                         <span class="chip chip-warn">{% translate "待处理" %}</span>
                     </div>
                     <div class="panel-body">
-                        <p class="muted">{% translate "请先下载本轮项目书，阅读后填写评审意见与决定；如已在项目书上批注，可一并上传批注版。" %}</p>
+                        <p class="muted">{% translate "请先下载本轮项目资料，阅读后填写评审意见与决定；如有需要补充的材料，可作为评审回复一并上传。" %}</p>
                         <div class="btn-row">
-                            <a class="btn btn-sm" href="{% url 'projects:group_proposal_download' group.pk %}">{% translate "下载项目书" %}</a>
+                            <a class="btn btn-sm" href="{% url 'projects:group_materials_download' group.pk %}">{% translate "下载项目资料" %}</a>
                         </div>
                         {% include "includes/checksum.html" with digest=group.sha256 %}
                         <form method="post" action="{% url 'reviews:complete' my_assignment.pk %}" enctype="multipart/form-data">
@@ -382,10 +382,10 @@
                                 {{ review_form.comment.errors }}
                             </div>
                             <div class="field">
-                                <label for="{{ review_form.annotated_file.id_for_label }}">{{ review_form.annotated_file.label }}</label>
-                                {{ review_form.annotated_file }}
-                                {% if review_form.annotated_file.help_text %}<p class="help">{{ review_form.annotated_file.help_text }}</p>{% endif %}
-                                {{ review_form.annotated_file.errors }}
+                                <label for="{{ review_form.reply_file.id_for_label }}">{{ review_form.reply_file.label }}</label>
+                                {{ review_form.reply_file }}
+                                {% if review_form.reply_file.help_text %}<p class="help">{{ review_form.reply_file.help_text }}</p>{% endif %}
+                                {{ review_form.reply_file.errors }}
                             </div>
                             <div class="form-actions">
                                 <button class="btn btn-primary" type="submit">{% translate "完成评审" %}</button>

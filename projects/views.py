@@ -23,7 +23,7 @@ from .forms import (
     GroupDescriptionForm,
     GroupInfoForm,
     GroupJoinRequestForm,
-    GroupProposalForm,
+    GroupMaterialsForm,
 )
 from .models import GroupCreateRequest, GroupJoinRequest, ProjectGroup
 from .permissions import (
@@ -189,7 +189,7 @@ def group_detail(request, pk):
         "group": group,
         "submissions": submissions,
         "latest_submission": submissions[0] if submissions else None,
-        "archived_proposals": group.archived_proposals.select_related("submission"),
+        "archived_replies": group.archived_replies.select_related("submission"),
         "can_manage": can_manage_group(request.user, group),
     }
     # 评审那一半（我的任务、可行使的超级评审、三个表单）由评审应用自己装配。
@@ -201,23 +201,23 @@ def group_detail(request, pk):
 
 @login_required
 @require_POST
-def group_proposal_update(request, pk):
+def group_materials_update(request, pk):
     group = get_object_or_404(ProjectGroup, pk=pk)
     _require_group_manager(request, group)
 
-    form = GroupProposalForm(request.POST, request.FILES, instance=group)
+    form = GroupMaterialsForm(request.POST, request.FILES, instance=group)
     if form.is_valid():
         form.save()
         record_audit(
-            action="projects.group.proposal.update",
+            action="projects.group.materials.update",
             user=request.user,
             target=group,
             detail={},
             request=request,
         )
-        messages.success(request, _("项目书已上传/更新。"))
+        messages.success(request, _("项目资料已上传/更新。"))
     else:
-        for error in form.errors.get("proposal", []):
+        for error in form.errors.get("materials", []):
             messages.error(request, error)
     return redirect("projects:group_manage", pk=group.pk)
 
@@ -257,16 +257,16 @@ def group_submit_review(request, pk):
 
 
 @login_required
-def group_proposal_download(request, pk):
+def group_materials_download(request, pk):
     group = get_object_or_404(ProjectGroup, pk=pk)
     if not can_view_group(request.user, group):
         raise PermissionDenied
-    if not group.proposal:
-        raise Http404(_("该项目组尚未上传项目书。"))
+    if not group.materials:
+        raise Http404(_("该项目组尚未上传项目资料。"))
     return serve_file(
-        group.proposal,
+        group.materials,
         # 落盘名已被换成 uuid（见 core/storage.py），下到的就是这个中性名字。
-        download_name=os.path.basename(group.proposal.name),
+        download_name=os.path.basename(group.materials.name),
         as_attachment=True,
         sha256=group.sha256,
     )
@@ -458,7 +458,7 @@ def group_manage(request, pk):
             "description_form": description_form,
             "transfer_form": transfer_form,
             "info_form": info_form,
-            "proposal_form": GroupProposalForm(instance=group),
+            "materials_form": GroupMaterialsForm(instance=group),
             "submit_form": SubmissionForm(),
             "latest_submission": latest_submission,
         },

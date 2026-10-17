@@ -5,8 +5,11 @@ media 与 projects 两处 validators 各写过一遍、逐字相同，所以收�
 
 图片还有第三件事：确认它真是一张图（而不是改了扩展名的别的什么）。这段
 原先只在 media 里有，头像与个人图册也要用，所以一并收进来——大小上限与
-允许的扩展名是各调用方自己的口径（项目书 20 MB、头像 2 MB、图册单张 5 MB），
-由调用方传进来，这里只管「怎么验」。
+允许的扩展名是各调用方自己的口径（项目资料与评审回复 500 MB、头像 2 MB、
+图册单张 5 MB），由调用方传进来，这里只管「怎么验」。
+
+压缩包走同一套：:func:`validate_archive_upload` 收扩展名、大小、签名三道关，
+名字（「项目资料」「评审回复」）与上限同样由调用方给。
 """
 
 import io
@@ -33,6 +36,18 @@ MAX_IMAGE_PIXELS = 64_000_000
 
 #: 平台接受的图片扩展名：媒体库、头像、个人图册共用这一份。
 IMAGE_EXTENSIONS = frozenset({"jpg", "jpeg", "png", "webp", "gif"})
+
+#: 平台接受的压缩包扩展名。写成元组而不是集合：顺序即报错文案里的顺序
+#: （zip 最常见，排在最前），集合的遍历顺序读起来是随机的。
+ARCHIVE_EXTENSIONS = ("zip", "7z", "tgz")
+
+#: 各压缩包格式开头的魔数。tar.gz 与 tgz 是同一件东西，只是叫法不同；
+#: 这里只认 .tgz（口径见 :data:`ARCHIVE_EXTENSIONS`）。
+_ARCHIVE_SIGNATURES = {
+    "zip": (b"PK", _("文件不是有效的 zip。")),
+    "7z": (b"7z\xbc\xaf\x27\x1c", _("文件不是有效的 7z。")),
+    "tgz": (b"\x1f\x8b", _("文件不是有效的 tgz。")),
+}
 
 
 def file_extension(name):
@@ -133,3 +148,37 @@ def validate_image_upload(uploaded_file, *, label, max_bytes, extensions=IMAGE_E
     # 扩展名与 MIME 都是自报的，最后按二进制内容验一次。读的是副本，所以
     # 校验完上传文件仍然可用——阶段 4 的统一 uuid 落盘还要再读它一遍。
     _validate_image_content(uploaded_file)
+
+
+def validate_archive_upload(uploaded_file, *, label, max_bytes):
+    """校验一个上传的压缩包：扩展名、大小与文件签名。
+
+    与 :func:`validate_image_upload` 同一形状，区别只有两处：压缩包没有 MIME 家族
+    可判（浏览器对 .7z 常报 application/octet-stream，按 MIME 拦会拦掉合法的上传），
+    以及扩展名清单全平台只有一份（:data:`ARCHIVE_EXTENSIONS`）——项目资料与评审回复
+    收的就是同一套格式。
+
+    ``label`` 是文案里给用户看的名字（「项目资料」「评审回复」），``max_bytes`` 是
+    调用方自己的上限。不合格一律抛 :class:`ValidationError`，消息可直接展示。
+    """
+    if not uploaded_file:
+        raise ValidationError(_("请选择要上传的文件。"))
+
+    extension = file_extension(uploaded_file.name)
+    if extension not in ARCHIVE_EXTENSIONS:
+        raise ValidationError(
+            _("%(label)s仅支持 %(allowed)s 格式。")
+            % {"label": label, "allowed": "、".join(ARCHIVE_EXTENSIONS)}
+        )
+    if uploaded_file.size and uploaded_file.size > max_bytes:
+        raise ValidationError(
+            _("%(label)s不能超过 %(limit)s MB。")
+            % {"label": label, "limit": max_bytes // (1024 * 1024)}
+        )
+
+    prefix, message = _ARCHIVE_SIGNATURES[extension]
+    reset_file_position(uploaded_file)
+    header = uploaded_file.read(len(prefix))
+    reset_file_position(uploaded_file)
+    if not header.startswith(prefix):
+        raise ValidationError(message)

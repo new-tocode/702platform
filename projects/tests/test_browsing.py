@@ -111,9 +111,9 @@ class GroupBrowsingViewTests(ProjectViewTestCase):
 
         self.assertEqual(response.status_code, 302)
         self.assertIn(reverse("accounts:login"), response["Location"])
-    def test_group_detail_derives_extension_from_proposal_filename(self):
-        self.group.proposal = "project_proposals/2026/09/开题报告.pdf"
-        self.group.save(update_fields=["proposal"])
+    def test_group_detail_derives_extension_from_materials_filename(self):
+        self.group.materials = "project_proposals/2026/09/开题资料.zip"
+        self.group.save(update_fields=["materials"])
         self.client.force_login(self.leader)
 
         response = self.client.get(
@@ -121,8 +121,8 @@ class GroupBrowsingViewTests(ProjectViewTestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "开题报告.pdf")
-        self.assertContains(response, "PDF")
+        self.assertContains(response, "开题资料.zip")
+        self.assertContains(response, "ZIP")
     def test_group_detail_and_list_show_college_and_advisors(self):
         self.group.college = "计算机学院"
         self.group.save(update_fields=["college"])

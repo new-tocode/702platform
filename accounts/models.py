@@ -39,7 +39,7 @@ class User(AbstractUser):
     is_reviewer = models.BooleanField(
         "评审资格",
         default=False,
-        help_text="启用后可进入“评审”应用，审阅分配到自己的项目书并给出评审意见。",
+        help_text="启用后可进入“评审”应用，审阅分配到自己的项目资料并给出评审意见。",
     )
     is_preliminary_reviewer = models.BooleanField(
         "初审资格",

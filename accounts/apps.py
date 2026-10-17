@@ -42,7 +42,7 @@ class AccountsConfig(AppConfig):
         register_role(
             key="reviewer",
             label="评审人",
-            summary="由管理员授予的评审资格；只有持有它的人才会被抽为项目书的评审人。",
+            summary="由管理员授予的评审资格；只有持有它的人才会被抽为项目资料的评审人。",
             scope=Scope.GLOBAL,
             sort_order=20,
         )
