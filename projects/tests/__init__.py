@@ -8,8 +8,8 @@
 * ``test_contact_transfer`` —— 联系人转让
 * ``test_group_management`` —— 管理页与组信息维护
 
-另两个主题各自成模块：申请建组（``test_group_create_requests``）与成员名册
-（``test_member_roster``）。
+另几个主题各自成模块：申请建组（``test_group_create_requests``）、成员名册
+（``test_member_roster``）与详情页上的竞赛报名区块（``test_group_competitions``）。
 
 共用件只有 ``base.ProjectViewTestCase``（四种身份各一个账号 + 两个项目组）。夹具
 可以共用：项目组没有抽签，夹具不决定任何随机结果。

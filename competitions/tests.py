@@ -489,6 +489,24 @@ class RegistrationDeadlineAcceptanceTests(TestCase):
         )
         self.client.force_login(self.leader)
 
+    def test_list_offers_no_action_on_an_expired_competition(self):
+        """截止之后，连能管这个组的人那一行也不该出现修改／放弃的入口。
+
+        名单这一轮改成对全体成员可见，逐行判权限的那两层 `{% if %}`（可管 → 是否
+        开放）写反了会让按钮在截止后重新冒出来，所以这里从页面这一侧钉一遍。
+        """
+        response = self.client.get(reverse("competitions:list"))
+
+        self.assertContains(response, "已截止，无法修改")
+        self.assertNotContains(
+            response,
+            reverse("competitions:registration_edit", args=(self.registration.pk,)),
+        )
+        self.assertNotContains(
+            response,
+            reverse("competitions:registration_withdraw", args=(self.registration.pk,)),
+        )
+
     def test_withdraw_is_refused_after_the_deadline(self):
         response = self.client.post(
             reverse("competitions:registration_withdraw", args=(self.registration.pk,))

@@ -102,7 +102,8 @@
                     <h2>{% translate "竞赛报名" %}</h2>
                     <span class="count">{{ competition_registrations|length }} competitions</span>
                 </div>
-                <div class="panel-body tight">
+                {# 用带内边距的 panel-body：tight 会让 .table-wrap 的边框贴住面板边框成双层线。 #}
+                <div class="panel-body">
                     <div class="table-wrap">
                         <table>
                             <thead>

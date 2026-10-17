@@ -7,12 +7,21 @@
 
 from datetime import timedelta
 
+from django.contrib.auth import get_user_model
 from django.urls import reverse
 from django.utils import timezone
 
 from competitions.models import Competition, CompetitionRegistration
+from reviews.models import (
+    REVIEW_TYPE_COMPETITION_PROJECT,
+    ProjectSubmission,
+    ReviewTask,
+)
 
 from .base import ProjectViewTestCase
+
+
+User = get_user_model()
 
 
 class GroupCompetitionPanelTests(ProjectViewTestCase):
@@ -83,3 +92,33 @@ class GroupCompetitionPanelTests(ProjectViewTestCase):
 
         self.assertContains(response, "竞赛报名")
         self.assertContains(response, "该项目组尚未报名任何竞赛。")
+
+    def test_a_reviewer_holding_a_task_sees_the_panel_too(self):
+        """区块不另判可见性：门槛就是 can_view_group，评审人凭任务进来也看得到。
+
+        这正是「报名＋成员名单本来就公开」的含义；哪天有人在面板上另加一道
+        「是不是组员」的条件，这条会红。
+        """
+        self._register(self.open_competition, self.group, self.leader)
+        reviewer = User.objects.create_user(
+            username="competition-panel-reviewer",
+            password="Reviewer-Password-123!",
+        )
+        reviewer.must_change_password = False
+        reviewer.save(update_fields=["must_change_password"])
+        submission = ProjectSubmission.objects.create(
+            group=self.group,
+            review_type=REVIEW_TYPE_COMPETITION_PROJECT,
+            submitted_by=self.leader,
+        )
+        ReviewTask.objects.create(
+            submission=submission,
+            stage=ReviewTask.PRELIMINARY,
+            reviewer=reviewer,
+        )
+        self.client.force_login(reviewer)
+
+        response = self._detail(self.group)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.open_competition.title)

@@ -22,7 +22,7 @@
 ## 2. 必须成立的断言
 
 - **截止口径只有一处（除了一处重复表达）**：`Competition.is_registration_open` 是唯一口径；
-  前台三个入口、前台表单、列表徽章都问它，**后台刻意不问**。但 `core.stats` 的平台概览用
+  前台三个入口、前台表单、竞赛列表与项目组详情页的徽章都问它，**后台刻意不问**。但 `core.stats` 的平台概览用
   `is_open=True, deadline__gte=now` 把同一条判定又写了一遍——**改 `is_registration_open` 时要一并核对它**。
 - **`save_registration` 自己不看截止**：报名与修改的校验在表单 + 视图各拦一次；放弃只有一个调用方，
   校验写在 `services.withdraw_registration`。**新增前台写入口必须自带这道校验**。
