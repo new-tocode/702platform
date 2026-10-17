@@ -71,8 +71,10 @@
                                                             <button class="btn btn-danger btn-sm" type="submit">{% translate "放弃报名" %}</button>
                                                         </form>
                                                     </div>
-                                                {% else %}
+                                                {% elif row.competition.is_open %}
                                                     <span class="muted">{% translate "已截止，无法修改" %}</span>
+                                                {% else %}
+                                                    <span class="muted">{% translate "报名未开放，无法修改" %}</span>
                                                 {% endif %}
                                             {% else %}
                                                 <span class="muted">—</span>

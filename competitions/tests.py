@@ -411,6 +411,41 @@ class CompetitionAcceptanceTests(TestCase):
             reverse("competitions:registration_withdraw", args=(other.pk,)),
         )
 
+    def test_list_offers_no_action_before_registration_opens(self):
+        """未开放（is_open=False）与已截止是两种状态，行内文案要分开说。
+
+        这条路径只在后台补录过、或竞赛先开放后被关掉时才看得到，但它和已截止共用
+        「操作」那一格，写成一岔就会把「从未开放」说成「已截止」。
+        """
+        closed = Competition.objects.create(
+            title="还没开放的竞赛",
+            description="说明",
+            deadline=timezone.now() + timedelta(days=7),
+            is_open=False,
+            published_by=self.admin,
+        )
+        registration = CompetitionRegistration.objects.create(
+            competition=closed,
+            group=self.group,
+            registered_by=self.leader,
+            team_leader=self.leader,
+        )
+        registration.members.set([self.leader])
+        self.client.force_login(self.leader)
+
+        response = self.client.get(reverse("competitions:list"))
+
+        self.assertContains(response, "报名未开放，无法修改")
+        self.assertNotContains(response, "已截止，无法修改")
+        self.assertNotContains(
+            response,
+            reverse("competitions:registration_edit", args=(registration.pk,)),
+        )
+        self.assertNotContains(
+            response,
+            reverse("competitions:registration_withdraw", args=(registration.pk,)),
+        )
+
     def test_admin_can_register_any_group(self):
         self.client.force_login(self.admin)
 
