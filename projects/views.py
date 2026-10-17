@@ -162,7 +162,9 @@ def group_list(request):
 
 @login_required
 def group_detail(request, pk):
-    # 局部导入：让 projects 不在模块加载期就依赖 reviews。
+    # 局部导入：让 projects 不在模块加载期就依赖 reviews 与 competitions
+    # （两处都是「对方的页面区块」由对方自己装配）。
+    from competitions.panels import group_detail_context as competition_panel
     from reviews.panels import group_detail_context
 
     group = get_object_or_404(
@@ -192,10 +194,12 @@ def group_detail(request, pk):
         "archived_replies": group.archived_replies.select_related("submission"),
         "can_manage": can_manage_group(request.user, group),
     }
-    # 评审那一半（我的任务、可行使的超级评审、三个表单）由评审应用自己装配。
+    # 评审那一半（我的任务、可行使的超级评审、三个表单）由评审应用自己装配；
+    # 竞赛报名那块（本组报了哪些竞赛）由竞赛应用自己装配。
     context.update(
         group_detail_context(submissions=submissions, user=request.user)
     )
+    context.update(competition_panel(group=group))
     return render(request, "projects/group_detail.html", context)
 
 

@@ -334,6 +334,118 @@ class CompetitionAcceptanceTests(TestCase):
             reverse("competitions:registration_withdraw", args=(registration.pk,)),
         )
 
+    def _register_other_group(self):
+        registration = CompetitionRegistration.objects.create(
+            competition=self.competition,
+            group=self.other_group,
+            registered_by=self.other_leader,
+            team_leader=self.other_leader,
+        )
+        registration.members.set([self.other_leader, self.other_member])
+        return registration
+
+    def test_member_without_any_group_sees_the_whole_roster(self):
+        """报名名单对全体登录成员可见，即使这个人不管理任何项目组。
+
+        这是有意的：项目组列表本来就列着全部组、成员与指导老师，谁报了哪场
+        竞赛不再算额外暴露（与 projects 列表上的评审状态同一口径）。可见与可改
+        是两件事——**一个操作入口都不该漏出去**。
+        """
+        own = self._register()
+        other = self._register_other_group()
+        outsider = User.objects.create_user(
+            username="competition-outsider",
+            password="Outsider-Password-123!",
+        )
+        outsider.must_change_password = False
+        outsider.save(update_fields=["must_change_password"])
+        self.client.force_login(outsider)
+
+        response = self.client.get(reverse("competitions:list"))
+
+        self.assertContains(response, self.group.name)
+        self.assertContains(response, self.other_group.name)
+        for registration in (own, other):
+            self.assertNotContains(
+                response,
+                reverse("competitions:registration_edit", args=(registration.pk,)),
+            )
+            self.assertNotContains(
+                response,
+                reverse("competitions:registration_withdraw", args=(registration.pk,)),
+            )
+
+    def test_contact_sees_other_groups_row_but_no_actions_on_it(self):
+        own = self._register()
+        other = self._register_other_group()
+        self.client.force_login(self.leader)
+
+        response = self.client.get(reverse("competitions:list"))
+
+        self.assertContains(response, self.other_group.name)
+        self.assertContains(
+            response,
+            reverse("competitions:registration_edit", args=(own.pk,)),
+        )
+        self.assertNotContains(
+            response,
+            reverse("competitions:registration_edit", args=(other.pk,)),
+        )
+        self.assertNotContains(
+            response,
+            reverse("competitions:registration_withdraw", args=(other.pk,)),
+        )
+
+    def test_admin_can_act_on_every_registration_row(self):
+        other = self._register_other_group()
+        self.client.force_login(self.admin)
+
+        response = self.client.get(reverse("competitions:list"))
+
+        self.assertContains(
+            response,
+            reverse("competitions:registration_edit", args=(other.pk,)),
+        )
+        self.assertContains(
+            response,
+            reverse("competitions:registration_withdraw", args=(other.pk,)),
+        )
+
+    def test_list_offers_no_action_before_registration_opens(self):
+        """未开放（is_open=False）与已截止是两种状态，行内文案要分开说。
+
+        这条路径只在后台补录过、或竞赛先开放后被关掉时才看得到，但它和已截止共用
+        「操作」那一格，写成一岔就会把「从未开放」说成「已截止」。
+        """
+        closed = Competition.objects.create(
+            title="还没开放的竞赛",
+            description="说明",
+            deadline=timezone.now() + timedelta(days=7),
+            is_open=False,
+            published_by=self.admin,
+        )
+        registration = CompetitionRegistration.objects.create(
+            competition=closed,
+            group=self.group,
+            registered_by=self.leader,
+            team_leader=self.leader,
+        )
+        registration.members.set([self.leader])
+        self.client.force_login(self.leader)
+
+        response = self.client.get(reverse("competitions:list"))
+
+        self.assertContains(response, "报名未开放，无法修改")
+        self.assertNotContains(response, "已截止，无法修改")
+        self.assertNotContains(
+            response,
+            reverse("competitions:registration_edit", args=(registration.pk,)),
+        )
+        self.assertNotContains(
+            response,
+            reverse("competitions:registration_withdraw", args=(registration.pk,)),
+        )
+
     def test_admin_can_register_any_group(self):
         self.client.force_login(self.admin)
 
@@ -411,6 +523,24 @@ class RegistrationDeadlineAcceptanceTests(TestCase):
             registered_by=self.leader,
         )
         self.client.force_login(self.leader)
+
+    def test_list_offers_no_action_on_an_expired_competition(self):
+        """截止之后，连能管这个组的人那一行也不该出现修改／放弃的入口。
+
+        名单这一轮改成对全体成员可见，逐行判权限的那两层 `{% if %}`（可管 → 是否
+        开放）写反了会让按钮在截止后重新冒出来，所以这里从页面这一侧钉一遍。
+        """
+        response = self.client.get(reverse("competitions:list"))
+
+        self.assertContains(response, "已截止，无法修改")
+        self.assertNotContains(
+            response,
+            reverse("competitions:registration_edit", args=(self.registration.pk,)),
+        )
+        self.assertNotContains(
+            response,
+            reverse("competitions:registration_withdraw", args=(self.registration.pk,)),
+        )
 
     def test_withdraw_is_refused_after_the_deadline(self):
         response = self.client.post(
