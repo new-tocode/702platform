@@ -1,21 +1,21 @@
-"""Journal-style peer review of project proposals.
+"""Journal-style peer review of a project group's materials.
 
 Each :class:`ProjectSubmission` is one review round of a project group's
-proposal. A round starts in the hands of one :class:`ReviewTask` (初审):
-that single reviewer passes the proposal on — which is when the round draws the
+materials. A round starts in the hands of one :class:`ReviewTask` (初审):
+that single reviewer passes the materials on — which is when the round draws the
 reviewers its type calls for — or sends it back for revision. From then on
 :class:`ReviewTask` records one reviewer's verdict, and a submission is
 approved only when every assignment is complete and every verdict approves.
 
-The proposal itself is **not** copied here: reviewers download the project
-group's current proposal (``ProjectGroup.proposal``) from the group detail page,
-so there is a single stored file per group.
+The materials themselves are **not** copied here: reviewers download the
+project group's current materials (``ProjectGroup.materials``) from the group
+detail page, so there is a single stored file per group.
 
 How many reviewers a round needs depends on the type the submitter picks
 (``REVIEWER_QUOTA``): competition rounds need three, an innovation project needs
-one at kick-off and two at mid-term/final. A reviewer may attach an annotated
-copy of the proposal along with the verdict; once the round is approved those
-annotated copies are archived as :class:`ArchivedProposal` records.
+one at kick-off and two at mid-term/final. A reviewer may attach a reply archive
+along with the verdict; once the round is approved those replies are archived as
+:class:`ArchivedReply` records.
 
 The ``review_type`` labels are **platform-local tags** and deliberately have no
 foreign key to ``competitions.Competition``.
@@ -28,9 +28,9 @@ from django.utils.translation import gettext_lazy as _
 from core.hashing import FileDigestMixin
 from core.storage import neutral_upload_to, private_storage
 from projects.models import ProjectGroup
-from projects.validators import validate_proposal_file
 
 from . import lifecycle
+from .validators import REPLY_HELP_TEXT, validate_reply_file
 
 
 REVIEW_TYPE_COMPETITION_PROJECT = "competition_project"
@@ -63,13 +63,21 @@ REVIEWER_QUOTA = {
 DEFAULT_REVIEWERS = 2
 
 
-#: 评审人的批注版与归档件：落盘名一律 uuid。
+#: 评审人的评审回复与归档件：落盘名一律 uuid。
 #:
-#: 匿名是评审的硬约束，而文件名是最容易漏的一处——``zhangsan-批注.docx`` 这样的
+#: 匿名是评审的硬约束，而文件名是最容易漏的一处——``zhangsan-评审回复.zip`` 这样的
 #: 名字会把评审人直接写进存储层，再跟着备份与运维的 ls 一路扩散出去。命名口径与
-#: 其他受保护上传件统一到 core.storage，只在目录前缀上区分。
-upload_annotated_proposal = neutral_upload_to("review_annotations")
-upload_archived_proposal = neutral_upload_to("review_archives")
+#: 其他受保护上传件统一到 core.storage，只在目录前缀上区分（前缀是存储内部路径，
+#: 不对外，也不随字段改名而动——改了会让已有文件与新文件分居两处）。
+upload_review_reply = neutral_upload_to("review_annotations")
+upload_archived_reply = neutral_upload_to("review_archives")
+
+#: 这两个名字是 ``upload_to`` 的历史写法，**历史迁移按名引用**（``reviews/0002``、
+#: ``0006``、``0007`` 里是 ``reviews.models.upload_annotated_proposal`` 这样的字面量），
+#: Django 加载迁移时会来取，删掉它们 manage.py 都起不来。值就是上面那两个，
+#: ``NeutralUploadTo`` 按前缀判等，所以留别名不会让 autodetector 看出差别。
+upload_annotated_proposal = upload_review_reply
+upload_archived_proposal = upload_archived_reply
 
 
 class ProjectSubmission(models.Model):
@@ -115,8 +123,8 @@ class ProjectSubmission(models.Model):
     decided_at = models.DateTimeField("完成时间", null=True, blank=True)
 
     class Meta:
-        verbose_name = "项目书送审"
-        verbose_name_plural = "项目书送审"
+        verbose_name = "项目资料送审"
+        verbose_name_plural = "项目资料送审"
         ordering = ("-submitted_at", "-id")
         constraints = [
             models.UniqueConstraint(
@@ -200,7 +208,7 @@ class ReviewTask(FileDigestMixin, models.Model):
     约束或 :data:`reviews.lifecycle.STAGES` 表达：
 
     * 一轮恰好一条初审（``unique_preliminary_task_per_submission``）；
-    * 批注版项目书只有评审阶段会填（初审给的是理由，不是稿子）；
+    * 评审回复只有评审阶段会填（初审给的是理由，不是稿子）；
     * 超级评审那一票属于评审阶段（``override_is_review_stage_only``）。
 
     ``RELEASED`` 是「本轮已被超级评审敲定，这张卡不必再交」的终态：不再计入待办、
@@ -220,8 +228,8 @@ class ReviewTask(FileDigestMixin, models.Model):
     REVISE = lifecycle.DECISION_REVISE
     DECISION_CHOICES = lifecycle.DECISION_CHOICES
 
-    #: 评审人随结论附上的批注版；下载页上附出它的 SHA-256 供人比对。
-    digest_field = "annotated_file"
+    #: 评审人随结论附上的评审回复；下载页上附出它的 SHA-256 供人比对。
+    digest_field = "reply_file"
 
     submission = models.ForeignKey(
         ProjectSubmission,
@@ -254,13 +262,13 @@ class ReviewTask(FileDigestMixin, models.Model):
         default=False,
         help_text="该行来自超级评审的一票决定：本轮结论由它单独敲定，等待中的任务随即被释放。",
     )
-    annotated_file = models.FileField(
-        "批注版项目书",
-        upload_to=upload_annotated_proposal,
+    reply_file = models.FileField(
+        "评审回复",
+        upload_to=upload_review_reply,
         storage=private_storage,
         blank=True,
-        validators=[validate_proposal_file],
-        help_text="选填；支持 doc、docx、pdf。请勿在文件属性中保留可识别个人身份的信息。",
+        validators=[validate_reply_file],
+        help_text=REPLY_HELP_TEXT,
     )
     assigned_at = models.DateTimeField("分配时间", auto_now_add=True)
     completed_at = models.DateTimeField("完成时间", null=True, blank=True)
@@ -345,54 +353,54 @@ def preliminary_task_of(submission):
     return submission.tasks.filter(stage=ReviewTask.PRELIMINARY).first()
 
 
-class ArchivedProposal(FileDigestMixin, models.Model):
-    """An approved round's annotated proposal, kept as the group's record.
+class ArchivedReply(FileDigestMixin, models.Model):
+    """An approved round's reply archive, kept as the group's record.
 
-    One row per reviewer who actually attached an annotated copy — reviewers who
-    answered with text only produce no row, and the original proposal is never
+    One row per reviewer who actually attached a reply — reviewers who answered
+    with text only produce no row, and the project materials are never
     duplicated here. Rows are written once when a round turns ``approved`` and
     are immutable afterwards.
     """
 
-    #: 归档件是批注版在通过那一刻的副本，指纹因此与源任务上的那份一致——
+    #: 归档件是评审回复在通过那一刻的副本，指纹因此与源任务上的那份一致——
     #: 两边对不上就说明归档之后被动过。
     digest_field = "file"
 
     group = models.ForeignKey(
         ProjectGroup,
         on_delete=models.PROTECT,
-        related_name="archived_proposals",
+        related_name="archived_replies",
         verbose_name="项目组",
     )
     submission = models.ForeignKey(
         ProjectSubmission,
         on_delete=models.PROTECT,
-        related_name="archived_proposals",
+        related_name="archived_replies",
         verbose_name="送审",
     )
     source_task = models.ForeignKey(
         ReviewTask,
         on_delete=models.PROTECT,
-        related_name="archived_proposals",
+        related_name="archived_replies",
         verbose_name="来源任务",
     )
     file = models.FileField(
-        "批注版项目书",
-        upload_to=upload_archived_proposal,
+        "评审回复",
+        upload_to=upload_archived_reply,
         storage=private_storage,
     )
     archived_at = models.DateTimeField("归档时间", auto_now_add=True)
 
     class Meta:
-        verbose_name = "批注版项目书归档"
-        verbose_name_plural = "批注版项目书归档"
+        verbose_name = "评审回复归档"
+        verbose_name_plural = "评审回复归档"
         ordering = ("-archived_at", "-id")
         constraints = [
             # Archiving runs inside the verdict aggregation, which may be
             # retried; one archive per source assignment keeps it idempotent.
             models.UniqueConstraint(
                 fields=("source_task",),
-                name="unique_archived_proposal_task",
+                name="unique_archived_reply_task",
             ),
         ]
         indexes = [
@@ -400,4 +408,4 @@ class ArchivedProposal(FileDigestMixin, models.Model):
         ]
 
     def __str__(self):
-        return f"{self.group} 第 {self.submission.round} 轮的批注版项目书"
+        return f"{self.group} 第 {self.submission.round} 轮的评审回复"

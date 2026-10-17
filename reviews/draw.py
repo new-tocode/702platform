@@ -1,7 +1,7 @@
 """抽签：谁可能被抽为初审人或评审人，以及抽不出来时怎么解释。
 
 这里只查库、不写库，也不碰轮次状态——写命令在 :mod:`reviews.services`。
-「谁可以审这份项目书」全平台只有一个实现（:func:`eligible_holders`），
+「谁可以审这份资料」全平台只有一个实现（:func:`eligible_holders`），
 抽人与管理员改派共用它，两边的排除条件因此不会各走各的。
 """
 
@@ -32,7 +32,7 @@ def receives_for(stage):
 
 
 def _eligible_pool(*, stage, group, submitter, submission=None):
-    """Accounts that may take a task of this kind on this group's proposal now.
+    """Accounts that may take a task of this kind on this group's materials now.
 
     The single definition of "who may review", shared by every draw and by an
     administrator's manual reassignment, so the exclusions cannot drift apart

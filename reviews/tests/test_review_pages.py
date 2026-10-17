@@ -1,7 +1,7 @@
 """评审人看到的页面：评审队列、项目组详情，以及页面上的提交表单。
 
 这些用例多数从 HTTP 层走一遍（测试客户端 + 模板），因为要守的是「谁能看到什么」
-与「模板渲染得出来」——服务层的规则在别的模块里断言，批注版与归档的下载入口
+与「模板渲染得出来」——服务层的规则在别的模块里断言，评审回复与归档的下载入口
 归 test_verdicts.py。
 """
 
@@ -26,7 +26,7 @@ from .factories import (
     make_preliminary_reviewer,
     make_reviewer,
     make_user,
-    pdf,
+    materials_upload,
 )
 
 
@@ -131,7 +131,7 @@ class ReviewPagesTests(ReviewTestCase):
         self.assertNotIn("<dt>评审人 3</dt>", html)
 
     def test_review_form_posts_multipart(self):
-        """A browser only sends the annotated file if the form is multipart.
+        """A browser only sends the reply archive if the form is multipart.
 
         The test client encodes files as multipart on its own, so without this
         assertion a missing enctype would only ever break in a real browser.
@@ -224,7 +224,7 @@ class ReviewPagesTests(ReviewTestCase):
             response, reverse("projects:group_submit_review", args=(self.group.pk,))
         )
 
-    def test_reviewer_uploads_annotated_file_via_view(self):
+    def test_reviewer_uploads_reply_file_via_view(self):
         submission = self._submit()
         assignment = self._assignment(submission, self.reviewer_one)
         self.client.force_login(self.reviewer_one)
@@ -233,27 +233,49 @@ class ReviewPagesTests(ReviewTestCase):
             reverse("reviews:complete", args=(assignment.pk,)),
             {
                 "decision": ReviewTask.APPROVE,
-                "comment": "已在稿件上批注。",
-                "annotated_file": pdf("annotated.pdf"),
+                "comment": "已在材料上批注。",
+                "reply_file": materials_upload("reply.zip"),
             },
         )
 
         self.assertEqual(response.status_code, 302)
         assignment.refresh_from_db()
-        self.assertTrue(assignment.annotated_file)
-        self.assertTrue(assignment.annotated_file.name.endswith(".pdf"))
+        self.assertTrue(assignment.reply_file)
+        self.assertTrue(assignment.reply_file.name.endswith(".zip"))
 
-    def test_proposal_upload_rejects_unsupported_extension(self):
+    def test_the_view_refuses_an_empty_comment(self):
+        """文字意见是评审的**必需**产出；压缩包才是选填的那一个。
+
+        回复里放的是批注与补充材料，而「通过还是需修改、为什么」必须落在意见里——
+        没有意见的评审，项目组拿到的是一个没有理由的结论。
+        """
+        submission = self._submit()
+        assignment = self._assignment(submission, self.reviewer_one)
+        self.client.force_login(self.reviewer_one)
+
+        response = self.client.post(
+            reverse("reviews:complete", args=(assignment.pk,)),
+            {"decision": ReviewTask.APPROVE, "comment": "", "reply_file": materials_upload()},
+        )
+
+        self.assertRedirects(
+            response, reverse("projects:group_detail", args=(self.group.pk,))
+        )
+        assignment.refresh_from_db()
+        self.assertEqual(assignment.status, ReviewTask.PENDING)
+        self.assertFalse(assignment.reply_file)
+
+    def test_materials_upload_rejects_unsupported_extension(self):
         self.client.force_login(self.contact)
 
         response = self.client.post(
-            reverse("projects:group_proposal_update", args=(self.group.pk,)),
-            {"proposal": SimpleUploadedFile("plan.txt", b"hello", content_type="text/plain")},
+            reverse("projects:group_materials_update", args=(self.group.pk,)),
+            {"materials": SimpleUploadedFile("plan.txt", b"hello", content_type="text/plain")},
         )
 
         self.assertEqual(response.status_code, 302)
         self.group.refresh_from_db()
-        self.assertNotEqual(self.group.proposal.name, "plan.txt")
+        self.assertNotEqual(self.group.materials.name, "plan.txt")
 
 
 

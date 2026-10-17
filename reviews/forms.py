@@ -1,14 +1,13 @@
-"""Forms for submitting a project proposal for review and for reviewing it."""
+"""Forms for submitting a project group's materials for review, and for reviewing."""
 
 from django import forms
 from django.contrib.auth import get_user_model
 from django.utils.translation import gettext_lazy as _
 
-from projects.validators import validate_proposal_file
-
 from . import lifecycle
 from .models import REVIEW_TYPE_CHOICES, ReviewTask
 from .services import eligible_holders
+from .validators import REPLY_HELP_TEXT, validate_reply_file
 
 
 User = get_user_model()
@@ -40,7 +39,7 @@ class SubmissionForm(forms.Form):
 class DecisionForm(forms.Form):
     """一次判定的形状：一个结论 + 一段意见——两道关共用的部分。
 
-    初审直接用这个基类（它给的是理由，不是稿子），评审在它之上多一个批注版字段。
+    初审直接用这个基类（它给的是理由，不是稿子），评审在它之上多一个评审回复字段。
     标签按阶段给全（「初审决定」「评审决定」这类），不做字符串拼接——拼出来的
     话翻译不了；所以两个页面上的措辞与合并前逐字相同。
     """
@@ -70,7 +69,7 @@ class DecisionForm(forms.Form):
 class PreliminaryReviewForm(DecisionForm):
     """初审的判定：放行，还是打回。
 
-    没有批注版字段——初审是关卡，产出的是理由；要附批注版的是评审人那一侧。
+    没有评审回复字段——初审是关卡，产出的是理由；要附回复的是评审人那一侧。
     """
 
     decision_label = _("初审决定")
@@ -79,7 +78,7 @@ class PreliminaryReviewForm(DecisionForm):
         "通过后按送审类型随机分配评审人，进入正式评审；"
         "需修改则本轮直接打回项目组，不分配评审人。"
     )
-    comment_help = _("请说明通过或需要修改的理由；打回时项目组会据此修改项目书。")
+    comment_help = _("请说明通过或需要修改的理由；打回时项目组会据此修改项目资料。")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -87,18 +86,19 @@ class PreliminaryReviewForm(DecisionForm):
 
 
 class ReviewForm(DecisionForm):
-    """评审的判定：通过还是需修改，可另附一份批注版项目书。"""
+    """评审的判定：通过还是需修改，可另附一份评审回复压缩包。
+
+    文字意见是必填的（``comment``），压缩包是选填的：回复里放的是批注、补充材料
+    这类东西，而「通过还是需修改、为什么」必须写在意见里，否则结论与理由分家。
+    """
 
     comment_help = _("请说明通过或需要修改的理由。")
 
-    annotated_file = forms.FileField(
-        label=_("批注版项目书"),
+    reply_file = forms.FileField(
+        label=_("评审回复"),
         required=False,
-        validators=[validate_proposal_file],
-        help_text=_(
-            "选填；支持 doc、docx、pdf。可在项目书上直接批注后上传，"
-            "也可只填文字意见。请勿在文件属性中保留可识别个人身份的信息。"
-        ),
+        validators=[validate_reply_file],
+        help_text=REPLY_HELP_TEXT,
     )
 
 

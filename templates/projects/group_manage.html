@@ -177,35 +177,35 @@
         <div class="stack reveal">
             <div class="panel">
                 <div class="panel-head">
-                    <h2>{% translate "项目书" %}</h2>
+                    <h2>{% translate "项目资料" %}</h2>
                     {% if latest_submission %}<span class="count">R{{ latest_submission.round }}</span>{% endif %}
                 </div>
                 <div class="panel-body">
-                    {% if group.proposal %}
+                    {% if group.materials %}
                         <div class="doc-file doc-block">
-                            <span class="doc-ext">{{ group.proposal.name|file_ext }}</span>
+                            <span class="doc-ext">{{ group.materials.name|file_ext }}</span>
                             <div>
-                                <div class="doc-name">{{ group.proposal.name|basename }}</div>
-                                <div class="doc-spec">doc / docx / pdf · {% translate "不超过 20 MB" %}</div>
+                                <div class="doc-name">{{ group.materials.name|basename }}</div>
+                                <div class="doc-spec">zip / 7z / tgz / tar.gz · {% translate "不超过 500 MB" %}</div>
                             </div>
                         </div>
                         <div class="btn-row">
-                            <a class="btn btn-sm" href="{% url 'projects:group_proposal_download' group.pk %}">{% translate "下载当前项目书" %}</a>
+                            <a class="btn btn-sm" href="{% url 'projects:group_materials_download' group.pk %}">{% translate "下载当前项目资料" %}</a>
                         </div>
                         {% include "includes/checksum.html" with digest=group.sha256 %}
                     {% else %}
-                        <p class="muted">{% translate "尚未上传项目书。" %}</p>
+                        <p class="muted">{% translate "尚未上传项目资料。" %}</p>
                     {% endif %}
-                    <form method="post" action="{% url 'projects:group_proposal_update' group.pk %}" enctype="multipart/form-data">
+                    <form method="post" action="{% url 'projects:group_materials_update' group.pk %}" enctype="multipart/form-data">
                         {% csrf_token %}
                         <div class="field">
-                            <label for="{{ proposal_form.proposal.id_for_label }}">{{ proposal_form.proposal.label }}</label>
-                            {{ proposal_form.proposal }}
-                            {% if proposal_form.proposal.help_text %}<p class="help">{{ proposal_form.proposal.help_text }}</p>{% endif %}
-                            {{ proposal_form.proposal.errors }}
+                            <label for="{{ materials_form.materials.id_for_label }}">{{ materials_form.materials.label }}</label>
+                            {{ materials_form.materials }}
+                            {% if materials_form.materials.help_text %}<p class="help">{{ materials_form.materials.help_text }}</p>{% endif %}
+                            {{ materials_form.materials.errors }}
                         </div>
                         <div class="form-actions">
-                            <button class="btn btn-sm" type="submit">{% translate "上传 / 更新项目书" %}</button>
+                            <button class="btn btn-sm" type="submit">{% translate "上传 / 更新项目资料" %}</button>
                         </div>
                     </form>
                 </div>
@@ -250,7 +250,7 @@
                                 {{ submit_form.message }}
                                 <p class="help">
                                     {% translate "提交后先由 1 名初审人初审，通过后才按所选类型随机分配评审人；全部评审人通过后，本项目组方案即通过。" %}
-                                    {% translate "初审人、评审人身份对项目组匿名，评审人可另附批注版项目书。" %}
+                                    {% translate "初审人、评审人身份对项目组匿名，评审人可另附评审回复。" %}
                                 </p>
                                 {{ submit_form.message.errors }}
                             </div>

@@ -1,7 +1,6 @@
-"""Member-facing review queue, verdict submission, and annotated-file downloads."""
+"""Member-facing review queue, verdict submission, and reply-file downloads."""
 
 import logging
-import os
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -12,13 +11,14 @@ from django.utils.translation import gettext as _, ngettext
 from django.views.decorators.http import require_POST
 
 from core.downloads import serve_file
+from core.uploads import file_extension
 from core.permissions import require
 from projects.permissions import can_view_group
 
 from . import lifecycle, panels, permissions
 from .forms import PreliminaryReviewForm, ReviewForm
 from .models import (
-    ArchivedProposal,
+    ArchivedReply,
     ReviewTask,
     ProjectSubmission,
 )
@@ -82,10 +82,17 @@ def _require_group_visibility(request, group, what):
     )
 
 
-def _annotated_filename(file_field, round_number):
-    """Build a neutral download name that reveals nothing about the reviewer."""
-    extension = os.path.splitext(file_field.name)[1].lower()
-    return _("批注版项目书_R%(round)s%(ext)s") % {"round": round_number, "ext": extension}
+def _reply_filename(file_field, round_number):
+    """Build a neutral download name that reveals nothing about the reviewer.
+
+    扩展名走 ``file_extension``：评审回复可以是 ``.tar.gz``，按 ``splitext`` 取会
+    只剩 ``.gz``。
+    """
+    extension = file_extension(file_field.name)
+    return _("评审回复_R%(round)s%(ext)s") % {
+        "round": round_number,
+        "ext": f".{extension}" if extension else "",
+    }
 
 
 @login_required
@@ -124,7 +131,7 @@ def override_submission(request, pk):
                 super_reviewer=request.user,
                 decision=form.cleaned_data["decision"],
                 comment=form.cleaned_data["comment"],
-                annotated_file=form.cleaned_data.get("annotated_file"),
+                reply_file=form.cleaned_data.get("reply_file"),
                 request=request,
             )
         except ReviewError as exc:
@@ -152,7 +159,7 @@ def _success_message(task, decision):
                 "初审已通过，已随机分配 %(count)s 名评审人。",
                 required,
             ) % {"count": required}
-        return _("初审已打回，项目组修改项目书后可重新提交。")
+        return _("初审已打回，项目组修改项目资料后可重新提交。")
     return _("评审已提交，感谢你的评审意见。")
 
 
@@ -187,7 +194,7 @@ def complete_task(request, pk):
                 reviewer=request.user,
                 decision=decision,
                 comment=form.cleaned_data["comment"],
-                annotated_file=form.cleaned_data.get("annotated_file"),
+                reply_file=form.cleaned_data.get("reply_file"),
                 request=request,
             )
         except ReviewError as exc:
@@ -240,17 +247,17 @@ def set_availability(request):
 
 
 @login_required
-def annotated_file_download(request, pk):
-    """Serve one reviewer's annotated copy to whoever may view the group."""
+def reply_file_download(request, pk):
+    """Serve one reviewer's reply archive to whoever may view the group."""
     assignment = get_object_or_404(
         ReviewTask.objects.select_related("submission__group"),
         pk=pk,
     )
-    _require_group_visibility(request, assignment.submission.group, "annotated")
-    if not assignment.annotated_file:
-        raise Http404(_("该评审任务没有批注版项目书。"))
+    _require_group_visibility(request, assignment.submission.group, "reply")
+    if not assignment.reply_file:
+        raise Http404(_("该评审任务没有评审回复。"))
     logger.info(
-        "reviews.annotated.download assignment_id=%s submission_id=%s user=%s",
+        "reviews.reply.download assignment_id=%s submission_id=%s user=%s",
         assignment.pk,
         assignment.submission_id,
         request.user.get_username(),
@@ -259,9 +266,9 @@ def annotated_file_download(request, pk):
     # Serve through this view rather than exposing the media URL: Nginx serves
     # /media/ straight from disk, which would bypass the permission check above.
     return serve_file(
-        assignment.annotated_file,
-        download_name=_annotated_filename(
-            assignment.annotated_file, assignment.submission.round
+        assignment.reply_file,
+        download_name=_reply_filename(
+            assignment.reply_file, assignment.submission.round
         ),
         as_attachment=True,
         sha256=assignment.sha256,
@@ -269,10 +276,10 @@ def annotated_file_download(request, pk):
 
 
 @login_required
-def archived_proposal_download(request, pk):
-    """Serve an archived annotated proposal to whoever may view the group."""
+def archived_reply_download(request, pk):
+    """Serve an archived reply to whoever may view the group."""
     archived = get_object_or_404(
-        ArchivedProposal.objects.select_related("group", "submission"),
+        ArchivedReply.objects.select_related("group", "submission"),
         pk=pk,
     )
     _require_group_visibility(request, archived.group, "archived")
@@ -285,7 +292,7 @@ def archived_proposal_download(request, pk):
     )
     return serve_file(
         archived.file,
-        download_name=_annotated_filename(archived.file, archived.submission.round),
+        download_name=_reply_filename(archived.file, archived.submission.round),
         as_attachment=True,
         sha256=archived.sha256,
     )

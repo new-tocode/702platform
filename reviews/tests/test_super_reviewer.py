@@ -12,7 +12,7 @@ from projects.permissions import can_view_group
 
 from ..models import (
     REVIEW_TYPE_INNOVATION_START,
-    ArchivedProposal,
+    ArchivedReply,
     ReviewTask,
     ProjectSubmission,
     preliminary_task_of,
@@ -33,7 +33,7 @@ from .factories import (
     make_reviewer,
     make_super_reviewer,
     make_user,
-    pdf,
+    materials_upload,
 )
 
 
@@ -102,7 +102,7 @@ class SuperReviewerOverrideTests(ReviewTestCase):
         self.assertEqual(
             self.review_tasks(submission).filter(status=ReviewTask.RELEASED).count(), 2
         )
-        self.assertFalse(ArchivedProposal.objects.filter(submission=submission).exists())
+        self.assertFalse(ArchivedReply.objects.filter(submission=submission).exists())
 
     def test_override_beats_an_earlier_revision_request(self):
         """The super vote must not be re-derived from the ordinary reviewers' votes."""
@@ -120,21 +120,21 @@ class SuperReviewerOverrideTests(ReviewTestCase):
         submission.refresh_from_db()
         self.assertEqual(submission.status, ProjectSubmission.APPROVED)
 
-    def test_override_archives_every_annotated_copy(self):
+    def test_override_archives_every_reply(self):
         submission = self._submit()
         submit_verdict(
             task=self.review_tasks(submission).filter(reviewer=self.reviewer_one).get(),
             reviewer=self.reviewer_one,
             decision=ReviewTask.APPROVE,
             comment="同意。",
-            annotated_file=pdf("reviewer-one.pdf"),
+            reply_file=materials_upload("reviewer-one.zip"),
         )
 
-        self._override(submission, annotated_file=pdf("super.pdf"))
+        self._override(submission, reply_file=materials_upload("super.zip"))
 
-        archived = ArchivedProposal.objects.filter(submission=submission)
+        archived = ArchivedReply.objects.filter(submission=submission)
         self.assertEqual(archived.count(), 2)
-        # 归档的正是「已完成且通过」的那两条；被释放的那条没有批注文件，不产生归档。
+        # 归档的正是「已完成且通过」的那两条；被释放的那条没有回复文件，不产生归档。
         self.assertEqual(
             set(archived.values_list("source_task_id", flat=True)),
             set(
@@ -308,7 +308,7 @@ class SuperReviewerOverrideTests(ReviewTestCase):
     def test_super_reviewer_sees_a_group_only_while_it_has_an_open_round(self):
         self.assertFalse(can_view_group(self.super_reviewer, self.group))
         submission = self._open_round()
-        # 初审中也算进行中：要看项目书才谈得上敲定。
+        # 初审中也算进行中：要看项目资料才谈得上敲定。
         self.assertTrue(can_view_group(self.super_reviewer, self.group))
         preliminary = submission.preliminary_task
         submit_verdict(
@@ -359,7 +359,7 @@ class SuperReviewerOverrideTests(ReviewTestCase):
         self.assertContains(response, "另一个组")
         self.assertEqual(len(response.context["open_rounds"]), 2)
         # 这条账号两条都能行使，所以给的是可操作按钮、没有「不可行使」标注。
-        self.assertContains(response, "查看项目书并决定")
+        self.assertContains(response, "查看项目资料并决定")
         self.assertNotContains(response, "不可行使")
 
     def test_queue_explains_why_a_round_cannot_be_overridden(self):
@@ -374,7 +374,7 @@ class SuperReviewerOverrideTests(ReviewTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "不可行使")
         self.assertContains(response, "你是本轮的提交人")
-        self.assertNotContains(response, "查看项目书并决定")
+        self.assertNotContains(response, "查看项目资料并决定")
         rows = response.context["open_rounds"]
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["submission"].pk, submission.pk)

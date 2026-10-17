@@ -1,7 +1,7 @@
 # projects 模块
 
-> 项目组：组本身、联系人（由 `leader` 计算）、指导老师、入组申请、建组申请，以及项目书的校验、上传与取件。
-> 不做评审本身（轮次、任务、结论、批注版归档都在 `reviews`），不存任何联系人／成员身份；
+> 项目组：组本身、联系人（由 `leader` 计算）、指导老师、入组申请、建组申请，以及项目资料的校验、上传与取件。
+> 不做评审本身（轮次、任务、结论、评审回复与归档都在 `reviews`），不存任何联系人／成员身份；
 > `reviews`、`competitions`、`equipment`、`notices`、`accounts` 都来问它的 `permissions`／`selectors` 取口径。
 
 **什么时候看**：改项目组成员关系、指导老师槽位、入组／建组申请流程，或回答「谁能看、谁能管这个项目组」时。
@@ -12,7 +12,7 @@
 
 | 不做 | 落在哪 |
 |---|---|
-| 评审本身：送审轮次、初审／评审任务、结论、批注版、归档 | `reviews`。本模块只在 `group_submit_review` 里转交 `reviews.services.submit_for_review`，详情页的评审区块由 `reviews.panels.group_detail_context` 装配 |
+| 评审本身：送审轮次、初审／评审任务、结论、评审回复、归档 | `reviews`。本模块只在 `group_submit_review` 里转交 `reviews.services.submit_for_review`，详情页的评审区块由 `reviews.panels.group_detail_context` 装配 |
 | 评审资格判定，以及「凭评审身份能不能看这个组」 | `reviews.permissions`（`has_review_claim`）。`can_view_group` 只委托这一次，不在本模块重写 |
 | 教师账号、把指导老师关联成用户 | 不做：指导老师是纯文本姓名，没有可指向的账号 |
 | 存联系人／成员身份（auth 用户组、独立 membership 表） | 不做：身份由 `ProjectGroup.leader` / `.members` 计算；后台只给只读名册，不给分配入口 |
@@ -62,8 +62,13 @@
   两处补偿。`QuerySet.update()`、直接 `members.remove(leader)`、或任何跳过 `save()` 的写入都会破坏它。
 - **提高指导老师上限要动迁移**：`GroupCreateRequest.advisor_1..3` 是三个固定列，
   `GroupCreateRequestForm` / `GroupInfoForm` 也各自显式声明三个字段；常量之外这些地方都要跟着改。
-- **项目书原文件名不留存**：落盘名是 uuid + 扩展名，页面展示与下载头里都是它——上传时的文件名
+- **项目资料原文件名不留存**：落盘名是 uuid + 扩展名，页面展示与下载头里都是它——上传时的文件名
   （常带组名、人名）平台根本不保存。
+- **500 MB 这个数字有两处主**：上限在 `projects/validators.MATERIALS_MAX_BYTES`（评审回复同档，在
+  `reviews/validators.REPLY_MAX_BYTES`），而放行它的是 nginx 的 `client_max_body_size 520m`——与
+  媒体库视频共用那一档。改上限要同时看 `deploy/nginx-club702.conf`（模板改了要「先 `deploy.sh`
+  再 `install.sh`」才到线上）。超过 `FILE_UPLOAD_MAX_MEMORY_SIZE` 的上传走临时文件，不占内存，
+  但落盘前会短暂占一份临时文件的空间。
 - **建组申请发给全体管理员的那批消息不会被撤回**：任一管理员处理后，其余人的队列里那条申请消失了，
   消息却还在（点进去看不到东西）。这是现状，不是漏写；要改成撤回得在 `notices` 加一条清理路径。
 - **并发只覆盖顺序的第二次提交**：建组申请的「两个管理员同时同意」靠服务层的行锁 + 复查挡住，

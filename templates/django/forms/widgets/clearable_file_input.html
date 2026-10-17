@@ -1,7 +1,7 @@
 {% load files file_urls %}{% if widget.is_initial %}
     <div class="file-current">
         <span class="file-current-label">{{ widget.initial_text }}</span>
-        {# 受保护的上传件（项目书、批注版）没有公开地址，file_url 会给出空串；
+        {# 受保护的上传件（项目资料、评审回复）没有公开地址，file_url 会给出空串；
            公开的媒体库配图有。能取到地址的渲染成链接，取不到的只显示名字——
            而不是让整个页面在渲染时炸掉。 #}
         {% with url=widget.value|file_url %}

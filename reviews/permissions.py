@@ -90,7 +90,7 @@ def may_receive_tasks(user):
 def has_review_claim(user, group):
     """凭评审身份对这一组的可见性主张（与项目组那一侧的口径取并集）。
 
-    超级评审的视野是「进行中的轮次」——他们要读项目书才能敲定，而不是全平台的
+    超级评审的视野是「进行中的轮次」——他们要读项目资料才能敲定，而不是全平台的
     项目组；初审人与评审人则看自己持有任务的项目组。
     """
     if not (user and user.is_authenticated and group):

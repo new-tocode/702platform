@@ -48,9 +48,9 @@ class ReviewTaskReassignmentTests(ReviewTestCase):
             for name in ("swap-reviewer-one", "swap-reviewer-two", "swap-reviewer-three")
         ]
         self.preliminary = make_preliminary_reviewer("swap-preliminary")
-        # 本类只关心「有一份项目书」这个事实，不读文件内容，所以不落盘。
+        # 本类只关心「有一份项目资料」这个事实，不读文件内容，所以不落盘。
         self.group = make_group(
-            "换人项目组", leader=self.contact, members=[self.member], write_proposal=False
+            "换人项目组", leader=self.contact, members=[self.member], write_materials=False
         )
     """An administrator can hand a still-pending task to a different reviewer.
 

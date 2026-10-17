@@ -22,7 +22,7 @@
 | 后台首页的「身份管理」分组 | `config/admin.py`（它硬编码六张名册的清单，顺序要和 `core.roles` 的 `sort_order` 保持一致） |
 | Nginx 直出的公开媒体库 | 公开件落 `MEDIA_ROOT`；`core.downloads` 只管受保护件的取件 |
 | 六个取件视图本身 | `accounts.file_views` / `discussion.views` / `projects.views` / `reviews.views`；**权限判定在各自的视图里**，core 只负责把响应拼对 |
-| 各入口的上限与文案（项目书 20 MB、头像 2 MB……） | 各 app 的 `validators.py`；core 的 `validate_image_upload` 只收下 `label` 与 `max_bytes` |
+| 各入口的上限与文案（项目资料 500 MB、头像 2 MB……） | 各 app 的 `validators.py`；core 的 `validate_image_upload` 与 `validate_archive_upload` 都只收下 `label` 与 `max_bytes` |
 
 ## 2. 必须成立的断言
 
@@ -44,7 +44,7 @@
   （Django 不会落盘那个新文件，照内存里的内容重算就会与库里的文件对不上）。指纹没变就别硬塞。
 - **算完必须把上传流拨回开头**，否则紧接着的落盘会存下一个空文件。
 - **`digest_field` 只认一个文件字段**：平台上每个模型都只有一个；真有第二个时再把字段名变成参数。
-  接了七个文件字段：项目书、批注版与归档版、头像与图册、帖子图、媒体库——**新增带文件字段的模型时
+  接了七个文件字段：项目资料、评审回复与归档件、头像与图册、帖子图、媒体库——**新增带文件字段的模型时
   照这个清单补**。
 - **两个媒体根里的相对路径相同**：所以 `rehome` 搬完之后数据库字段一个字都不用改，迁移也因此天然幂等。
 - **真正的屏障是目录边界，不是 `url()`**：`PrivateStorage.url()` 返回空串只是「别拼地址」的软约束；

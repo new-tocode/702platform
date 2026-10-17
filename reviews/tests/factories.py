@@ -17,8 +17,8 @@ User = get_user_model()
 #: 所有测试账号共用的密码；需要真正走登录流程的用例（如登录提醒）用它。
 DEFAULT_PASSWORD = "Password-123!"
 
-#: 项目书内容无关紧要，只要是能通过校验的 doc/docx/pdf 即可。
-PROPOSAL_BYTES = b"%PDF-1.4 test proposal"
+#: 项目资料内容无关紧要，只要是能通过校验的 zip 即可（开头四个字节是 zip 的文件头）。
+MATERIALS_BYTES = b"PK\x03\x04test materials"
 
 
 def qualify(user, **flags):
@@ -63,23 +63,23 @@ def make_admin(username, **flags):
     )
 
 
-def make_group(name, *, leader, members=(), write_proposal=True):
-    """A project group with a proposal attached.
+def make_group(name, *, leader, members=(), write_materials=True):
+    """A project group with its materials attached.
 
-    ``write_proposal=False`` 只记下项目书文件名、不写字节：给那些只需要「有项目书」
-    这个事实、从不读它的用例（送审要求项目书存在，但不校验内容）。
+    ``write_materials=False`` 只记下项目资料的文件名、不写字节：给那些只需要
+    「这个组有项目资料」这个事实、从不读它的用例（送审要求项目资料存在，但不校验内容）。
     """
     group = ProjectGroup.objects.create(name=name, leader=leader)
     if members:
         group.members.add(*members)
-    if write_proposal:
-        group.proposal.save("proposal.pdf", ContentFile(PROPOSAL_BYTES), save=True)
+    if write_materials:
+        group.materials.save("materials.zip", ContentFile(MATERIALS_BYTES), save=True)
     else:
-        group.proposal.name = "project_proposals/existing.pdf"
-        group.save(update_fields=["proposal"])
+        group.materials.name = "project_proposals/existing.zip"
+        group.save(update_fields=["materials"])
     return group
 
 
-def pdf(name="proposal.pdf"):
-    """A file that passes the proposal validator (doc/docx/pdf, non-empty)."""
-    return SimpleUploadedFile(name, PROPOSAL_BYTES, content_type="application/pdf")
+def materials_upload(name="reply.zip"):
+    """A file that passes the reply validator (zip, non-empty)."""
+    return SimpleUploadedFile(name, MATERIALS_BYTES, content_type="application/zip")

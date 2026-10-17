@@ -122,7 +122,7 @@ def groups_visible_to(user):
     用页面上的「我的项目组」筛选（`?mine=1`，那是筛选，不是可见范围）。
     未登录 → 空查询集。
 
-    注意这里**只管列表**：详情页与项目书取件是另一道门（:func:`can_view_group`，
+    注意这里**只管列表**：详情页与项目资料取件是另一道门（:func:`can_view_group`，
     它还并进评审侧的主张），两者不是同一个口径。
     """
     if not (user and user.is_authenticated):

@@ -106,15 +106,14 @@ class GroupInfoForm(AdvisorSlotsMixin, forms.ModelForm):
             self.fields[f"advisor_{index}"].initial = advisor.name
 
 
-class GroupProposalForm(forms.ModelForm):
+class GroupMaterialsForm(forms.ModelForm):
     class Meta:
         model = ProjectGroup
-        fields = ("proposal",)
+        fields = ("materials",)
         # 受保护文件没有公开 URL，Django 原版 widget 会因此整块不渲染
         # （看不到当前文件名、也没有清除勾选），换成本项目那个按文件名判断的。
-        widgets = {"proposal": ProtectedClearableFileInput()}
-        labels = {"proposal": _("项目书")}
-        help_texts = {"proposal": _("支持 doc、docx、pdf，上传后即可提交审核。")}
+        widgets = {"materials": ProtectedClearableFileInput()}
+        labels = {"materials": _("项目资料")}
 
 
 class ContactTransferForm(forms.Form):

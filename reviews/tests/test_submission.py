@@ -1,6 +1,6 @@
 """送审这一侧：进入「评审」的入口，以及「这一轮开不开得出来」。
 
-开轮次的条件全在这里：送审类型、项目书、初审人够不够、评审人够不够（容量预检）、
+开轮次的条件全在这里：送审类型、项目资料、初审人够不够、评审人够不够（容量预检）、
 上一轮结束没有。评审人怎么抽、结论怎么汇总、页面怎么渲染在别的模块。
 """
 
@@ -146,8 +146,8 @@ class SubmissionTests(ReviewTestCase):
                 with self.assertRaises(ReviewError):
                     self._submit(review_type=review_type)
 
-    def test_submission_requires_a_proposal(self):
-        self.group.proposal.delete(save=True)
+    def test_submission_requires_materials(self):
+        self.group.materials.delete(save=True)
 
         with self.assertRaises(ReviewError):
             self._submit()

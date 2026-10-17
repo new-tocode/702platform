@@ -20,7 +20,7 @@ from core.audit import record_audit
 from . import lifecycle
 from .forms import AdminReassignTaskForm
 from .models import (
-    ArchivedProposal,
+    ArchivedReply,
     ReviewTask,
     ProjectSubmission,
     preliminary_task_of,
@@ -127,7 +127,7 @@ class ReviewTaskAdmin(admin.ModelAdmin):
         "reviewer",
         "status_label",
         "decision",
-        "annotated_file",
+        "reply_file",
         "assigned_at",
         "completed_at",
     )
@@ -145,7 +145,7 @@ class ReviewTaskAdmin(admin.ModelAdmin):
         "status",
         "decision",
         "comment",
-        "annotated_file",
+        "reply_file",
         "sha256",
         "is_override",
         "assigned_at",
@@ -226,8 +226,8 @@ class ReviewTaskAdmin(admin.ModelAdmin):
             self.message_user(request, f"已更换{label}。", messages.SUCCESS)
 
 
-@admin.register(ArchivedProposal)
-class ArchivedProposalAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
+@admin.register(ArchivedReply)
+class ArchivedReplyAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
     list_display = (
         "group",
         "submission",

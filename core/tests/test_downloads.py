@@ -93,7 +93,7 @@ class ServeFileTests(SimpleTestCase):
 
         response = serve_file(
             _StoredFile(self.storage, name),
-            download_name="项目书.pdf",
+            download_name="项目资料.zip",
             as_attachment=True,
         )
 

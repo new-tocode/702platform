@@ -20,7 +20,7 @@
 | 接单开关的**规则**（能不能关、关了谁被排除） | `reviews`：字段住在 `User`（`receives_preliminary_tasks` / `receives_review_tasks`），但写入口只有 `reviews.services.set_reviewer_availability`（后台动作在 `accounts/admin.py`，函数体内 import） |
 | 强制改密的**拦截** | `config.middleware.ForcePasswordChangeMiddleware`；`accounts` 只提供改密页和这个字段 |
 | 登录失败计数、锁定判定、冷却时长 | django-axes + `config/settings.py` 的 `AXES_*`；`accounts.axes` 只把锁定响应换成站内中文页并写审计 |
-| 项目书、批注版、归档版、帖子图的取件 | `projects` / `reviews` / `discussion`；`accounts.file_views` 只管头像与图册 |
+| 项目资料、评审回复与归档件、帖子图的取件 | `projects` / `reviews` / `discussion`；`accounts.file_views` 只管头像与图册 |
 | 上传校验实现、存储、取件响应、文件指纹 | `core.uploads` / `core.storage` / `core.downloads` / `core.hashing` |
 | 内部通知的投递语义 | `notices`；`auth.Group` 的成员关系在这里维护，只当通知的收件范围，**不是身份** |
 | 公开注册、自助找回密码 | 有意不做；忘密码由管理员在后台重置 |

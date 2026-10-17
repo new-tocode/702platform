@@ -200,7 +200,7 @@ encrypt "$DB_PLAIN"
 PRODUCED=("$DB_PLAIN$SUF")
 
 # 两个上传目录都要备份：mediafiles/ 是公开的媒体库配图，protected_media/ 是
-# 项目书、批注版、头像、图册这些受保护的文件（它们刻意不在 mediafiles/ 之下，
+# 项目资料、评审回复、头像、图册这些受保护的文件（它们刻意不在 mediafiles/ 之下，
 # 所以只打包前者会把它们整批漏掉）。目录可能还不存在，缺一个就跳过那一个。
 MEDIA_SOURCES=()
 if [[ -d mediafiles ]]; then MEDIA_SOURCES+=(mediafiles/); fi
