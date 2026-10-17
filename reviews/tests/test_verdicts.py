@@ -349,6 +349,28 @@ class VerdictTests(ReviewTestCase):
         self.assertFalse(form.is_valid())
         self.assertIn("reply_file", form.errors)
 
+    def test_the_reply_download_name_keeps_a_two_part_suffix(self):
+        """中性下载名从落盘名推扩展名：``.tar.gz`` 不能被截成 ``.gz``。
+
+        名字里只有轮次与扩展名，账号、姓名一概不出现（匿名口径）。
+        """
+        submission = self._submit()
+        assignment = self._assignment(submission, self.reviewer_one)
+        submit_verdict(
+            task=assignment,
+            reviewer=self.reviewer_one,
+            decision=ReviewTask.APPROVE,
+            comment="已附回复。",
+            reply_file=materials_upload("回复.tar.gz"),
+        )
+        self.client.force_login(self.member)
+
+        response = self.client.get(reverse("reviews:reply", args=(assignment.pk,)))
+
+        disposition = response["Content-Disposition"]
+        self.assertIn("R1.tar.gz", disposition)
+        self.assertNotIn("回复", disposition)
+
     def test_reply_download_honours_group_visibility(self):
         submission = self._submit()
         assignment = self._assignment(submission, self.reviewer_one)

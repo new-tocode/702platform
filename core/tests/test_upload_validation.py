@@ -261,19 +261,20 @@ class UserSuppliedTextLimitAcceptanceTests(TestCase):
 
 
 class ArchiveUploadAcceptanceTests(TestCase):
-    """项目资料与评审回复只收 zip、7z、tgz，上限 500 MB，且按内容验一次。
+    """项目资料与评审回复只收 zip、7z、tgz、tar.gz，上限 500 MB，且按内容验一次。
 
     两个字段共用 :func:`core.uploads.validate_archive_upload`，各自只带一个名字
     （「项目资料」「评审回复」）与上限——所以这里逐条钉的是**口径**：收哪三种、
     拒哪些（含过去收过的 doc/docx/pdf）、多大算超、扩展名与内容不符时怎么办。
     """
 
-    #: 三种格式各一份「够真」的文件头：zip 是本地文件头，7z 是它的魔数，
-    #: tgz 就是 gzip 的 ``\x1f\x8b``。后面跟什么无所谓，校验只看开头几个字节。
+    #: 各格式一份「够真」的文件头：zip 是本地文件头，7z 是它的魔数，tgz 与 tar.gz
+    #: 都是 gzip 的 ``\x1f\x8b``。后面跟什么无所谓，校验只看开头几个字节。
     VALID = {
         "zip": b"PK\x03\x04rest of the archive",
         "7z": b"7z\xbc\xaf\x27\x1crest",
         "tgz": b"\x1f\x8b\x08rest",
+        "tar.gz": b"\x1f\x8b\x08rest",
     }
 
     def _upload(self, name, content):
@@ -294,6 +295,20 @@ class ArchiveUploadAcceptanceTests(TestCase):
         for extension, content in self.VALID.items():
             with self.subTest(extension=extension):
                 validate_materials_file(self._upload(f"materials.{extension}", content))
+
+    def test_a_bare_gz_is_not_an_archive(self):
+        """只认 ``.tar.gz`` 这条双后缀，不收单个 ``.gz``。
+
+        ``.gz`` 是「一个文件被压过」，不是「一包东西」——项目资料与评审回复要的是
+        后者，混进来只会让评审人拿到一个解不开的压缩流。
+        """
+        from projects.validators import validate_materials_file
+
+        self._assert_rejected(
+            validate_materials_file,
+            self._upload("materials.gz", b"\x1f\x8b\x08rest"),
+            mentions="仅支持",
+        )
 
     def test_the_old_document_formats_are_no_longer_accepted(self):
         """doc、docx、pdf 是「项目书」时代的格式，现在一律拒。
@@ -353,6 +368,26 @@ class ArchiveUploadAcceptanceTests(TestCase):
             validate_reply_file,
             self._upload("reply.pdf", b"%PDF-1.4"),
             mentions="评审回复仅支持",
+        )
+
+    def test_a_two_part_suffix_stays_one_extension_everywhere(self):
+        """``.tar.gz`` 在校验、落盘名、下载名与页面角标里都是**一条**扩展名。
+
+        四处都从 ``core.uploads.file_extension`` 取口径。各取各的（``Path.suffix``、
+        ``splitext``、``rsplit('.')``）会把它读成 ``gz``——白名单里收不下，落盘名写成
+        ``<uuid>.gz``，界面上显示 ``GZ``，上传时是什么格式就看不出来了。
+        """
+        from core.storage import neutral_upload_to
+        from core.templatetags.files import file_ext
+        from core.uploads import file_extension
+
+        self.assertEqual(file_extension("开题资料.tar.gz"), "tar.gz")
+        self.assertEqual(file_extension("开题资料.TAR.GZ"), "tar.gz")
+        self.assertEqual(file_extension("单个.gz"), "gz")
+        self.assertEqual(file_ext("project_proposals/2026/10/abc.tar.gz"), "TAR.GZ")
+        self.assertEqual(file_ext("没有扩展名"), "FILE")
+        self.assertTrue(
+            neutral_upload_to("probes")(None, "开题资料.tar.gz").endswith(".tar.gz")
         )
 
     def test_historical_migrations_still_resolve_the_frozen_validator_name(self):

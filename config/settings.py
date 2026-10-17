@@ -211,7 +211,7 @@ STATICFILES_DIRS = [BASE_DIR / "static"]
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "mediafiles"
 
-# 受保护的上传件：项目资料、评审回复、归档版、帖子图、头像、个人图册。它们的可见性由
+# 受保护的上传件：项目资料、评审回复与归档件、帖子图、头像、个人图册。它们的可见性由
 # 业务规则决定，所以**刻意不在 mediafiles/ 之下**——Nginx 的 /media/ 永远指不到
 # 这里，取文件只能走视图，视图里的权限判定才有意义。见 core/storage.py。
 PRIVATE_MEDIA_ROOT = Path(

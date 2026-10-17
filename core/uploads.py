@@ -39,19 +39,34 @@ IMAGE_EXTENSIONS = frozenset({"jpg", "jpeg", "png", "webp", "gif"})
 
 #: 平台接受的压缩包扩展名。写成元组而不是集合：顺序即报错文案里的顺序
 #: （zip 最常见，排在最前），集合的遍历顺序读起来是随机的。
-ARCHIVE_EXTENSIONS = ("zip", "7z", "tgz")
+#: ``tar.gz`` 占**一条**：它和 ``tgz`` 是同一种东西的两个叫法，两个都收。
+ARCHIVE_EXTENSIONS = ("zip", "7z", "tgz", "tar.gz")
 
-#: 各压缩包格式开头的魔数。tar.gz 与 tgz 是同一件东西，只是叫法不同；
-#: 这里只认 .tgz（口径见 :data:`ARCHIVE_EXTENSIONS`）。
+#: 各压缩包格式开头的魔数。三种 gzip 的叫法是同一个魔数。
 _ARCHIVE_SIGNATURES = {
     "zip": (b"PK", _("文件不是有效的 zip。")),
     "7z": (b"7z\xbc\xaf\x27\x1c", _("文件不是有效的 7z。")),
     "tgz": (b"\x1f\x8b", _("文件不是有效的 tgz。")),
+    "tar.gz": (b"\x1f\x8b", _("文件不是有效的 tar.gz。")),
 }
 
 
+#: 算**一条**扩展名的双后缀写法。``.tar.gz`` 与 ``.tgz`` 是同一种东西，只取最后
+#: 一段会把它读成 ``gz``——那既不在压缩包白名单里，也会让落盘名（``<uuid>.gz``）、
+#: 下载名与页面角标少掉一半信息。三处都从 :func:`file_extension` 取口径，所以
+#: 加一条双后缀只改这里。
+COMPOUND_EXTENSIONS = (".tar.gz",)
+
+
 def file_extension(name):
-    """文件名的扩展名：小写、不带点；没有扩展名时返回空串。"""
+    """文件名的扩展名：小写、不带点；没有扩展名时返回空串。
+
+    双后缀（``.tar.gz``）算一条，理由见 :data:`COMPOUND_EXTENSIONS`。
+    """
+    lowered = (name or "").lower()
+    for suffix in COMPOUND_EXTENSIONS:
+        if lowered.endswith(suffix):
+            return suffix.lstrip(".")
     return Path(name or "").suffix.lower().lstrip(".")
 
 

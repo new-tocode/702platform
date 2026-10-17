@@ -4,6 +4,7 @@ import hashlib
 
 from django.contrib.auth import get_user_model
 from django.urls import reverse
+from core.models import AuditLog
 from ..models import (
     GroupCreateRequest,
     GroupJoinRequest,
@@ -96,6 +97,25 @@ class GroupManagementViewTests(ProjectViewTestCase):
         )
         self.group.refresh_from_db()
         self.assertEqual(self.group.sha256, hashlib.sha256(payload).hexdigest())
+
+    def test_the_upload_audit_action_keeps_its_published_name(self):
+        """action 字符串发布之后不再改（docs/更新维护/模块与关系.md §3）。
+
+        字段早就改叫 materials 了，这个字符串却仍然写着 proposal，是**有意**的：
+        后台审计页按 action 过滤、按老字符串翻日志的人都用它认这件事，改掉会把同一
+        件事的历史劈成两半。所以这条断言钉的不是「名字好看」，是「不许顺手改掉」。
+        """
+        upload = materials_upload()
+        self.client.force_login(self.leader)
+
+        self.client.post(
+            reverse("projects:group_materials_update", args=(self.group.pk,)),
+            {"materials": upload},
+        )
+
+        self.assertTrue(
+            AuditLog.objects.filter(action="projects.group.proposal.update").exists()
+        )
 
     def test_manage_page_shows_the_whole_digest_next_to_the_download_button(self):
         """校验值要真的渲染出来，而且是完整的 64 位。

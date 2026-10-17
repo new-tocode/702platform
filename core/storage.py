@@ -4,7 +4,7 @@
 
 * **公开的**：媒体库（``mediafiles/uploads/``）。它是首页轮播、历年获奖、成员
   风采、公开通知的配图，那些页面对匿名访客开放，所以这些文件本来就该能直接取。
-* **受保护的**：项目资料、评审回复、归档版、帖子图、头像、个人图册。它们的可见性
+* **受保护的**：项目资料、评审回复与归档件、帖子图、头像、个人图册。它们的可见性
   由业务规则决定（谁能看这个项目组、谁是这个板块的成员），而 ``/media/`` 是
   Nginx 直出的静态目录——文件一旦落在那里，谁拿到路径谁就能取，视图里的权限
   判定形同虚设。
@@ -28,6 +28,8 @@ from django.core.files.storage import FileSystemStorage
 from django.forms.widgets import ClearableFileInput
 from django.utils import timezone
 from django.utils.deconstruct import deconstructible
+
+from core.uploads import file_extension
 
 
 logger = logging.getLogger(__name__)
@@ -113,8 +115,11 @@ class NeutralUploadTo:
         self.prefix = prefix
 
     def __call__(self, instance, filename):
-        extension = Path(filename or "").suffix.lower()
-        return f"{self.prefix}/{timezone.now():%Y/%m}/{uuid.uuid4().hex}{extension}"
+        # 扩展名口径与上传校验共用一份（``core.uploads.file_extension``）：`.tar.gz`
+        # 是**一条**，按 ``Path.suffix`` 取会把它存成 ``<uuid>.gz``。
+        extension = file_extension(filename)
+        suffix = f".{extension}" if extension else ""
+        return f"{self.prefix}/{timezone.now():%Y/%m}/{uuid.uuid4().hex}{suffix}"
 
     def __eq__(self, other):
         return isinstance(other, NeutralUploadTo) and self.prefix == other.prefix

@@ -587,7 +587,7 @@ input[type="file"] { font: inherit; font-size: 13px; color: var(--ink-2); }
 .rounds span.now { border-color: var(--blue); color: var(--blue); background: var(--blue-tint); }
 .rounds span.stop { border-color: var(--amber-line); color: var(--amber); background: var(--amber-tint); }
 
-/* --- 项目书文件 --- */
+/* --- 项目资料文件 --- */
 .doc-file { display: flex; align-items: center; gap: 12px; }
 .doc-ext {
   flex: none; width: 40px; height: 48px; display: grid; place-items: center;

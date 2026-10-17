@@ -1,7 +1,6 @@
 """Member-facing review queue, verdict submission, and reply-file downloads."""
 
 import logging
-import os
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -12,6 +11,7 @@ from django.utils.translation import gettext as _, ngettext
 from django.views.decorators.http import require_POST
 
 from core.downloads import serve_file
+from core.uploads import file_extension
 from core.permissions import require
 from projects.permissions import can_view_group
 
@@ -83,9 +83,16 @@ def _require_group_visibility(request, group, what):
 
 
 def _reply_filename(file_field, round_number):
-    """Build a neutral download name that reveals nothing about the reviewer."""
-    extension = os.path.splitext(file_field.name)[1].lower()
-    return _("评审回复_R%(round)s%(ext)s") % {"round": round_number, "ext": extension}
+    """Build a neutral download name that reveals nothing about the reviewer.
+
+    扩展名走 ``file_extension``：评审回复可以是 ``.tar.gz``，按 ``splitext`` 取会
+    只剩 ``.gz``。
+    """
+    extension = file_extension(file_field.name)
+    return _("评审回复_R%(round)s%(ext)s") % {
+        "round": round_number,
+        "ext": f".{extension}" if extension else "",
+    }
 
 
 @login_required

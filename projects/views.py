@@ -209,7 +209,11 @@ def group_materials_update(request, pk):
     if form.is_valid():
         form.save()
         record_audit(
-            action="projects.group.materials.update",
+            # 字段早就改叫 materials 了，这个 action 字符串**故意**还写着 proposal：
+            # 审计 action 一旦发布就不再改（见 docs/更新维护/模块与关系.md §3），
+            # 改掉会把同一件事在后台的 action 过滤里劈成两半，也让按老字符串翻日志
+            # 的人再也搜不到新行。projects/tests/test_group_management.py 钉着它。
+            action="projects.group.proposal.update",
             user=request.user,
             target=group,
             detail={},
