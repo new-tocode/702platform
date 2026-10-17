@@ -97,6 +97,56 @@
                 </div>
             </div>
 
+            <div class="panel">
+                <div class="panel-head">
+                    <h2>{% translate "竞赛报名" %}</h2>
+                    <span class="count">{{ competition_registrations|length }} competitions</span>
+                </div>
+                <div class="panel-body tight">
+                    <div class="table-wrap">
+                        <table>
+                            <thead>
+                                <tr><th>{% translate "竞赛" %}</th><th>{% translate "报名状态" %}</th><th>{% translate "竞赛组长" %}</th><th>{% translate "参赛成员" %}</th></tr>
+                            </thead>
+                            <tbody>
+                                {% for registration in competition_registrations %}
+                                    <tr>
+                                        <td><span class="t">{{ registration.competition.title }}</span></td>
+                                        <td>
+                                            {% if registration.competition.is_registration_open %}
+                                                <span class="chip chip-ok">{% translate "报名开放中" %}</span>
+                                            {% elif registration.competition.is_open %}
+                                                <span class="chip chip-warn">{% translate "报名已截止" %}</span>
+                                            {% else %}
+                                                <span class="chip chip-off">{% translate "报名未开放" %}</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if registration.team_leader %}
+                                                {{ registration.team_leader.profile.full_name|default:registration.team_leader.username }}
+                                            {% else %}
+                                                <span class="muted">—</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <p class="member-line">
+                                                {% for member in registration.members.all %}
+                                                    <span class="member">{{ member.profile.full_name|default:member.username }}</span>
+                                                {% empty %}
+                                                    <span class="muted">—</span>
+                                                {% endfor %}
+                                            </p>
+                                        </td>
+                                    </tr>
+                                {% empty %}
+                                    <tr><td colspan="4"><div class="empty">{% translate "该项目组尚未报名任何竞赛。" %}</div></td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
             {% if group.description %}
                 <div class="panel">
                     <div class="panel-head"><h2>{% translate "项目组介绍" %}</h2></div>
