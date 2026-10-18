@@ -936,6 +936,8 @@ td .empty, .panel-body.tight .empty {
   .discussion-post-images { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
   .discussion-board-heading { align-items: flex-start; }
   .langbtn { padding: 1px 5px; }
+  /* 窄屏这一行挤（间距收到 9px）：角标往按钮里收一点，免得贴上旁边的「退出」 */
+  .member-badge { top: -6px; right: -4px; }
   .brand-code { display: none; }
   .head-row { align-items: flex-start; }
   .spec { grid-template-columns: 1fr 1fr; }
