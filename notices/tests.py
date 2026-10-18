@@ -644,6 +644,91 @@ class MemberHomeReminderAcceptanceTests(TestCase):
         self.assertNotContains(response, "entry-badge")
 
 
+class TopBarUnreadBadgeAcceptanceTests(TestCase):
+    """顶栏「成员中心」上的未读角标：任意页面都看得到，读完就撤，未登录与强制改密不给。
+
+    角标是**显示**，数字只有 selectors.unread_message_count 一处口径——所以这里只钉
+    「什么时候出现、出现的是那个数」，不另算一遍。
+    """
+
+    def setUp(self):
+        self.admin = User.objects.create_superuser(
+            username="badge-admin",
+            password="Admin-Password-123!",
+        )
+        self.member = User.objects.create_user(
+            username="badge-member",
+            password="Member-Password-123!",
+        )
+        self.member.must_change_password = False
+        self.member.save(update_fields=["must_change_password"])
+        self.group = Group.objects.create(name="角标组")
+        self.member.groups.add(self.group)
+        self.notice = Notice.objects.create(
+            title="角标用的通知",
+            content="正文。",
+            scope=Notice.INTERNAL,
+            published_by=self.admin,
+        )
+        self.notice.visible_groups.add(self.group)
+
+    def test_badge_shows_the_count_on_every_page_not_just_the_member_center(self):
+        """顶栏属于每一页：公开的首页与「我的消息」自己那一页都要带角标。"""
+        second = Notice.objects.create(
+            title="第二条通知",
+            content="正文。",
+            scope=Notice.INTERNAL,
+            published_by=self.admin,
+        )
+        second.visible_groups.add(self.group)
+        self.client.force_login(self.member)
+
+        for url in (
+            reverse("accounts:home"),
+            reverse("notices:public_list"),
+            reverse("member_notices:internal_list"),
+        ):
+            with self.subTest(url=url):
+                response = self.client.get(url)
+
+                self.assertContains(response, "memberbtn is-unread")
+                self.assertContains(
+                    response,
+                    '<span class="member-badge" aria-hidden="true">2</span>',
+                )
+                # 角标旁边的隐藏文案（读屏用）与成员中心提醒条用的是同一条译文。
+                self.assertContains(response, "2 条未读消息")
+
+    def test_badge_goes_away_once_everything_is_read(self):
+        mark_read(user=self.member, notice=self.notice)
+        self.client.force_login(self.member)
+
+        response = self.client.get(reverse("accounts:home"))
+
+        self.assertContains(response, reverse("accounts:member_home"))
+        self.assertNotContains(response, "member-badge")
+        self.assertNotContains(response, "is-unread")
+
+    def test_anonymous_visitors_have_no_badge_and_no_member_center_link(self):
+        response = self.client.get(reverse("accounts:home"))
+
+        self.assertNotContains(response, "member-badge")
+        self.assertNotContains(response, reverse("accounts:member_home"))
+
+    def test_forced_password_change_hides_the_badge(self):
+        """强制改密那一段进不去成员中心（中间件拦回改密页），角标跟着入口一起收。"""
+        self.member.must_change_password = True
+        self.member.save(update_fields=["must_change_password"])
+        self.client.force_login(self.member)
+
+        response = self.client.get(reverse("accounts:password_change"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "memberbtn")
+        self.assertNotContains(response, "is-unread")
+        self.assertNotContains(response, "member-badge")
+
+
 class MessagePageAcceptanceTests(TestCase):
     """「我的消息」页：五列、未读样式、点开即已读、全部已读与删除的连带。"""
 

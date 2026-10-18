@@ -146,6 +146,27 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 22px 0; }
   border: 1px solid var(--line);
 }
 .langbtn:hover { border-color: var(--blue); }
+/* 有未读消息时的「成员中心」：整颗按钮换成琥珀色底（琥珀是本站的「等你办」色，
+   与提醒条、入口徽标同源），计数角标挂在右上角。
+   选择器带上 .topbar-end：不然顶栏那两条 (a:hover / a[aria-current]) 会把颜色改回去。 */
+.topbar-end a.memberbtn { position: relative; }
+.topbar-end a.memberbtn.is-unread {
+  display: inline-block; padding: 1px 7px;
+  background: var(--amber); border: 1px solid var(--amber); color: #fff;
+  font-weight: 600;
+}
+.topbar-end a.memberbtn.is-unread:hover {
+  background: var(--amber-tint); border-color: var(--amber); color: var(--amber);
+}
+/* 角标白底琥珀字：琥珀底上再叠琥珀字就糊在一起了。数字排版与入口徽标一致 */
+.member-badge {
+  position: absolute; top: -7px; right: -7px;
+  min-width: 16px; height: 16px; padding: 0 4px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--surface); border: 1px solid var(--amber); color: var(--amber);
+  font-size: 11px; font-weight: 600; line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
 
 /* --- 页头 --- */
 .pagehead { padding: 34px 0 24px; }
