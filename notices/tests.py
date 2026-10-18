@@ -645,9 +645,9 @@ class MemberHomeReminderAcceptanceTests(TestCase):
 
 
 class TopBarUnreadBadgeAcceptanceTests(TestCase):
-    """顶栏「成员中心」上的未读角标：任意页面都看得到，读完就撤，未登录与强制改密不给。
+    """顶栏「成员中心」上的未读徽标：任意页面都看得到，读完就撤，未登录与强制改密不给。
 
-    角标是**显示**，数字只有 selectors.unread_message_count 一处口径——所以这里只钉
+    徽标是**显示**，数字只有 selectors.unread_message_count 一处口径——所以这里只钉
     「什么时候出现、出现的是那个数」，不另算一遍。
     """
 
@@ -662,10 +662,10 @@ class TopBarUnreadBadgeAcceptanceTests(TestCase):
         )
         self.member.must_change_password = False
         self.member.save(update_fields=["must_change_password"])
-        self.group = Group.objects.create(name="角标组")
+        self.group = Group.objects.create(name="徽标组")
         self.member.groups.add(self.group)
         self.notice = Notice.objects.create(
-            title="角标用的通知",
+            title="徽标用的通知",
             content="正文。",
             scope=Notice.INTERNAL,
             published_by=self.admin,
@@ -673,10 +673,10 @@ class TopBarUnreadBadgeAcceptanceTests(TestCase):
         self.notice.visible_groups.add(self.group)
 
     def test_badge_shows_the_count_on_every_page_not_just_the_member_center(self):
-        """顶栏属于每一页：公开首页、「我的消息」、成员中心自己那一页都要带角标。
+        """顶栏属于每一页：公开首页、「我的消息」、成员中心自己那一页都要带徽标。
 
         成员中心那一页尤其要点到：它的提醒条与入口徽标也显示这个数，三个地方共用一个
-        变量（顶栏角标由 notices 的基底上下文处理器给），谁都不另算一遍。
+        变量（顶栏徽标由 notices 的基底上下文处理器给），谁都不另算一遍。
         """
         second = Notice.objects.create(
             title="第二条通知",
@@ -701,11 +701,11 @@ class TopBarUnreadBadgeAcceptanceTests(TestCase):
                     response,
                     '<span class="member-badge" aria-hidden="true">2</span>',
                 )
-                # 角标旁边的隐藏文案（读屏用）与成员中心提醒条用的是同一条译文。
+                # 徽标旁边的隐藏文案（读屏用）与成员中心提醒条用的是同一条译文。
                 self.assertContains(response, "2 条未读消息")
 
     def test_badge_shows_what_the_selector_says_including_event_messages(self):
-        """角标 = selectors.unread_message_count 的返回值，通知与事件消息一起算。
+        """徽标 = selectors.unread_message_count 的返回值，通知与事件消息一起算。
 
         这一条钉的是「显示不另算一份」：只数通知、或漏掉私信那类事件消息的写法都会
         在这里露出来。
@@ -743,7 +743,7 @@ class TopBarUnreadBadgeAcceptanceTests(TestCase):
         self.assertNotContains(response, reverse("accounts:member_home"))
 
     def test_forced_password_change_hides_the_badge(self):
-        """强制改密那一段进不去成员中心（中间件拦回改密页），角标跟着入口一起收。"""
+        """强制改密那一段进不去成员中心（中间件拦回改密页），徽标跟着入口一起收。"""
         self.member.must_change_password = True
         self.member.save(update_fields=["must_change_password"])
         self.client.force_login(self.member)

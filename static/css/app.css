@@ -148,7 +148,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 22px 0; }
 .langbtn:hover { border-color: var(--blue); }
 /* 有未读消息时的「成员中心」：整颗按钮换成琥珀色底（琥珀是本站的「等你办」色，
    与提醒条、入口徽标同源），标签后面跟一枚计数徽标。
-   徽标走**行内**、不压在右上角：未读把公开通知也算在内，位数会长，绝对定位的角标
+   徽标走**行内**、不压在右上角：未读把公开通知也算在内，位数会长，绝对定位的徽标
    位数一多就盖住标签自己（3 位数实测切到末字），窄屏又没有抬到字上方的余地。
    选择器带上 .topbar-end：不然顶栏那两条 (a:hover / a[aria-current]) 会把颜色改回去。 */
 .topbar-end a.memberbtn { position: relative; }
