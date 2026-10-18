@@ -92,6 +92,7 @@ TEMPLATES = [
                 "competitions.context_processors.competition_navigation",
                 "core.context_processors.operation_entries",
                 "core.context_processors.nav_section",
+                "notices.context_processors.unread_messages",
             ],
         },
     },

@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 702platform\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-17 22:53+0800\n"
+"POT-Creation-Date: 2026-10-18 17:53+0800\n"
 "PO-Revision-Date: 2026-09-19 18:39\n"
 "Last-Translator: 702platform\n"
 "Language-Team: 702platform\n"
@@ -1536,13 +1536,13 @@ msgid "该评审任务没有评审回复。"
 msgstr "This review task has no review reply."
 
 #: templates/accounts/member_home.html:4 templates/accounts/member_home.html:12
-#: templates/base.html:43 templates/discussion/space.html:16
+#: templates/base.html:46 templates/discussion/space.html:16
 msgid "成员中心"
 msgstr "Member Center"
 
 #: templates/accounts/member_home.html:4
 #: templates/accounts/password_change.html:4 templates/accounts/profile.html:4
-#: templates/base.html:6 templates/base.html:71
+#: templates/base.html:6 templates/base.html:74
 #: templates/competitions/list.html:4 templates/competitions/register.html:4
 #: templates/content/about.html:4 templates/content/award_form.html:4
 #: templates/content/awards.html:4 templates/content/page_detail.html:4
@@ -1594,7 +1594,7 @@ msgstr "No"
 msgid "初审资格"
 msgstr "Preliminary reviewer role"
 
-#: templates/accounts/member_home.html:49
+#: templates/accounts/member_home.html:49 templates/base.html:46
 #, python-format
 msgid "1 条未读消息"
 msgid_plural "%(counter)s 条未读消息"
@@ -1910,20 +1910,20 @@ msgstr "Switch to Chinese"
 msgid "切换到英文"
 msgstr "Switch to English"
 
-#: templates/base.html:44
+#: templates/base.html:47
 msgid "管理后台"
 msgstr "Admin"
 
-#: templates/base.html:47
+#: templates/base.html:50
 msgid "退出"
 msgstr "Log out"
 
-#: templates/base.html:50 templates/home.html:88
+#: templates/base.html:53 templates/home.html:88
 #: templates/registration/login.html:4 templates/registration/login.html:18
 msgid "成员登录"
 msgstr "Member Login"
 
-#: templates/base.html:72
+#: templates/base.html:75
 msgid "账号由管理员统一发放，不开放公开注册"
 msgstr "Accounts are issued by administrators; there is no public sign-up"
 

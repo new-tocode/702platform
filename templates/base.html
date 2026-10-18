@@ -40,7 +40,10 @@
                     <a class="langbtn" href="{% language_url 'en' %}" lang="en" hreflang="en" title="{% translate '切换到英文' %}">English</a>
                 {% endif %}
                 {% if user.is_authenticated %}
-                    <a href="{% url 'accounts:member_home' %}"{% if nav_section == "member" %} aria-current="page"{% endif %}>{% translate "成员中心" %}</a>
+                    {# 有未读消息时「成员中心」换成琥珀色底、标签右侧跟一枚计数徽标： #}
+                    {# 徽标是显示，数字只有 notices.selectors.unread_message_count 一处口径。 #}
+                    {# 计数对读屏没有意义，所以视觉上的那个数 aria-hidden，另给一句隐藏的算数文案。 #}
+                    <a class="memberbtn{% if unread_messages %} is-unread{% endif %}" href="{% url 'accounts:member_home' %}"{% if nav_section == "member" %} aria-current="page"{% endif %}>{% translate "成员中心" %}{% if unread_messages %}<span class="member-badge" aria-hidden="true">{{ unread_messages }}</span><span class="visually-hidden">{% blocktranslate count counter=unread_messages %}1 条未读消息{% plural %}{{ counter }} 条未读消息{% endblocktranslate %}</span>{% endif %}</a>
                     {% if user.is_staff %}<a href="{% url 'admin:index' %}">{% translate "管理后台" %}</a>{% endif %}
                     <form method="post" action="{% url 'accounts:logout' %}">
                         {% csrf_token %}
