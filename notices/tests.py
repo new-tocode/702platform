@@ -673,7 +673,11 @@ class TopBarUnreadBadgeAcceptanceTests(TestCase):
         self.notice.visible_groups.add(self.group)
 
     def test_badge_shows_the_count_on_every_page_not_just_the_member_center(self):
-        """顶栏属于每一页：公开的首页与「我的消息」自己那一页都要带角标。"""
+        """顶栏属于每一页：公开首页、「我的消息」、成员中心自己那一页都要带角标。
+
+        成员中心那一页尤其要点到：它的提醒条与入口徽标也显示这个数，三个地方共用一个
+        变量（顶栏角标由 notices 的基底上下文处理器给），谁都不另算一遍。
+        """
         second = Notice.objects.create(
             title="第二条通知",
             content="正文。",
@@ -686,6 +690,7 @@ class TopBarUnreadBadgeAcceptanceTests(TestCase):
         for url in (
             reverse("accounts:home"),
             reverse("notices:public_list"),
+            reverse("accounts:member_home"),
             reverse("member_notices:internal_list"),
         ):
             with self.subTest(url=url):
@@ -698,6 +703,28 @@ class TopBarUnreadBadgeAcceptanceTests(TestCase):
                 )
                 # 角标旁边的隐藏文案（读屏用）与成员中心提醒条用的是同一条译文。
                 self.assertContains(response, "2 条未读消息")
+
+    def test_badge_shows_what_the_selector_says_including_event_messages(self):
+        """角标 = selectors.unread_message_count 的返回值，通知与事件消息一起算。
+
+        这一条钉的是「显示不另算一份」：只数通知、或漏掉私信那类事件消息的写法都会
+        在这里露出来。
+        """
+        send_direct_message(
+            sender=self.admin,
+            recipient=self.member,
+            body="口径用的一条私信。",
+        )
+        self.client.force_login(self.member)
+        expected = unread_message_count(self.member)
+
+        response = self.client.get(reverse("accounts:home"))
+
+        self.assertEqual(expected, 2)
+        self.assertContains(
+            response,
+            f'<span class="member-badge" aria-hidden="true">{expected}</span>',
+        )
 
     def test_badge_goes_away_once_everything_is_read(self):
         mark_read(user=self.member, notice=self.notice)
