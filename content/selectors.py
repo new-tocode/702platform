@@ -75,9 +75,11 @@ def _choice_value(choices, keyword, aliases):
     folded = (keyword or "").casefold()
     if not folded:
         return None
-    aliased = aliases.get(folded)
-    if aliased:
-        return aliased
+    # 别名的键写成「页面上的样子」（比如 ``SCI/EI``），这里统一按 casefold 比，
+    # 否则用户输入小写时只有全大写的别名会漏掉。
+    for alias, value in aliases.items():
+        if alias.casefold() == folded:
+            return value
     for value, label in choices:
         if not value:
             continue
