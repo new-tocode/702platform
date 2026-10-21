@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% load i18n rendering %}
+
+{% block title %}{% translate "发明专利" %} - {% translate "竞赛社团管理平台" %}{% endblock %}
+
+{% block content %}
+<div class="wrap">
+    <div class="pagehead">
+        <div class="path">
+            <a href="{% url 'accounts:home' %}">/</a>
+            <span>/</span>
+            <a href="{% url 'content:achievements' %}">{% translate "社团成果" %}</a>
+            <span>/</span>
+            <span>{% translate "发明专利" %}</span>
+        </div>
+        <div class="head-row">
+            <div>
+                <h1>{% translate "发明专利" %}</h1>
+                {% if total %}<div class="sub">{% blocktranslate count counter=total %}共 1 项专利{% plural %}共 {{ counter }} 项专利{% endblocktranslate %}</div>{% endif %}
+            </div>
+            {% if can_contribute %}
+                <div class="head-actions">
+                    <a class="btn btn-primary" href="{% url 'content:patent_create' %}">{% translate "添加专利" %}</a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {% include "includes/achievement_tabs.html" with active="patents" %}
+
+    <form class="list-toolbar" method="get" role="search">
+        <div class="list-search">
+            <input type="search" name="q" value="{{ keyword }}" autocomplete="off"
+                   placeholder="{% translate '搜索名称、发明人、专利号或状态' %}"
+                   aria-label="{% translate '搜索专利' %}">
+            {% if per_page != per_page_options.0 %}
+                <input type="hidden" name="per_page" value="{{ per_page }}">
+            {% endif %}
+            <button class="btn btn-primary" type="submit">{% translate "搜索" %}</button>
+            {% if keyword %}<a class="btn" href="{% querystring q=None page=None %}">{% translate "清除" %}</a>{% endif %}
+        </div>
+        {% if total > per_page_options.0 %}
+            <div class="list-aside">
+                <span class="muted">{% translate "每页" %}</span>
+                {% for size in per_page_options %}
+                    <a class="chip{% if size == per_page %} chip-on{% endif %}"
+                       href="{% querystring per_page=size page=None %}"
+                       {% if size == per_page %}aria-current="true"{% endif %}>{{ size }}</a>
+                {% endfor %}
+            </div>
+        {% endif %}
+    </form>
+
+    {% for patent in patents %}
+        <div class="panel reveal">
+            <div class="panel-head">
+                <div class="award-heading has-chips">
+                    <h2>{{ patent.title }}</h2>
+                    <span class="chip chip-on">{{ patent.get_patent_type_display }}</span>
+                    <span class="chip {% if patent.status == 'granted' %}chip-ok{% elif patent.status == 'reviewing' %}chip-warn{% else %}chip-off{% endif %}">{{ patent.get_status_display }}</span>
+                </div>
+                <span class="count">{{ patent.year }}</span>
+            </div>
+            <div class="panel-body">
+                <dl class="dl">
+                    <div><dt>{% translate "发明人" %}</dt><dd>{{ patent.inventors|linebreaksbr }}</dd></div>
+                    <div><dt>{% translate "专利号 / 申请号" %}</dt><dd class="mono">{{ patent.patent_number }}</dd></div>
+                </dl>
+                {% if patent.summary %}
+                    <h3 class="award-subtitle">{% translate "简介" %}</h3>
+                    <div class="prose">{{ patent.summary|render_markdown }}</div>
+                {% endif %}
+            </div>
+        </div>
+    {% empty %}
+        {% if keyword %}
+            <div class="empty">{% blocktranslate %}没有匹配「{{ keyword }}」的专利。{% endblocktranslate %}</div>
+        {% else %}
+            <div class="empty">{% translate "暂时没有专利记录。" %}</div>
+        {% endif %}
+    {% endfor %}
+
+    {% if page_obj.has_other_pages %}
+        <nav class="discussion-pagination" aria-label="{% translate '专利分页' %}">
+            {% if page_obj.has_previous %}
+                <a class="btn btn-sm" href="{% querystring page=page_obj.previous_page_number %}">{% translate "上一页" %}</a>
+            {% endif %}
+            {% for number in page_range %}
+                {% if number == page_obj.paginator.ELLIPSIS %}
+                    <span class="muted">…</span>
+                {% elif number == page_obj.number %}
+                    <span class="chip chip-on" aria-current="page">{{ number }}</span>
+                {% else %}
+                    <a class="chip" href="{% querystring page=number %}">{{ number }}</a>
+                {% endif %}
+            {% endfor %}
+            {% if page_obj.has_next %}
+                <a class="btn btn-sm" href="{% querystring page=page_obj.next_page_number %}">{% translate "下一页" %}</a>
+            {% endif %}
+        </nav>
+        <div class="award-pageinfo muted">
+            {% blocktranslate with current=page_obj.number total=page_obj.paginator.num_pages %}第 {{ current }} / {{ total }} 页{% endblocktranslate %}
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

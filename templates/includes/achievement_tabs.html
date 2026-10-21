@@ -1,0 +1,24 @@
+{% load i18n %}
+{% comment %}
+社团成果三个分类之间的切换条。
+
+参数：active（awards / papers / patents）。它只决定哪一项高亮，不参与权限判断
+——三个页面本身都对匿名访客开放。
+{% endcomment %}
+<nav class="achievement-tabs" aria-label="{% translate '社团成果分类' %}">
+    <a class="achievement-tab{% if active == 'awards' %} is-active{% endif %}"
+       href="{% url 'content:awards' %}"{% if active == 'awards' %} aria-current="page"{% endif %}>
+        <span class="achievement-tab-index">01</span>
+        <span>{% translate "历年获奖" %}</span>
+    </a>
+    <a class="achievement-tab{% if active == 'papers' %} is-active{% endif %}"
+       href="{% url 'content:papers' %}"{% if active == 'papers' %} aria-current="page"{% endif %}>
+        <span class="achievement-tab-index">02</span>
+        <span>{% translate "学术论文" %}</span>
+    </a>
+    <a class="achievement-tab{% if active == 'patents' %} is-active{% endif %}"
+       href="{% url 'content:patents' %}"{% if active == 'patents' %} aria-current="page"{% endif %}>
+        <span class="achievement-tab-index">03</span>
+        <span>{% translate "发明专利" %}</span>
+    </a>
+</nav>

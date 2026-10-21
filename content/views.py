@@ -1,4 +1,4 @@
-"""Public views for the club's introduction, awards and member showcase."""
+"""Public views for the club's achievements, introduction and member showcase."""
 
 import logging
 from urllib.parse import quote
@@ -6,6 +6,7 @@ from urllib.parse import quote
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
+from django.db import IntegrityError, transaction
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -13,14 +14,20 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext as _
 from django.views.decorators.http import require_POST
 
+from core.audit import record_audit
 from core.permissions import require
 
 from .archives import MAX_ARCHIVE_AWARDS, build_certificate_archive
-from .forms import AwardForm
+from .forms import AwardForm, PaperForm, PatentForm
 from .models import Award, ContentPage, Showcase
 from .permissions import can_manage_awards
-from .selectors import search_awards
-from .services import DuplicateAward, create_award
+from .selectors import (
+    achievement_summary,
+    search_awards,
+    search_papers,
+    search_patents,
+)
+from .services import DuplicateAward, DuplicatePaper, create_award, create_paper
 
 
 logger = logging.getLogger(__name__)
@@ -100,6 +107,28 @@ def _per_page(raw):
     except (TypeError, ValueError):
         return DEFAULT_PER_PAGE
     return value if value in PER_PAGE_OPTIONS else DEFAULT_PER_PAGE
+
+
+def achievements(request):
+    """社团成果聚合页：三类成果各一张卡，点进去才是对应的清单。"""
+    summary = achievement_summary()
+    logger.info(
+        "content.achievements.view total=%s awards=%s papers=%s patents=%s user=%s",
+        summary["total"],
+        summary["awards"]["total"],
+        summary["papers"]["total"],
+        summary["patents"]["total"],
+        request.user.get_username() if request.user.is_authenticated else "anonymous",
+        extra={"request_id": getattr(request, "request_id", "-")},
+    )
+    return render(
+        request,
+        "content/achievements.html",
+        {
+            "summary": summary,
+            "can_contribute": can_manage_awards(request.user),
+        },
+    )
 
 
 def awards(request):
@@ -232,6 +261,160 @@ def _duplicate_message(existing):
         "已有相似的获奖记录：%(detail)s。同一年、同一赛事、同一批获奖人下，"
         "每个层级只需一条记录；如果确实是另一条，请联系管理员在后台添加。"
     ) % {"detail": detail}
+
+
+def papers(request):
+    keyword = request.GET.get("q", "").strip()
+    per_page = _per_page(request.GET.get("per_page"))
+    paginator = Paginator(search_papers(query=keyword), per_page)
+    page = paginator.get_page(request.GET.get("page"))
+    logger.info(
+        "content.papers.view total=%s query=%s per_page=%s page=%s user=%s",
+        paginator.count,
+        keyword,
+        per_page,
+        page.number,
+        request.user.get_username() if request.user.is_authenticated else "anonymous",
+        extra={"request_id": getattr(request, "request_id", "-")},
+    )
+    return render(
+        request,
+        "content/papers.html",
+        {
+            "papers": page.object_list,
+            "page_obj": page,
+            "total": paginator.count,
+            "keyword": keyword,
+            "per_page": per_page,
+            "per_page_options": PER_PAGE_OPTIONS,
+            "can_contribute": can_manage_awards(request.user),
+            "page_range": list(
+                paginator.get_elided_page_range(page.number, on_each_side=2, on_ends=1)
+            ),
+        },
+    )
+
+
+def patents(request):
+    keyword = request.GET.get("q", "").strip()
+    per_page = _per_page(request.GET.get("per_page"))
+    paginator = Paginator(search_patents(query=keyword), per_page)
+    page = paginator.get_page(request.GET.get("page"))
+    logger.info(
+        "content.patents.view total=%s query=%s per_page=%s page=%s user=%s",
+        paginator.count,
+        keyword,
+        per_page,
+        page.number,
+        request.user.get_username() if request.user.is_authenticated else "anonymous",
+        extra={"request_id": getattr(request, "request_id", "-")},
+    )
+    return render(
+        request,
+        "content/patents.html",
+        {
+            "patents": page.object_list,
+            "page_obj": page,
+            "total": paginator.count,
+            "keyword": keyword,
+            "per_page": per_page,
+            "per_page_options": PER_PAGE_OPTIONS,
+            "can_contribute": can_manage_awards(request.user),
+            "page_range": list(
+                paginator.get_elided_page_range(page.number, on_each_side=2, on_ends=1)
+            ),
+        },
+    )
+
+
+@login_required
+def paper_create(request):
+    """成员在前台登记一篇论文；后台那条路照旧（见 ``content/admin.py``）。"""
+    require(
+        request,
+        can_manage_awards(request.user),
+        "content.papers.create.denied",
+        action="create",
+    )
+
+    if request.method == "POST":
+        form = PaperForm(request.POST)
+        if form.is_valid():
+            try:
+                paper = create_paper(
+                    **form.paper_kwargs(),
+                    user=request.user,
+                    request=request,
+                )
+            except DuplicatePaper:
+                # 与表单里的即时提示同一句话：并发提交时表单那一次可能还没来得及
+                # 看见对方的写入，服务层在咨询锁里复核后才给出结论。
+                form.add_error(
+                    None, _("已经登记过同一篇论文（题目、作者与年份相同）。")
+                )
+            else:
+                messages.success(request, _("论文记录已添加。"))
+                return redirect(f"{reverse('content:papers')}?q={quote(paper.title)}")
+        logger.warning(
+            "content.papers.create.failure user=%s errors=%s",
+            request.user.get_username(),
+            form.errors.as_json(),
+            extra={"request_id": getattr(request, "request_id", "-")},
+        )
+    else:
+        form = PaperForm()
+
+    return render(request, "content/paper_form.html", {"form": form})
+
+
+@login_required
+def patent_create(request):
+    """成员在前台登记一项专利；后台那条路照旧（见 ``content/admin.py``）。"""
+    require(
+        request,
+        can_manage_awards(request.user),
+        "content.patents.create.denied",
+        action="create",
+    )
+
+    if request.method == "POST":
+        form = PatentForm(request.POST)
+        if form.is_valid():
+            try:
+                # 专利号在库里有大小写不敏感的唯一约束。表单已经查过一遍，这里
+                # 接住的是并发提交时后到的那一次——事务必须包住，否则出错的
+                # 语句会让连接停在失败事务里。
+                with transaction.atomic():
+                    patent = form.save()
+                    record_audit(
+                        action="content.patent.create",
+                        user=request.user,
+                        target=patent,
+                        detail={"year": patent.year},
+                        request=request,
+                    )
+            except IntegrityError:
+                form.add_error("patent_number", _("这个专利号已经登记过了。"))
+            else:
+                logger.info(
+                    "content.patent.create.success patent_id=%s patent_number=%s user=%s",
+                    patent.pk,
+                    patent.patent_number,
+                    request.user.get_username(),
+                    extra={"request_id": getattr(request, "request_id", "-")},
+                )
+                messages.success(request, _("专利记录已添加。"))
+                return redirect(f"{reverse('content:patents')}?q={quote(patent.title)}")
+        logger.warning(
+            "content.patents.create.failure user=%s errors=%s",
+            request.user.get_username(),
+            form.errors.as_json(),
+            extra={"request_id": getattr(request, "request_id", "-")},
+        )
+    else:
+        form = PatentForm()
+
+    return render(request, "content/patent_form.html", {"form": form})
 
 
 @login_required

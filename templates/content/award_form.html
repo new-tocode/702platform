@@ -7,9 +7,13 @@
 <div class="wrap">
     <div class="pagehead">
         <div class="path">
-            <a href="{% url 'content:awards' %}">/awards</a>
+            <a href="{% url 'accounts:home' %}">/</a>
             <span>/</span>
-            <span>new</span>
+            <a href="{% url 'content:achievements' %}">{% translate "社团成果" %}</a>
+            <span>/</span>
+            <a href="{% url 'content:awards' %}">{% translate "历年获奖" %}</a>
+            <span>/</span>
+            <span>{% translate "添加获奖记录" %}</span>
         </div>
         <div class="head-row">
             <div>

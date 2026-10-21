@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% translate "社团成果" %} - {% translate "竞赛社团管理平台" %}{% endblock %}
+
+{% block content %}
+<div class="wrap">
+    <div class="pagehead achievement-head">
+        <div class="path">
+            <a href="{% url 'accounts:home' %}">/</a>
+            <span>/</span>
+            <span>{% translate "社团成果" %}</span>
+        </div>
+        <div class="head-row">
+            <div>
+                <p class="achievement-kicker">CLUB-702 / ACHIEVEMENTS</p>
+                <h1>{% translate "社团成果" %}</h1>
+                <div class="sub">{% translate "竞赛奖项、学术论文与发明专利，构成社团的技术积累。选择一个分类，查看完整清单。" %}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="achievement-grid">
+        <a class="achievement-card is-awards reveal" href="{% url 'content:awards' %}" data-index="01">
+            <span class="achievement-code">AWARDS</span>
+            <h2>{% translate "历年获奖" %}</h2>
+            <p>{% translate "从校级到国家级的竞赛奖项，按年份与层级归档。" %}</p>
+            <span class="achievement-meta">
+                <span><strong>{{ summary.awards.total }}</strong> {% translate "项记录" %}</span>
+                <span class="muted">
+                    {% if summary.awards.latest is not None %}
+                        {% blocktranslate with year=summary.awards.latest %}最近 {{ year }}{% endblocktranslate %}
+                    {% else %}
+                        {% translate "暂无记录" %}
+                    {% endif %}
+                </span>
+            </span>
+            <span class="achievement-go">{% translate "查看成果" %} <span aria-hidden="true">→</span></span>
+        </a>
+
+        <a class="achievement-card is-papers reveal" href="{% url 'content:papers' %}" data-index="02">
+            <span class="achievement-code">PAPERS</span>
+            <h2>{% translate "学术论文" %}</h2>
+            <p>{% translate "成员在期刊与会议上发表的论文，含收录情况与原文入口。" %}</p>
+            <span class="achievement-meta">
+                <span><strong>{{ summary.papers.total }}</strong> {% translate "篇论文" %}</span>
+                <span class="muted">
+                    {% if summary.papers.latest is not None %}
+                        {% blocktranslate with year=summary.papers.latest %}最近 {{ year }}{% endblocktranslate %}
+                    {% else %}
+                        {% translate "暂无记录" %}
+                    {% endif %}
+                </span>
+            </span>
+            <span class="achievement-go">{% translate "查看成果" %} <span aria-hidden="true">→</span></span>
+        </a>
+
+        <a class="achievement-card is-patents reveal" href="{% url 'content:patents' %}" data-index="03">
+            <span class="achievement-code">PATENTS</span>
+            <h2>{% translate "发明专利" %}</h2>
+            <p>{% translate "已授权与申请中的专利，记录发明人、专利号与当前状态。" %}</p>
+            <span class="achievement-meta">
+                <span><strong>{{ summary.patents.total }}</strong> {% translate "项专利" %}</span>
+                <span class="muted">
+                    {% if summary.patents.latest is not None %}
+                        {% blocktranslate with year=summary.patents.latest %}最近 {{ year }}{% endblocktranslate %}
+                    {% else %}
+                        {% translate "暂无记录" %}
+                    {% endif %}
+                </span>
+            </span>
+            <span class="achievement-go">{% translate "查看成果" %} <span aria-hidden="true">→</span></span>
+        </a>
+    </div>
+
+    <div class="achievement-foot reveal">
+        <div>
+            <span class="mono">MAINTAINED BY CLUB-702</span>
+            <p>{% translate "成果由社团成员共同维护；每个分类都可以单独进入，查看完整清单。" %}</p>
+        </div>
+        {% if can_contribute %}
+            <div class="btn-row">
+                <a class="btn btn-sm" href="{% url 'content:award_create' %}">{% translate "添加获奖" %}</a>
+                <a class="btn btn-sm" href="{% url 'content:paper_create' %}">{% translate "添加论文" %}</a>
+                <a class="btn btn-sm" href="{% url 'content:patent_create' %}">{% translate "添加专利" %}</a>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

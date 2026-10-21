@@ -13,6 +13,7 @@ from django.apps import apps
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
+from django.db import IntegrityError, transaction
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from django.utils.functional import Promise
@@ -24,8 +25,10 @@ from core.models import AuditLog
 from media.models import MediaFile
 
 from . import tier_rules
-from .forms import AwardForm
-from .models import Award, ContentPage, HomeSlide, Showcase
+from .forms import AwardForm, PaperForm, PatentForm
+from .models import AcademicPaper, Award, ContentPage, HomeSlide, Patent, Showcase
+from .selectors import _choice_value
+from .services import DuplicatePaper, create_paper
 from .similarity import find_similar_award, normalize
 from .validators import IMAGE_LIMIT, MAX_IMAGE_MB
 
@@ -1574,3 +1577,697 @@ class AwardFormTranslationTests(TestCase):
 
         self.assertIn("获奖人/团队", model_labels)
         self.assertNotIn("获奖人 / 团队", model_labels)
+
+
+def paper_payload(**overrides):
+    values = {
+        "title": "图神经网络综述",
+        "authors": "张三、李四",
+        "venue": "计算机学报",
+        "year": "2024",
+        "paper_type": "journal",
+        "indexing": "core",
+        "doi": "10.1234/gnn-survey",
+        "abstract": "一篇**综述**。",
+    }
+    values.update(overrides)
+    return values
+
+
+def patent_payload(**overrides):
+    values = {
+        "title": "一种边缘计算任务调度方法",
+        "inventors": "张三、李四",
+        "patent_number": "CN202410123456.7",
+        "year": "2024",
+        "patent_type": "invention",
+        "status": "granted",
+        "summary": "面向**边缘节点**的任务调度方法。",
+    }
+    values.update(overrides)
+    return values
+
+
+class AchievementHubTests(TestCase):
+    """社团成果聚合页：三类成果各一张卡，进入后才是清单。"""
+
+    def setUp(self):
+        Award.objects.create(
+            title="数学建模一等奖",
+            competition="全国大学生数学建模竞赛",
+            year=2024,
+            tier=tier_rules.NATIONAL,
+            level="国家级",
+            winners="张三",
+        )
+        AcademicPaper.objects.create(
+            title="图神经网络综述",
+            authors="张三",
+            venue="计算机学报",
+            year=2025,
+            paper_type="journal",
+            indexing="core",
+        )
+        Patent.objects.create(
+            title="一种边缘计算任务调度方法",
+            inventors="李四",
+            patent_number="CN202310000001.0",
+            year=2023,
+            patent_type="invention",
+            status="granted",
+        )
+
+    def test_hub_is_public_and_links_to_three_sections(self):
+        response = self.client.get(reverse("content:achievements"))
+
+        self.assertEqual(response.status_code, 200)
+        for label in ("社团成果", "历年获奖", "学术论文", "发明专利"):
+            with self.subTest(label=label):
+                self.assertContains(response, label)
+        for name in ("content:awards", "content:papers", "content:patents"):
+            with self.subTest(name=name):
+                self.assertContains(response, reverse(name))
+        summary = response.context["summary"]
+        self.assertEqual(summary["total"], 3)
+        self.assertEqual(summary["awards"]["total"], 1)
+
+    def test_hub_shows_empty_state_for_each_section(self):
+        Award.objects.all().delete()
+        AcademicPaper.objects.all().delete()
+        Patent.objects.all().delete()
+
+        response = self.client.get(reverse("content:achievements"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["summary"]["total"], 0)
+        self.assertEqual(response.content.decode().count("暂无记录"), 3)
+
+    def test_year_zero_is_not_treated_as_missing(self):
+        Award.objects.all().delete()
+        Award.objects.create(
+            title="年份为零的旧记录",
+            competition="旧赛事",
+            year=0,
+            tier=tier_rules.SCHOOL,
+            level="校级",
+            winners="张三",
+        )
+
+        response = self.client.get(reverse("content:achievements"))
+
+        self.assertEqual(response.context["summary"]["awards"]["latest"], 0)
+        self.assertContains(response, "最近 0")
+
+    def test_top_nav_marks_achievements_on_hub_and_each_section(self):
+        active = (
+            f'<a href="{reverse("content:achievements")}" aria-current="page">社团成果</a>'
+        )
+
+        for name in (
+            "content:achievements",
+            "content:awards",
+            "content:papers",
+            "content:patents",
+        ):
+            with self.subTest(name=name):
+                response = self.client.get(reverse(name))
+                self.assertEqual(response.context["nav_section"], "achievements")
+                self.assertContains(response, active, html=True)
+
+    def test_home_links_to_the_hub(self):
+        response = self.client.get(reverse("accounts:home"))
+
+        self.assertContains(response, "社团成果")
+        self.assertContains(response, reverse("content:achievements"))
+
+    def test_top_nav_stays_on_achievements_for_the_create_forms(self):
+        member = User.objects.create_user(
+            username="achievement-author", password="Member-Password-123!"
+        )
+        member.must_change_password = False
+        member.save(update_fields=["must_change_password"])
+        self.client.force_login(member)
+
+        for name in (
+            "content:award_create",
+            "content:paper_create",
+            "content:patent_create",
+        ):
+            with self.subTest(name=name):
+                response = self.client.get(reverse(name))
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.context["nav_section"], "achievements")
+
+    def test_admin_can_open_paper_and_patent_admin(self):
+        admin = User.objects.create_superuser(
+            username="achievement-admin", password="Admin-Password-123!"
+        )
+        self.client.force_login(admin)
+
+        for path in ("/admin/content/academicpaper/", "/admin/content/patent/"):
+            with self.subTest(path=path):
+                self.assertEqual(self.client.get(path).status_code, 200)
+
+    def test_admin_paper_save_is_audited(self):
+        admin = User.objects.create_superuser(
+            username="achievement-admin-audit", password="Admin-Password-123!"
+        )
+        self.client.force_login(admin)
+
+        response = self.client.post(
+            "/admin/content/academicpaper/add/",
+            {
+                "title": "后台添加的论文",
+                "authors": "后台作者",
+                "venue": "后台期刊",
+                "year": "2024",
+                "paper_type": "journal",
+                "indexing": "",
+                "doi": "",
+                "abstract": "",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        paper = AcademicPaper.objects.get(title="后台添加的论文")
+        audit = AuditLog.objects.get(
+            action="content.paper.create", target_id=str(paper.pk)
+        )
+        self.assertEqual(audit.user, admin)
+
+
+class PaperPublicListTests(TestCase):
+    """学术论文清单：公开、按年份倒序、一个框搜全部。"""
+
+    def setUp(self):
+        self.newer = AcademicPaper.objects.create(
+            title="图神经网络综述",
+            authors="张三、李四",
+            venue="计算机学报",
+            year=2024,
+            paper_type="journal",
+            indexing="core",
+            doi="10.1234/gnn-survey",
+            abstract="一篇**综述**。",
+        )
+        self.older = AcademicPaper.objects.create(
+            title="边缘计算调度",
+            authors="王五",
+            venue="ICPC 2023",
+            year=2023,
+            paper_type="conference",
+            indexing="none",
+        )
+
+    def test_papers_are_public_and_sorted_by_year(self):
+        response = self.client.get(reverse("content:papers"))
+        body = response.content.decode()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(self.newer.title, body)
+        self.assertIn(self.older.title, body)
+        self.assertLess(body.index(self.newer.title), body.index(self.older.title))
+        self.assertIn("中文核心", body)
+        self.assertIn("会议论文", body)
+        self.assertIn("https://doi.org/10.1234/gnn-survey", body)
+        self.assertIn("<strong>综述</strong>", body)
+
+    def test_keyword_matches_each_field(self):
+        cases = {
+            "张三": "图神经网络综述",
+            "计算机学报": "图神经网络综述",
+            "会议论文": "边缘计算调度",
+            "中文核心": "图神经网络综述",
+            "未收录": "边缘计算调度",
+            "2023": "边缘计算调度",
+            "24": "图神经网络综述",
+            "gnn-survey": "图神经网络综述",  # DOI
+            "综述": "图神经网络综述",  # 摘要
+        }
+        for keyword, expected in cases.items():
+            with self.subTest(keyword=keyword):
+                body = self.client.get(
+                    reverse("content:papers"), {"q": keyword}
+                ).content.decode()
+                self.assertIn(expected, body)
+                other = (
+                    self.older.title
+                    if expected == self.newer.title
+                    else self.newer.title
+                )
+                self.assertNotIn(other, body)
+
+    def test_no_match_says_so_instead_of_the_empty_state(self):
+        body = self.client.get(
+            reverse("content:papers"), {"q": "查无此论文"}
+        ).content.decode()
+
+        self.assertIn("没有匹配「查无此论文」的论文。", body)
+        self.assertNotIn("暂时没有论文记录。", body)
+
+    def test_empty_state_without_records(self):
+        AcademicPaper.objects.all().delete()
+
+        body = self.client.get(reverse("content:papers")).content.decode()
+
+        self.assertIn("暂时没有论文记录。", body)
+
+    def test_abstract_is_rendered_as_sanitized_markdown(self):
+        self.newer.abstract = "**安全**<script>alert('xss')</script>"
+        self.newer.save(update_fields=["abstract"])
+
+        body = self.client.get(reverse("content:papers")).content.decode()
+
+        self.assertIn("<strong>安全</strong>", body)
+        self.assertNotIn("<script>", body)
+        self.assertNotIn("alert('xss')", body)
+
+    def test_pagination_links_preserve_search_and_page_size(self):
+        for index in range(24):
+            AcademicPaper.objects.create(
+                title=f"填充论文 {index}",
+                authors="填充作者",
+                venue="填充期刊",
+                year=2020,
+                paper_type="journal",
+            )
+
+        body = self.client.get(
+            reverse("content:papers"), {"q": "填充", "per_page": "10"}
+        ).content.decode()
+
+        self.assertIn("第 1 / 3 页", body)
+        self.assertIn("q=%E5%A1%AB%E5%85%85", body)
+        self.assertIn("per_page=10", body)
+
+
+class PatentPublicListTests(TestCase):
+    """发明专利清单：公开、按年份倒序、状态与类型都能搜。"""
+
+    def setUp(self):
+        self.granted = Patent.objects.create(
+            title="一种边缘计算任务调度方法",
+            inventors="张三、李四",
+            patent_number="CN202410123456.7",
+            year=2024,
+            patent_type="invention",
+            status="granted",
+            summary="面向**边缘节点**的任务调度方法。",
+        )
+        self.pending = Patent.objects.create(
+            title="一种可折叠支架",
+            inventors="王五",
+            patent_number="CN202320000002.1",
+            year=2023,
+            patent_type="utility",
+            status="reviewing",
+        )
+
+    def test_patents_are_public_and_sorted_by_year(self):
+        response = self.client.get(reverse("content:patents"))
+        body = response.content.decode()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(self.granted.title, body)
+        self.assertIn(self.pending.title, body)
+        self.assertLess(body.index(self.granted.title), body.index(self.pending.title))
+        self.assertIn("发明专利", body)
+        self.assertIn("实用新型", body)
+        self.assertIn("已授权", body)
+        self.assertIn("审查中", body)
+        self.assertIn("CN202410123456.7", body)
+        self.assertIn("<strong>边缘节点</strong>", body)
+
+    def test_keyword_matches_each_field(self):
+        cases = {
+            "张三": "一种边缘计算任务调度方法",
+            "CN202320000002.1": "一种可折叠支架",
+            "实用新型": "一种可折叠支架",
+            "已授权": "一种边缘计算任务调度方法",
+            "审查中": "一种可折叠支架",
+            "2023": "一种可折叠支架",
+            "边缘节点": "一种边缘计算任务调度方法",  # 简介
+        }
+        for keyword, expected in cases.items():
+            with self.subTest(keyword=keyword):
+                body = self.client.get(
+                    reverse("content:patents"), {"q": keyword}
+                ).content.decode()
+                self.assertIn(expected, body)
+                other = (
+                    self.pending.title
+                    if expected == self.granted.title
+                    else self.granted.title
+                )
+                self.assertNotIn(other, body)
+
+    def test_empty_state_without_records(self):
+        Patent.objects.all().delete()
+
+        body = self.client.get(reverse("content:patents")).content.decode()
+
+        self.assertIn("暂时没有专利记录。", body)
+
+    def test_no_match_says_so_instead_of_the_empty_state(self):
+        body = self.client.get(
+            reverse("content:patents"), {"q": "查无此专利"}
+        ).content.decode()
+
+        self.assertIn("没有匹配「查无此专利」的专利。", body)
+        self.assertNotIn("暂时没有专利记录。", body)
+
+    def test_pagination_links_preserve_search_and_page_size(self):
+        for index in range(24):
+            Patent.objects.create(
+                title=f"填充专利 {index}",
+                inventors="填充发明人",
+                patent_number=f"CN2024000{index:04d}.0",
+                year=2020,
+                patent_type="invention",
+                status="granted",
+            )
+
+        body = self.client.get(
+            reverse("content:patents"), {"q": "填充", "per_page": "10"}
+        ).content.decode()
+
+        self.assertIn("第 1 / 3 页", body)
+        self.assertIn("q=%E5%A1%AB%E5%85%85", body)
+        self.assertIn("per_page=10", body)
+
+
+class PaperContributionTests(TestCase):
+    """成员在前台登记论文；访客只能看。"""
+
+    def setUp(self):
+        self.member = User.objects.create_user(
+            username="paper-member", password="Member-Password-123!"
+        )
+        self.member.must_change_password = False
+        self.member.save(update_fields=["must_change_password"])
+        self.url = reverse("content:paper_create")
+
+    def test_guest_is_redirected_from_form_and_post(self):
+        self.assertEqual(self.client.get(self.url).status_code, 302)
+        self.assertEqual(self.client.post(self.url, paper_payload()).status_code, 302)
+        self.assertEqual(AcademicPaper.objects.count(), 0)
+
+    def test_member_adds_a_paper(self):
+        self.client.force_login(self.member)
+
+        response = self.client.post(self.url, paper_payload(), follow=True)
+
+        paper = AcademicPaper.objects.get()
+        self.assertEqual(paper.title, "图神经网络综述")
+        self.assertEqual(paper.authors, "张三、李四")
+        self.assertEqual(paper.paper_type, "journal")
+        self.assertEqual(paper.indexing, "core")
+        self.assertEqual(
+            response.redirect_chain,
+            [(f"{reverse('content:papers')}?q=%E5%9B%BE%E7%A5%9E%E7%BB%8F%E7%BD%91%E7%BB%9C%E7%BB%BC%E8%BF%B0", 302)],
+        )
+        self.assertIn("论文记录已添加。", [str(m) for m in response.context["messages"]])
+        audit = AuditLog.objects.get(action="content.paper.create")
+        self.assertEqual(audit.user, self.member)
+        self.assertEqual(audit.target_id, str(paper.pk))
+
+    def test_duplicate_title_and_authors_are_refused(self):
+        AcademicPaper.objects.create(
+            title="Graph Neural Networks: A Survey",
+            authors="Zhang San, Li Si",
+            venue="Journal",
+            year=2024,
+            paper_type="journal",
+        )
+        self.client.force_login(self.member)
+
+        response = self.client.post(
+            self.url,
+            paper_payload(
+                title="graph neural networks a survey",
+                authors="Zhang San, Li Si",
+            ),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(AcademicPaper.objects.count(), 1)
+        errors = response.context["form"].non_field_errors()
+        self.assertEqual(len(errors), 1)
+        self.assertIn("已经登记过同一篇论文", errors[0])
+
+    def test_service_refuses_a_duplicate_even_when_the_form_check_is_bypassed(self):
+        """表单的即时提示之外，服务层在咨询锁里还要再查一次。"""
+        kwargs = {
+            "title": "图神经网络综述",
+            "authors": "张三、李四",
+            "venue": "计算机学报",
+            "year": 2024,
+            "paper_type": "journal",
+            "indexing": "core",
+            "doi": "",
+            "abstract": "",
+        }
+        create_paper(**kwargs, user=self.member)
+
+        with self.assertRaises(DuplicatePaper):
+            create_paper(**kwargs, user=self.member)
+
+        self.assertEqual(AcademicPaper.objects.count(), 1)
+
+    def test_different_year_is_not_a_duplicate(self):
+        AcademicPaper.objects.create(
+            title="图神经网络综述",
+            authors="张三、李四",
+            venue="计算机学报",
+            year=2023,
+            paper_type="journal",
+        )
+        self.client.force_login(self.member)
+
+        self.client.post(self.url, paper_payload(year="2024"), follow=True)
+
+        self.assertEqual(AcademicPaper.objects.count(), 2)
+
+    def test_year_out_of_range_is_refused(self):
+        self.client.force_login(self.member)
+
+        response = self.client.post(self.url, paper_payload(year="20244"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("year", response.context["form"].errors)
+        self.assertEqual(AcademicPaper.objects.count(), 0)
+
+    def test_required_fields_are_all_enforced(self):
+        self.client.force_login(self.member)
+
+        response = self.client.post(self.url, {})
+
+        for field in ("title", "authors", "venue", "year", "paper_type"):
+            self.assertIn(field, response.context["form"].errors)
+        self.assertEqual(AcademicPaper.objects.count(), 0)
+
+    def test_members_see_the_add_button_but_guests_do_not(self):
+        guest = self.client.get(reverse("content:papers")).content.decode()
+        self.assertNotIn(reverse("content:paper_create"), guest)
+
+        self.client.force_login(self.member)
+        member = self.client.get(reverse("content:papers")).content.decode()
+        self.assertIn(reverse("content:paper_create"), member)
+
+
+class PatentContributionTests(TestCase):
+    """成员在前台登记专利；专利号是身份，重复的拦下。"""
+
+    def setUp(self):
+        self.member = User.objects.create_user(
+            username="patent-member", password="Member-Password-123!"
+        )
+        self.member.must_change_password = False
+        self.member.save(update_fields=["must_change_password"])
+        self.url = reverse("content:patent_create")
+
+    def test_guest_is_redirected_from_form_and_post(self):
+        self.assertEqual(self.client.get(self.url).status_code, 302)
+        self.assertEqual(self.client.post(self.url, patent_payload()).status_code, 302)
+        self.assertEqual(Patent.objects.count(), 0)
+
+    def test_member_adds_a_patent(self):
+        self.client.force_login(self.member)
+
+        response = self.client.post(self.url, patent_payload(), follow=True)
+
+        patent = Patent.objects.get()
+        self.assertEqual(patent.title, "一种边缘计算任务调度方法")
+        self.assertEqual(patent.patent_number, "CN202410123456.7")
+        self.assertEqual(patent.patent_type, "invention")
+        self.assertEqual(patent.status, "granted")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("专利记录已添加。", [str(m) for m in response.context["messages"]])
+        audit = AuditLog.objects.get(action="content.patent.create")
+        self.assertEqual(audit.user, self.member)
+        self.assertEqual(audit.target_id, str(patent.pk))
+
+    def test_duplicate_patent_number_is_refused_ignoring_case_and_spaces(self):
+        Patent.objects.create(**{**patent_payload(), "year": 2024})
+        self.client.force_login(self.member)
+
+        response = self.client.post(
+            self.url,
+            patent_payload(patent_number=" cn202410123456.7 "),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Patent.objects.count(), 1)
+        self.assertIn("patent_number", response.context["form"].errors)
+
+    def test_database_rejects_duplicate_patent_numbers(self):
+        Patent.objects.create(**{**patent_payload(), "year": 2024})
+
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                Patent.objects.create(
+                    **{**patent_payload(), "year": 2025, "patent_number": "cn202410123456.7"}
+                )
+
+    def test_model_clean_removes_whitespace_from_the_patent_number(self):
+        patent = Patent(
+            title="一种边缘计算任务调度方法",
+            inventors="张三",
+            patent_number="CN 2024 1 0123456.7",
+            year=2024,
+            patent_type="invention",
+            status="granted",
+        )
+
+        patent.full_clean()
+
+        self.assertEqual(patent.patent_number, "CN202410123456.7")
+
+    def test_year_out_of_range_is_refused(self):
+        self.client.force_login(self.member)
+
+        response = self.client.post(self.url, patent_payload(year="20244"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("year", response.context["form"].errors)
+        self.assertEqual(Patent.objects.count(), 0)
+
+    def test_required_fields_are_all_enforced(self):
+        self.client.force_login(self.member)
+
+        response = self.client.post(self.url, {})
+
+        for field in ("title", "inventors", "patent_number", "year", "patent_type", "status"):
+            self.assertIn(field, response.context["form"].errors)
+        self.assertEqual(Patent.objects.count(), 0)
+
+    def test_members_see_the_add_button_but_guests_do_not(self):
+        guest = self.client.get(reverse("content:patents")).content.decode()
+        self.assertNotIn(reverse("content:patent_create"), guest)
+
+        self.client.force_login(self.member)
+        member = self.client.get(reverse("content:patents")).content.decode()
+        self.assertIn(reverse("content:patent_create"), member)
+
+
+class AchievementFormTranslationTests(TestCase):
+    """新增的两张成果表单也守同一条双语规矩：标签与选项都是惰性译文。"""
+
+    def test_every_label_is_a_lazy_translation(self):
+        for form_class in (PaperForm, PatentForm):
+            form = form_class()
+            plain = [
+                name
+                for name, field in form.fields.items()
+                if not isinstance(field.label, Promise)
+            ]
+            with self.subTest(form=form_class.__name__):
+                self.assertEqual(
+                    plain,
+                    [],
+                    f"这些字段的标签不是惰性译文（多半是从模型 verbose_name 漏过来的）：{plain}",
+                )
+
+    def test_choice_labels_are_lazy_translations(self):
+        cases = (
+            (PaperForm(), "paper_type"),
+            (PaperForm(), "indexing"),
+            (PatentForm(), "patent_type"),
+            (PatentForm(), "status"),
+        )
+        for form, field_name in cases:
+            choices = [
+                (value, label)
+                for value, label in form.fields[field_name].choices
+                if value
+            ]
+            with self.subTest(form=type(form).__name__, field=field_name):
+                self.assertTrue(choices)
+                for value, label in choices:
+                    self.assertIsInstance(label, Promise)
+
+
+class ChoiceValueTests(TestCase):
+    """搜索关键词对到 choices 码值的逻辑。
+
+    CI 不编译 ``.mo``，英文页面会回退中文，所以这里不断言英文渲染结果；只钉
+    「存储码 / 标签 / 别名」三种写法都能对到码值。英文标签是否齐全由
+    ``core.tests.test_interface_translation`` 检查 ``.po`` 兜底。
+    """
+
+    def test_storage_code_and_label_match_case_insensitively(self):
+        choices = (
+            ("journal", "Journal paper"),
+            ("conference", "Conference paper"),
+        )
+
+        self.assertEqual(_choice_value(choices, "journal", {}), "journal")
+        self.assertEqual(_choice_value(choices, "Journal paper", {}), "journal")
+        self.assertEqual(_choice_value(choices, "conference PAPER", {}), "conference")
+        self.assertIsNone(_choice_value(choices, "workshop", {}))
+
+    def test_alias_matches_case_insensitively(self):
+        choices = (("sci", "SCI / EI"),)
+        aliases = {"SCI/EI": "sci"}
+
+        self.assertEqual(_choice_value(choices, "sci/ei", aliases), "sci")
+        self.assertEqual(_choice_value(choices, "SCI / EI", aliases), "sci")
+
+    def test_empty_keyword_has_no_choice(self):
+        self.assertIsNone(_choice_value((("journal", "Journal paper"),), "", {}))
+
+
+class PaperExternalUrlTests(TestCase):
+    """DOI 与原文地址都变成一个安全可点的链接。"""
+
+    def paper(self, doi):
+        return AcademicPaper(
+            title="论文", authors="作者", venue="期刊", year=2024,
+            paper_type="journal", doi=doi,
+        )
+
+    def test_doi_gets_the_resolver_prefix(self):
+        self.assertEqual(
+            self.paper("10.1234/abc").external_url,
+            "https://doi.org/10.1234/abc",
+        )
+        self.assertEqual(
+            self.paper("doi:10.1234/abc").external_url,
+            "https://doi.org/10.1234/abc",
+        )
+
+    def test_http_link_is_kept(self):
+        self.assertEqual(
+            self.paper("https://example.com/paper.pdf").external_url,
+            "https://example.com/paper.pdf",
+        )
+
+    def test_blank_value_has_no_link(self):
+        self.assertEqual(self.paper("").external_url, "")
+        self.assertEqual(self.paper("   ").external_url, "")
+
+    def test_other_schemes_fall_back_to_the_doi_resolver(self):
+        self.assertEqual(
+            self.paper("javascript:alert(1)").external_url,
+            "https://doi.org/javascript:alert(1)",
+        )

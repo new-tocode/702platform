@@ -6,7 +6,7 @@ from django.contrib import admin
 
 from core.audit import record_audit
 
-from .models import Award, ContentPage, HomeSlide, Showcase
+from .models import AcademicPaper, Award, ContentPage, HomeSlide, Patent, Showcase
 
 
 logger = logging.getLogger(__name__)
@@ -65,6 +65,62 @@ class AwardAdmin(admin.ModelAdmin):
         )
         logger.info(
             "admin.award.save operator=%s award_id=%s title=%s year=%s created=%s",
+            request.user.get_username(),
+            obj.pk,
+            obj.title,
+            obj.year,
+            not change,
+            extra={"request_id": getattr(request, "request_id", "-")},
+        )
+
+
+@admin.register(AcademicPaper)
+class AcademicPaperAdmin(admin.ModelAdmin):
+    list_display = ("title", "venue", "year", "paper_type", "indexing", "authors")
+    list_filter = ("year", "paper_type", "indexing")
+    search_fields = ("title", "authors", "venue", "doi")
+    readonly_fields = ("created_at",)
+    ordering = ("-year", "-created_at", "-id")
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        record_audit(
+            action="content.paper.create" if not change else "content.paper.update",
+            user=request.user,
+            target=obj,
+            detail={"year": obj.year},
+            request=request,
+        )
+        logger.info(
+            "admin.paper.save operator=%s paper_id=%s title=%s year=%s created=%s",
+            request.user.get_username(),
+            obj.pk,
+            obj.title,
+            obj.year,
+            not change,
+            extra={"request_id": getattr(request, "request_id", "-")},
+        )
+
+
+@admin.register(Patent)
+class PatentAdmin(admin.ModelAdmin):
+    list_display = ("title", "patent_number", "year", "patent_type", "status", "inventors")
+    list_filter = ("year", "patent_type", "status")
+    search_fields = ("title", "inventors", "patent_number", "summary")
+    readonly_fields = ("created_at",)
+    ordering = ("-year", "-created_at", "-id")
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        record_audit(
+            action="content.patent.create" if not change else "content.patent.update",
+            user=request.user,
+            target=obj,
+            detail={"year": obj.year},
+            request=request,
+        )
+        logger.info(
+            "admin.patent.save operator=%s patent_id=%s title=%s year=%s created=%s",
             request.user.get_username(),
             obj.pk,
             obj.title,

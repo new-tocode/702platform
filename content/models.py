@@ -1,8 +1,9 @@
-"""Public-facing club introduction, awards and member showcase models."""
+"""Public-facing club introduction, achievements and member showcase models."""
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models.functions import Lower
 from django.utils.translation import gettext_lazy as _
 
 from media.models import MediaFile
@@ -86,6 +87,132 @@ class Award(models.Model):
 
     def __str__(self):
         return f"{self.year} {self.title}"
+
+
+#: 论文类型与收录情况。标签是惰性的：后台与前台共用这一份 choices，英文前台
+#: 不能冒出中文（与 ``AWARD_TIER_CHOICES`` 同一写法）。
+PAPER_TYPE_CHOICES = (
+    ("journal", _("期刊论文")),
+    ("conference", _("会议论文")),
+)
+
+PAPER_INDEXING_CHOICES = (
+    ("sci", _("SCI / EI")),
+    ("core", _("中文核心")),
+    ("other", _("其他收录")),
+    ("none", _("未收录")),
+)
+
+
+class AcademicPaper(models.Model):
+    """社团成员公开发表的学术论文。
+
+    只登记书目信息，不收 PDF：论文原文的版权与分发口径不在平台手里，公开页给一个
+    DOI／原文链接就够了。与 ``Award`` 一样由成员在前台录入、管理员在后台维护。
+    """
+
+    title = models.CharField("论文题目", max_length=300)
+    authors = models.TextField("作者", max_length=500)
+    venue = models.CharField("期刊 / 会议", max_length=200)
+    year = models.PositiveIntegerField("年份")
+    paper_type = models.CharField(
+        "论文类型", max_length=20, choices=PAPER_TYPE_CHOICES
+    )
+    # 收录情况可不填：不是每篇论文都有索引，也不该逼人把「未收录」当成一条信息。
+    indexing = models.CharField(
+        "收录情况", max_length=20, choices=PAPER_INDEXING_CHOICES, blank=True
+    )
+    # 可以填 DOI（10.xxxx/…），也可以直接填原文地址；展示时由 external_url 统一。
+    doi = models.CharField("DOI / 原文链接", max_length=300, blank=True)
+    abstract = models.TextField("摘要", max_length=2000, blank=True)
+    created_at = models.DateTimeField("创建时间", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "学术论文"
+        verbose_name_plural = "学术论文"
+        ordering = ("-year", "-created_at", "-id")
+        indexes = [models.Index(fields=("-year", "-created_at"))]
+
+    def __str__(self):
+        return f"{self.year} {self.title}"
+
+    @property
+    def external_url(self):
+        """把 DOI 或原文地址变成一个可点的链接；空值返回空串。
+
+        只认 http(s) 与 DOI 前缀：别的写法（例如 ``javascript:``）一律落到 DOI
+        解析器上，模板因此不需要再做一层「这个链接能不能点」的判断。
+        """
+        value = (self.doi or "").strip()
+        if not value:
+            return ""
+        lowered = value.lower()
+        if lowered.startswith(("http://", "https://")):
+            return value
+        if lowered.startswith("doi:"):
+            value = value[4:].strip()
+        return f"https://doi.org/{value}"
+
+
+#: 专利类型与当前状态。区块名叫「发明专利」，但队里真正拿到的可能是实用新型
+#: 或外观设计，类型仍要如实可分。
+PATENT_TYPE_CHOICES = (
+    ("invention", _("发明专利")),
+    ("utility", _("实用新型")),
+    ("design", _("外观设计")),
+)
+
+PATENT_STATUS_CHOICES = (
+    ("granted", _("已授权")),
+    ("reviewing", _("审查中")),
+    ("applied", _("已申请")),
+)
+
+
+class Patent(models.Model):
+    """社团成员取得或正在申请中的专利。
+
+    专利号是这条记录的身份：同号只允许一条（库里有大小写不敏感的唯一约束）。
+    状态允许「审查中／已申请」——成果页展示的是社团的技术积累，不必等到授权。
+    """
+
+    title = models.CharField("专利名称", max_length=300)
+    inventors = models.TextField("发明人", max_length=500)
+    patent_number = models.CharField("专利号 / 申请号", max_length=100)
+    year = models.PositiveIntegerField("年份")
+    patent_type = models.CharField(
+        "专利类型", max_length=20, choices=PATENT_TYPE_CHOICES
+    )
+    status = models.CharField("当前状态", max_length=20, choices=PATENT_STATUS_CHOICES)
+    summary = models.TextField("简介", max_length=2000, blank=True)
+    created_at = models.DateTimeField("创建时间", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "发明专利"
+        verbose_name_plural = "发明专利"
+        ordering = ("-year", "-created_at", "-id")
+        indexes = [models.Index(fields=("-year", "-created_at"))]
+        constraints = [
+            # 大小写不敏感：``CN123`` 与 ``cn123`` 是同一个专利号。数据库这一道是
+            # 兜底，前台表单另有更早、更好读的提示（见 ``content.forms``）。
+            models.UniqueConstraint(
+                Lower("patent_number"),
+                name="content_patent_number_ci_unique",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.year} {self.title}"
+
+    def clean(self):
+        """专利号去掉空白后再交给唯一约束比较。
+
+        表单路径已经去过一次；后台与 `full_clean()` 也走这里，``CN 123`` 与
+        ``CN123`` 在保存前先变成同一个串。``save()`` 不调用 `full_clean()`，
+        `objects.create()` / `bulk_create()` 仍可绕过——那是已声明的限制。
+        """
+        super().clean()
+        self.patent_number = "".join((self.patent_number or "").split())
 
 
 class Showcase(models.Model):
