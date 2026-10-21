@@ -2204,26 +2204,6 @@ msgstr ""
 "Competition awards, academic papers, and patents make up the club's body of "
 "work. Choose a category to see the full list."
 
-#: templates/content/achievements.html:25
-msgid "成果总数"
-msgstr "Total achievements"
-
-#: templates/content/achievements.html:26
-msgid "项"
-msgstr "in total"
-
-#: templates/content/achievements.html:29
-msgid "成果分类"
-msgstr "Categories"
-
-#: templates/content/achievements.html:30
-msgid "类"
-msgstr "categories"
-
-#: templates/content/achievements.html:33
-msgid "最近年份"
-msgstr "Latest year"
-
 #: templates/content/achievements.html:41 templates/content/award_form.html:14
 #: templates/content/awards.html:4 templates/content/awards.html:19
 #: templates/content/awards.html:23 templates/includes/achievement_tabs.html:12

@@ -725,7 +725,6 @@ td .empty, .panel-body.tight .empty {
   font-family: var(--mono); font-size: 10px;
   letter-spacing: 0.18em; color: var(--blue);
 }
-.achievement-spec { margin-bottom: 22px; }
 .achievement-grid {
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 18px; margin-bottom: 20px;

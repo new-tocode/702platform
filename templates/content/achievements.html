@@ -20,21 +20,6 @@
         </div>
     </div>
 
-    <div class="spec achievement-spec reveal">
-        <div>
-            <div class="k">{% translate "成果总数" %}</div>
-            <div class="v">{{ summary.total }}<small>{% translate "项" %}</small></div>
-        </div>
-        <div>
-            <div class="k">{% translate "成果分类" %}</div>
-            <div class="v">03<small>{% translate "类" %}</small></div>
-        </div>
-        <div>
-            <div class="k">{% translate "最近年份" %}</div>
-            <div class="v mono">{% if summary.latest_year is not None %}{{ summary.latest_year }}{% else %}—{% endif %}</div>
-        </div>
-    </div>
-
     <div class="achievement-grid">
         <a class="achievement-card is-awards reveal" href="{% url 'content:awards' %}" data-index="01">
             <span class="achievement-code">AWARDS</span>

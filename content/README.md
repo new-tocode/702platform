@@ -64,8 +64,9 @@
 - **删媒体文件时两处行为不同**：挂在 `Showcase.photo` / `HomeSlide.image` 上的会被 `PROTECT` 挡下；
   挂在 `Award.certificates` / `photos` / `ContentPage.attachments` 上的不会——M2M 中间行跟着删，
   证书会**静默**从获奖页消失。
-- **聚合页是入口，不是第四份数据**：`/achievements/` 只做三张卡与一组统计（每类计数、最近年份），每张卡落到各自的清单页；
-  三类记录仍分别在 `Award` / `AcademicPaper` / `Patent` 三张表里。改聚合页不改变清单页的查询口径。
+- **聚合页是入口，不是第四份数据**：`/achievements/` 只做三张卡（计数与最近年份在卡内），
+  每张卡落到各自的清单页；三类记录仍分别在 `Award` / `AcademicPaper` / `Patent` 三张表里。
+  改聚合页不改变清单页的查询口径。
 - **`Award` 的既有行为不因聚合入口而改变**：`/awards/` 仍是原来的列表、搜索、判重与证书打包下载；
   聚合入口只是在顶栏替换了原来的直达链接，并在列表页加了一条分类切换条与面包屑。
 - **获奖与论文的写入走 `services.py`，专利不走**：前两者要判重并在咨询锁里复核，论文还要保证
@@ -82,7 +83,7 @@
 - **论文与专利没有附件字段**：不挂 `MediaFile`；论文页只把 DOI／原文地址交给 `external_url`，
   它只认 `http(s)` 与 DOI 前缀，其他 scheme 一律落到 `https://doi.org/` 解析器。
 - **聚合页统计只走一个入口**：`selectors.achievement_summary()` 各查一次聚合，模板不自己写查询；
-  三个计数与最近年份必须来自同一份 summary，否则卡片与页头会出现两套数字。
+  卡片上的计数与最近年份必须来自同一份 summary。
 
 ## 3. 已知限制 / 当前不支持
 

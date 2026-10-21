@@ -1648,7 +1648,6 @@ class AchievementHubTests(TestCase):
                 self.assertContains(response, reverse(name))
         summary = response.context["summary"]
         self.assertEqual(summary["total"], 3)
-        self.assertEqual(summary["latest_year"], 2025)
         self.assertEqual(summary["awards"]["total"], 1)
 
     def test_hub_shows_empty_state_for_each_section(self):
@@ -1660,7 +1659,6 @@ class AchievementHubTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["summary"]["total"], 0)
-        self.assertIsNone(response.context["summary"]["latest_year"])
         self.assertEqual(response.content.decode().count("暂无记录"), 3)
 
     def test_english_hub_uses_plural_neutral_units(self):

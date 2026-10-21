@@ -1,6 +1,6 @@
 """只读查询：公开的成果清单与聚合页统计。不写库，也不做权限判定。"""
 
-from django.db.models import Count, Max, Min, Q
+from django.db.models import Count, Max, Q
 
 from .models import (
     PAPER_INDEXING_CHOICES,
@@ -182,22 +182,16 @@ ACHIEVEMENT_SECTIONS = (
 
 
 def achievement_summary():
-    """聚合页要的三个数：每类各几条、最近与最早是哪一年，外加总数。
+    """聚合页每张卡要的两个数：这一类有几条、最近是哪一年，外加总数。
 
     三类各一次聚合，不把三张表拼成一个大查询：模型之间没有关系，硬拼只会让
-    模板拿到一堆需要再拆的列。
+    模板拿到一堆需要再拆的列。总数只给视图日志用，页面不另设总览统计条。
     """
     summary = {}
     total = 0
-    latest_years = []
     for key, model in ACHIEVEMENT_SECTIONS:
-        stats = model.objects.aggregate(
-            total=Count("pk"), latest=Max("year"), earliest=Min("year")
-        )
+        stats = model.objects.aggregate(total=Count("pk"), latest=Max("year"))
         summary[key] = stats
         total += stats["total"]
-        if stats["latest"] is not None:
-            latest_years.append(stats["latest"])
     summary["total"] = total
-    summary["latest_year"] = max(latest_years) if latest_years else None
     return summary
