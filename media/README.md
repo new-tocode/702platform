@@ -15,7 +15,7 @@
 | 不做 | 落在哪 |
 |---|---|
 | 「谁能上传／引用」的判定 | 各引用方自己的后台表单与权限；本 app 没有 `permissions.py` |
-| 引用关系 | 全在引用方：`content` 的四个模型与 `notices.models.Notice.attachments` |
+| 引用关系 | 全在引用方：`content` 的展示模型与 `notices.models.Notice.attachments` |
 | 取件、地址、模板 | 没有 `views.py` / `urls.py` / `templates/`：文件由 Nginx 的 `location /media/` 直出，页面自己写 `{{ media.file.url }}` |
 | 图片校验的实现 | `core.uploads.validate_image_upload`（头像、图册、帖子图共用同一份）；本 app 只出上限与视频那一半 |
 | SHA-256 的算法 | `core.hashing.FileDigestMixin`；模型只声明 `digest_field = "file"` |

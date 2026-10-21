@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% translate "添加论文" %} - {% translate "竞赛社团管理平台" %}{% endblock %}
+
+{% block content %}
+<div class="wrap">
+    <div class="pagehead">
+        <div class="path">
+            <a href="{% url 'accounts:home' %}">/</a>
+            <span>/</span>
+            <a href="{% url 'content:achievements' %}">{% translate "社团成果" %}</a>
+            <span>/</span>
+            <a href="{% url 'content:papers' %}">{% translate "学术论文" %}</a>
+            <span>/</span>
+            <span>{% translate "添加论文" %}</span>
+        </div>
+        <div class="head-row">
+            <div>
+                <h1>{% translate "添加论文" %}</h1>
+                <div class="sub">{% translate "题目、作者、期刊或会议、年份与论文类型必填；收录情况、原文链接与摘要可稍后补充。提交后立即显示在学术论文页面上。" %}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-narrow">
+        <div class="frame reveal">
+            <form method="post">
+                {% csrf_token %}
+                {{ form.non_field_errors }}
+                <div class="field">
+                    <label for="{{ form.title.id_for_label }}">{{ form.title.label }}</label>
+                    {{ form.title }}
+                    {{ form.title.errors }}
+                </div>
+                <div class="field">
+                    <label for="{{ form.authors.id_for_label }}">{{ form.authors.label }}</label>
+                    {{ form.authors }}
+                    <p class="help">{% translate "多位作者用顿号分隔；顺序照论文上的署名。" %}</p>
+                    {{ form.authors.errors }}
+                </div>
+                <div class="field">
+                    <label for="{{ form.venue.id_for_label }}">{{ form.venue.label }}</label>
+                    {{ form.venue }}
+                    <p class="help">{% translate "期刊全名，或会议的名称与届次。" %}</p>
+                    {{ form.venue.errors }}
+                </div>
+                <div class="field-row">
+                    <div class="field">
+                        <label for="{{ form.year.id_for_label }}">{{ form.year.label }}</label>
+                        {{ form.year }}
+                        {{ form.year.errors }}
+                    </div>
+                    <div class="field">
+                        <label for="{{ form.paper_type.id_for_label }}">{{ form.paper_type.label }}</label>
+                        {{ form.paper_type }}
+                        {{ form.paper_type.errors }}
+                    </div>
+                </div>
+                <div class="field">
+                    <label for="{{ form.indexing.id_for_label }}">{{ form.indexing.label }}</label>
+                    {{ form.indexing }}
+                    <p class="help">{% translate "不确定就留空，不必为了填满而选「未收录」。" %}</p>
+                    {{ form.indexing.errors }}
+                </div>
+                <div class="field">
+                    <label for="{{ form.doi.id_for_label }}">{{ form.doi.label }}</label>
+                    {{ form.doi }}
+                    <p class="help">{% translate "可填 DOI（10.xxxx/…），也可填 https:// 开头的原文地址。" %}</p>
+                    {{ form.doi.errors }}
+                </div>
+                <div class="field">
+                    <label for="{{ form.abstract.id_for_label }}">{{ form.abstract.label }}</label>
+                    {{ form.abstract }}
+                    <p class="help">{% translate "支持 Markdown。摘要会显示在论文列表里。" %}</p>
+                    {{ form.abstract.errors }}
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-primary" type="submit">{% translate "添加论文" %}</button>
+                    <a class="btn" href="{% url 'content:papers' %}">{% translate "返回学术论文" %}</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

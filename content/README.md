@@ -1,13 +1,14 @@
 # content 模块
 
-> 公开展示内容：通用公开页 `ContentPage`（含顶栏固定的 `/about/`）、历年获奖 `Award`
-> （判重、成员前台录入、证书打包下载）、成员风采 `Showcase`、首页轮播 `HomeSlide`，
-> 以及全站共用的 Markdown 渲染过滤器 `render_markdown`。
+> 公开展示内容：通用公开页 `ContentPage`（含顶栏固定的 `/about/`）、社团成果聚合页
+> `/achievements/`（把历年获奖 `Award`、学术论文 `AcademicPaper`、发明专利 `Patent`
+> 三类汇总成入口）、成员风采 `Showcase`、首页轮播 `HomeSlide`，以及全站共用的
+> Markdown 渲染过滤器 `render_markdown`。
 > **不碰媒体文件本身**——`MediaFile` 归 `media`；**不定义「谁能做什么」**——`permissions.py`
 > 只有一条委托；**不负责首页**——轮播由 `accounts.views.home` 查、在 `templates/home.html` 里渲染。
 
-**什么时候看**：改公开栏目或 `/about/`、动获奖判重与层级口径、改前台添加获奖表单与图片上限、
-改证书打包下载、调 `render_markdown` 的白名单时。
+**什么时候看**：改公开栏目或 `/about/`、动社团成果聚合页与顶栏入口、动获奖判重与层级口径、
+改前台添加获奖／论文／专利表单、改证书打包下载、调 `render_markdown` 的白名单时。
 
 ---
 
@@ -17,11 +18,13 @@
 |---|---|
 | 媒体文件本身：存储、`kind` / `caption` / `uploader` / `file_size` / `sha256`、上传校验实现、取件 | `media`（`MediaFile`）、`core.uploads.validate_image_upload`；本模块只 `MediaFile.objects.create(...)` 并把它挂上 M2M／FK |
 | 受保护件的取件与指纹响应头 | 本模块没有受保护件：配图一律进**公开**媒体库，页面直接用 `media.file.url`，没有取件视图 |
-| 「谁能添加／下载」的判据 | `discussion.permissions.is_member`（登录 + 账号启用 + 已过首次改密）；`can_manage_awards` 只是它的业务别名 |
+| 论文原文与专利证书文件 | 不收：论文只存书目信息与 DOI／原文链接，专利只存专利号与文字简介——平台不托管这两类文件 |
+| 「谁能添加／下载」的判据 | `discussion.permissions.is_member`（登录 + 账号启用 + 已过首次改密）；`can_manage_awards` 只是它的业务别名，三类成果共用 |
 | 首页轮播的查询与渲染 | `accounts.views.home` 与 `templates/home.html`；本模块只建模与后台维护 |
 | 「我的获奖」入口 | `accounts`：个人信息页链到 `content:awards?q=<姓名>`，匹配的是 `Award.winners` 的自由文本 |
-| 顶部导航的高亮 | `core/context_processors.py` 把 `content:*` 的 URL 名映射成 `nav_section` |
-| 后台删除的审计 | 不做：四个 `ModelAdmin` 只覆写 `save_model`，删行不留痕 |
+| 顶部导航的高亮 | `core/context_processors.py` 把成果相关 URL 名统一映射成 `achievements` |
+| 聚合页的统计口径 | `content/selectors.achievement_summary`；模板只读它给的统计，不自己查库 |
+| 后台删除的审计 | 不做：各 `ModelAdmin` 只覆写 `save_model`，删行不留痕 |
 
 ## 2. 必须成立的断言
 
@@ -44,7 +47,7 @@
 - **后台不判重是刻意留的后门**：`AwardAdmin` 不调用 `find_similar_award`，也不引 `similarity`。
   「同一层级只允许一条」的例外（换个赛道之类）正是从这里放行。任何「顺手给后台也加上判重」的改动
   都会关掉这条唯一的例外通道。
-- **判重只有代码一条路，数据库没有唯一约束**：身份串不落库、没有 `UniqueConstraint`；
+- **获奖判重只有代码一条路，数据库没有唯一约束**：身份串不落库、没有 `UniqueConstraint`；
   `create_award` 之外（后台保存、脚本、`QuerySet.update`）都能造出重复记录。
 - **层级规则的唯一真相源是 `Award.tier`；改 `tier_rules` 要连带检查的调用点**：
   判重比较前的折叠（`similarity.fold_tier_terms` / `normalize`）、迁移 `0006` 从自由文本回填 `tier`
@@ -61,15 +64,45 @@
 - **删媒体文件时两处行为不同**：挂在 `Showcase.photo` / `HomeSlide.image` 上的会被 `PROTECT` 挡下；
   挂在 `Award.certificates` / `photos` / `ContentPage.attachments` 上的不会——M2M 中间行跟着删，
   证书会**静默**从获奖页消失。
+- **聚合页是入口，不是第四份数据**：`/achievements/` 只做三张卡与一组统计（每类计数、最近年份），每张卡落到各自的清单页；
+  三类记录仍分别在 `Award` / `AcademicPaper` / `Patent` 三张表里。改聚合页不改变清单页的查询口径。
+- **`Award` 的既有行为不因聚合入口而改变**：`/awards/` 仍是原来的列表、搜索、判重与证书打包下载；
+  聚合入口只是在顶栏替换了原来的直达链接，并在列表页加了一条分类切换条与面包屑。
+- **获奖与论文的写入走 `services.py`，专利不走**：前两者要判重并在咨询锁里复核，论文还要保证
+  「查重 + 写入」在同一个事务里；专利只有一行记录 + 一条审计，视图用 `transaction.atomic()` 包住即可。
+  三处的服务边界不同是刻意的，不要为「统一」把简单写入包一层。
+- **三类成果共用写入门槛**：`can_manage_awards`（名字沿用获奖时代）对三类都返回 `is_member`；
+  模板里的按钮只是展示，三个创建视图各自 `require` 二次校验。
+- **论文去重是「整串相同」，不是相似度**：同一年、归一化后题目与作者都相同才拦。表单先查一次
+  给即时提示，`services.create_paper` 在咨询锁里再查一次；数据库上没有唯一约束，绕过这两处的
+  ORM／后台写入仍可重复。
+- **专利号在数据库里大小写不敏感唯一**：`Patent.Meta.constraints` 用 `Lower("patent_number")` 兜底；
+  前台表单与模型 `clean()` 先去掉空白，表单另给一句可读的重复提示。这套归一化只管
+  大小写与空白——连字符等格式变体、直接走 ORM 的写入仍可能重复。
+- **论文与专利没有附件字段**：不挂 `MediaFile`；论文页只把 DOI／原文地址交给 `external_url`，
+  它只认 `http(s)` 与 DOI 前缀，其他 scheme 一律落到 `https://doi.org/` 解析器。
+- **聚合页统计只走一个入口**：`selectors.achievement_summary()` 各查一次聚合，模板不自己写查询；
+  三个计数与最近年份必须来自同一份 summary，否则卡片与页头会出现两套数字。
 
 ## 3. 已知限制 / 当前不支持
 
-- **判重没有数据库约束**：不变量全靠 `create_award` 一条路把守。发现历史重复用
+- **论文与专利只收文字**：不收 PDF、专利证书扫描件；页面没有文件可看，论文只能跳 DOI／原文地址。
+  真要托管原文，先解决版权与分发口径，并给它单独的受保护件取件路径，不要直接塞进公开媒体库。
+- **论文去重只有代码一条路**：前台走 `PaperForm` + `create_paper`，后台没有同样的查重；
+  `AcademicPaper.objects.create()`、后台批量导入都能绕过。比较还是「同一年里逐条扫」，
+  记录多时是 O(同一年记录数)。
+- **专利号只做大小写与空白归一**：数据库约束按 `Lower` 比，表单与模型 `clean()` 会去掉空白；
+  `CN 2024…` 与 `CN-2024-…` 这类格式差异、以及绕过 `full_clean()` 的 ORM 写入仍会各存一条，
+  需要人工在后台合并。
+- **聚合页的统计不缓存**：每次打开都三次 `COUNT/MAX/MIN`；记录量大了再考虑缓存，别把计数做成
+  容易过期的存储字段。
+- **论文/专利没有前台编辑与删除**：成员加错了要管理员在后台处理，与获奖同一条限制。
+- **获奖判重没有数据库约束**：不变量全靠 `create_award` 一条路把守。发现历史重复用
   `manage.py report_duplicate_awards`（只读，按比判重更严的口径分组——靠相似度才拦下的错别字那一档
   不报），合并要人判断，命令不替人做决定。
 - **判重不带编辑场景**：`find_similar_award` 有 `exclude_pk`，但生产代码里没有调用方（只有测试用）；
   平台也没有前台编辑入口——成员加错了要管理员在后台处理。
-- **后台删除不写审计**：`admin.py` 只覆写 `save_model`，删一条获奖或页面不留审计行。
+- **后台删除不写审计**：`admin.py` 只覆写 `save_model`，删一条成果或页面不留审计行。
 - **日志没有监控与告警**：logger 已经配好、`logger.warning` 落 `logs/django.log`，
   但没人盯着这个文件——出问题仍然要有人主动去翻。
 - **`certificates` 限图片只在校验层**：`limit_choices_to` 只约束后台表单的可选项；用 ORM 直接
@@ -101,3 +134,12 @@
   获奖人是「我的获奖」按姓名搜索所依附的那一项。`level`（证书上的写法，如「东北赛区一等奖」）
   与 `tier` 分开存：「省一等奖」与「东北赛区一等奖」是同一层，措辞差别不算差别。
 - **已录入的重复不会自己消失**：命令按比判重更严的口径列出重复组，人工在后台留下一条、删掉其余。
+- **为什么成果要一个聚合入口**：顶栏位置有限，「历年获奖」原本只是成果的一类，单独占一格会让
+  「论文」「专利」无处安放；聚合页给三类各一张卡，清单页仍按类型分开——三张表的字段差异太大，
+  硬并成一张表只会塞进大量空列，清单模板也要按类型分支。
+- **为什么论文不收 PDF**：论文原文的版权与分发口径不在平台手里；书目信息 + DOI／原文链接已经足够
+  回答「社团发过什么」。专利同理，只登记专利号与状态，不托管证书扫描件。
+- **为什么专利号唯一而论文题目不唯一**：专利号是官方标识，同一个号就是同一项专利；论文题目可能
+  在不同年份、不同作者组合下重复出现，所以论文只做「同一年 + 题目 + 作者」的表单级查重。
+- **为什么 `can_manage_awards` 不改名**：它现在管三类成果，但改名会扩散到所有调用点与测试；
+  函数体只有一条 `is_member`，名字的历史包袱记在这里比一次纯改名更省事。

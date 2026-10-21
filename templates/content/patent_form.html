@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% translate "添加专利" %} - {% translate "竞赛社团管理平台" %}{% endblock %}
+
+{% block content %}
+<div class="wrap">
+    <div class="pagehead">
+        <div class="path">
+            <a href="{% url 'accounts:home' %}">/</a>
+            <span>/</span>
+            <a href="{% url 'content:achievements' %}">{% translate "社团成果" %}</a>
+            <span>/</span>
+            <a href="{% url 'content:patents' %}">{% translate "发明专利" %}</a>
+            <span>/</span>
+            <span>{% translate "添加专利" %}</span>
+        </div>
+        <div class="head-row">
+            <div>
+                <h1>{% translate "添加专利" %}</h1>
+                <div class="sub">{% translate "名称、发明人、专利号、年份、类型与当前状态必填；简介可稍后补充。提交后立即显示在发明专利页面上。" %}</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-narrow">
+        <div class="frame reveal">
+            <form method="post">
+                {% csrf_token %}
+                {{ form.non_field_errors }}
+                <div class="field">
+                    <label for="{{ form.title.id_for_label }}">{{ form.title.label }}</label>
+                    {{ form.title }}
+                    {{ form.title.errors }}
+                </div>
+                <div class="field">
+                    <label for="{{ form.inventors.id_for_label }}">{{ form.inventors.label }}</label>
+                    {{ form.inventors }}
+                    <p class="help">{% translate "多位发明人用顿号分隔；顺序照专利文件上的署名。" %}</p>
+                    {{ form.inventors.errors }}
+                </div>
+                <div class="field">
+                    <label for="{{ form.patent_number.id_for_label }}">{{ form.patent_number.label }}</label>
+                    {{ form.patent_number }}
+                    <p class="help">{% translate "已授权的填专利号，审查中的填申请号；空格会在保存时去掉。" %}</p>
+                    {{ form.patent_number.errors }}
+                </div>
+                <div class="field-row">
+                    <div class="field">
+                        <label for="{{ form.year.id_for_label }}">{{ form.year.label }}</label>
+                        {{ form.year }}
+                        {{ form.year.errors }}
+                    </div>
+                    <div class="field">
+                        <label for="{{ form.patent_type.id_for_label }}">{{ form.patent_type.label }}</label>
+                        {{ form.patent_type }}
+                        {{ form.patent_type.errors }}
+                    </div>
+                </div>
+                <div class="field">
+                    <label for="{{ form.status.id_for_label }}">{{ form.status.label }}</label>
+                    {{ form.status }}
+                    {{ form.status.errors }}
+                </div>
+                <div class="field">
+                    <label for="{{ form.summary.id_for_label }}">{{ form.summary.label }}</label>
+                    {{ form.summary }}
+                    <p class="help">{% translate "支持 Markdown。可写技术方向、应用场景或授权进展。" %}</p>
+                    {{ form.summary.errors }}
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-primary" type="submit">{% translate "添加专利" %}</button>
+                    <a class="btn" href="{% url 'content:patents' %}">{% translate "返回发明专利" %}</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

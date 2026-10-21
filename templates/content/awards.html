@@ -14,6 +14,8 @@
         <div class="path">
             <a href="{% url 'accounts:home' %}">/</a>
             <span>/</span>
+            <a href="{% url 'content:achievements' %}">{% translate "社团成果" %}</a>
+            <span>/</span>
             <span>{% translate "历年获奖" %}</span>
         </div>
         <div class="head-row">
@@ -28,6 +30,8 @@
             {% endif %}
         </div>
     </div>
+
+    {% include "includes/achievement_tabs.html" with active="awards" %}
 
     {# 搜索与每页条数写在同一个 GET 表单里：提交搜索时把 per_page 一并带上， #}
     {# 否则搜一次就被打回默认条数。 #}
