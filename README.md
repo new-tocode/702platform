@@ -38,7 +38,7 @@ source env.local.sh          # PostgreSQL 连接配置；不加载会连接失�
 | **为什么当初这么定**（架构级决策） | [`更新维护/ADR.md`](docs/更新维护/ADR.md) |
 | 名词、缩写、单位口径 | [`术语表.md`](docs/术语表.md) |
 | 用了什么、什么许可、分发义务 | [`更新维护/许可.md`](docs/更新维护/许可.md) |
-| AI 的工作约定 | [`CLAUDE.md`](CLAUDE.md) |
+| AI 的工作约定 | [`AGENTS.md`](AGENTS.md) |
 | 原型当初怎么设计的（**历史资料，非现状**） | [`原型设计/`](docs/原型设计/README.md) |
 
 部署工件在 [`deploy/`](deploy/)：`install.sh`、`deploy.sh`、`backup.sh`、systemd／Nginx 模板、`env.template`。

@@ -56,7 +56,7 @@ class AwardForm(forms.ModelForm):
         model = Award
         fields = ("title", "competition", "year", "tier", "level", "winners", "advisor")
         # 标签必须在这里点名：ModelForm 默认拿模型的 verbose_name 当标签，而那些
-        # 中文是给后台看的、不进 .po（见 CLAUDE.md §4 的双语范围），照搬过来
+        # 中文是给后台看的、不进 .po（见 AGENTS.md §4 的双语范围），照搬过来
         # 就是英文表单上冒出一片中文标签。`tier` 的选项标签不在这里——它来自模型上
         # 那份惰性 choices（见 models.AWARD_TIER_CHOICES），与标签同样是可译的。
         labels = {
