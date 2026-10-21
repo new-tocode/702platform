@@ -124,13 +124,17 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 22px 0; }
   display: flex; flex: 1 1 auto; min-width: 0; gap: 24px; font-size: 13px;
   /* 导航项比中文长一截（英文尤其明显）。让它占满剩余宽度、超宽时横向滚动，
      而不是把「About the Club」「Club Space」折成两行——折行会把顶栏撑高。 */
-  overflow-x: auto; overscroll-behavior-x: contain;
+  /* 只允许横向滚动。overflow-x:auto 会把未写的 overflow-y 计算成 auto，
+     导航内容比容器高出一两像素时就会冒出一条竖向滚动条。 */
+  overflow-x: auto; overflow-y: hidden; overscroll-behavior-x: contain;
   white-space: nowrap; scrollbar-width: thin;
+  /* 给焦点框留出上下各 2px；否则 overflow 会把 outline 的上下边裁掉。 */
+  padding: 2px 0;
 }
 .nav a {
   flex: none;
   color: var(--ink-2); text-decoration: none; padding: 6px 0;
-  border-bottom: 2px solid transparent; margin-bottom: -2px;
+  border-bottom: 2px solid transparent;
   transition: color 0.15s, border-color 0.15s;
 }
 .nav a:hover { color: var(--blue); }
