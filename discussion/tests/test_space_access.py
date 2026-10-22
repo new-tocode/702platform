@@ -94,3 +94,34 @@ class SpaceAccessViewTests(DiscussionViewTestCase):
             username_search,
             reverse("accounts:member_profile", args=(self.other_member.pk,)),
         )
+
+    def test_member_directory_shows_grade_mark_from_student_id(self):
+        self.member.profile.full_name = "Alex Chen"
+        self.member.profile.student_id = "20230001"
+        self.member.profile.save(update_fields=["full_name", "student_id"])
+        self.other_member.profile.full_name = "Sam Lee"
+        self.other_member.profile.student_id = "2021"
+        self.other_member.profile.save(update_fields=["full_name", "student_id"])
+        self.staff.profile.student_id = "STUDENT-SECRET-91"
+        self.staff.profile.save(update_fields=["student_id"])
+        self.superuser.profile.student_id = "２０２３０００１"
+        self.superuser.profile.save(update_fields=["student_id"])
+        self.client.force_login(self.member)
+
+        response = self.client.get(reverse("discussion:space"))
+
+        directory = response.content.decode().split("discussion-member-list")[1]
+        directory = directory.split("discussion-main")[0]
+        self.assertRegex(
+            directory,
+            r'Alex Chen</a>\s*<span class="discussion-member-grade">23级</span>',
+        )
+        self.assertRegex(
+            directory,
+            r'Sam Lee</a>\s*<span class="discussion-member-grade">21级</span>',
+        )
+        # 非数字 / 非 ASCII 学号不显示标志，学生号本身也不进模板。
+        self.assertEqual(directory.count('class="discussion-member-grade"'), 2)
+        self.assertNotIn("20230001", directory)
+        self.assertNotIn("STUDENT-SECRET-91", directory)
+        self.assertNotIn("２０２３０００１", directory)

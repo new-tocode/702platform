@@ -847,11 +847,19 @@ td .empty, .panel-body.tight .empty {
   padding: 7px 2px; border-bottom: 1px solid var(--line);
 }
 .discussion-avatar { width: 34px; height: 34px; flex: none; font-size: 14px; }
+.discussion-member-info {
+  display: flex; flex: 1; align-items: center; gap: 6px; min-width: 0;
+}
 .discussion-member-name {
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   color: var(--ink-2); font-size: 12px; text-decoration: none;
 }
 .discussion-member-name:hover { color: var(--blue); text-decoration: underline; }
+.discussion-member-grade {
+  flex: none; padding: 0 4px; border: 1px solid var(--line-2);
+  background: var(--surface-2); color: var(--ink-3);
+  font-family: var(--mono); font-size: 10px; line-height: 15px; white-space: nowrap;
+}
 
 .discussion-board-selector {
   display: flex; align-items: center; gap: 12px; width: 100%; min-width: 0;

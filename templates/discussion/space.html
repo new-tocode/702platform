@@ -45,7 +45,12 @@
                             {% else %}
                                 <span class="avatar avatar-blank discussion-avatar" aria-hidden="true">{% if member.profile.full_name %}{{ member.profile.full_name|first|upper }}{% else %}{{ member.username|first|upper }}{% endif %}</span>
                             {% endif %}
-                            <a class="discussion-member-name" href="{% url 'accounts:member_profile' member.pk %}">{% if member.profile.full_name %}{{ member.profile.full_name }}{% else %}{{ member.username }}{% endif %}</a>
+                            <div class="discussion-member-info">
+                                <a class="discussion-member-name" href="{% url 'accounts:member_profile' member.pk %}">{% if member.profile.full_name %}{{ member.profile.full_name }}{% else %}{{ member.username }}{% endif %}</a>
+                                {% with grade=member.profile.grade_mark %}
+                                    {% if grade %}<span class="discussion-member-grade">{% blocktranslate %}{{ grade }}级{% endblocktranslate %}</span>{% endif %}
+                                {% endwith %}
+                            </div>
                         </div>
                     {% empty %}
                         <div class="empty">{% translate "没有找到匹配的成员。" %}</div>

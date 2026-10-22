@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 702platform\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-21 22:30+0800\n"
+"POT-Creation-Date: 2026-10-22 12:27+0800\n"
 "PO-Revision-Date: 2026-09-19 18:39\n"
 "Last-Translator: 702platform\n"
 "Language-Team: 702platform\n"
@@ -68,7 +68,7 @@ msgstr "Avatar"
 msgid "请选择要上传的图片。"
 msgstr "Please choose an image to upload."
 
-#: accounts/forms.py:181 accounts/models.py:180
+#: accounts/forms.py:181 accounts/models.py:191
 msgid "图像"
 msgstr "Image"
 
@@ -136,19 +136,19 @@ msgstr "Bio"
 msgid "最多 1000 字。"
 msgstr "Up to 1000 characters."
 
-#: accounts/models.py:168
+#: accounts/models.py:179
 msgid "普通"
 msgstr "Normal"
 
-#: accounts/models.py:169
+#: accounts/models.py:180
 msgid "大图"
 msgstr "Large"
 
-#: accounts/models.py:170
+#: accounts/models.py:181
 msgid "整行"
 msgstr "Full width"
 
-#: accounts/models.py:187
+#: accounts/models.py:198
 msgid "排布"
 msgstr "Layout"
 
@@ -403,7 +403,7 @@ msgstr "Award name"
 msgid "赛事名称"
 msgstr "Competition"
 
-#: content/forms.py:87 content/forms.py:152 content/forms.py:209
+#: content/forms.py:87 content/forms.py:152 content/forms.py:224
 msgid "年份"
 msgstr "Year"
 
@@ -458,35 +458,35 @@ msgstr "DOI / Full text"
 msgid "摘要"
 msgstr "Abstract"
 
-#: content/forms.py:186
+#: content/forms.py:188 content/views.py:353
 msgid "已经登记过同一篇论文（题目、作者与年份相同）。"
 msgstr "This paper is already listed with the same title, authors, and year."
 
-#: content/forms.py:206
+#: content/forms.py:221
 msgid "专利名称"
 msgstr "Patent title"
 
-#: content/forms.py:207 templates/content/patents.html:66
+#: content/forms.py:222 templates/content/patents.html:66
 msgid "发明人"
 msgstr "Inventors"
 
-#: content/forms.py:208 templates/content/patents.html:67
+#: content/forms.py:223 templates/content/patents.html:67
 msgid "专利号 / 申请号"
 msgstr "Patent / Application No."
 
-#: content/forms.py:210
+#: content/forms.py:225
 msgid "专利类型"
 msgstr "Patent type"
 
-#: content/forms.py:211
+#: content/forms.py:226
 msgid "当前状态"
 msgstr "Status"
 
-#: content/forms.py:212 templates/content/patents.html:70
+#: content/forms.py:227 templates/content/patents.html:70
 msgid "简介"
 msgstr "Summary"
 
-#: content/forms.py:231 content/views.py:401
+#: content/forms.py:246 content/views.py:397
 msgid "这个专利号已经登记过了。"
 msgstr "This patent number is already registered."
 
@@ -526,7 +526,7 @@ msgstr "Other indexing"
 msgid "未收录"
 msgstr "Not indexed"
 
-#: content/models.py:160 templates/content/achievements.html:75
+#: content/models.py:160 templates/content/achievements.html:60
 #: templates/content/patent_form.html:14 templates/content/patents.html:4
 #: templates/content/patents.html:14 templates/content/patents.html:18
 #: templates/includes/achievement_tabs.html:22
@@ -577,28 +577,28 @@ msgstr ""
 "and winners, only one record is needed per tier; if it really is a different "
 "one, ask an administrator to add it in the admin site."
 
-#: content/views.py:360
+#: content/views.py:356
 msgid "论文记录已添加。"
 msgstr "Paper added."
 
-#: content/views.py:410
+#: content/views.py:406
 msgid "专利记录已添加。"
 msgstr "Patent added."
 
-#: content/views.py:444
+#: content/views.py:440
 msgid "请先勾选要下载的获奖记录。"
 msgstr "Select the awards you want to download first."
 
-#: content/views.py:449
+#: content/views.py:445
 #, python-format
 msgid "一次最多打包 %(limit)s 条记录，请分批下载。"
 msgstr "At most %(limit)s records per archive — please download in batches."
 
-#: content/views.py:458
+#: content/views.py:454
 msgid "所选的记录里还没有上传获奖证书。"
 msgstr "The selected records have no award certificates yet."
 
-#: content/views.py:473
+#: content/views.py:469
 #, python-format
 msgid "有 %(count)s 个证书文件已不在服务器上，没有打进压缩包。"
 msgstr ""
@@ -668,7 +668,7 @@ msgstr "A board with that name already exists."
 
 #: discussion/forms.py:44 discussion/models.py:89 discussion/models.py:100
 #: discussion/models.py:101 discussion/validators.py:54
-#: templates/discussion/space.html:132
+#: templates/discussion/space.html:137
 msgid "帖子图片"
 msgstr "Post image"
 
@@ -697,7 +697,7 @@ msgid "每篇帖子最多保留 3 张图片。"
 msgstr "A post can contain at most 3 images."
 
 #: discussion/forms.py:100 notices/selectors.py:148 notices/selectors.py:317
-#: templates/discussion/space.html:156 templates/discussion/space.html:157
+#: templates/discussion/space.html:161 templates/discussion/space.html:162
 msgid "评论"
 msgstr "Comment"
 
@@ -721,7 +721,7 @@ msgstr "Created at"
 msgid "社团空间板块"
 msgstr "Discussion board"
 
-#: discussion/models.py:44 templates/discussion/space.html:59
+#: discussion/models.py:44 templates/discussion/space.html:64
 msgid "板块"
 msgstr "Board"
 
@@ -734,8 +734,8 @@ msgstr "Author"
 msgid "标题"
 msgstr "Title"
 
-#: discussion/models.py:54 templates/discussion/space.html:113
-#: templates/discussion/space.html:151 templates/home.html:54
+#: discussion/models.py:54 templates/discussion/space.html:118
+#: templates/discussion/space.html:156 templates/home.html:54
 #: templates/notices/list.html:36 templates/notices/message_list.html:52
 msgid "置顶"
 msgstr "Pinned"
@@ -791,7 +791,7 @@ msgstr ""
 "Posting too frequently: at most %(limit)d per minute (posts and comments "
 "combined). Please try again shortly."
 
-#: discussion/services.py:190 templates/discussion/space.html:85
+#: discussion/services.py:190 templates/discussion/space.html:90
 msgid "请先删除板块中的所有帖子，再删除板块。"
 msgstr "Delete all posts in this board before deleting the board."
 
@@ -826,7 +826,7 @@ msgid "帖子已发布。"
 msgstr "Post published."
 
 #: discussion/views.py:135 discussion/views.py:136
-#: templates/discussion/space.html:82
+#: templates/discussion/space.html:87
 msgid "发布帖子"
 msgstr "Publish post"
 
@@ -1984,7 +1984,7 @@ msgstr "Move up"
 msgid "下移"
 msgstr "Move down"
 
-#: templates/accounts/profile.html:181 templates/discussion/space.html:166
+#: templates/accounts/profile.html:181 templates/discussion/space.html:171
 msgid "删除"
 msgstr "Delete"
 
@@ -2204,83 +2204,83 @@ msgstr ""
 "Competition awards, academic papers, and patents make up the club's body of "
 "work. Choose a category to see the full list."
 
-#: templates/content/achievements.html:41 templates/content/award_form.html:14
+#: templates/content/achievements.html:26 templates/content/award_form.html:14
 #: templates/content/awards.html:4 templates/content/awards.html:19
 #: templates/content/awards.html:23 templates/includes/achievement_tabs.html:12
 msgid "历年获奖"
 msgstr "Awards"
 
-#: templates/content/achievements.html:42
+#: templates/content/achievements.html:27
 msgid "从校级到国家级的竞赛奖项，按年份与层级归档。"
 msgstr ""
 "Competition awards from school to national level, archived by year and tier."
 
-#: templates/content/achievements.html:44
+#: templates/content/achievements.html:29
 msgid "项记录"
 msgstr "in total"
 
-#: templates/content/achievements.html:47
-#: templates/content/achievements.html:64
-#: templates/content/achievements.html:81
+#: templates/content/achievements.html:32
+#: templates/content/achievements.html:49
+#: templates/content/achievements.html:66
 #, python-format
 msgid "最近 %(year)s"
 msgstr "Latest %(year)s"
 
-#: templates/content/achievements.html:49
-#: templates/content/achievements.html:66
-#: templates/content/achievements.html:83
+#: templates/content/achievements.html:34
+#: templates/content/achievements.html:51
+#: templates/content/achievements.html:68
 msgid "暂无记录"
 msgstr "No records yet"
 
-#: templates/content/achievements.html:53
-#: templates/content/achievements.html:70
-#: templates/content/achievements.html:87
+#: templates/content/achievements.html:38
+#: templates/content/achievements.html:55
+#: templates/content/achievements.html:72
 msgid "查看成果"
 msgstr "View achievements"
 
-#: templates/content/achievements.html:58 templates/content/paper_form.html:14
+#: templates/content/achievements.html:43 templates/content/paper_form.html:14
 #: templates/content/papers.html:4 templates/content/papers.html:14
 #: templates/content/papers.html:18 templates/includes/achievement_tabs.html:17
 msgid "学术论文"
 msgstr "Academic Papers"
 
-#: templates/content/achievements.html:59
+#: templates/content/achievements.html:44
 msgid "成员在期刊与会议上发表的论文，含收录情况与原文入口。"
 msgstr ""
 "Papers published by members in journals and conferences, with indexing and "
 "full-text links."
 
-#: templates/content/achievements.html:61
+#: templates/content/achievements.html:46
 msgid "篇论文"
 msgstr "in total"
 
-#: templates/content/achievements.html:76
+#: templates/content/achievements.html:61
 msgid "已授权与申请中的专利，记录发明人、专利号与当前状态。"
 msgstr ""
 "Granted and filed patents, with inventors, patent numbers, and current "
 "status."
 
-#: templates/content/achievements.html:78
+#: templates/content/achievements.html:63
 msgid "项专利"
 msgstr "in total"
 
-#: templates/content/achievements.html:94
+#: templates/content/achievements.html:79
 msgid "成果由社团成员共同维护；每个分类都可以单独进入，查看完整清单。"
 msgstr ""
 "Achievements are maintained by club members. Each category opens its own "
 "full list."
 
-#: templates/content/achievements.html:98
+#: templates/content/achievements.html:83
 msgid "添加获奖"
 msgstr "Add award"
 
-#: templates/content/achievements.html:99 templates/content/paper_form.html:4
+#: templates/content/achievements.html:84 templates/content/paper_form.html:4
 #: templates/content/paper_form.html:16 templates/content/paper_form.html:20
 #: templates/content/paper_form.html:79 templates/content/papers.html:23
 msgid "添加论文"
 msgstr "Add paper"
 
-#: templates/content/achievements.html:100 templates/content/patent_form.html:4
+#: templates/content/achievements.html:85 templates/content/patent_form.html:4
 #: templates/content/patent_form.html:16 templates/content/patent_form.html:20
 #: templates/content/patent_form.html:72 templates/content/patents.html:23
 msgid "添加专利"
@@ -2404,17 +2404,17 @@ msgid "获奖记录分页"
 msgstr "Award pages"
 
 #: templates/content/awards.html:127 templates/content/papers.html:94
-#: templates/content/patents.html:86 templates/discussion/space.html:192
+#: templates/content/patents.html:86 templates/discussion/space.html:197
 msgid "上一页"
 msgstr "Previous page"
 
 #: templates/content/awards.html:139 templates/content/papers.html:106
-#: templates/content/patents.html:98 templates/discussion/space.html:196
+#: templates/content/patents.html:98 templates/discussion/space.html:201
 msgid "下一页"
 msgstr "Next page"
 
 #: templates/content/awards.html:143 templates/content/papers.html:110
-#: templates/content/patents.html:102 templates/discussion/space.html:194
+#: templates/content/patents.html:102 templates/discussion/space.html:199
 #, python-format
 msgid "第 %(current)s / %(total)s 页"
 msgstr "Page %(current)s of %(total)s"
@@ -2596,101 +2596,106 @@ msgid "搜索姓名"
 msgstr "Search names"
 
 #: templates/discussion/space.html:51
+#, python-format
+msgid "%(grade)s级"
+msgstr "Cohort %(grade)s"
+
+#: templates/discussion/space.html:56
 msgid "没有找到匹配的成员。"
 msgstr "No matching members found."
 
-#: templates/discussion/space.html:57
+#: templates/discussion/space.html:62
 msgid "社团空间内容"
 msgstr "Club Space content"
 
-#: templates/discussion/space.html:60
+#: templates/discussion/space.html:65
 msgid "选择板块"
 msgstr "Choose a board"
 
-#: templates/discussion/space.html:67
+#: templates/discussion/space.html:72
 msgid "还没有板块。"
 msgstr "No boards yet."
 
-#: templates/discussion/space.html:78
+#: templates/discussion/space.html:83
 #, python-format
 msgid "共 1 条帖子"
 msgid_plural "共 %(counter)s 条帖子"
 msgstr[0] "1 post"
 msgstr[1] "%(counter)s posts"
 
-#: templates/discussion/space.html:87
+#: templates/discussion/space.html:92
 msgid "确定删除这个空板块吗？"
 msgstr "Delete this empty board?"
 
-#: templates/discussion/space.html:89
+#: templates/discussion/space.html:94
 msgid "删除空板块"
 msgstr "Delete empty board"
 
-#: templates/discussion/space.html:103
+#: templates/discussion/space.html:108
 msgid "添加板块"
 msgstr "Add board"
 
-#: templates/discussion/space.html:121
+#: templates/discussion/space.html:126
 msgid "发布于"
 msgstr "Posted"
 
-#: templates/discussion/space.html:126
+#: templates/discussion/space.html:131
 msgid "展开全文"
 msgstr "Show more"
 
-#: templates/discussion/space.html:139
+#: templates/discussion/space.html:144
 msgid "编辑"
 msgstr "Edit"
 
-#: templates/discussion/space.html:142
+#: templates/discussion/space.html:147
 msgid "确定删除这篇帖子及其评论吗？"
 msgstr "Delete this post and its comments?"
 
-#: templates/discussion/space.html:144
+#: templates/discussion/space.html:149
 msgid "删除帖子"
 msgstr "Delete post"
 
-#: templates/discussion/space.html:151
+#: templates/discussion/space.html:156
 msgid "取消置顶"
 msgstr "Unpin"
 
-#: templates/discussion/space.html:164
+#: templates/discussion/space.html:169
 msgid "确定删除这条评论吗？"
 msgstr "Delete this comment?"
 
-#: templates/discussion/space.html:173
+#: templates/discussion/space.html:178
 msgid "还没有评论。"
 msgstr "No comments yet."
 
-#: templates/discussion/space.html:177
+#: templates/discussion/space.html:182
 msgid "写下评论"
 msgstr "Write a comment"
 
-#: templates/discussion/space.html:178
+#: templates/discussion/space.html:183
 msgid "写下评论…"
 msgstr "Write a comment…"
 
-#: templates/discussion/space.html:179
+#: templates/discussion/space.html:184
 msgid "发表评论"
 msgstr "Post comment"
 
-#: templates/discussion/space.html:185
+#: templates/discussion/space.html:190
 msgid "这个板块还没有帖子，发布第一篇吧。"
 msgstr "No posts in this board yet. Start the conversation with the first one."
 
-#: templates/discussion/space.html:190
+#: templates/discussion/space.html:195
 msgid "帖子分页"
 msgstr "Post pagination"
 
-#: templates/discussion/space.html:201
+#: templates/discussion/space.html:206
 msgid "社团空间还没有板块。"
 msgstr "There are no boards in the club space yet."
 
-#: templates/discussion/space.html:205
+#: templates/discussion/space.html:210
 msgid "创建第一个板块"
 msgstr "Create the first board"
 
-#: templates/discussion/space.html:210
+#: templates/discussion/space.html:215
 msgid "创建板块"
 msgstr "Create a board"
 

@@ -50,6 +50,35 @@ class AccountModelAcceptanceTests(TestCase):
         self.assertNotIn("first_name", change_fields)
         self.assertNotIn("last_name", change_fields)
 
+    def test_grade_mark_comes_from_the_first_four_student_id_digits(self):
+        user = User.objects.create_user(
+            username="member-grade",
+            password="Initial-Password-123!",
+        )
+        profile = user.profile
+
+        for student_id, expected in (
+            ("20230001", "23"),
+            ("2021", "21"),
+            ("2023123456", "23"),
+            (" 20230001 ", "23"),
+            ("2023\t0001", "23"),
+            ("", ""),
+            (None, ""),
+            ("STUDENT-SECRET-91", ""),
+            ("202", ""),
+            # 全角/上标/阿拉伯-印度数字不是 ASCII 学号，不生成标志。
+            ("２０２３０００１", ""),
+            ("²²²²²", ""),
+            ("٠٠٠٠١", ""),
+            # 派生侧不猜年份范围：非年份前缀照规则出标志，属录入数据问题。
+            ("0000", "00"),
+            ("9999", "99"),
+        ):
+            with self.subTest(student_id=student_id):
+                profile.student_id = student_id
+                self.assertEqual(profile.grade_mark, expected)
+
 
 class MemberAuthenticationAcceptanceTests(TestCase):
     def setUp(self):

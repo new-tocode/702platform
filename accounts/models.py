@@ -145,6 +145,20 @@ class Profile(FileDigestMixin, models.Model):
     def __str__(self):
         return f"{self.user.get_username()} 的个人资料"
 
+    @property
+    def grade_mark(self):
+        """年级标志里的两位年份：学号前 4 位是入学年份，2023 → ``"23"``。
+
+        学号为空、前 4 位不是 ASCII 数字时返回空串（界面据此不显示标志）。
+        这里只取年份，完整学号不从这里出去；「级」这个字属于界面文案，留在
+        模板里翻译。
+        """
+        student_id = (self.student_id or "").strip()
+        prefix = student_id[:4]
+        if len(prefix) == 4 and prefix.isascii() and prefix.isdigit():
+            return prefix[2:]
+        return ""
+
 
 #: 一个人的图册合计能占多少空间。单张的上限在 ``accounts.validators``；
 #: 这条要跨行求和，落在 ``accounts.services`` 的上传命令里把关。
