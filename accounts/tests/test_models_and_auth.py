@@ -50,6 +50,26 @@ class AccountModelAcceptanceTests(TestCase):
         self.assertNotIn("first_name", change_fields)
         self.assertNotIn("last_name", change_fields)
 
+    def test_grade_mark_comes_from_the_first_four_student_id_digits(self):
+        user = User.objects.create_user(
+            username="member-grade",
+            password="Initial-Password-123!",
+        )
+        profile = user.profile
+
+        for student_id, expected in (
+            ("20230001", "23"),
+            ("2021", "21"),
+            ("2023123456", "23"),
+            ("", ""),
+            (None, ""),
+            ("STUDENT-SECRET-91", ""),
+            ("202", ""),
+        ):
+            with self.subTest(student_id=student_id):
+                profile.student_id = student_id
+                self.assertEqual(profile.grade_mark, expected)
+
 
 class MemberAuthenticationAcceptanceTests(TestCase):
     def setUp(self):
