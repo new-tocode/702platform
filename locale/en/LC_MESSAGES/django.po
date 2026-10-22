@@ -2598,7 +2598,7 @@ msgstr "Search names"
 #: templates/discussion/space.html:51
 #, python-format
 msgid "%(grade)s级"
-msgstr "Class of %(grade)s"
+msgstr "Cohort %(grade)s"
 
 #: templates/discussion/space.html:56
 msgid "没有找到匹配的成员。"

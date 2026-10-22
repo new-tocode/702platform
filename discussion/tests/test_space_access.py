@@ -102,6 +102,10 @@ class SpaceAccessViewTests(DiscussionViewTestCase):
         self.other_member.profile.full_name = "Sam Lee"
         self.other_member.profile.student_id = "2021"
         self.other_member.profile.save(update_fields=["full_name", "student_id"])
+        self.staff.profile.student_id = "STUDENT-SECRET-91"
+        self.staff.profile.save(update_fields=["student_id"])
+        self.superuser.profile.student_id = "２０２３０００１"
+        self.superuser.profile.save(update_fields=["student_id"])
         self.client.force_login(self.member)
 
         response = self.client.get(reverse("discussion:space"))
@@ -116,6 +120,8 @@ class SpaceAccessViewTests(DiscussionViewTestCase):
             directory,
             r'Sam Lee</a>\s*<span class="discussion-member-grade">21级</span>',
         )
-        # 没有学号的成员（staff / superuser）不显示标志，也不显示完整学号。
+        # 非数字 / 非 ASCII 学号不显示标志，学生号本身也不进模板。
         self.assertEqual(directory.count('class="discussion-member-grade"'), 2)
         self.assertNotIn("20230001", directory)
+        self.assertNotIn("STUDENT-SECRET-91", directory)
+        self.assertNotIn("２０２３０００１", directory)
