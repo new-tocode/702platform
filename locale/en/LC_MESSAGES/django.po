@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 702platform\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-22 12:27+0800\n"
+"POT-Creation-Date: 2026-10-24 12:36+0800\n"
 "PO-Revision-Date: 2026-09-19 18:39\n"
 "Last-Translator: 702platform\n"
 "Language-Team: 702platform\n"
@@ -68,7 +68,7 @@ msgstr "Avatar"
 msgid "请选择要上传的图片。"
 msgstr "Please choose an image to upload."
 
-#: accounts/forms.py:181 accounts/models.py:191
+#: accounts/forms.py:181 accounts/models.py:194
 msgid "图像"
 msgstr "Image"
 
@@ -132,23 +132,23 @@ msgstr "Other contact"
 msgid "个人简介"
 msgstr "Bio"
 
-#: accounts/models.py:135
+#: accounts/models.py:135 defenses/models.py:149
 msgid "最多 1000 字。"
 msgstr "Up to 1000 characters."
 
-#: accounts/models.py:179
+#: accounts/models.py:182
 msgid "普通"
 msgstr "Normal"
 
-#: accounts/models.py:180
+#: accounts/models.py:183
 msgid "大图"
 msgstr "Large"
 
-#: accounts/models.py:181
+#: accounts/models.py:184
 msgid "整行"
 msgstr "Full width"
 
-#: accounts/models.py:198
+#: accounts/models.py:201
 msgid "排布"
 msgstr "Layout"
 
@@ -239,7 +239,7 @@ msgstr[1] ""
 "%(used)s / %(limit)s MB): %(names)s"
 
 #: accounts/views.py:381 accounts/views.py:402 projects/views.py:392
-#: projects/views.py:499
+#: projects/views.py:504
 msgid "未知操作"
 msgstr "Unknown action"
 
@@ -286,9 +286,10 @@ msgstr "View competitions; a group's contact can register that group"
 
 #: competitions/forms.py:18 projects/apps.py:18
 #: templates/accounts/member_home.html:69 templates/competitions/list.html:51
-#: templates/projects/group_list.html:4 templates/projects/group_list.html:16
-#: templates/reviews/queue.html:230 templates/reviews/queue.html:267
-#: templates/reviews/queue.html:295 templates/reviews/queue.html:332
+#: templates/defenses/detail.html:139 templates/projects/group_list.html:4
+#: templates/projects/group_list.html:16 templates/reviews/queue.html:233
+#: templates/reviews/queue.html:270 templates/reviews/queue.html:298
+#: templates/reviews/queue.html:335
 msgid "项目组"
 msgstr "Project group"
 
@@ -658,6 +659,70 @@ msgstr "That file is not an image."
 msgid "请选择要上传的文件。"
 msgstr "Please choose a file to upload."
 
+#: defenses/forms.py:20 templates/defenses/detail.html:67
+msgid "答辩安排"
+msgstr "Defense schedule"
+
+#: defenses/forms.py:28 defenses/forms.py:36 defenses/models.py:123
+#: discussion/forms.py:100 notices/selectors.py:148 notices/selectors.py:335
+#: templates/discussion/space.html:161 templates/discussion/space.html:162
+msgid "评论"
+msgstr "Comment"
+
+#: defenses/forms.py:41 defenses/services.py:58 discussion/services.py:404
+msgid "评论内容不能为空。"
+msgstr "A comment cannot be empty."
+
+#: defenses/models.py:48 templates/defenses/schedule.html:33
+msgid "安排中"
+msgstr "Scheduling"
+
+#: defenses/models.py:49 templates/defenses/schedule.html:67
+msgid "已确定"
+msgstr "Confirmed"
+
+#: defenses/models.py:67
+msgid "请写明答辩的时间和地点，最多 500 字。"
+msgstr "State the time and place of the defense (up to 500 characters)."
+
+#: defenses/models.py:124
+msgid "修改"
+msgstr "Edit"
+
+#: defenses/services.py:46
+msgid "请填写答辩的时间与地点。"
+msgstr "Please state the time and place of the defense."
+
+#: defenses/services.py:49
+#, python-format
+msgid "答辩申请不能超过 %(limit)s 字。"
+msgstr "A defense request cannot exceed %(limit)s characters."
+
+#: defenses/services.py:61
+#, python-format
+msgid "评论不能超过 %(limit)s 字。"
+msgstr "A comment cannot exceed %(limit)s characters."
+
+#: defenses/views.py:88
+msgid "已提交线下模拟答辩申请，评审人可在「线下答辩」中查看并讨论。"
+msgstr "Offline mock-defense request submitted. Reviewers can view and discuss it under “Offline defenses”."
+
+#: defenses/views.py:160
+msgid "答辩申请已更新。"
+msgstr "Defense request updated."
+
+#: defenses/views.py:162
+msgid "内容没有变化，未产生修改记录。"
+msgstr "Nothing changed, so no edit record was created."
+
+#: defenses/views.py:193
+msgid "评论已发表。"
+msgstr "Comment posted."
+
+#: defenses/views.py:227
+msgid "该申请已确定，正文与讨论进入只读状态。"
+msgstr "The request is now confirmed; its text and discussion are read-only."
+
 #: discussion/forms.py:18 discussion/models.py:14
 msgid "中文名称"
 msgstr "Chinese name"
@@ -696,11 +761,6 @@ msgstr "A post can have at most 3 images."
 msgid "每篇帖子最多保留 3 张图片。"
 msgstr "A post can contain at most 3 images."
 
-#: discussion/forms.py:100 notices/selectors.py:148 notices/selectors.py:317
-#: templates/discussion/space.html:161 templates/discussion/space.html:162
-msgid "评论"
-msgstr "Comment"
-
 #: discussion/forms.py:112
 msgid "请输入评论内容。"
 msgstr "Enter a comment."
@@ -713,7 +773,7 @@ msgstr "English name"
 msgid "创建人"
 msgstr "Created by"
 
-#: discussion/models.py:22
+#: discussion/models.py:22 templates/defenses/detail.html:52
 msgid "创建时间"
 msgstr "Created at"
 
@@ -807,10 +867,6 @@ msgstr "The selected images are invalid."
 msgid "所选图片不属于这篇帖子。"
 msgstr "The selected image does not belong to this post."
 
-#: discussion/services.py:404
-msgid "评论内容不能为空。"
-msgstr "A comment cannot be empty."
-
 #: discussion/validators.py:17
 msgid "板块名称需为 1 至 80 个字符的英文名称，可包含数字、空格和常见标点。"
 msgstr ""
@@ -839,6 +895,7 @@ msgid "编辑帖子"
 msgstr "Edit post"
 
 #: discussion/views.py:191 templates/competitions/register.html:73
+#: templates/defenses/detail.html:85
 msgid "保存修改"
 msgstr "Save changes"
 
@@ -963,14 +1020,14 @@ msgid "%(name)s（第 %(round)s 轮）"
 msgstr "%(name)s (round %(round)s)"
 
 #: notices/selectors.py:182 reviews/lifecycle.py:68
-#: templates/projects/group_detail.html:192 templates/reviews/queue.html:73
-#: templates/reviews/queue.html:152
+#: templates/projects/group_detail.html:192 templates/reviews/queue.html:76
+#: templates/reviews/queue.html:155
 msgid "待初审"
 msgstr "Pending preliminary"
 
 #: notices/selectors.py:182 reviews/lifecycle.py:71
-#: templates/projects/group_detail.html:220 templates/reviews/queue.html:79
-#: templates/reviews/queue.html:187
+#: templates/projects/group_detail.html:220 templates/reviews/queue.html:82
+#: templates/reviews/queue.html:190
 msgid "待评审"
 msgstr "Pending review"
 
@@ -1005,46 +1062,56 @@ msgstr "Awaiting your review"
 msgid "待审核"
 msgstr "Pending review"
 
-#: notices/selectors.py:306
+#: notices/selectors.py:292
+#, python-format
+msgid "%(name)s · 线下模拟答辩申请"
+msgstr "%(name)s · offline mock-defense request"
+
+#: notices/selectors.py:324
 msgid "向你发送了一条私信"
 msgstr "Sent you a direct message"
 
-#: notices/selectors.py:316
+#: notices/selectors.py:334
 msgid "提及"
 msgstr "Mention"
 
-#: notices/selectors.py:318 templates/accounts/member_profile_readonly.html:24
+#: notices/selectors.py:336 templates/accounts/member_profile_readonly.html:24
 #: templates/notices/direct_detail.html:4
 #: templates/notices/direct_detail.html:12
 #: templates/notices/direct_detail.html:16
 msgid "私信"
 msgstr "Direct message"
 
-#: notices/selectors.py:319 notices/selectors.py:320 reviews/apps.py:19
+#: notices/selectors.py:337 notices/selectors.py:338 reviews/apps.py:19
 #: reviews/lifecycle.py:52 reviews/lifecycle.py:116
 #: templates/reviews/queue.html:4
 msgid "评审"
 msgstr "Review"
 
-#: notices/selectors.py:321
+#: notices/selectors.py:339
 msgid "评审结果"
 msgstr "Review result"
 
-#: notices/selectors.py:322 templates/projects/group_manage.html:59
+#: notices/selectors.py:340 templates/projects/group_manage.html:59
 msgid "入组申请"
 msgstr "Join requests"
 
-#: notices/selectors.py:323
+#: notices/selectors.py:341
 msgid "入组结果"
 msgstr "Join result"
 
-#: notices/selectors.py:324
+#: notices/selectors.py:342
 msgid "建组申请"
 msgstr "Group request"
 
-#: notices/selectors.py:325
+#: notices/selectors.py:343
 msgid "建组结果"
 msgstr "Group result"
+
+#: notices/selectors.py:344 templates/defenses/schedule.html:4
+#: templates/defenses/schedule.html:18 templates/reviews/queue.html:24
+msgid "线下答辩"
+msgstr "Offline defenses"
 
 #: notices/views.py:56 templates/home.html:60
 msgid "暂时没有公开通知。"
@@ -1242,15 +1309,15 @@ msgstr "Group description updated."
 msgid "已转让项目组联系人。"
 msgstr "Group contact transferred."
 
-#: projects/views.py:490
+#: projects/views.py:495
 msgid "已通过该入组申请。"
 msgstr "The join application was approved."
 
-#: projects/views.py:497
+#: projects/views.py:502
 msgid "已拒绝该入组申请。"
 msgstr "The join application was rejected."
 
-#: projects/views.py:519
+#: projects/views.py:524
 #, python-format
 msgid "已将 %(name)s 移出项目组。"
 msgstr "%(name)s has been removed from the project group."
@@ -1374,8 +1441,8 @@ msgstr "Completed"
 
 #: reviews/lifecycle.py:64 reviews/lifecycle.py:70 reviews/lifecycle.py:73
 #: templates/projects/group_detail.html:189
-#: templates/projects/group_detail.html:217 templates/reviews/queue.html:96
-#: templates/reviews/queue.html:326
+#: templates/projects/group_detail.html:217 templates/reviews/queue.html:99
+#: templates/reviews/queue.html:329
 msgid "已释放"
 msgstr "Released"
 
@@ -1668,8 +1735,9 @@ msgstr "Member Center"
 #: templates/content/page_detail.html:4 templates/content/page_index.html:4
 #: templates/content/paper_form.html:4 templates/content/papers.html:4
 #: templates/content/patent_form.html:4 templates/content/patents.html:4
-#: templates/content/showcase.html:4 templates/discussion/space.html:4
-#: templates/equipment/borrow_form.html:4
+#: templates/content/showcase.html:4 templates/defenses/detail.html:4
+#: templates/defenses/request_form.html:4 templates/defenses/schedule.html:4
+#: templates/discussion/space.html:4 templates/equipment/borrow_form.html:4
 #: templates/equipment/borrow_list.html:4 templates/equipment/list.html:4
 #: templates/home.html:4 templates/home.html:12 templates/notices/detail.html:4
 #: templates/notices/direct_compose.html:4
@@ -2569,6 +2637,188 @@ msgstr "Your browser does not support video playback."
 msgid "暂时没有成员风采内容。"
 msgstr "No member profiles yet."
 
+#: templates/defenses/detail.html:4
+#, python-format
+msgid "%(name)s · 线下模拟答辩"
+msgstr "%(name)s · offline mock defense"
+
+#: templates/defenses/detail.html:20 templates/projects/group_manage.html:267
+msgid "线下模拟答辩"
+msgstr "Offline mock defense"
+
+#: templates/defenses/detail.html:22
+#, python-format
+msgid ""
+"\n"
+"                        申请人 %(applicant)s · 创建于 %(created)s\n"
+"                    "
+msgstr "\n                        Applicant %(applicant)s · created %(created)s\n                    "
+
+#: templates/defenses/detail.html:29
+msgid "返回线下答辩"
+msgstr "Back to offline defenses"
+
+#: templates/defenses/detail.html:31
+msgid "查看项目组"
+msgstr "View project group"
+
+#: templates/defenses/detail.html:38 templates/equipment/borrow_list.html:33
+msgid "状态"
+msgstr "Status"
+
+#: templates/defenses/detail.html:48 templates/defenses/detail.html:140
+msgid "申请人"
+msgstr "Applicant"
+
+#: templates/defenses/detail.html:56
+msgid "确定时间"
+msgstr "Confirmed at"
+
+#: templates/defenses/detail.html:69
+msgid "最终版本"
+msgstr "Final version"
+
+#: templates/defenses/detail.html:81
+msgid "保存后会自动在讨论里留下一条「申请者修改了答辩申请」。"
+msgstr "Saving adds an “Applicant edited the defense request” entry to the discussion automatically."
+
+#: templates/defenses/detail.html:94
+msgid "讨论"
+msgstr "Discussion"
+
+#: templates/defenses/detail.html:105
+msgid "修改记录"
+msgstr "Edit record"
+
+#: templates/defenses/detail.html:109
+msgid "申请者修改了答辩申请"
+msgstr "Applicant edited the defense request"
+
+#: templates/defenses/detail.html:115
+msgid "还没有讨论。"
+msgstr "No discussion yet."
+
+#: templates/defenses/detail.html:124
+msgid "可以讨论时间、地点，或说明自己能不能到场。评论发表后不能修改。"
+msgstr "Discuss the time, the place, or whether you can attend. Comments cannot be edited after posting."
+
+#: templates/defenses/detail.html:125 templates/discussion/space.html:184
+msgid "发表评论"
+msgstr "Post comment"
+
+#: templates/defenses/detail.html:128
+msgid "该申请已确定，正文与讨论都已归档，不能再修改或评论。"
+msgstr "This request is confirmed. Its text and discussion are archived; no further edits or comments."
+
+#: templates/defenses/detail.html:136
+msgid "参与信息"
+msgstr "Participants"
+
+#: templates/defenses/detail.html:141
+msgid "最后更新"
+msgstr "Last updated"
+
+#: templates/defenses/detail.html:143
+msgid "关闭人"
+msgstr "Closed by"
+
+#: templates/defenses/detail.html:151 templates/defenses/detail.html:156
+msgid "关闭申请"
+msgstr "Close request"
+
+#: templates/defenses/detail.html:153
+msgid ""
+"关闭后申请进入「已确定」，正文与讨论都不能再修改。关闭前请确认时间与地点已经"
+"谈妥。"
+msgstr "Closing moves the request to “Confirmed” and freezes its text and discussion. Make sure the time and place are settled first."
+
+#: templates/defenses/detail.html:154
+msgid "关闭后正文与讨论都不能再修改，确定关闭吗？"
+msgstr "The text and discussion cannot be changed after closing. Close it?"
+
+#: templates/defenses/detail.html:162
+msgid "已归档"
+msgstr "Archived"
+
+#: templates/defenses/detail.html:164
+msgid ""
+"这条申请已经确定，正文与讨论保留作记录。需要新的安排时，请让项目组联系人重新"
+"发起一条申请。"
+msgstr "This request is confirmed; its text and discussion are kept as a record. For a new arrangement, ask the project-group contact to open a new request."
+
+#: templates/defenses/request_form.html:4
+#: templates/defenses/request_form.html:18
+#: templates/projects/group_manage.html:289
+msgid "申请线下模拟答辩"
+msgstr "Request an offline mock defense"
+
+#: templates/defenses/request_form.html:20
+#, python-format
+msgid ""
+"为「%(name)s」申请一次线下模拟答辩。请在申请里写明答辩的时间和地点，方便评审"
+"人安排。"
+msgstr "Request an offline mock defense for “%(name)s”. State the time and place so reviewers can plan."
+
+#: templates/defenses/request_form.html:24
+msgid "返回项目组管理"
+msgstr "Back to group management"
+
+#: templates/defenses/request_form.html:41
+#: templates/projects/group_apply.html:34
+#: templates/projects/group_create_request.html:73
+msgid "提交申请"
+msgstr "Submit application"
+
+#: templates/defenses/request_form.html:42
+#: templates/discussion/post_form.html:51
+#: templates/includes/direct_compose.html:35
+#: templates/notices/direct_compose.html:36
+msgid "取消"
+msgstr "Cancel"
+
+#: templates/defenses/schedule.html:20
+msgid ""
+"项目组的线下模拟答辩安排都在这里。申请关闭前可以在详情里讨论时间与地点；关闭"
+"后进入「已确定」，只保留最终正文与完整讨论。"
+msgstr "Every project group’s offline mock-defense arrangement is listed here. Before a request is closed you can discuss its time and place in the detail page; once closed it moves to “Confirmed” and keeps only the final text and the full discussion."
+
+#: templates/defenses/schedule.html:24
+msgid "返回评审"
+msgstr "Back to reviews"
+
+#: templates/defenses/schedule.html:48 templates/defenses/schedule.html:82
+#, python-format
+msgid "申请人 %(applicant)s"
+msgstr "Applicant %(applicant)s"
+
+#: templates/defenses/schedule.html:49
+#, python-format
+msgid "1 条讨论"
+msgid_plural "%(counter)s 条讨论"
+msgstr[0] "1 comment"
+msgstr[1] "%(counter)s comments"
+
+#: templates/defenses/schedule.html:52
+msgid "查看并讨论"
+msgstr "View and discuss"
+
+#: templates/defenses/schedule.html:57
+msgid "暂无安排中的答辩申请。"
+msgstr "No requests are being scheduled."
+
+#: templates/defenses/schedule.html:83
+#, python-format
+msgid "确定于 %(closed)s"
+msgstr "Confirmed %(closed)s"
+
+#: templates/defenses/schedule.html:86
+msgid "查看记录"
+msgstr "View record"
+
+#: templates/defenses/schedule.html:91
+msgid "暂无已确定的答辩安排。"
+msgstr "No confirmed defense arrangements yet."
+
 #: templates/discussion/post_form.html:30
 msgid "已上传图片"
 msgstr "Uploaded images"
@@ -2576,12 +2826,6 @@ msgstr "Uploaded images"
 #: templates/discussion/post_form.html:35
 msgid "移除此图片"
 msgstr "Remove this image"
-
-#: templates/discussion/post_form.html:51
-#: templates/includes/direct_compose.html:35
-#: templates/notices/direct_compose.html:36
-msgid "取消"
-msgstr "Cancel"
 
 #: templates/discussion/space.html:23
 msgid "在板块中分享进展、提出问题，也看看大家最近在聊什么。"
@@ -2675,10 +2919,6 @@ msgstr "Write a comment"
 msgid "写下评论…"
 msgstr "Write a comment…"
 
-#: templates/discussion/space.html:184
-msgid "发表评论"
-msgstr "Post comment"
-
 #: templates/discussion/space.html:190
 msgid "这个板块还没有帖子，发布第一篇吧。"
 msgstr "No posts in this board yet. Start the conversation with the first one."
@@ -2763,10 +3003,6 @@ msgstr "Borrowed"
 #: templates/equipment/borrow_list.html:32
 msgid "计划归还"
 msgstr "Due back"
-
-#: templates/equipment/borrow_list.html:33
-msgid "状态"
-msgstr "Status"
 
 #: templates/equipment/borrow_list.html:34
 msgid "实际归还"
@@ -2958,11 +3194,6 @@ msgstr "Apply to join “%(name)s”"
 msgid "项目组联系人 %(contact)s · 审核通过后即成为项目组成员。"
 msgstr "Contact %(contact)s · you become a member once approved."
 
-#: templates/projects/group_apply.html:34
-#: templates/projects/group_create_request.html:73
-msgid "提交申请"
-msgstr "Submit application"
-
 #: templates/projects/group_apply.html:35
 #: templates/projects/group_create_request.html:74
 msgid "返回项目组列表"
@@ -3139,9 +3370,9 @@ msgstr ""
 msgid "方案状态"
 msgstr "Proposal status"
 
-#: templates/projects/group_detail.html:293 templates/reviews/queue.html:230
-#: templates/reviews/queue.html:267 templates/reviews/queue.html:295
-#: templates/reviews/queue.html:332
+#: templates/projects/group_detail.html:293 templates/reviews/queue.html:233
+#: templates/reviews/queue.html:270 templates/reviews/queue.html:298
+#: templates/reviews/queue.html:335
 msgid "轮次"
 msgstr "Round"
 
@@ -3153,8 +3384,8 @@ msgstr "In progress"
 msgid "评审进度"
 msgstr "Review progress"
 
-#: templates/projects/group_detail.html:300 templates/reviews/queue.html:230
-#: templates/reviews/queue.html:295
+#: templates/projects/group_detail.html:300 templates/reviews/queue.html:233
+#: templates/reviews/queue.html:298
 msgid "结论"
 msgstr "Decision"
 
@@ -3363,7 +3594,7 @@ msgstr[1] "%(counter)s<small>applications</small>"
 msgid "当前轮次"
 msgstr "Current round"
 
-#: templates/projects/group_manage.html:80 templates/reviews/queue.html:58
+#: templates/projects/group_manage.html:80 templates/reviews/queue.html:61
 msgid "拒绝"
 msgstr "Reject"
 
@@ -3456,19 +3687,25 @@ msgstr ""
 "Preliminary reviewers and reviewers stay anonymous to the group; reviewers "
 "may attach a review reply."
 
-#: templates/projects/group_manage.html:266
+#: templates/projects/group_manage.html:271
+msgid ""
+"需要线下模拟答辩时在这里发起申请，写明时间和地点。评审人会在「线下答辩」中讨"
+"论，申请人可以随时修改正文，直到申请被关闭。"
+msgstr "Start a request here when your group needs an offline mock defense, stating the time and place. Reviewers discuss it under “Offline defenses”, and the applicant can edit the text until the request is closed."
+
+#: templates/projects/group_manage.html:295
 msgid "转让联系人"
 msgstr "Transfer contact"
 
-#: templates/projects/group_manage.html:269
+#: templates/projects/group_manage.html:298
 msgid "转让后你仍是本项目组的普通成员。"
 msgstr "After transferring, you remain an ordinary member of this group."
 
-#: templates/projects/group_manage.html:280
+#: templates/projects/group_manage.html:309
 msgid "转让"
 msgstr "Transfer"
 
-#: templates/projects/group_manage.html:284
+#: templates/projects/group_manage.html:313
 msgid "暂无可转让的成员。"
 msgstr "No member to transfer to."
 
@@ -3501,11 +3738,11 @@ msgstr ""
 "As a super reviewer you also see every round in progress and can approve or "
 "send it back directly."
 
-#: templates/reviews/queue.html:29
+#: templates/reviews/queue.html:32
 msgid "创建项目组申请"
 msgstr "Project group creation requests"
 
-#: templates/reviews/queue.html:33
+#: templates/reviews/queue.html:36
 msgid ""
 "任何成员都可以申请创建项目组，申请人为项目组联系人。任一位管理员同意即视为审"
 "核通过并即刻建组，其他管理员的这条待办随之消失；拒绝后申请人可修改重交。"
@@ -3515,118 +3752,118 @@ msgstr ""
 "clears the item from the other administrators' queues; after a rejection the "
 "applicant can revise and resubmit."
 
-#: templates/reviews/queue.html:47
+#: templates/reviews/queue.html:50
 #, python-format
 msgid "指导老师 %(advisors)s"
 msgstr "Advisors %(advisors)s"
 
-#: templates/reviews/queue.html:54
+#: templates/reviews/queue.html:57
 msgid "同意"
 msgstr "Approve"
 
-#: templates/reviews/queue.html:74 templates/reviews/queue.html:80
-#: templates/reviews/queue.html:86 templates/reviews/queue.html:92
-#: templates/reviews/queue.html:97
+#: templates/reviews/queue.html:77 templates/reviews/queue.html:83
+#: templates/reviews/queue.html:89 templates/reviews/queue.html:95
+#: templates/reviews/queue.html:100
 #, python-format
 msgid "1<small>份</small>"
 msgid_plural "%(counter)s<small>份</small>"
 msgstr[0] "1<small>proposal</small>"
 msgstr[1] "%(counter)s<small>proposals</small>"
 
-#: templates/reviews/queue.html:85
+#: templates/reviews/queue.html:88
 msgid "已完成初审"
 msgstr "Completed preliminary"
 
-#: templates/reviews/queue.html:91
+#: templates/reviews/queue.html:94
 msgid "已完成评审"
 msgstr "Completed reviews"
 
-#: templates/reviews/queue.html:107
+#: templates/reviews/queue.html:110
 msgid "全部进行中"
 msgstr "All in progress"
 
-#: templates/reviews/queue.html:124
+#: templates/reviews/queue.html:127
 #, python-format
 msgid "需 1 名评审人 · 已审结 %(done)s"
 msgid_plural "需 %(counter)s 名评审人 · 已审结 %(done)s"
 msgstr[0] "1 reviewer needed · %(done)s decided"
 msgstr[1] "%(counter)s reviewers needed · %(done)s decided"
 
-#: templates/reviews/queue.html:128
+#: templates/reviews/queue.html:131
 msgid "不可行使"
 msgstr "Cannot use"
 
-#: templates/reviews/queue.html:129
+#: templates/reviews/queue.html:132
 #, python-format
 msgid "超级评审不可行使：%(reason)s。"
 msgstr "The super reviewer power cannot be used: %(reason)s."
 
-#: templates/reviews/queue.html:134
+#: templates/reviews/queue.html:137
 msgid "查看项目资料"
 msgstr "View materials"
 
-#: templates/reviews/queue.html:134
+#: templates/reviews/queue.html:137
 msgid "查看项目资料并决定"
 msgstr "View materials and decide"
 
-#: templates/reviews/queue.html:140
+#: templates/reviews/queue.html:143
 msgid "当前没有进行中的评审。"
 msgstr "No rounds in progress."
 
-#: templates/reviews/queue.html:169
+#: templates/reviews/queue.html:172
 #, python-format
 msgid "通过后需 1 名评审人"
 msgid_plural "通过后需 %(counter)s 名评审人"
 msgstr[0] "1 reviewer needed after approval"
 msgstr[1] "%(counter)s reviewers needed after approval"
 
-#: templates/reviews/queue.html:172
+#: templates/reviews/queue.html:175
 msgid "进入项目组详情并初审"
 msgstr "Open the group and review"
 
-#: templates/reviews/queue.html:177
+#: templates/reviews/queue.html:180
 msgid "暂无待初审的项目资料。"
 msgstr "No materials awaiting preliminary review."
 
-#: templates/reviews/queue.html:204
+#: templates/reviews/queue.html:207
 #, python-format
 msgid "需 1 名评审人"
 msgid_plural "需 %(counter)s 名评审人"
 msgstr[0] "1 reviewer needed"
 msgstr[1] "%(counter)s reviewers needed"
 
-#: templates/reviews/queue.html:207
+#: templates/reviews/queue.html:210
 msgid "进入项目组详情并评审"
 msgstr "Open the group and review"
 
-#: templates/reviews/queue.html:212
+#: templates/reviews/queue.html:215
 msgid "暂无待评审的项目资料。"
 msgstr "No materials awaiting review."
 
-#: templates/reviews/queue.html:224
+#: templates/reviews/queue.html:227
 msgid "已完成的初审"
 msgstr "Completed preliminary reviews"
 
-#: templates/reviews/queue.html:251
+#: templates/reviews/queue.html:254
 msgid "暂无已完成的初审。"
 msgstr "No completed preliminary reviews."
 
-#: templates/reviews/queue.html:261
+#: templates/reviews/queue.html:264
 msgid "已释放的初审"
 msgstr "Released preliminary reviews"
 
-#: templates/reviews/queue.html:274
+#: templates/reviews/queue.html:277
 msgid "本轮已由超级评审敲定，无需再初审"
 msgstr "A super reviewer settled this round; no preliminary review needed"
 
-#: templates/reviews/queue.html:289
+#: templates/reviews/queue.html:292
 msgid "已完成的评审"
 msgstr "Completed reviews"
 
-#: templates/reviews/queue.html:316
+#: templates/reviews/queue.html:319
 msgid "暂无已完成的评审。"
 msgstr "No completed reviews."
 
-#: templates/reviews/queue.html:339
+#: templates/reviews/queue.html:342
 msgid "本轮已由超级评审敲定，无需再审"
 msgstr "A super reviewer settled this round; no review needed"
