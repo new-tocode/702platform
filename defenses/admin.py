@@ -44,3 +44,8 @@ class DefenseRequestAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
     date_hierarchy = "created_at"
     ordering = ("-created_at", "-id")
     inlines = (DefenseCommentInline,)
+
+    def has_delete_permission(self, request, obj=None):
+        # 与 ReadOnlyAdminMixin 的其他表不同，这张表的删除会连讨论与消息一起
+        # 级联带走；成员侧的「关闭」才是业务上的退场方式。
+        return False

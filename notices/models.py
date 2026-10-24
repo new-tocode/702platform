@@ -166,7 +166,7 @@ class Message(models.Model):
     字符串外键，notices 不在加载期依赖 discussion／reviews／projects。
 
     「哪一类消息挂哪个引用」不在库里加约束（都为空的行是写入函数的责任，见
-    ``notices/services.py``）——六种引用的组合约束会让表结构比问题本身复杂。
+    ``notices/services.py``）——七种引用的组合约束会让表结构比问题本身复杂。
 
     私信那一类（``DIRECT``）指过来的是 ``DirectMessage``：正文在那边，本行照旧只有
     引用与已读状态。

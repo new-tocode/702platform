@@ -32,16 +32,25 @@ def can_access_schedule(user):
 
 
 def can_view_request(user, defense_request):
-    """一条申请对谁可见：排期表可进的人，以及这条申请的申请人本人。
+    """一条申请对谁可见：排期表可进的人、申请人本人，以及该组当前的管理者。
 
-    申请人那一支不能省：联系人把项目组转让出去以后就不再能管理该组，但他仍是
-    这条申请的申请人，仍要能回来看自己写过的内容与讨论。
+    后两支都不能省：
+
+    * 申请人把项目组转让出去以后就不再能管理该组，但他仍是这条申请的申请人，
+      仍要能回来看自己写过的内容与讨论；
+    * 组管理页会列出本组的申请，当前联系人点进去不能得到 403——他能管理这个组，
+      就该看得到这个组的排期。「能看」不等于「能评论／能改／能关闭」，后三件事
+      各有自己的判据。
     """
     if not (user and user.is_authenticated and defense_request):
         return False
     if can_access_schedule(user):
         return True
-    return defense_request.applicant_id == user.pk
+    if defense_request.applicant_id == user.pk:
+        return True
+    from projects.permissions import can_manage_group
+
+    return can_manage_group(user, defense_request.group)
 
 
 def can_edit_request(user, defense_request):
@@ -56,12 +65,21 @@ def can_edit_request(user, defense_request):
 
 
 def can_comment(user, defense_request):
-    """关闭即归档：已确定的申请不再接受新评论。"""
-    return bool(
-        defense_request
+    """关闭即归档：已确定的申请不再接受新评论。
+
+    能评论的只有三类评审资格、管理员与申请人本人；**当前联系人看一眼不算参与
+    讨论**——他能看（见 :func:`can_view_request`），但评论仍按身份走。
+    """
+    if not (
+        user
+        and user.is_authenticated
+        and defense_request
         and defense_request.is_open
-        and can_view_request(user, defense_request)
-    )
+    ):
+        return False
+    if defense_request.applicant_id == user.pk:
+        return True
+    return can_access_schedule(user)
 
 
 def can_close_request(user, defense_request):

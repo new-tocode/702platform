@@ -8,10 +8,12 @@
     <div class="pagehead">
         <div class="path">
             <a href="{% url 'accounts:member_home' %}">/member</a>
-            <span>/</span>
-            <a href="{% url 'reviews:queue' %}">reviews</a>
-            <span>/</span>
-            <a href="{% url 'defenses:schedule' %}">defenses</a>
+            {% if can_browse_schedule %}
+                <span>/</span>
+                <a href="{% url 'reviews:queue' %}">reviews</a>
+                <span>/</span>
+                <a href="{% url 'defenses:schedule' %}">defenses</a>
+            {% endif %}
             <span>/</span>
             <span>#{{ defense_request.pk }}</span>
         </div>
@@ -28,7 +30,9 @@
                 {% if can_browse_schedule %}
                     <a class="btn" href="{% url 'defenses:schedule' %}">{% translate "返回线下答辩" %}</a>
                 {% endif %}
-                <a class="btn" href="{% url 'projects:group_detail' defense_request.group.pk %}">{% translate "查看项目组" %}</a>
+                {% if can_view_group %}
+                    <a class="btn" href="{% url 'projects:group_detail' defense_request.group.pk %}">{% translate "查看项目组" %}</a>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -126,6 +130,8 @@
                         </form>
                     {% elif defense_request.is_closed %}
                         <p class="help">{% translate "该申请已确定，正文与讨论都已归档，不能再修改或评论。" %}</p>
+                    {% else %}
+                        <p class="help">{% translate "只有申请人、管理员与持有评审资格的成员可以发表评论。" %}</p>
                     {% endif %}
                 </div>
             </div>
@@ -136,7 +142,13 @@
                 <div class="panel-head"><h2>{% translate "参与信息" %}</h2></div>
                 <div class="panel-body">
                     <dl class="dl">
-                        <div><dt>{% translate "项目组" %}</dt><dd><a href="{% url 'projects:group_detail' defense_request.group.pk %}">{{ defense_request.group.name }}</a></dd></div>
+                        <div><dt>{% translate "项目组" %}</dt><dd>
+                            {% if can_view_group %}
+                                <a href="{% url 'projects:group_detail' defense_request.group.pk %}">{{ defense_request.group.name }}</a>
+                            {% else %}
+                                {{ defense_request.group.name }}
+                            {% endif %}
+                        </dd></div>
                         <div><dt>{% translate "申请人" %}</dt><dd>{{ defense_request.applicant.profile.full_name|default:defense_request.applicant.username }}</dd></div>
                         <div><dt>{% translate "最后更新" %}</dt><dd>{{ defense_request.updated_at|date:"Y-m-d H:i" }}</dd></div>
                         {% if defense_request.is_closed %}

@@ -10,6 +10,7 @@
 """
 
 import logging
+from datetime import timedelta
 
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
@@ -18,6 +19,7 @@ from django.utils.translation import gettext_lazy as _
 
 from core.audit import record_audit
 from notices import services as notices_services
+from projects.models import ProjectGroup
 
 from .models import (
     DEFENSE_COMMENT_MAX_CHARS,
@@ -34,6 +36,11 @@ from .permissions import (
 
 
 logger = logging.getLogger(__name__)
+
+#: 双击「提交申请」或网络重试时，同一个人、同一个组、同一段正文在这么短的窗口内
+#: 只会留下一条申请。它挡住的是误触，不是「有意再发一条」——后者总会改几个字，
+#: 或等窗口过去。
+CREATE_IDEMPOTENCY_WINDOW = timedelta(seconds=10)
 
 
 class DefenseError(Exception):
@@ -65,14 +72,36 @@ def _clean_comment(body):
 
 
 def create_request(*, group, applicant, content, request=None):
-    """创建一条「安排中」的申请，并给所有评审资格持有者发消息。"""
-    if not can_create_request(applicant, group):
-        raise PermissionDenied
+    """创建一条「安排中」的申请，并给所有评审资格持有者发消息。
+
+    返回 ``(申请, 是否新建)``。第二次提交同一段正文时复用刚建的那一条，不再
+    发一轮消息——双击不该让每位评审人多收一条未读。
+
+    创建前锁住项目组行再复查「谁能发起」：视图取到组之后，另一位管理员可能刚好
+    完成联系人转让，用视图里那份旧对象复查会放行已经卸任的联系人。锁内复查把
+    「创建」与「转让」排成先后两个状态，而不是交错。
+    """
     text = _clean_content(content)
 
     with transaction.atomic():
+        locked_group = ProjectGroup.objects.select_for_update().get(pk=group.pk)
+        if not can_create_request(applicant, locked_group):
+            raise PermissionDenied
+        recent = (
+            DefenseRequest.objects.filter(
+                group=locked_group,
+                applicant=applicant,
+                status=DefenseRequest.OPEN,
+                content=text,
+                created_at__gte=timezone.now() - CREATE_IDEMPOTENCY_WINDOW,
+            )
+            .order_by("-created_at", "-id")
+            .first()
+        )
+        if recent is not None:
+            return recent, False
         defense_request = DefenseRequest.objects.create(
-            group=group,
+            group=locked_group,
             applicant=applicant,
             content=text,
         )
@@ -82,16 +111,16 @@ def create_request(*, group, applicant, content, request=None):
         action="defenses.request.create",
         user=applicant,
         target=defense_request,
-        detail={"group_id": group.pk},
+        detail={"group_id": locked_group.pk},
         request=request,
     )
     logger.info(
         "defenses.request.create request_id=%s group_id=%s applicant=%s",
         defense_request.pk,
-        group.pk,
+        locked_group.pk,
         applicant.get_username(),
     )
-    return defense_request
+    return defense_request, True
 
 
 def update_request(*, defense_request, content, actor, request=None):

@@ -180,6 +180,45 @@ class DefenseRequestCreateTests(DefenseTestBase):
 
         self.assertFalse(DefenseRequest.objects.exists())
 
+    def test_double_submit_reuses_the_recent_identical_request(self):
+        self._login(self.contact)
+        url = reverse("defenses:request_create", args=(self.group.pk,))
+        payload = {"content": "10 月 30 日 19:00，实验楼 302。"}
+
+        self.client.post(url, payload)
+        first = DefenseRequest.objects.get()
+        repeated = self.client.post(url, payload)
+
+        self.assertEqual(DefenseRequest.objects.count(), 1)
+        self.assertEqual(
+            Message.objects.filter(kind=Message.DEFENSE_REQUEST).count(),
+            3,
+        )
+        self.assertEqual(repeated.status_code, 302)
+        self.assertEqual(
+            repeated["Location"],
+            reverse("defenses:detail", args=(first.pk,)),
+        )
+
+    def test_stale_group_object_cannot_create_after_a_contact_transfer(self):
+        from django.core.exceptions import PermissionDenied
+        from projects.services import transfer_contact
+
+        stale_group = ProjectGroup.objects.get(pk=self.group.pk)
+        transfer_contact(
+            group=self.group,
+            new_contact=self.member,
+            actor=self.contact,
+        )
+
+        with self.assertRaises(PermissionDenied):
+            create_request(
+                group=stale_group,
+                applicant=self.contact,
+                content="旧联系人拿过期对象再发一条。",
+            )
+        self.assertFalse(DefenseRequest.objects.exists())
+
 
 class DefenseNotificationTests(DefenseTestBase):
     """创建时给三类评审资格各一条消息，并能从「我的消息」点进详情。"""
@@ -231,7 +270,7 @@ class DefenseNotificationTests(DefenseTestBase):
         )
 
     def test_message_row_links_to_the_detail_and_shows_the_live_status(self):
-        defense_request = create_request(
+        defense_request, _created = create_request(
             group=self.group,
             applicant=self.contact,
             content="10 月 30 日 19:00，实验楼 302。",
@@ -264,7 +303,7 @@ class DefenseNotificationTests(DefenseTestBase):
         self.assertTrue(message.is_read)
 
     def test_message_context_follows_the_request_into_closed(self):
-        defense_request = create_request(
+        defense_request, _created = create_request(
             group=self.group,
             applicant=self.contact,
             content="10 月 30 日 19:00，实验楼 302。",
@@ -368,6 +407,100 @@ class DefenseScheduleTests(DefenseTestBase):
         self.assertContains(response, "线下答辩")
 
 
+class DefenseViewBoundaryTests(DefenseTestBase):
+    """「能看」与「能评论／能改／能关」分开：三个边界各钉一条。"""
+
+    def test_current_contact_can_view_but_not_comment_on_someone_elses_request(self):
+        defense_request = self._request(applicant=self.other_contact)
+        self._login(self.contact)
+
+        response = self.client.get(
+            reverse("defenses:detail", args=(defense_request.pk,))
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.context["can_comment"])
+        self.assertFalse(response.context["can_edit"])
+        self.assertFalse(response.context["can_close"])
+        self.assertEqual(
+            self.client.post(
+                reverse("defenses:comment_create", args=(defense_request.pk,)),
+                {"body": "联系人路过说一句。"},
+            ).status_code,
+            403,
+        )
+
+    def test_applicant_without_any_review_qualification_still_owns_the_thread(self):
+        defense_request = self._request(applicant=self.outsider)
+        self._login(self.outsider)
+
+        response = self.client.get(
+            reverse("defenses:detail", args=(defense_request.pk,))
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["can_edit"])
+        self.assertTrue(response.context["can_comment"])
+        self.assertTrue(response.context["can_close"])
+        self.assertFalse(response.context["can_browse_schedule"])
+        # 没有排期表权限时，面包屑不能把「reviews / defenses」渲染成死链。
+        self.assertNotContains(response, 'href="/member/reviews/"')
+        self.assertNotContains(response, 'href="/member/defenses/"')
+
+    def test_group_link_is_hidden_when_the_viewer_cannot_open_the_group(self):
+        defense_request = self._request()
+        group_url = reverse("projects:group_detail", args=(self.group.pk,))
+
+        self._login(self.reviewer)
+        response = self.client.get(
+            reverse("defenses:detail", args=(defense_request.pk,))
+        )
+        self.assertFalse(response.context["can_view_group"])
+        self.assertNotContains(response, group_url)
+
+        self._login(self.contact)
+        response = self.client.get(
+            reverse("defenses:detail", args=(defense_request.pk,))
+        )
+        self.assertTrue(response.context["can_view_group"])
+        self.assertContains(response, group_url)
+
+    def test_real_transfer_leaves_old_applicant_able_to_act_and_new_contact_read_only(self):
+        from projects.services import transfer_contact
+
+        defense_request = self._request()
+        transfer_contact(
+            group=self.group,
+            new_contact=self.member,
+            actor=self.contact,
+        )
+
+        self._login(self.member)
+        response = self.client.get(
+            reverse("defenses:detail", args=(defense_request.pk,))
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.context["can_comment"])
+        self.assertFalse(response.context["can_edit"])
+        self.assertFalse(response.context["can_close"])
+        self.assertEqual(
+            self.client.post(
+                reverse("defenses:comment_create", args=(defense_request.pk,)),
+                {"body": "新联系人路过。"},
+            ).status_code,
+            403,
+        )
+
+        # 申请人仍是旧联系人：转让不会把「谁写的」一起转走。
+        self._login(self.contact)
+        response = self.client.get(
+            reverse("defenses:detail", args=(defense_request.pk,))
+        )
+        self.assertTrue(response.context["can_comment"])
+        self.assertTrue(response.context["can_edit"])
+        self.assertTrue(response.context["can_close"])
+
+
 class DefenseCommentTests(DefenseTestBase):
     """评审、管理员与申请人能评论；关闭后不能；别人不能。"""
 
@@ -424,6 +557,20 @@ class DefenseCommentTests(DefenseTestBase):
 
         self.assertFalse(DefenseComment.objects.exists())
 
+    def test_invalid_comment_rerenders_with_the_submitted_text(self):
+        defense_request = self._request()
+        self._login(self.reviewer)
+        body = "字" * 1001
+
+        response = self.client.post(
+            reverse("defenses:comment_create", args=(defense_request.pk,)),
+            {"body": body},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["comment_form"]["body"].value(), body)
+        self.assertFalse(DefenseComment.objects.exists())
+
     def test_closed_request_rejects_new_comments(self):
         defense_request = self._request(status=DefenseRequest.CLOSED)
         self._login(self.reviewer)
@@ -433,7 +580,7 @@ class DefenseCommentTests(DefenseTestBase):
             {"body": "还想补一句。"},
         )
 
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 302)
         self.assertFalse(DefenseComment.objects.exists())
 
     def test_closed_detail_shows_history_and_final_text_without_forms(self):
@@ -508,6 +655,24 @@ class DefenseEditTests(DefenseTestBase):
         self.assertEqual(response.status_code, 302)
         self.assertFalse(DefenseComment.objects.exists())
 
+    def test_invalid_edit_rerenders_with_the_submitted_text(self):
+        defense_request = self._request()
+        self._login(self.contact)
+        content = "字" * 501
+
+        response = self.client.post(
+            reverse("defenses:request_edit", args=(defense_request.pk,)),
+            {"content": content},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["edit_form"]["content"].value(), content)
+        defense_request.refresh_from_db()
+        self.assertEqual(
+            defense_request.content,
+            "10 月 30 日 19:00，地点：实验楼 302。",
+        )
+
     def test_only_the_applicant_can_edit(self):
         defense_request = self._request()
 
@@ -532,7 +697,7 @@ class DefenseEditTests(DefenseTestBase):
             {"content": "关闭后再改。"},
         )
 
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 302)
         defense_request.refresh_from_db()
         self.assertEqual(defense_request.content, "10 月 30 日 19:00，地点：实验楼 302。")
 
@@ -610,7 +775,7 @@ class DefenseCloseTests(DefenseTestBase):
             reverse("defenses:request_close", args=(defense_request.pk,))
         )
 
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 302)
 
     def test_detail_after_close_has_no_edit_or_comment_forms(self):
         defense_request = self._request()
@@ -625,6 +790,24 @@ class DefenseCloseTests(DefenseTestBase):
         self.assertIsNone(response.context["comment_form"])
         self.assertFalse(response.context["can_close"])
         self.assertContains(response, "不能再修改或评论")
+
+
+class DefenseAdminTests(DefenseTestBase):
+    """后台只读：能查，但不能加、改、删。"""
+
+    def test_admin_has_no_add_change_or_delete_permission(self):
+        from django.contrib.admin.sites import AdminSite
+        from django.test import RequestFactory
+
+        from .admin import DefenseRequestAdmin
+
+        model_admin = DefenseRequestAdmin(DefenseRequest, AdminSite())
+        request = RequestFactory().get("/admin/")
+        request.user = self.admin
+
+        self.assertFalse(model_admin.has_add_permission(request))
+        self.assertFalse(model_admin.has_change_permission(request))
+        self.assertFalse(model_admin.has_delete_permission(request))
 
     def test_forged_service_call_after_close_is_refused(self):
         defense_request = self._request()
