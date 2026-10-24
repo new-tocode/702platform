@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     "projects.apps.ProjectsConfig",
     "competitions.apps.CompetitionsConfig",
     "reviews.apps.ReviewsConfig",
+    "defenses.apps.DefensesConfig",
     "equipment.apps.EquipmentConfig",
     "discussion.apps.DiscussionConfig",
     "core.apps.CoreConfig",
@@ -405,6 +406,11 @@ LOGGING = {
             "propagate": False,
         },
         "reviews": {
+            "handlers": ["console", "file"],
+            "level": "DEBUG",
+            "propagate": False,
+        },
+        "defenses": {
             "handlers": ["console", "file"],
             "level": "DEBUG",
             "propagate": False,

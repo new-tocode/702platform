@@ -192,6 +192,31 @@ def notify_create_result(*, create_request, actor):
     )
 
 
+def notify_defense_request(*, defense_request):
+    """有人发起线下模拟答辩：给**这一刻**持有三种评审资格之一的人各写一条。
+
+    一个账号同时持有多种资格也只收一条（``distinct``）。申请人若也持有评审资格，
+    同样在收件人里——这条消息对他是「申请已创建」的回执，与给别人的「有事可看」
+    是同一行。
+    """
+    recipients = User.objects.filter(
+        Q(is_reviewer=True)
+        | Q(is_preliminary_reviewer=True)
+        | Q(is_super_reviewer=True)
+    ).distinct()
+    Message.objects.bulk_create(
+        [
+            Message(
+                recipient=recipient,
+                actor=defense_request.applicant,
+                kind=Message.DEFENSE_REQUEST,
+                defense_request=defense_request,
+            )
+            for recipient in recipients
+        ]
+    )
+
+
 def send_direct_message(*, sender, recipient, body):
     """发一条私信：正文一行、收件人「我的消息」里那条通知一行，两行同一事务。
 

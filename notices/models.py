@@ -182,6 +182,7 @@ class Message(models.Model):
     JOIN_RESULT = "join_result"
     CREATE_REQUEST = "create_request"
     CREATE_RESULT = "create_result"
+    DEFENSE_REQUEST = "defense_request"
     KIND_CHOICES = (
         (MENTION, "提及"),
         (COMMENT, "评论"),
@@ -193,6 +194,7 @@ class Message(models.Model):
         (JOIN_RESULT, "入组结果"),
         (CREATE_REQUEST, "建组申请"),
         (CREATE_RESULT, "建组结果"),
+        (DEFENSE_REQUEST, "线下答辩申请"),
     )
 
     recipient = models.ForeignKey(
@@ -261,6 +263,14 @@ class Message(models.Model):
         blank=True,
         related_name="messages",
         verbose_name="私信",
+    )
+    defense_request = models.ForeignKey(
+        "defenses.DefenseRequest",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="messages",
+        verbose_name="线下答辩申请",
     )
 
     class Meta:

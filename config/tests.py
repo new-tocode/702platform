@@ -79,6 +79,7 @@ class AppLoggerTests(SimpleTestCase):
         "projects",
         "competitions",
         "reviews",
+        "defenses",
         "equipment",
         "discussion",
         "core",
