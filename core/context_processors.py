@@ -32,6 +32,7 @@ MEMBER_NAMESPACES = frozenset(
     {
         "projects",
         "reviews",
+        "defenses",
         "competitions",
         "equipment",
         "equipment_borrows",

@@ -20,6 +20,9 @@
                     {% if open_rounds %}{% translate "作为超级评审，你还可以看到全部进行中的评审，并对其直接通过或打回。" %}{% endif %}
                 </div>
             </div>
+            <div class="head-actions">
+                <a class="btn" href="{% url 'defenses:schedule' %}">{% translate "线下答辩" %}</a>
+            </div>
         </div>
     </div>
 

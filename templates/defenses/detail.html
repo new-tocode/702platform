@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% blocktranslate with name=defense_request.group.name %}{{ name }} · 线下模拟答辩{% endblocktranslate %} - {% translate "竞赛社团管理平台" %}{% endblock %}
+
+{% block content %}
+<div class="wrap">
+    <div class="pagehead">
+        <div class="path">
+            <a href="{% url 'accounts:member_home' %}">/member</a>
+            <span>/</span>
+            <a href="{% url 'reviews:queue' %}">reviews</a>
+            <span>/</span>
+            <a href="{% url 'defenses:schedule' %}">defenses</a>
+            <span>/</span>
+            <span>#{{ defense_request.pk }}</span>
+        </div>
+        <div class="head-row">
+            <div>
+                <h1>{{ defense_request.group.name }} · {% translate "线下模拟答辩" %}</h1>
+                <div class="sub">
+                    {% blocktranslate with applicant=defense_request.applicant.profile.full_name|default:defense_request.applicant.username created=defense_request.created_at|date:"Y-m-d H:i" %}
+                        申请人 {{ applicant }} · 创建于 {{ created }}
+                    {% endblocktranslate %}
+                </div>
+            </div>
+            <div class="head-actions">
+                {% if can_browse_schedule %}
+                    <a class="btn" href="{% url 'defenses:schedule' %}">{% translate "返回线下答辩" %}</a>
+                {% endif %}
+                <a class="btn" href="{% url 'projects:group_detail' defense_request.group.pk %}">{% translate "查看项目组" %}</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="spec reveal">
+        <div>
+            <div class="k">{% translate "状态" %}</div>
+            <div class="v text">
+                {% if defense_request.is_open %}
+                    <span class="chip chip-warn">{{ defense_request.get_status_display }}</span>
+                {% else %}
+                    <span class="chip chip-ok">{{ defense_request.get_status_display }}</span>
+                {% endif %}
+            </div>
+        </div>
+        <div>
+            <div class="k">{% translate "申请人" %}</div>
+            <div class="v text">{{ defense_request.applicant.profile.full_name|default:defense_request.applicant.username }}</div>
+        </div>
+        <div>
+            <div class="k">{% translate "创建时间" %}</div>
+            <div class="v mono">{{ defense_request.created_at|date:"Y-m-d H:i" }}</div>
+        </div>
+        <div>
+            <div class="k">{% translate "确定时间" %}</div>
+            <div class="v mono">
+                {% if defense_request.closed_at %}{{ defense_request.closed_at|date:"Y-m-d H:i" }}{% else %}—{% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="split">
+        <div class="stack reveal">
+            <div class="panel">
+                <div class="panel-head">
+                    <h2>{% translate "答辩安排" %}</h2>
+                    {% if defense_request.is_closed %}
+                        <span class="chip chip-off">{% translate "最终版本" %}</span>
+                    {% endif %}
+                </div>
+                <div class="panel-body">
+                    <div class="msg">{{ defense_request.content|linebreaksbr }}</div>
+                    {% if can_edit %}
+                        <form method="post" action="{% url 'defenses:request_edit' defense_request.pk %}">
+                            {% csrf_token %}
+                            <div class="field">
+                                <label for="{{ edit_form.content.id_for_label }}">{{ edit_form.content.label }}</label>
+                                {{ edit_form.content }}
+                                {% if edit_form.content.help_text %}<p class="help">{{ edit_form.content.help_text }}</p>{% endif %}
+                                <p class="help">{% translate "保存后会自动在讨论里留下一条「申请者修改了答辩申请」。" %}</p>
+                                {{ edit_form.content.errors }}
+                            </div>
+                            <div class="form-actions">
+                                <button class="btn btn-primary" type="submit">{% translate "保存修改" %}</button>
+                            </div>
+                        </form>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-head">
+                    <h2>{% translate "讨论" %}</h2>
+                    <span class="count">{{ comments|length }}</span>
+                </div>
+                <div class="panel-body">
+                    <div class="discussion-comments">
+                        {% for comment in comments %}
+                            <div class="discussion-comment" id="comment-{{ comment.pk }}">
+                                <div class="discussion-comment-head">
+                                    <strong>{{ comment.author.profile.full_name|default:comment.author.username }}</strong>
+                                    <span class="muted">{{ comment.created_at|date:"Y-m-d H:i" }}</span>
+                                    {% if comment.is_edit %}
+                                        <span class="chip chip-off">{% translate "修改记录" %}</span>
+                                    {% endif %}
+                                </div>
+                                {% if comment.is_edit %}
+                                    <p class="muted">{% translate "申请者修改了答辩申请" %}</p>
+                                {% else %}
+                                    <p>{{ comment.body|linebreaksbr }}</p>
+                                {% endif %}
+                            </div>
+                        {% empty %}
+                            <div class="empty">{% translate "还没有讨论。" %}</div>
+                        {% endfor %}
+                    </div>
+
+                    {% if can_comment %}
+                        <form method="post" action="{% url 'defenses:comment_create' defense_request.pk %}" class="discussion-comment-form">
+                            {% csrf_token %}
+                            <label class="visually-hidden" for="{{ comment_form.body.id_for_label }}">{{ comment_form.body.label }}</label>
+                            {{ comment_form.body }}
+                            <p class="help">{% translate "可以讨论时间、地点，或说明自己能不能到场。评论发表后不能修改。" %}</p>
+                            <button class="btn btn-primary btn-sm" type="submit">{% translate "发表评论" %}</button>
+                        </form>
+                    {% elif defense_request.is_closed %}
+                        <p class="help">{% translate "该申请已确定，正文与讨论都已归档，不能再修改或评论。" %}</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="stack reveal">
+            <div class="panel">
+                <div class="panel-head"><h2>{% translate "参与信息" %}</h2></div>
+                <div class="panel-body">
+                    <dl class="dl">
+                        <div><dt>{% translate "项目组" %}</dt><dd><a href="{% url 'projects:group_detail' defense_request.group.pk %}">{{ defense_request.group.name }}</a></dd></div>
+                        <div><dt>{% translate "申请人" %}</dt><dd>{{ defense_request.applicant.profile.full_name|default:defense_request.applicant.username }}</dd></div>
+                        <div><dt>{% translate "最后更新" %}</dt><dd>{{ defense_request.updated_at|date:"Y-m-d H:i" }}</dd></div>
+                        {% if defense_request.is_closed %}
+                            <div><dt>{% translate "关闭人" %}</dt><dd>{{ defense_request.closed_by.profile.full_name|default:defense_request.closed_by.username }}</dd></div>
+                        {% endif %}
+                    </dl>
+                </div>
+            </div>
+
+            {% if can_close %}
+                <div class="panel">
+                    <div class="panel-head"><h2>{% translate "关闭申请" %}</h2></div>
+                    <div class="panel-body">
+                        <p class="help">{% translate "关闭后申请进入「已确定」，正文与讨论都不能再修改。关闭前请确认时间与地点已经谈妥。" %}</p>
+                        <form method="post" action="{% url 'defenses:request_close' defense_request.pk %}" data-confirm="{% translate '关闭后正文与讨论都不能再修改，确定关闭吗？' %}">
+                            {% csrf_token %}
+                            <button class="btn btn-danger" type="submit">{% translate "关闭申请" %}</button>
+                        </form>
+                    </div>
+                </div>
+            {% elif defense_request.is_closed %}
+                <div class="panel">
+                    <div class="panel-head"><h2>{% translate "已归档" %}</h2></div>
+                    <div class="panel-body">
+                        <p class="help">{% translate "这条申请已经确定，正文与讨论保留作记录。需要新的安排时，请让项目组联系人重新发起一条申请。" %}</p>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

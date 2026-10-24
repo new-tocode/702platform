@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% translate "线下答辩" %} - {% translate "竞赛社团管理平台" %}{% endblock %}
+
+{% block content %}
+<div class="wrap">
+    <div class="pagehead">
+        <div class="path">
+            <a href="{% url 'accounts:member_home' %}">/member</a>
+            <span>/</span>
+            <a href="{% url 'reviews:queue' %}">reviews</a>
+            <span>/</span>
+            <span>defenses</span>
+        </div>
+        <div class="head-row">
+            <div>
+                <h1>{% translate "线下答辩" %}</h1>
+                <div class="sub">
+                    {% translate "项目组的线下模拟答辩安排都在这里。申请关闭前可以在详情里讨论时间与地点；关闭后进入「已确定」，只保留最终正文与完整讨论。" %}
+                </div>
+            </div>
+            <div class="head-actions">
+                <a class="btn" href="{% url 'reviews:queue' %}">{% translate "返回评审" %}</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="split">
+        <div class="stack reveal">
+            <div class="panel">
+                <div class="panel-head">
+                    <h2>{% translate "安排中" %}</h2>
+                    <span class="count">{{ open_requests|length }} open</span>
+                </div>
+                <div class="panel-body tight">
+                    <div class="queue">
+                        {% for item in open_requests %}
+                            <div class="qitem">
+                                <span class="idx">#{{ item.pk }}</span>
+                                <div class="grow">
+                                    <div>
+                                        <a class="who" href="{% url 'defenses:detail' item.pk %}">{{ item.group.name }}</a>
+                                        <span class="when">{{ item.created_at|date:"Y-m-d H:i" }}</span>
+                                    </div>
+                                    <div class="msg">{{ item.content|truncatechars:120|linebreaksbr }}</div>
+                                    <div class="qmeta">
+                                        {% blocktranslate with applicant=item.applicant.profile.full_name|default:item.applicant.username %}申请人 {{ applicant }}{% endblocktranslate %}
+                                        · {% blocktranslate count counter=item.comment_count %}1 条讨论{% plural %}{{ counter }} 条讨论{% endblocktranslate %}
+                                    </div>
+                                    <div class="btn-row">
+                                        <a class="btn btn-primary btn-sm" href="{% url 'defenses:detail' item.pk %}">{% translate "查看并讨论" %}</a>
+                                    </div>
+                                </div>
+                            </div>
+                        {% empty %}
+                            <div class="empty">{% translate "暂无安排中的答辩申请。" %}</div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="stack reveal">
+            <div class="panel">
+                <div class="panel-head">
+                    <h2>{% translate "已确定" %}</h2>
+                    <span class="count">{{ closed_requests|length }} closed</span>
+                </div>
+                <div class="panel-body tight">
+                    <div class="queue">
+                        {% for item in closed_requests %}
+                            <div class="qitem">
+                                <span class="idx">#{{ item.pk }}</span>
+                                <div class="grow">
+                                    <div>
+                                        <a class="who" href="{% url 'defenses:detail' item.pk %}">{{ item.group.name }}</a>
+                                        <span class="when">{{ item.created_at|date:"Y-m-d H:i" }}</span>
+                                    </div>
+                                    <div class="msg">{{ item.content|truncatechars:120|linebreaksbr }}</div>
+                                    <div class="qmeta">
+                                        {% blocktranslate with applicant=item.applicant.profile.full_name|default:item.applicant.username %}申请人 {{ applicant }}{% endblocktranslate %}
+                                        {% if item.closed_at %}· {% blocktranslate with closed=item.closed_at|date:"Y-m-d H:i" %}确定于 {{ closed }}{% endblocktranslate %}{% endif %}
+                                    </div>
+                                    <div class="btn-row">
+                                        <a class="btn btn-sm" href="{% url 'defenses:detail' item.pk %}">{% translate "查看记录" %}</a>
+                                    </div>
+                                </div>
+                            </div>
+                        {% empty %}
+                            <div class="empty">{% translate "暂无已确定的答辩安排。" %}</div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

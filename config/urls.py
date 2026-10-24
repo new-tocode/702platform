@@ -26,6 +26,10 @@ urlpatterns += i18n_patterns(
         include(("reviews.urls", "reviews"), namespace="reviews"),
     ),
     path(
+        "member/defenses/",
+        include(("defenses.urls", "defenses"), namespace="defenses"),
+    ),
+    path(
         "member/competitions/",
         include(("competitions.urls", "competitions"), namespace="competitions"),
     ),
