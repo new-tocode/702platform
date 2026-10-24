@@ -263,6 +263,35 @@
             </div>
 
             <div class="panel">
+                <div class="panel-head">
+                    <h2>{% translate "线下模拟答辩" %}</h2>
+                    <span class="count">{{ defense_requests|length }} requests</span>
+                </div>
+                <div class="panel-body">
+                    <p class="help">{% translate "需要线下模拟答辩时在这里发起申请，写明时间和地点。评审人会在「线下答辩」中讨论，申请人可以随时修改正文，直到申请被关闭。" %}</p>
+                    {% if defense_requests %}
+                        <div class="queue">
+                            {% for item in defense_requests %}
+                                <div class="qitem">
+                                    <span class="idx">#{{ item.pk }}</span>
+                                    <div class="grow">
+                                        <div>
+                                            <a class="who" href="{% url 'defenses:detail' item.pk %}">{{ item.get_status_display }}</a>
+                                            <span class="when">{{ item.created_at|date:"Y-m-d H:i" }}</span>
+                                        </div>
+                                        <div class="msg">{{ item.content|truncatechars:80|linebreaksbr }}</div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    <div class="form-actions">
+                        <a class="btn btn-primary" href="{% url 'defenses:request_create' group.pk %}">{% translate "申请线下模拟答辩" %}</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
                 <div class="panel-head"><h2>{% translate "转让联系人" %}</h2></div>
                 <div class="panel-body">
                     {% if transfer_form.fields.new_contact.queryset %}

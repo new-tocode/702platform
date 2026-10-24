@@ -278,6 +278,24 @@ def _create_result_content(message):
     )
 
 
+def _defense_request_content(message):
+    """有人发起线下模拟答辩：给三种评审资格持有者，点开进申请详情。
+
+    说明列是申请当前的状态（「安排中」／「已确定」），现取现算——关闭之后这一行
+    跟着变，收件人不必点进去就知道排期已经确定。
+    """
+    defense_request = message.defense_request
+    if defense_request is None:
+        # 引用缺失的坏行（绕过 notify_defense_request 建的）：不给一条点不开的行。
+        return None
+    return _EventContent(
+        _("%(name)s · 线下模拟答辩申请") % {"name": defense_request.group.name},
+        reverse("defenses:detail", args=(defense_request.pk,)),
+        display_name(defense_request.applicant),
+        defense_request.get_status_display(),
+    )
+
+
 def direct_reply_target(direct):
     """这条私信能回给谁：发信人**仍在册**才有得回，否则是 ``None``。
 
@@ -323,6 +341,7 @@ _TYPE_LABELS = {
     Message.JOIN_RESULT: _("入组结果"),
     Message.CREATE_REQUEST: _("建组申请"),
     Message.CREATE_RESULT: _("建组结果"),
+    Message.DEFENSE_REQUEST: _("线下答辩"),
 }
 
 #: 每种 kind 怎么渲染成行；接新来源时在这里加一条。
@@ -337,19 +356,23 @@ _CONTENT_BUILDERS = {
     Message.JOIN_RESULT: _join_result_content,
     Message.CREATE_REQUEST: _create_request_content,
     Message.CREATE_RESULT: _create_result_content,
+    Message.DEFENSE_REQUEST: _defense_request_content,
 }
 
 
 def _renderable_messages(user):
     """我收到的、真渲染得出来的事件消息行。
 
-    今天唯一被排除的是「有 ``kind=direct`` 但没有正文」的坏行（绕过写入函数建的）：
-    :func:`_event_rows` 渲染不出来它，计数若还算上它，就会「提醒条说 1 条未读、
-    「我的消息」里却没有任何一行可点」——同一个数字不该有两处口径。
+    被排除的是「来源缺失」的坏行：``kind=direct`` 却没有正文、``kind=defense_request``
+    却没有申请。:func:`_event_rows` 渲染不出来它们，计数若还算上，就会「提醒条说
+    1 条未读、「我的消息」里却没有任何一行可点」——同一个数字不该有两处口径。
     """
     return Message.objects.filter(recipient=user).exclude(
         kind=Message.DIRECT,
         direct_message__isnull=True,
+    ).exclude(
+        kind=Message.DEFENSE_REQUEST,
+        defense_request__isnull=True,
     )
 
 
@@ -364,6 +387,8 @@ def _event_rows(user):
         "join_request__decided_by__profile",
         "create_request__applicant__profile",
         "create_request__decided_by__profile",
+        "defense_request__group",
+        "defense_request__applicant__profile",
         "direct_message__sender__profile",
     )
     rows = []

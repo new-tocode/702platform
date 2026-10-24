@@ -456,6 +456,10 @@ def group_manage(request, pk):
     latest_submission = (
         group.submissions.select_related("submitted_by").order_by("-round", "-id").first()
     )
+    # 局部导入：defenses 的申请模型反过来以 ProjectGroup 为外键，放在模块级会把
+    # projects → defenses → projects 闭成加载期环（见 docs/更新维护/模块与关系.md §2）。
+    from defenses.selectors import requests_for_group
+
     return render(
         request,
         "projects/group_manage.html",
@@ -469,6 +473,7 @@ def group_manage(request, pk):
             "materials_form": GroupMaterialsForm(instance=group),
             "submit_form": SubmissionForm(),
             "latest_submission": latest_submission,
+            "defense_requests": requests_for_group(group),
         },
     )
 
