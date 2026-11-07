@@ -8,8 +8,10 @@
     <div class="pagehead">
         <div class="path">
             <a href="{% url 'accounts:member_home' %}">/member</a>
-            <span>/</span>
-            <a href="{% url 'reviews:queue' %}">reviews</a>
+            {% if can_open_reviews %}
+                <span>/</span>
+                <a href="{% url 'reviews:queue' %}">reviews</a>
+            {% endif %}
             <span>/</span>
             <span>defenses</span>
         </div>
@@ -17,11 +19,15 @@
             <div>
                 <h1>{% translate "线下答辩" %}</h1>
                 <div class="sub">
-                    {% translate "项目组的线下模拟答辩安排都在这里。申请关闭前可以在详情里讨论时间与地点；关闭后进入「已确定」，只保留最终正文与完整讨论。" %}
+                    {% translate "项目组的线下模拟答辩安排都在这里。申请关闭前，发起项目组的成员与评审人可以在详情里讨论时间与地点；关闭后进入「已确定」，只保留最终正文与完整讨论。" %}
                 </div>
             </div>
             <div class="head-actions">
-                <a class="btn" href="{% url 'reviews:queue' %}">{% translate "返回评审" %}</a>
+                {% if can_open_reviews %}
+                    <a class="btn" href="{% url 'reviews:queue' %}">{% translate "返回评审" %}</a>
+                {% else %}
+                    <a class="btn" href="{% url 'accounts:member_home' %}">{% translate "返回成员中心" %}</a>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -49,7 +55,7 @@
                                         · {% blocktranslate count counter=item.comment_count %}1 条讨论{% plural %}{{ counter }} 条讨论{% endblocktranslate %}
                                     </div>
                                     <div class="btn-row">
-                                        <a class="btn btn-primary btn-sm" href="{% url 'defenses:detail' item.pk %}">{% translate "查看并讨论" %}</a>
+                                        <a class="btn btn-primary btn-sm" href="{% url 'defenses:detail' item.pk %}">{% translate "查看详情" %}</a>
                                     </div>
                                 </div>
                             </div>

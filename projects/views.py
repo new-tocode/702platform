@@ -162,9 +162,10 @@ def group_list(request):
 
 @login_required
 def group_detail(request, pk):
-    # 局部导入：让 projects 不在模块加载期就依赖 reviews 与 competitions
-    # （两处都是「对方的页面区块」由对方自己装配）。
+    # 局部导入：让 projects 不在模块加载期就依赖 reviews、competitions 与 defenses
+    # （三处都是「对方的页面区块」由对方自己装配）。
     from competitions.panels import group_detail_context as competition_panel
+    from defenses.selectors import requests_for_group
     from notices.panels import direct_compose_context
     from reviews.panels import group_detail_context
 
@@ -194,6 +195,7 @@ def group_detail(request, pk):
         "latest_submission": submissions[0] if submissions else None,
         "archived_replies": group.archived_replies.select_related("submission"),
         "can_manage": can_manage_group(request.user, group),
+        "defense_requests": requests_for_group(group),
     }
     # 评审那一半（我的任务、可行使的超级评审、三个表单）由评审应用自己装配；
     # 竞赛报名那块（本组报了哪些竞赛）由竞赛应用自己装配。
@@ -459,9 +461,6 @@ def group_manage(request, pk):
     latest_submission = (
         group.submissions.select_related("submitted_by").order_by("-round", "-id").first()
     )
-    # 局部导入：defenses 的申请模型反过来以 ProjectGroup 为外键，放在模块级会把
-    # projects → defenses → projects 闭成加载期环（见 docs/更新维护/模块与关系.md §2）。
-    from defenses.selectors import requests_for_group
 
     return render(
         request,
@@ -476,7 +475,6 @@ def group_manage(request, pk):
             "materials_form": GroupMaterialsForm(instance=group),
             "submit_form": SubmissionForm(),
             "latest_submission": latest_submission,
-            "defense_requests": requests_for_group(group),
         },
     )
 
