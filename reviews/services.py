@@ -383,8 +383,6 @@ def _open_review_stage(submission, *, reviewer_ids=None):
         ids = list(dict.fromkeys(int(pk) for pk in (reviewer_ids or ())))
     except (TypeError, ValueError):
         raise ReviewError(_("所选评审人无效，请重新指定。"))
-    if len(ids) != required:
-        raise ReviewError(_("请指定 %(count)s 名评审人。") % {"count": required})
     pool = eligible_holders(
         stage=lifecycle.STAGE_REVIEW,
         group=submission.group,
@@ -398,6 +396,8 @@ def _open_review_stage(submission, *, reviewer_ids=None):
         stage=lifecycle.STAGE_REVIEW,
         hint=_("无法通过初审，请稍后重试或联系管理员补充评审人。"),
     )
+    if len(ids) != required:
+        raise ReviewError(_("请指定 %(count)s 名评审人。") % {"count": required})
     candidates = {
         user.pk: user for user in pool.filter(pk__in=ids)
     }
