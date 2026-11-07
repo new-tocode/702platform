@@ -464,6 +464,19 @@ class ReviewerPickerPageTests(ReviewTestCase):
         self.assertContains(submitter_view, "评审老师甲")
         self.assertContains(submitter_view, "评审老师乙")
         self.assertContains(submitter_view, "评审人 1")
+        # 评审人姓名旁有与初审人同款的私信入口。
+        self.assertContains(
+            submitter_view,
+            reverse(
+                "member_notices:direct_compose", args=(self.reviewer_one.pk,)
+            ),
+        )
+        self.assertContains(
+            submitter_view,
+            reverse(
+                "member_notices:direct_compose", args=(self.reviewer_two.pk,)
+            ),
+        )
 
         self.client.force_login(self.member)
         member_view = self.client.get(
@@ -471,6 +484,12 @@ class ReviewerPickerPageTests(ReviewTestCase):
         )
         self.assertNotContains(member_view, "评审老师甲")
         self.assertNotContains(member_view, "评审老师乙")
+        self.assertNotContains(
+            member_view,
+            reverse(
+                "member_notices:direct_compose", args=(self.reviewer_one.pk,)
+            ),
+        )
 
     def test_the_submitter_still_sees_super_review_anonymously(self):
         """姓名例外只覆盖初审人指定的评审人，不覆盖超级评审那一票。"""

@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 702platform\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-07 16:46+0800\n"
+"POT-Creation-Date: 2026-11-07 16:51+0800\n"
 "PO-Revision-Date: 2026-09-19 18:39\n"
 "Last-Translator: 702platform\n"
 "Language-Team: 702platform\n"
@@ -179,7 +179,7 @@ msgstr "Guest"
 
 #: accounts/selectors.py:59 reviews/lifecycle.py:117
 #: templates/projects/group_detail.html:223
-#: templates/projects/group_detail.html:415
+#: templates/projects/group_detail.html:420
 msgid "评审人"
 msgstr "Reviewer"
 
@@ -190,7 +190,7 @@ msgstr "Preliminary reviewer"
 
 #: accounts/selectors.py:63 templates/accounts/member_home.html:37
 #: templates/projects/group_detail.html:215
-#: templates/projects/group_detail.html:345
+#: templates/projects/group_detail.html:350
 msgid "超级评审"
 msgstr "Super reviewer"
 
@@ -1047,7 +1047,7 @@ msgid "待初审"
 msgstr "Pending preliminary"
 
 #: notices/selectors.py:182 reviews/lifecycle.py:71
-#: templates/projects/group_detail.html:239 templates/reviews/queue.html:82
+#: templates/projects/group_detail.html:244 templates/reviews/queue.html:82
 #: templates/reviews/queue.html:190
 msgid "待评审"
 msgstr "Pending review"
@@ -1101,6 +1101,7 @@ msgstr "Mention"
 #: templates/notices/direct_detail.html:12
 #: templates/notices/direct_detail.html:16
 #: templates/projects/group_detail.html:202
+#: templates/projects/group_detail.html:228
 msgid "私信"
 msgstr "Direct message"
 
@@ -1213,7 +1214,7 @@ msgid "指导老师 3"
 msgstr "Advisor 3"
 
 #: projects/forms.py:116 projects/validators.py:26
-#: templates/projects/group_detail.html:259
+#: templates/projects/group_detail.html:264
 #: templates/projects/group_manage.html:180
 msgid "项目资料"
 msgstr "Materials"
@@ -1379,7 +1380,7 @@ msgid "无法提交审核。"
 msgstr "cannot submit for review."
 
 #: reviews/forms.py:20 templates/projects/group_detail.html:43
-#: templates/projects/group_detail.html:313
+#: templates/projects/group_detail.html:318
 msgid "评审类型"
 msgstr "Review type"
 
@@ -1436,7 +1437,7 @@ msgstr ""
 "the group will revise the materials accordingly."
 
 #: reviews/forms.py:98 reviews/validators.py:30
-#: templates/projects/group_detail.html:291
+#: templates/projects/group_detail.html:296
 msgid "评审回复"
 msgstr "Review reply"
 
@@ -1450,12 +1451,12 @@ msgstr "Under review"
 
 #: reviews/lifecycle.py:52 reviews/lifecycle.py:103
 #: templates/projects/group_detail.html:184
-#: templates/projects/group_detail.html:315
+#: templates/projects/group_detail.html:320
 msgid "初审"
 msgstr "Preliminary review"
 
-#: reviews/lifecycle.py:62 templates/projects/group_detail.html:391
-#: templates/projects/group_detail.html:442
+#: reviews/lifecycle.py:62 templates/projects/group_detail.html:396
+#: templates/projects/group_detail.html:447
 msgid "待处理"
 msgstr "Pending"
 
@@ -1465,7 +1466,7 @@ msgstr "Completed"
 
 #: reviews/lifecycle.py:64 reviews/lifecycle.py:70 reviews/lifecycle.py:73
 #: templates/projects/group_detail.html:189
-#: templates/projects/group_detail.html:236 templates/reviews/queue.html:99
+#: templates/projects/group_detail.html:241 templates/reviews/queue.html:99
 #: templates/reviews/queue.html:329
 msgid "已释放"
 msgstr "Released"
@@ -3384,94 +3385,94 @@ msgstr ""
 msgid "评审人 %(number)s"
 msgstr "Reviewer %(number)s"
 
-#: templates/projects/group_detail.html:231
+#: templates/projects/group_detail.html:236
 msgid "下载评审回复"
 msgstr "Download review reply"
 
-#: templates/projects/group_detail.html:237
+#: templates/projects/group_detail.html:242
 msgid "本轮已由超级评审敲定，该评审任务随之结束"
 msgstr "A super reviewer settled this round, so this review task is closed"
 
-#: templates/projects/group_detail.html:244
+#: templates/projects/group_detail.html:249
 msgid "评审任务"
 msgstr "Review tasks"
 
-#: templates/projects/group_detail.html:244
+#: templates/projects/group_detail.html:249
 msgid "暂无"
 msgstr "None"
 
-#: templates/projects/group_detail.html:250
+#: templates/projects/group_detail.html:255
 msgid "暂无评审记录。"
 msgstr "No review history yet."
 
-#: templates/projects/group_detail.html:266
+#: templates/projects/group_detail.html:271
 msgid "点击下载查看全文"
 msgstr "Click to download the full text"
 
-#: templates/projects/group_detail.html:270
-#: templates/projects/group_detail.html:357
-#: templates/projects/group_detail.html:402
-#: templates/projects/group_detail.html:447
+#: templates/projects/group_detail.html:275
+#: templates/projects/group_detail.html:362
+#: templates/projects/group_detail.html:407
+#: templates/projects/group_detail.html:452
 msgid "下载项目资料"
 msgstr "Download materials"
 
-#: templates/projects/group_detail.html:274
+#: templates/projects/group_detail.html:279
 #: templates/projects/group_manage.html:197
 msgid "尚未上传项目资料。"
 msgstr "No materials uploaded yet."
 
-#: templates/projects/group_detail.html:281
+#: templates/projects/group_detail.html:286
 msgid "评审回复归档"
 msgstr "Archived review replies"
 
-#: templates/projects/group_detail.html:295
+#: templates/projects/group_detail.html:300
 msgid "下载"
 msgstr "Download"
 
-#: templates/projects/group_detail.html:301
+#: templates/projects/group_detail.html:306
 msgid "评审通过后，评审人上传的评审回复会归档到这里。"
 msgstr ""
 "Once a round is approved, the review replies uploaded by reviewers are "
 "archived here."
 
-#: templates/projects/group_detail.html:308
+#: templates/projects/group_detail.html:313
 msgid "方案状态"
 msgstr "Proposal status"
 
-#: templates/projects/group_detail.html:312 templates/reviews/queue.html:233
+#: templates/projects/group_detail.html:317 templates/reviews/queue.html:233
 #: templates/reviews/queue.html:270 templates/reviews/queue.html:298
 #: templates/reviews/queue.html:335
 msgid "轮次"
 msgstr "Round"
 
-#: templates/projects/group_detail.html:315
+#: templates/projects/group_detail.html:320
 msgid "进行中"
 msgstr "In progress"
 
-#: templates/projects/group_detail.html:317
+#: templates/projects/group_detail.html:322
 msgid "评审进度"
 msgstr "Review progress"
 
-#: templates/projects/group_detail.html:319 templates/reviews/queue.html:233
+#: templates/projects/group_detail.html:324 templates/reviews/queue.html:233
 #: templates/reviews/queue.html:298
 msgid "结论"
 msgstr "Decision"
 
-#: templates/projects/group_detail.html:323
+#: templates/projects/group_detail.html:328
 msgid "方案已通过，可按此推进项目。"
 msgstr "The proposal is approved — go ahead with the project."
 
-#: templates/projects/group_detail.html:326
+#: templates/projects/group_detail.html:331
 msgid "请根据评审意见修改项目资料后重新提交。"
 msgstr "Revise the materials according to the review comments and resubmit."
 
-#: templates/projects/group_detail.html:328
+#: templates/projects/group_detail.html:333
 msgid "本轮由初审打回（没有进入评审），请根据初审意见修改项目资料后重新提交。"
 msgstr ""
 "This round was sent back at preliminary review (it never reached the "
 "reviewers); revise the materials accordingly and resubmit."
 
-#: templates/projects/group_detail.html:331
+#: templates/projects/group_detail.html:336
 #, python-format
 msgid "等待初审人给出意见；初审通过后由初审人指定 1 名评审人。"
 msgid_plural ""
@@ -3483,7 +3484,7 @@ msgstr[1] ""
 "Waiting for the preliminary reviewer's decision; once it passes, the "
 "preliminary reviewer assigns %(counter)s reviewers."
 
-#: templates/projects/group_detail.html:333
+#: templates/projects/group_detail.html:338
 #, python-format
 msgid "等待评审人提交意见；1 名评审人全部通过后方案即为通过。"
 msgid_plural "等待评审人提交意见；%(counter)s 名评审人全部通过后方案即为通过。"
@@ -3494,15 +3495,15 @@ msgstr[1] ""
 "Waiting for the reviewers to respond; the proposal is approved once all "
 "%(counter)s reviewers approve."
 
-#: templates/projects/group_detail.html:337
+#: templates/projects/group_detail.html:342
 msgid "尚未提交评审。"
 msgstr "Not submitted for review yet."
 
-#: templates/projects/group_detail.html:346
+#: templates/projects/group_detail.html:351
 msgid "一票决定"
 msgstr "One vote decides"
 
-#: templates/projects/group_detail.html:350
+#: templates/projects/group_detail.html:355
 #, python-format
 msgid ""
 "你的决定会立即敲定第 %(round)s 轮，本轮尚未提交的 1 个任务（初审／评审）会随"
@@ -3519,15 +3520,15 @@ msgstr[1] ""
 "still open this round (preliminary and review) are released right away. "
 "Download the materials first, and attach a review reply if you wish."
 
-#: templates/projects/group_detail.html:380
+#: templates/projects/group_detail.html:385
 msgid "提交超级评审"
 msgstr "Submit super review"
 
-#: templates/projects/group_detail.html:390
+#: templates/projects/group_detail.html:395
 msgid "我的初审"
 msgstr "My preliminary review"
 
-#: templates/projects/group_detail.html:395
+#: templates/projects/group_detail.html:400
 #, python-format
 msgid ""
 "你是第 %(round)s 轮的初审人：请先下载项目资料阅读， 再决定放行还是打回。通过"
@@ -3539,26 +3540,26 @@ msgstr ""
 "choose %(required)s reviewers. If you send it back, the round ends and the "
 "group can revise and resubmit."
 
-#: templates/projects/group_detail.html:418
+#: templates/projects/group_detail.html:423
 #: templates/reviews/reviewer_picker.html:15
 msgid "指定评审人"
 msgstr "Choose reviewers"
 
-#: templates/projects/group_detail.html:421
+#: templates/projects/group_detail.html:426
 #, python-format
 msgid "通过时需恰好指定 %(required)s 名评审人；打回不需要指定。"
 msgstr ""
 "Approval requires exactly %(required)s reviewers; sending it back needs none."
 
-#: templates/projects/group_detail.html:430
+#: templates/projects/group_detail.html:435
 msgid "提交初审"
 msgstr "Submit preliminary decision"
 
-#: templates/projects/group_detail.html:441 templates/reviews/queue.html:16
+#: templates/projects/group_detail.html:446 templates/reviews/queue.html:16
 msgid "我的评审"
 msgstr "My reviews"
 
-#: templates/projects/group_detail.html:445
+#: templates/projects/group_detail.html:450
 msgid ""
 "请先下载本轮项目资料，阅读后填写评审意见与决定；如有需要补充的材料，可作为评"
 "审回复一并上传。"
@@ -3566,7 +3567,7 @@ msgstr ""
 "Download this round's materials, then record your decision and comments; if "
 "you have supporting files, upload them as a review reply."
 
-#: templates/projects/group_detail.html:470
+#: templates/projects/group_detail.html:475
 msgid "完成评审"
 msgstr "Submit review"
 
@@ -3770,11 +3771,12 @@ msgstr ""
 #: templates/projects/group_manage.html:254
 msgid ""
 "初审人与评审人姓名只对本轮提交人可见；超级评审对项目组匿名。提交人可直接私信"
-"初审人。"
+"初审人或评审人。"
 msgstr ""
-"The preliminary reviewer's and the assigned reviewers' names are visible only "
-"to this round's submitter; super reviewers remain anonymous to the group. The "
-"submitter can message the preliminary reviewer directly."
+"The preliminary reviewer's and the assigned reviewers' names are visible "
+"only to this round's submitter; super reviewers remain anonymous to the "
+"group. The submitter can message the preliminary reviewer or any assigned "
+"reviewer directly."
 
 #: templates/projects/group_manage.html:255
 msgid "评审人可另附评审回复。"

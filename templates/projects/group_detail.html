@@ -222,6 +222,11 @@
                                                         <div class="reviewer-contact">
                                                             <span class="muted">{% translate "评审人" %}</span>
                                                             <span class="who">{{ assignment.reviewer.profile.full_name|default:assignment.reviewer.username }}</span>
+                                                            {% if assignment.reviewer.is_active %}
+                                                                <a class="btn btn-sm" data-direct-compose
+                                                                   data-direct-name="{{ assignment.reviewer.profile.full_name|default:assignment.reviewer.username }}"
+                                                                   href="{% url 'member_notices:direct_compose' assignment.reviewer_id %}?next={{ request.get_full_path|urlencode }}">{% translate "私信" %}</a>
+                                                            {% endif %}
                                                         </div>
                                                     {% endif %}
                                                     {% if assignment.is_completed %}
