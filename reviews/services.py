@@ -5,13 +5,13 @@ Reviewer assignment, verdict aggregation and archiving live here so the rules
 approve" each have exactly one implementation.
 
 A round has two stages, and both are :class:`~reviews.models.ReviewTask` rows
-distinguished by ``stage``: one 初审人 gets the materials first, and only their
-通过 draws the ordinary reviewers (:func:`_open_review_stage`). Everything that
-is not stage-specific — who may hold a task, what a task may do next, how a
-verdict is recorded — is therefore written once (:func:`submit_verdict`) and
-parameterised by :data:`reviews.lifecycle.STAGES`.
+distinguished by ``stage``: one 初审人 gets the materials first, and their 通过
+opens the review stage with the reviewers they named (:func:`_open_review_stage`).
+Everything that is not stage-specific — who may hold a task, what a task may do
+next, how a verdict is recorded — is therefore written once
+(:func:`submit_verdict`) and parameterised by :data:`reviews.lifecycle.STAGES`.
 
-本模块只放写命令（改状态、写任务、留审计）。抽签在 :mod:`reviews.draw`，
+本模块只放写命令（改状态、写任务、留审计）。候选名单与初审抽取在 :mod:`reviews.draw`，
 只读的计数与策略在 :mod:`reviews.selectors`——它们过去都挤在这里，819 行里
 真正写库的不到一半。
 """
@@ -31,7 +31,7 @@ from projects.models import ProjectGroup
 
 from . import lifecycle
 
-# 抽签与只读查询已分别搬到 draw / selectors，但各调用方（views、panels、
+# 候选名单与只读查询已分别搬到 draw / selectors，但各调用方（views、panels、
 # forms、admin、accounts.signals 以及各测试模块）一直从本模块取这些名字，
 # 所以照旧转出，import 路径不变。
 from .draw import draw_tasks, eligible_holders, ensure_pool
@@ -48,6 +48,7 @@ from .selectors import (
 )
 
 from .models import (
+    COMPETITION_REVIEW_TYPES,
     REVIEWER_QUOTA,
     ArchivedReply,
     ReviewTask,
@@ -75,9 +76,9 @@ def _advance(submission, event, *, at=None):
 def submit_for_review(*, group, submitter, review_type, message="", request=None):
     """Open a new review round and hand it to one 初审人.
 
-    The round starts in 初审中 with no reviewers: the type's quota is spent by
-    :func:`_open_review_stage` once the 初审 passes, so materials that are not
-    ready never occupies the panel.
+    The round starts in 初审中 with no reviewers: the 初审人 specifies who
+    reviews it when they pass it through (:func:`_open_review_stage`), so
+    materials that are not ready never occupies the panel.
 
     The reviewers themselves are *not* reserved here, but the round is only
     opened if the pool could fill the quota right now. Otherwise a club that has
@@ -88,6 +89,13 @@ def submit_for_review(*, group, submitter, review_type, message="", request=None
     """
     if review_type not in REVIEWER_QUOTA:
         raise ReviewError(_("请选择评审类型。"))
+    if (
+        review_type in COMPETITION_REVIEW_TYPES
+        and not group.competition_registrations.exists()
+    ):
+        raise ReviewError(
+            _("本组还没有报名任何竞赛，不能提交竞赛类评审；请先在竞赛页报名后再提交。")
+        )
     if not group.materials:
         raise ReviewError(_("请先上传项目资料，再提交审核。"))
 
@@ -252,6 +260,7 @@ def submit_verdict(
     decision,
     comment,
     reply_file=None,
+    reviewer_ids=None,
     request=None,
 ):
     """交一张任务卡：写下结论，并让这一轮该发生的后续发生。
@@ -260,11 +269,13 @@ def submit_verdict(
     轮次还停不停止在这一关」这些校验、加锁顺序（submission → task）、审计与日志
     的形状全都相同，差别只在交完之后：
 
-    * 初审**通过** → 当场按送审类型抽齐评审人，轮次转入评审（:func:`_open_review_stage`）；
+    * 初审**通过** → 用初审人指定的 ``reviewer_ids`` 建评审任务，轮次转入评审
+      （:func:`_open_review_stage`）；
     * 初审**打回** → 本轮结束，项目组改稿后再送新一轮；
     * 评审**交卷** → 尝试汇总本轮（:func:`_settle_submission`），全员通过才算通过。
 
     评审回复只有评审阶段接收：初审给的是理由，不是稿子（表单也不给这个字段）。
+    ``reviewer_ids`` 只在初审通过时有意义；评审那一侧传了也不读。
     """
     stage = task.stage
     rules = lifecycle.STAGES[stage]
@@ -320,7 +331,9 @@ def submit_verdict(
         drawn = []
         if stage == ReviewTask.PRELIMINARY:
             if decision == ReviewTask.APPROVE:
-                drawn = _open_review_stage(submission)
+                drawn = _open_review_stage(
+                    submission, reviewer_ids=reviewer_ids
+                )
             else:
                 _advance(submission, lifecycle.PRELIMINARY_REVISED, at=now)
         else:
@@ -337,7 +350,7 @@ def submit_verdict(
             "decision": decision,
             "submission_status": submission.status,
             "reply": reply_file is not None,
-            # 初审通过时一并记下抽到的评审人（名单本身就是这一刻的结果）。
+            # 初审通过时一并记下指定的评审人（名单本身就是这一刻的结果）。
             "reviewer_ids": [user.pk for user in drawn],
         },
         request=request,
@@ -357,21 +370,50 @@ def submit_verdict(
     return locked
 
 
-def _open_review_stage(submission):
-    """初审通过：轮次转「评审中」，并按送审类型把评审人抽齐。
+def _open_review_stage(submission, *, reviewer_ids=None):
+    """初审通过：轮次转「评审中」，并给初审人指定的评审人建任务。
 
-    先过闸再抽人，两者在同一事务里：池子不够就整次回滚——结论不落库、初审任务
-    仍待处理，初审人可以在有人空闲后原地重试，轮次也不会停在「评审中」却无人可派。
+    名单与抽签共用 :func:`reviews.draw.eligible_holders`：资格、接单开关、利益
+    冲突与「一人一轮一席」都在同一个地方排除，指定因此绕不过任何一条既有规则。
+    校验与状态迁移在同一事务里：只要有一个名字不合格就整次回滚——结论不落库、
+    初审任务仍待处理，初审人可以在补齐人数后原地重试。
     """
-    _advance(submission, lifecycle.PRELIMINARY_APPROVED)
-    reviewers = draw_tasks(
+    required = submission.required_reviewers
+    try:
+        ids = list(dict.fromkeys(int(pk) for pk in (reviewer_ids or ())))
+    except (TypeError, ValueError):
+        raise ReviewError(_("所选评审人无效，请重新指定。"))
+    # 主键是 64 位有符号整数：超出范围的值会让数据库绑定层直接抛 OverflowError／
+    # DataError（500），而不是像「查不到」那样走到下面的候选复核。
+    if any(pk < 1 or pk > 2**63 - 1 for pk in ids):
+        raise ReviewError(_("所选评审人无效，请重新指定。"))
+    pool = eligible_holders(
         stage=lifecycle.STAGE_REVIEW,
         group=submission.group,
         submitter=submission.submitted_by,
-        count=submission.required_reviewers,
         submission=submission,
+    )
+    ensure_pool(
+        candidates=pool,
+        count=required,
+        label=lifecycle.STAGES[lifecycle.STAGE_REVIEW].holder_label,
+        stage=lifecycle.STAGE_REVIEW,
         hint=_("无法通过初审，请稍后重试或联系管理员补充评审人。"),
     )
+    if len(ids) != required:
+        raise ReviewError(_("请指定 %(count)s 名评审人。") % {"count": required})
+    candidates = {
+        user.pk: user for user in pool.filter(pk__in=ids)
+    }
+    if len(candidates) != required:
+        raise ReviewError(
+            _(
+                "所选评审人中有不可用的人选"
+                "（可能没有资格、已暂停接单，或已在本轮持有任务）。"
+            )
+        )
+    _advance(submission, lifecycle.PRELIMINARY_APPROVED)
+    reviewers = [candidates[pk] for pk in ids]
     for reviewer_user in reviewers:
         ReviewTask.objects.create(
             submission=submission,
@@ -574,8 +616,8 @@ def reassign_task(*, task, new_reviewer, actor, request=None):
 def set_reviewer_availability(*, reviewer, stage, receives, actor, request=None):
     """打开／关闭某一道关的「接单开关」，返回是否真的改动了。
 
-    开关与资格是两件事：关掉它不撤资格、不影响手上已有的任务，只是这个人不再被
-    抽中、也不再出现在改派候选里（见 :func:`reviews.draw.eligible_holders`）。
+    开关与资格是两件事：关掉它不撤资格、不影响手上已有的任务，只是这个人不再出现在
+    初审抽取、评审人指定与改派候选里（见 :func:`reviews.draw.eligible_holders`）。
 
     两条规则：
 

@@ -15,7 +15,7 @@ from ..models import (
     ProjectSubmission,
     preliminary_task_of,
 )
-from ..services import submit_verdict
+from ..services import override_review, submit_verdict
 from .base import (
     TWO_REVIEWER_TYPE,
     ReviewTestCase,
@@ -25,6 +25,7 @@ from .factories import (
     make_group,
     make_preliminary_reviewer,
     make_reviewer,
+    make_super_reviewer,
     make_user,
     materials_upload,
 )
@@ -162,7 +163,11 @@ class ReviewPagesTests(ReviewTestCase):
         self.client.force_login(self.preliminary)
         preliminary_response = self.client.post(
             reverse("reviews:preliminary_complete", args=(preliminary.pk,)),
-            {"decision": ReviewTask.APPROVE, "comment": "同意送审。"},
+            {
+                "decision": ReviewTask.APPROVE,
+                "comment": "同意送审。",
+                "reviewers": [self.reviewer_one.pk, self.reviewer_two.pk],
+            },
         )
         self.assertEqual(preliminary_response.status_code, 302)
         preliminary.refresh_from_db()
@@ -352,3 +357,157 @@ class CreateRequestQueueTests(ReviewTestCase):
 
         # 待办面板整块消失；上一位管理员那条 flash 消息可能还在会话里，不去管它。
         self.assertNotContains(response, "创建项目组申请")
+
+
+class ReviewerPickerPageTests(ReviewTestCase):
+    """初审人指定评审人的弹窗，以及申请人对初审人的可见性。"""
+
+    def setUp(self):
+        self.contact = make_user("picker-contact")
+        self.member = make_user("picker-member")
+        self.preliminary = make_preliminary_reviewer("picker-preliminary")
+        self.reviewer_one = make_reviewer("picker-reviewer-one")
+        self.reviewer_two = make_reviewer("picker-reviewer-two")
+        self.outsider = make_user("picker-outsider")
+        self.group = make_group("指定评审人页面组", leader=self.contact, members=[self.member])
+
+    def _busy_with_another_round(self, reviewer):
+        """给评审人挂一条别轮的进行中任务，用来渲染「进行中」状态。"""
+        other_group = make_group(
+            "另一个项目组", leader=self.outsider, write_materials=False
+        )
+        other_submission = ProjectSubmission.objects.create(
+            group=other_group,
+            round=1,
+            review_type=TWO_REVIEWER_TYPE,
+            submitted_by=self.outsider,
+        )
+        ReviewTask.objects.create(
+            submission=other_submission,
+            stage=ReviewTask.REVIEW,
+            reviewer=reviewer,
+        )
+
+    def test_the_preliminary_reviewer_gets_a_picker_with_names_bios_and_status(self):
+        self.preliminary.profile.bio = "熟悉前端与架构。"
+        self.preliminary.profile.save(update_fields=["bio"])
+        self.reviewer_one.profile.bio = "做过三届省赛。"
+        self.reviewer_one.profile.save(update_fields=["bio"])
+        self._busy_with_another_round(self.reviewer_two)
+        self._open_round()
+        self.client.force_login(self.preliminary)
+
+        response = self.client.get(
+            reverse("projects:group_detail", args=(self.group.pk,))
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "指定评审人")
+        self.assertContains(response, "做过三届省赛。")
+        options = {row["reviewer"].pk: row for row in response.context["reviewer_options"]}
+        self.assertFalse(options[self.reviewer_one.pk]["busy"])
+        self.assertTrue(options[self.reviewer_two.pk]["busy"])
+        self.assertContains(response, "已有进行中的评审任务")
+        self.assertContains(response, "空闲")
+
+    def test_the_submitter_sees_the_preliminary_reviewer_and_can_message_them(self):
+        self.preliminary.profile.full_name = "初审老师"
+        self.preliminary.profile.save(update_fields=["full_name"])
+        self._open_round()
+        self.client.force_login(self.contact)
+
+        response = self.client.get(
+            reverse("projects:group_detail", args=(self.group.pk,))
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "初审老师")
+        self.assertContains(
+            response,
+            reverse(
+                "member_notices:direct_compose", args=(self.preliminary.pk,)
+            ),
+        )
+        self.assertContains(response, "data-direct-compose")
+        # 申请人不是初审人，不需要指定评审人。
+        self.assertNotIn("reviewer_options", response.context)
+
+    def test_other_group_members_do_not_see_the_preliminary_reviewer(self):
+        self.preliminary.profile.full_name = "初审老师"
+        self.preliminary.profile.save(update_fields=["full_name"])
+        self._open_round()
+        self.client.force_login(self.member)
+
+        response = self.client.get(
+            reverse("projects:group_detail", args=(self.group.pk,))
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "初审老师")
+        self.assertNotContains(response, "data-direct-compose")
+
+    def test_the_submitter_sees_the_specified_reviewers_names(self):
+        """发起人看得到初审人指定了谁；组内其他成员仍然只看到位置编号。"""
+        self.reviewer_one.profile.full_name = "评审老师甲"
+        self.reviewer_one.profile.save(update_fields=["full_name"])
+        self.reviewer_two.profile.full_name = "评审老师乙"
+        self.reviewer_two.profile.save(update_fields=["full_name"])
+        submission = self._open_round()
+        self._pass_preliminary(
+            submission, reviewers=[self.reviewer_one, self.reviewer_two]
+        )
+
+        self.client.force_login(self.contact)
+        submitter_view = self.client.get(
+            reverse("projects:group_detail", args=(self.group.pk,))
+        )
+        self.assertContains(submitter_view, "评审老师甲")
+        self.assertContains(submitter_view, "评审老师乙")
+        self.assertContains(submitter_view, "评审人 1")
+        # 评审人姓名旁有与初审人同款的私信入口。
+        self.assertContains(
+            submitter_view,
+            reverse(
+                "member_notices:direct_compose", args=(self.reviewer_one.pk,)
+            ),
+        )
+        self.assertContains(
+            submitter_view,
+            reverse(
+                "member_notices:direct_compose", args=(self.reviewer_two.pk,)
+            ),
+        )
+
+        self.client.force_login(self.member)
+        member_view = self.client.get(
+            reverse("projects:group_detail", args=(self.group.pk,))
+        )
+        self.assertNotContains(member_view, "评审老师甲")
+        self.assertNotContains(member_view, "评审老师乙")
+        self.assertNotContains(
+            member_view,
+            reverse(
+                "member_notices:direct_compose", args=(self.reviewer_one.pk,)
+            ),
+        )
+
+    def test_the_submitter_still_sees_super_review_anonymously(self):
+        """姓名例外只覆盖初审人指定的评审人，不覆盖超级评审那一票。"""
+        super_reviewer = make_super_reviewer("picker-super")
+        super_reviewer.profile.full_name = "超级老师"
+        super_reviewer.profile.save(update_fields=["full_name"])
+        submission = self._open_round()
+        override_review(
+            submission=submission,
+            super_reviewer=super_reviewer,
+            decision=ReviewTask.APPROVE,
+            comment="直接通过。",
+        )
+        self.client.force_login(self.contact)
+
+        response = self.client.get(
+            reverse("projects:group_detail", args=(self.group.pk,))
+        )
+
+        self.assertContains(response, "超级评审")
+        self.assertNotContains(response, "超级老师")

@@ -1,4 +1,4 @@
-"""接单开关：关掉就不再被抽中、不进改派候选，手上还有任务时关不掉。
+"""接单开关：关掉就不再出现在候选里、不进改派候选，手上还有任务时关不掉。
 
 它替换掉的是一套「请假窗口」（起止两个时间点 + 事由 + 到点自动恢复）。最大的
 差别是**没有时间**：开关是本人此刻的状态，打开就恢复，所以这里没有一条围着时间
@@ -41,7 +41,7 @@ REVIEW = lifecycle.STAGE_REVIEW
 
 
 class ReviewerAvailabilityTests(ReviewTestCase):
-    #: 只开一人的轮次：候选人数少，抽签结果才写得死。
+    #: 只开一人的轮次：候选人数少，指定结果才写得死。
     round_type = ONE_REVIEWER_TYPE
 
     def setUp(self):
@@ -62,29 +62,29 @@ class ReviewerAvailabilityTests(ReviewTestCase):
             reviewer=reviewer, stage=stage, receives=True, actor=reviewer
         )
 
-    def _draw_one(self):
-        """送审一轮并过初审，返回抽到的评审人。"""
+    def _select_one(self):
+        """送审一轮并过初审，返回被指定的评审人。"""
         submission = self._open_round()
         self._pass_preliminary(submission)
         return self.review_tasks(submission).get().reviewer
 
-    # --- 对抽签的影响 -------------------------------------------------------
+    # --- 对候选名单的影响 ---------------------------------------------------
 
-    def test_a_closed_reviewer_is_not_drawn(self):
+    def test_a_closed_reviewer_is_not_selectable(self):
         other = make_reviewer("availability-reviewer-two")
         self._close(self.reviewer, REVIEW)
 
-        self.assertEqual(self._draw_one(), other)
+        self.assertEqual(self._select_one(), other)
 
     def test_reopening_restores_immediately(self):
-        """开关一变，下一次抽签立刻按新状态走——没有「窗口到点」这回事。"""
+        """开关一变，下一次指定立刻按新状态走——没有「窗口到点」这回事。"""
         other = make_reviewer("availability-reviewer-two")
         self._close(self.reviewer, REVIEW)
         self._close(other, REVIEW)
 
         self._open(self.reviewer, REVIEW)
 
-        self.assertEqual(self._draw_one(), self.reviewer)
+        self.assertEqual(self._select_one(), self.reviewer)
 
     def test_a_closed_preliminary_reviewer_is_not_drawn_for_preliminary(self):
         other = make_preliminary_reviewer("availability-preliminary-two")
@@ -98,14 +98,14 @@ class ReviewerAvailabilityTests(ReviewTestCase):
         """关掉初审不等于关掉评审：窗口那套是共用的，开关不是。
 
         同一份名单决定「谁会出现在哪一道关」——把初审人同时给评审资格，关掉他的
-        初审开关之后他照旧能被抽为评审人。
+        初审开关之后他照旧能被指定为评审人。
         """
         self.preliminary.is_reviewer = True
         self.preliminary.save(update_fields=["is_reviewer"])
         # 初审那一道关得另有其人，这一轮才开得出来。
         make_preliminary_reviewer("availability-preliminary-two")
         self._close(self.preliminary, PRELIMINARY)
-        # 评审池里只留他一个：抽签结果才不是运气（池里有两个人时断言会时灵时不灵）。
+        # 评审池里只留他一个：指定结果才不是运气（池里有两个人时断言会时灵时不灵）。
         self._close(self.reviewer, REVIEW)
 
         submission = self._open_round()

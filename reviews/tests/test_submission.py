@@ -1,7 +1,7 @@
 """送审这一侧：进入「评审」的入口，以及「这一轮开不开得出来」。
 
 开轮次的条件全在这里：送审类型、项目资料、初审人够不够、评审人够不够（容量预检）、
-上一轮结束没有。评审人怎么抽、结论怎么汇总、页面怎么渲染在别的模块。
+上一轮结束没有。评审人怎么指定、结论怎么汇总、页面怎么渲染在别的模块。
 """
 
 from django.urls import reverse
@@ -26,6 +26,7 @@ from .factories import (
     make_preliminary_reviewer,
     make_reviewer,
     make_user,
+    register_for_competition,
 )
 
 
@@ -62,7 +63,7 @@ class SubmissionTests(ReviewTestCase):
         # 需要的评审人数照旧由类型决定，只是要等初审通过才分配。
         self.assertEqual(submission.required_reviewers, 2)
 
-    def test_submission_assigns_two_random_reviewers(self):
+    def test_submission_assigns_the_reviewers_its_type_calls_for(self):
         submission = self._submit()
 
         self.assertEqual(submission.round, 1)
@@ -78,6 +79,8 @@ class SubmissionTests(ReviewTestCase):
 
     def test_review_type_determines_reviewer_quota(self):
         make_reviewer("reviewer-three")
+        # 竞赛类送审要求项目组至少报名一项竞赛；三种竞赛类型共用这一条报名。
+        register_for_competition(self.group)
 
         for review_type, expected in REVIEWER_QUOTA.items():
             with self.subTest(review_type=review_type):
@@ -165,16 +168,30 @@ class SubmissionTests(ReviewTestCase):
     def test_submission_blocked_when_candidates_below_quota(self):
         """评审人不够就不开这一轮。
 
-        抽人挪到了初审通过时，但「开得出一轮推进得了的送审」仍是提交这一侧的
+        指定评审人挪到了初审通过时，但「开得出一轮推进得了的送审」仍是提交这一侧的
         门槛：否则开出来的轮次谁也推进不了——联系人被单轮次约束挡住、初审人
         通不过，只能等管理员补资格或超级评审来收场。
         """
         # Only two qualified reviewers exist, but a competition round needs three.
+        register_for_competition(self.group)
         with self.assertRaises(ReviewError) as caught:
             self._open_round(review_type=REVIEW_TYPE_COMPETITION_PROJECT)
 
         self.assertIn("3 人", str(caught.exception))
         self.assertFalse(ProjectSubmission.objects.exists())
+
+    def test_competition_review_requires_a_registration(self):
+        """没有报名任何竞赛的项目组，不能提交竞赛类评审。"""
+        with self.assertRaises(ReviewError) as caught:
+            self._open_round(review_type=REVIEW_TYPE_COMPETITION_PROJECT)
+
+        self.assertIn("没有报名任何竞赛", str(caught.exception))
+        self.assertFalse(ProjectSubmission.objects.exists())
+
+        # 大创类不受这条限制。
+        submission = self._open_round()
+
+        self.assertEqual(submission.status, ProjectSubmission.PRELIMINARY_PENDING)
 
     def test_submit_view_requires_a_review_type(self):
         self.client.force_login(self.contact)

@@ -70,9 +70,9 @@ def _submit_message(submission):
     required = submission.required_reviewers
     return ngettext(
         "已提交第 %(round)s 轮评审（%(type)s），"
-        "等待初审人初审；初审通过后将随机分配 1 名评审人。",
+        "等待初审人初审；初审通过后将由初审人指定 1 名评审人。",
         "已提交第 %(round)s 轮评审（%(type)s），"
-        "等待初审人初审；初审通过后将随机分配 %(count)s 名评审人。",
+        "等待初审人初审；初审通过后将由初审人指定 %(count)s 名评审人。",
         required,
     ) % {
         "round": submission.round,
@@ -165,6 +165,7 @@ def group_detail(request, pk):
     # 局部导入：让 projects 不在模块加载期就依赖 reviews 与 competitions
     # （两处都是「对方的页面区块」由对方自己装配）。
     from competitions.panels import group_detail_context as competition_panel
+    from notices.panels import direct_compose_context
     from reviews.panels import group_detail_context
 
     group = get_object_or_404(
@@ -200,6 +201,8 @@ def group_detail(request, pk):
         group_detail_context(submissions=submissions, user=request.user)
     )
     context.update(competition_panel(group=group))
+    # 申请人在评审记录里能看到初审人姓名，并可直接发私信——浮动窗需要这只空表单。
+    context.update(direct_compose_context())
     return render(request, "projects/group_detail.html", context)
 
 

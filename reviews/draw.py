@@ -1,8 +1,8 @@
-"""抽签：谁可能被抽为初审人或评审人，以及抽不出来时怎么解释。
+"""谁能接手任务：初审人的抽取、评审人指定的候选名单，以及抽不出来时怎么解释。
 
 这里只查库、不写库，也不碰轮次状态——写命令在 :mod:`reviews.services`。
 「谁可以审这份资料」全平台只有一个实现（:func:`eligible_holders`），
-抽人与管理员改派共用它，两边的排除条件因此不会各走各的。
+初审抽取、初审人指定评审人与管理员改派共用它，三边的排除条件因此不会各走各的。
 """
 
 import random
@@ -26,7 +26,7 @@ def receives_for(stage):
     """这道关「开关是开着的」条件——与 :func:`qualification_for` 一起用。
 
     资格与开关是两件事：资格是管理员授予的「能不能做」，开关是本人的「现在做不做」。
-    抽人、容量预检与改派候选都要同时满足这两条，所以条件也从同一张阶段表里取。
+    初审抽取、评审人指定、容量预检与改派候选都要同时满足这两条，所以条件也从同一张阶段表里取。
     """
     return {lifecycle.STAGES[stage].receives: True}
 
@@ -34,15 +34,15 @@ def receives_for(stage):
 def _eligible_pool(*, stage, group, submitter, submission=None):
     """Accounts that may take a task of this kind on this group's materials now.
 
-    The single definition of "who may review", shared by every draw and by an
-    administrator's manual reassignment, so the exclusions cannot drift apart
-    between them:
+    The single definition of "who may review", shared by every draw, by the
+    preliminary reviewer's hand-picked list, and by an administrator's manual
+    reassignment, so the exclusions cannot drift apart between them:
 
     * the submitter and the group's members (conflict of interest),
     * **把这一道关的开关关掉的人**——他仍然有资格、手上有任务也照做，只是现在
       不接新的。两道关各管各的：关掉评审不影响被抽为初审人，
     * whoever already holds a task on this round — **两道关一起算**: a 初审人 who
-      passed a round is not drawn as one of its reviewers, since letting one
+      passed a round is not offered as one of its reviewers, since letting one
       person both open and judge the same round hands their single opinion two
       slots in it. (合并成一张任务表之前，这里要额外查一次初审任务；现在
       ``submission.tasks`` 本身就含两道关，排除自然成立。)
@@ -59,7 +59,7 @@ def _eligible_pool(*, stage, group, submitter, submission=None):
 
 
 def eligible_holders(*, stage, group, submitter, submission=None):
-    """谁可以接手这一道关的任务——抽人与管理员改派共用同一份名单。
+    """谁可以接手这一道关的任务——初审抽取、评审人指定与管理员改派共用同一份名单。
 
     Pass ``submission`` to also exclude whoever already holds a task on the round
     (both stages count, so a 初审人 is never offered the review seats of the round
@@ -121,7 +121,7 @@ def _draw(*, candidates, count, label, stage, hint):
 
 
 def draw_tasks(*, stage, group, submitter, count, submission=None, hint=_("无法提交审核。")):
-    """从这一道关的候选里随机抽 ``count`` 个人。"""
+    """从这一道关的候选里随机抽 ``count`` 个人（目前只用于初审人）。"""
     return _draw(
         candidates=eligible_holders(
             stage=stage, group=group, submitter=submitter, submission=submission

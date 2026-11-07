@@ -43,7 +43,7 @@ def is_super_reviewer(user):
 def qualifies_for_stage(user, stage):
     """持有这一道关的资格。资格字段名由 :data:`lifecycle.STAGES` 给出。
 
-    一个新阶段只要在阶段表里写好 ``qualification``，这里、抽人、改派与「谁看得见
+    一个新阶段只要在阶段表里写好 ``qualification``，这里、初审抽取、评审人指定、改派与「谁看得见
     这一组」就全跟着生效。
     """
     if not (user and user.is_authenticated):

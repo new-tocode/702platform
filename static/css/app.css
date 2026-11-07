@@ -322,6 +322,33 @@ td form { margin: 0; }
 .direct-compose h2 { font-size: 16px; margin: 0 0 14px; }
 .direct-compose .direct-to { margin: 0 0 14px; font-size: 13px; }
 
+/* 初审人指定评审人的浮动窗：外观与写私信窗同一套，内容是可选的人。 */
+.reviewer-picker {
+  width: min(640px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  margin: auto;
+  padding: 0;
+  overflow: auto;
+  border: 1px solid var(--line-2);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 24px 60px rgba(15, 26, 36, 0.24);
+}
+.reviewer-picker::backdrop { background: rgba(15, 26, 36, 0.42); }
+.reviewer-picker-body { padding: 22px; }
+.reviewer-picker h2 { font-size: 16px; margin: 0 0 14px; }
+.reviewer-options { display: grid; gap: 8px; margin: 14px 0; }
+.reviewer-option {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 10px 12px; border: 1px solid var(--line-2); cursor: pointer;
+}
+.reviewer-option:hover { border-color: var(--blue); }
+.reviewer-option input { margin-top: 3px; flex: none; }
+.reviewer-option-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.reviewer-option-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.reviewer-bio { font-size: 12px; color: var(--ink-2); line-height: 1.6; }
+.reviewer-contact { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+
 /* --- 表单 --- */
 .field { margin-bottom: 16px; }
 .field label, .field-label {
