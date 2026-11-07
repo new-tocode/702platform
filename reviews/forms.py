@@ -75,7 +75,7 @@ class PreliminaryReviewForm(DecisionForm):
     decision_label = _("初审决定")
     comment_label = _("初审意见")
     decision_help = _(
-        "通过后按送审类型随机分配评审人，进入正式评审；"
+        "通过前请指定评审人，通过后由他们进入正式评审；"
         "需修改则本轮直接打回项目组，不分配评审人。"
     )
     comment_help = _("请说明通过或需要修改的理由；打回时项目组会据此修改项目资料。")
@@ -107,7 +107,7 @@ class AdminReassignTaskForm(forms.ModelForm):
 
     与 ``ReviewTaskAdmin.save_model`` 的契约：表单只负责给候选人，**没有**发言权
     决定能不能换（校验与审计都在 ``reassign_task``），``save()`` 也从不被使用。
-    候选名单来自与抽人同一个 ``eligible_holders(stage=…)``，两者因此不可能漂移。
+    候选名单来自与初审抽取、评审人指定同一个 ``eligible_holders(stage=…)``，两者因此不可能漂移。
     """
 
     class Meta:

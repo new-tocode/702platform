@@ -50,7 +50,7 @@ class SuperReviewerOverrideTests(ReviewTestCase):
         self.member = make_user("super-member")
         self.reviewer_one = make_reviewer("super-reviewer-one")
         self.reviewer_two = make_reviewer("super-reviewer-two")
-        # 只给敲定资格——这样的账号从不会被抽为普通评审人。
+        # 只给敲定资格——这样的账号从不会被指定为普通评审人。
         self.super_reviewer = make_super_reviewer("super-boss")
         self.preliminary = make_preliminary_reviewer("super-preliminary")
         self.outsider = make_user("super-outsider")
@@ -310,13 +310,7 @@ class SuperReviewerOverrideTests(ReviewTestCase):
         submission = self._open_round()
         # 初审中也算进行中：要看项目资料才谈得上敲定。
         self.assertTrue(can_view_group(self.super_reviewer, self.group))
-        preliminary = submission.preliminary_task
-        submit_verdict(
-            task=preliminary,
-            reviewer=preliminary.reviewer,
-            decision=ReviewTask.APPROVE,
-            comment="同意送审。",
-        )
+        self._pass_preliminary(submission)
         self.assertTrue(can_view_group(self.super_reviewer, self.group))
 
         for assignment in self.review_tasks(submission).all():

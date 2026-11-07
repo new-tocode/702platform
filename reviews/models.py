@@ -2,8 +2,8 @@
 
 Each :class:`ProjectSubmission` is one review round of a project group's
 materials. A round starts in the hands of one :class:`ReviewTask` (初审):
-that single reviewer passes the materials on — which is when the round draws the
-reviewers its type calls for — or sends it back for revision. From then on
+that single reviewer passes the materials on — naming the reviewers its type
+calls for — or sends it back for revision. From then on
 :class:`ReviewTask` records one reviewer's verdict, and a submission is
 approved only when every assignment is complete and every verdict approves.
 
@@ -47,6 +47,15 @@ REVIEW_TYPE_CHOICES = (
     (REVIEW_TYPE_INNOVATION_START, _("大创立项")),
     (REVIEW_TYPE_INNOVATION_MIDTERM, _("大创中期")),
     (REVIEW_TYPE_INNOVATION_FINAL, _("大创结题")),
+)
+
+#: 竞赛类送审：项目组必须先报名一项竞赛，才能提交这几类评审。
+COMPETITION_REVIEW_TYPES = frozenset(
+    {
+        REVIEW_TYPE_COMPETITION_PROJECT,
+        REVIEW_TYPE_COMPETITION_PROVINCIAL,
+        REVIEW_TYPE_COMPETITION_NATIONAL,
+    }
 )
 
 #: Reviewers required per submission type; the single place that decides it.
@@ -278,7 +287,7 @@ class ReviewTask(FileDigestMixin, models.Model):
         verbose_name_plural = "评审任务"
         ordering = ("status", "stage", "-assigned_at", "-id")
         constraints = [
-            # 一人一轮一席：初审人不会被抽为同一轮的评审人，所以这条约束与所有
+            # 一人一轮一席：初审人不会被指定为同一轮的评审人，所以这条约束与所有
             # 合法路径相容，且把「一人两票」挡在数据库层。
             models.UniqueConstraint(
                 fields=("submission", "reviewer"),

@@ -1,7 +1,8 @@
 """初审关卡：通过才进评审，打回则本轮直接结束。
 
-初审只有一个位置、一对与评审共用的结论取值，而且通过它的那个人不会再被抽进
-这一轮的评审人里——一个人既放行又评审，等于让同一份意见在一轮里占两个位置。
+初审只有一个位置、一对与评审共用的结论取值，通过后由初审人指定评审人；
+而通过它的那个人不会再被指定进这一轮的评审人里——一个人既放行又评审，等于让
+同一份意见在一轮里占两个位置。
 """
 
 from django.contrib.auth.models import Permission
@@ -38,30 +39,31 @@ from .factories import (
     make_reviewer,
     make_user,
     qualify,
+    register_for_competition,
 )
 
 
 class PreliminaryReviewTests(ReviewTestCase):
-    """送审先过初审人这一关，通过后才抽评审人。
+    """送审先过初审人这一关，通过后才指定评审人。
 
     初审是「关卡」而不是评审团：只有一个位置（一对一）、只有与评审同一对结论
-    （通过 / 需修改），而且通过它的那个人不会再被抽进这一轮的评审人里。
+    （通过 / 需修改），而且通过它的那个人不会再被指定进这一轮的评审人里。
     """
 
     def setUp(self):
         self.admin = make_admin("preliminary-admin")
         self.contact = make_user("preliminary-contact")
         self.member = make_user("preliminary-member")
-        # 只放一位初审人在岗：抽签结果确定，断言才写得住。
+        # 只放一位初审人在岗：抽取结果确定，断言才写得住。
         self.preliminary = make_preliminary_reviewer("preliminary-one")
         self.reviewer_one = make_reviewer("preliminary-reviewer-one")
         self.reviewer_two = make_reviewer("preliminary-reviewer-two")
         self.outsider = make_user("preliminary-outsider")
         self.group = make_group("初审项目组", leader=self.contact, members=[self.member])
-    """送审先过初审人这一关，通过后才抽评审人。
+    """送审先过初审人这一关，通过后才指定评审人。
 
     初审是「关卡」而不是评审团：只有一个位置（一对一）、只有与评审同一对结论
-    （通过 / 需修改），而且通过它的那个人不会再被抽进这一轮的评审人里——一个人
+    （通过 / 需修改），而且通过它的那个人不会再被指定进这一轮的评审人里——一个人
     既放行又评审，等于让同一份意见在一轮里占两个位置。
     """
 
@@ -85,7 +87,7 @@ class PreliminaryReviewTests(ReviewTestCase):
         self.assertEqual(submission.open_task_count, 1)
         self.assertEqual(self.review_tasks(submission).count(), 0)
 
-    def test_approval_draws_the_reviewers_its_type_calls_for(self):
+    def test_approval_assigns_the_reviewers_its_type_calls_for(self):
         submission = self._open_round()
 
         self._pass_preliminary(submission)
@@ -104,6 +106,7 @@ class PreliminaryReviewTests(ReviewTestCase):
         """初审人不能占评审名额：预检要比「名义上有几个评审人」少算他一个。"""
         self.preliminary.is_reviewer = True
         self.preliminary.save(update_fields=["is_reviewer"])
+        register_for_competition(self.group)
 
         # 名义上有 3 名评审人（初审人也在其中），但初审人不能占名额，剩 2 人不够 3 人。
         with self.assertRaises(ReviewError) as caught:
@@ -174,7 +177,7 @@ class PreliminaryReviewTests(ReviewTestCase):
             {self.reviewer_one.pk, self.reviewer_two.pk},
         )
 
-    def test_an_approving_preliminary_reviewer_is_not_drawn_as_a_reviewer(self):
+    def test_an_approving_preliminary_reviewer_is_not_selected_as_a_reviewer(self):
         """同时具备两种资格的人，不接自己初审通过的那一轮。"""
         self.preliminary.is_reviewer = True
         self.preliminary.save(update_fields=["is_reviewer"])
@@ -412,15 +415,35 @@ class PreliminaryReviewTests(ReviewTestCase):
 
         response = self.client.post(
             self._preliminary_url(preliminary_task_of(submission)),
-            {"decision": ReviewTask.APPROVE, "comment": "同意送审。"},
+            {
+                "decision": ReviewTask.APPROVE,
+                "comment": "同意送审。",
+                "reviewers": [self.reviewer_one.pk, self.reviewer_two.pk],
+            },
             follow=True,
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "已随机分配 2 名评审人")
+        self.assertContains(response, "已指定 2 名评审人")
         submission.refresh_from_db()
         self.assertEqual(submission.status, ProjectSubmission.PENDING)
         self.assertEqual(self.review_tasks(submission).count(), 2)
+
+    def test_the_view_refuses_approval_without_reviewers(self):
+        """通过初审必须点名评审人：视图把空名单原样交给服务层，整次回滚。"""
+        submission = self._open_round()
+        self.client.force_login(self.preliminary)
+
+        response = self.client.post(
+            self._preliminary_url(preliminary_task_of(submission)),
+            {"decision": ReviewTask.APPROVE, "comment": "同意送审。"},
+            follow=True,
+        )
+
+        self.assertContains(response, "请指定 2 名评审人")
+        submission.refresh_from_db()
+        self.assertEqual(submission.status, ProjectSubmission.PRELIMINARY_PENDING)
+        self.assertEqual(self.review_tasks(submission).count(), 0)
 
     def test_the_view_records_a_revision_request(self):
         submission = self._open_round()
@@ -635,3 +658,88 @@ class PreliminaryReviewTests(ReviewTestCase):
         preliminary.refresh_from_db()
         self.assertEqual(preliminary.reviewer, self.preliminary)
 
+
+
+class ReviewerSelectionTests(ReviewTestCase):
+    """初审通过时由初审人点名评审人，不再随机抽取。
+
+    名单仍受候选池的全部约束（资格、接单开关、利益冲突、一人一轮一席）；这里守的
+    是「指名生效」与「指名不合格时整次回滚」两件事。
+    """
+
+    def setUp(self):
+        self.contact = make_user("select-contact")
+        self.member = make_user("select-member")
+        self.preliminary = make_preliminary_reviewer("select-preliminary")
+        self.reviewer_one = make_reviewer("select-reviewer-one")
+        self.reviewer_two = make_reviewer("select-reviewer-two")
+        self.reviewer_three = make_reviewer("select-reviewer-three")
+        self.group = make_group("指定评审人项目组", leader=self.contact, members=[self.member])
+
+    def test_approval_assigns_exactly_the_specified_reviewers(self):
+        submission = self._open_round()
+
+        self._pass_preliminary(
+            submission, reviewers=[self.reviewer_three, self.reviewer_one]
+        )
+
+        assigned = set(
+            self.review_tasks(submission).values_list("reviewer_id", flat=True)
+        )
+        self.assertEqual(assigned, {self.reviewer_three.pk, self.reviewer_one.pk})
+        # 没被点名的人不会收到任务，也不会收到「待评审」消息。
+        self.assertFalse(
+            self.review_tasks(submission).filter(reviewer=self.reviewer_two).exists()
+        )
+
+    def test_approval_refuses_a_count_other_than_the_quota(self):
+        submission = self._open_round()
+
+        for reviewers, expected in (
+            ([self.reviewer_one], "请指定 2 名评审人"),
+            (
+                [self.reviewer_one, self.reviewer_two, self.reviewer_three],
+                "请指定 2 名评审人",
+            ),
+            ([self.reviewer_one, self.reviewer_one], "请指定 2 名评审人"),
+        ):
+            with self.subTest(count=len(reviewers)):
+                with self.assertRaises(ReviewError) as caught:
+                    self._pass_preliminary(submission, reviewers=reviewers)
+                self.assertIn(expected, str(caught.exception))
+                submission.refresh_from_db()
+                self.assertEqual(
+                    submission.status, ProjectSubmission.PRELIMINARY_PENDING
+                )
+                self.assertEqual(self.review_tasks(submission).count(), 0)
+                preliminary = preliminary_task_of(submission)
+                self.assertEqual(preliminary.status, ReviewTask.PENDING)
+
+    def test_approval_refuses_a_named_person_who_cannot_take_the_task(self):
+        submission = self._open_round()
+
+        cases = (
+            # 项目组成员：利益冲突。
+            (self.member, "不可用"),
+            # 有资格但暂停接单。
+            (self.reviewer_two, "不可用"),
+            # 本轮已经持有初审任务。
+            (self.preliminary, "不可用"),
+        )
+        self.reviewer_two.receives_review_tasks = False
+        self.reviewer_two.save(update_fields=["receives_review_tasks"])
+        self.preliminary.is_reviewer = True
+        self.preliminary.save(update_fields=["is_reviewer"])
+
+        for disallowed, expected in cases:
+            with self.subTest(user=disallowed.username):
+                with self.assertRaises(ReviewError) as caught:
+                    self._pass_preliminary(
+                        submission, reviewers=[disallowed, self.reviewer_one]
+                    )
+                self.assertIn(expected, str(caught.exception))
+                submission.refresh_from_db()
+                self.assertEqual(
+                    submission.status, ProjectSubmission.PRELIMINARY_PENDING
+                )
+                self.assertEqual(self.review_tasks(submission).count(), 0)

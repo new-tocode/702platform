@@ -155,8 +155,8 @@ def _success_message(task, decision):
         if decision == ReviewTask.APPROVE:
             required = task.submission.required_reviewers
             return ngettext(
-                "初审已通过，已随机分配 1 名评审人。",
-                "初审已通过，已随机分配 %(count)s 名评审人。",
+                "初审已通过，已指定 1 名评审人。",
+                "初审已通过，已指定 %(count)s 名评审人。",
                 required,
             ) % {"count": required}
         return _("初审已打回，项目组修改项目资料后可重新提交。")
@@ -195,6 +195,8 @@ def complete_task(request, pk):
                 decision=decision,
                 comment=form.cleaned_data["comment"],
                 reply_file=form.cleaned_data.get("reply_file"),
+                # 初审通过时由初审人在弹窗里点名；评审那一侧不读它。
+                reviewer_ids=request.POST.getlist("reviewers"),
                 request=request,
             )
         except ReviewError as exc:

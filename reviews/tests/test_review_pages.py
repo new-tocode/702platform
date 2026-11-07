@@ -162,7 +162,11 @@ class ReviewPagesTests(ReviewTestCase):
         self.client.force_login(self.preliminary)
         preliminary_response = self.client.post(
             reverse("reviews:preliminary_complete", args=(preliminary.pk,)),
-            {"decision": ReviewTask.APPROVE, "comment": "同意送审。"},
+            {
+                "decision": ReviewTask.APPROVE,
+                "comment": "同意送审。",
+                "reviewers": [self.reviewer_one.pk, self.reviewer_two.pk],
+            },
         )
         self.assertEqual(preliminary_response.status_code, 302)
         preliminary.refresh_from_db()
@@ -352,3 +356,91 @@ class CreateRequestQueueTests(ReviewTestCase):
 
         # 待办面板整块消失；上一位管理员那条 flash 消息可能还在会话里，不去管它。
         self.assertNotContains(response, "创建项目组申请")
+
+
+class ReviewerPickerPageTests(ReviewTestCase):
+    """初审人指定评审人的弹窗，以及申请人对初审人的可见性。"""
+
+    def setUp(self):
+        self.contact = make_user("picker-contact")
+        self.member = make_user("picker-member")
+        self.preliminary = make_preliminary_reviewer("picker-preliminary")
+        self.reviewer_one = make_reviewer("picker-reviewer-one")
+        self.reviewer_two = make_reviewer("picker-reviewer-two")
+        self.outsider = make_user("picker-outsider")
+        self.group = make_group("指定评审人页面组", leader=self.contact, members=[self.member])
+
+    def _busy_with_another_round(self, reviewer):
+        """给评审人挂一条别轮的进行中任务，用来渲染「进行中」状态。"""
+        other_group = make_group(
+            "另一个项目组", leader=self.outsider, write_materials=False
+        )
+        other_submission = ProjectSubmission.objects.create(
+            group=other_group,
+            round=1,
+            review_type=TWO_REVIEWER_TYPE,
+            submitted_by=self.outsider,
+        )
+        ReviewTask.objects.create(
+            submission=other_submission,
+            stage=ReviewTask.REVIEW,
+            reviewer=reviewer,
+        )
+
+    def test_the_preliminary_reviewer_gets_a_picker_with_names_bios_and_status(self):
+        self.preliminary.profile.bio = "熟悉前端与架构。"
+        self.preliminary.profile.save(update_fields=["bio"])
+        self.reviewer_one.profile.bio = "做过三届省赛。"
+        self.reviewer_one.profile.save(update_fields=["bio"])
+        self._busy_with_another_round(self.reviewer_two)
+        self._open_round()
+        self.client.force_login(self.preliminary)
+
+        response = self.client.get(
+            reverse("projects:group_detail", args=(self.group.pk,))
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "指定评审人")
+        self.assertContains(response, "做过三届省赛。")
+        options = {row["reviewer"].pk: row for row in response.context["reviewer_options"]}
+        self.assertFalse(options[self.reviewer_one.pk]["busy"])
+        self.assertTrue(options[self.reviewer_two.pk]["busy"])
+        self.assertContains(response, "已有进行中的评审任务")
+        self.assertContains(response, "空闲")
+
+    def test_the_submitter_sees_the_preliminary_reviewer_and_can_message_them(self):
+        self.preliminary.profile.full_name = "初审老师"
+        self.preliminary.profile.save(update_fields=["full_name"])
+        self._open_round()
+        self.client.force_login(self.contact)
+
+        response = self.client.get(
+            reverse("projects:group_detail", args=(self.group.pk,))
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "初审老师")
+        self.assertContains(
+            response,
+            reverse(
+                "member_notices:direct_compose", args=(self.preliminary.pk,)
+            ),
+        )
+        self.assertContains(response, "data-direct-compose")
+        # 申请人不是初审人，不需要指定评审人。
+        self.assertNotIn("reviewer_options", response.context)
+
+    def test_other_group_members_do_not_see_the_preliminary_reviewer(self):
+        self.preliminary.profile.full_name = "初审老师"
+        self.preliminary.profile.save(update_fields=["full_name"])
+        self._open_round()
+        self.client.force_login(self.member)
+
+        response = self.client.get(
+            reverse("projects:group_detail", args=(self.group.pk,))
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "初审老师")
+        self.assertNotContains(response, "data-direct-compose")

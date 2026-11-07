@@ -83,3 +83,29 @@ def make_group(name, *, leader, members=(), write_materials=True):
 def materials_upload(name="reply.zip"):
     """A file that passes the reply validator (zip, non-empty)."""
     return SimpleUploadedFile(name, MATERIALS_BYTES, content_type="application/zip")
+
+
+def register_for_competition(group, *, title="测试竞赛"):
+    """Give a group a competition registration.
+
+    竞赛类送审要求项目组至少报名一项竞赛；这里只造报名记录本身，不关心竞赛
+    在不在报名期（那条规则属于 competitions 自己的写入口）。
+    """
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from competitions.models import Competition, CompetitionRegistration
+
+    competition = Competition.objects.create(
+        title=title,
+        description="测试用竞赛。",
+        deadline=timezone.now() + timedelta(days=30),
+        published_by=group.leader,
+    )
+    CompetitionRegistration.objects.create(
+        competition=competition,
+        group=group,
+        registered_by=group.leader,
+    )
+    return competition

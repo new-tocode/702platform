@@ -1,0 +1,47 @@
+{% load i18n static %}
+{% comment %}
+初审人指定评审人的浮动窗（原生 <dialog>，浏览器自己居中）。
+
+复选框通过 ``form="preliminary-form"`` 归属页面上的初审表单：选中项随「提交初审」
+一起 POST，名为 ``reviewers``（可多值）。窗口只负责挑人，服务端仍会按
+``eligible_holders`` 复核一遍——资格、接单开关、利益冲突与一人一席都不在这里判。
+
+脚本（static/js/reviewer_picker.js）只做三件事：开关窗口、显示已选人数、挡住
+超过配额的选择。没有脚本时窗口打不开，初审也就无法通过——这与「指定评审人」
+是硬规则一致，不另设随机兜底。
+{% endcomment %}
+<dialog class="reviewer-picker" data-reviewer-dialog aria-labelledby="reviewer-picker-title">
+    <div class="reviewer-picker-body">
+        <h2 id="reviewer-picker-title">{% translate "指定评审人" %}</h2>
+        <p class="help">{% translate "通过初审后，由你指定的评审人接手本轮。列表只含当前可接手的人；「已有进行中的评审任务」不影响指定，只是提示他们手上还有活。" %}</p>
+        <p class="help" data-reviewer-hint
+           data-limit-text="{% blocktranslate with required=latest_submission.required_reviewers %}最多选择 {{ required }} 名评审人{% endblocktranslate %}"></p>
+        <div class="reviewer-options">
+            {% for option in reviewer_options %}
+                <label class="reviewer-option">
+                    <input type="checkbox" name="reviewers" value="{{ option.reviewer.pk }}"
+                           form="preliminary-form" data-reviewer-pick>
+                    <span class="reviewer-option-main">
+                        <span class="reviewer-option-head">
+                            <span class="who">{{ option.name }}</span>
+                            {% if option.busy %}
+                                <span class="chip chip-warn">{% translate "已有进行中的评审任务" %}</span>
+                            {% else %}
+                                <span class="chip chip-ok">{% translate "空闲" %}</span>
+                            {% endif %}
+                        </span>
+                        <span class="reviewer-bio">
+                            {% if option.bio %}{{ option.bio|linebreaksbr }}{% else %}{% translate "暂无简介" %}{% endif %}
+                        </span>
+                    </span>
+                </label>
+            {% empty %}
+                <div class="empty">{% translate "当前没有可指定的评审人。" %}</div>
+            {% endfor %}
+        </div>
+        <div class="form-actions">
+            <button class="btn btn-primary" type="button" data-reviewer-dialog-close>{% translate "完成选择" %}</button>
+        </div>
+    </div>
+</dialog>
+<script defer src="{% static 'js/reviewer_picker.js' %}"></script>

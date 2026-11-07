@@ -12,6 +12,7 @@ from core.permissions import is_admin
 from projects.models import GroupCreateRequest
 
 from . import lifecycle, permissions
+from .draw import eligible_holders
 from .forms import PreliminaryReviewForm, ReviewForm
 from .models import (
     ReviewTask,
@@ -121,7 +122,47 @@ def group_detail_context(*, submissions, user):
     if can_override:
         # Prefixed so its field ids cannot clash with the reviewer form above.
         context["override_form"] = ReviewForm(prefix="override")
+    if context["my_preliminary"] is not None and latest is not None:
+        # 初审人通过前要自己点名评审人：候选里带上姓名、简介与此刻忙闲。
+        context["reviewer_options"] = _reviewer_options(latest)
     return context
+
+
+def _reviewer_options(submission):
+    """这一轮可被初审人指定的评审人，附带他们的忙闲状态。
+
+    名单来源与抽签、改派是同一个 :func:`reviews.draw.eligible_holders`——资格、
+    接单开关、利益冲突、本轮已持任务全部在那里排除。这里的「忙」只用于展示：
+    已有别的进行中评审任务的人照样能接，只是初审人该看得见。
+    """
+    from notices.selectors import display_name
+
+    candidates = list(
+        eligible_holders(
+            stage=ReviewTask.REVIEW,
+            group=submission.group,
+            submitter=submission.submitted_by,
+            submission=submission,
+        )
+        .prefetch_related("profile")
+        .order_by("username")
+    )
+    busy = set(
+        ReviewTask.objects.filter(
+            reviewer__in=candidates,
+            stage=ReviewTask.REVIEW,
+            status=ReviewTask.PENDING,
+        ).values_list("reviewer_id", flat=True)
+    )
+    return [
+        {
+            "reviewer": candidate,
+            "name": display_name(candidate),
+            "bio": getattr(getattr(candidate, "profile", None), "bio", ""),
+            "busy": candidate.pk in busy,
+        }
+        for candidate in candidates
+    ]
 
 
 def _pending_task_of(submission, user):
