@@ -47,16 +47,17 @@
             <section class="panel">
                 <div class="panel-head"><h2>{% translate "个人资料" %}</h2></div>
                 <div class="panel-body">
-                    {% if profile %}
+                    {% if profile or member.email %}
                         <dl class="dl member-profile-fields">
                             {% if profile.college %}<div><dt>{% translate "学院" %}</dt><dd>{{ profile.college }}</dd></div>{% endif %}
                             {% if profile.major %}<div><dt>{% translate "专业" %}</dt><dd>{{ profile.major }}</dd></div>{% endif %}
                             {% if profile.specialty %}<div><dt>{% translate "特长" %}</dt><dd>{{ profile.specialty }}</dd></div>{% endif %}
                             {% if profile.bio %}<div><dt>{% translate "个人简介" %}</dt><dd class="member-profile-bio">{{ profile.bio|linebreaksbr }}</dd></div>{% endif %}
                             {% if profile.phone %}<div><dt>{% translate "手机号" %}</dt><dd>{{ profile.phone }}</dd></div>{% endif %}
+                            {% if member.email %}<div><dt>{% translate "邮箱" %}</dt><dd>{{ member.email }}</dd></div>{% endif %}
                             {% if profile.contact %}<div><dt>{% translate "其他联系方式" %}</dt><dd>{{ profile.contact }}</dd></div>{% endif %}
                         </dl>
-                        {% if not profile.college and not profile.major and not profile.specialty and not profile.bio and not profile.phone and not profile.contact %}
+                        {% if not member.email and not profile.college and not profile.major and not profile.specialty and not profile.bio and not profile.phone and not profile.contact %}
                             <p class="muted">{% translate "这位成员还没有填写个人资料。" %}</p>
                         {% endif %}
                     {% else %}

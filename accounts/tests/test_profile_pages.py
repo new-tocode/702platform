@@ -220,12 +220,12 @@ class ReadOnlyMemberProfileAcceptanceTests(TestCase):
             "Embedded systems",
             "Builds small robots.",
             "13800000000",
+            "private@example.com",
             "WeChat: rinchen",
         ):
             with self.subTest(value=visible_value):
                 self.assertContains(response, visible_value)
         self.assertNotContains(response, "STUDENT-SECRET-91")
-        self.assertNotContains(response, "private@example.com")
         self.assertNotContains(response, 'name="phone"')
         self.assertNotContains(response, 'name="bio"')
 

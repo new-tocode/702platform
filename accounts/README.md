@@ -74,7 +74,7 @@
 - **`first_name` / `last_name` 仍在表上**：不再出现在任何界面与表单，历史数据由迁移
   `0004_copy_legacy_names` 合并进 `Profile.full_name`；**不要把这两个字段重新接进业务**。
 - **只读资料页的公开口径**：`college` / `major` / `specialty` / `bio` / `phone` / `contact`
-  对任何登录成员可见，`student_id` 与 `email` 不显示。页面上没有任何**资料**表单；今天唯一能提交的
+  与账号上的 `email` 对任何登录成员可见，`student_id` 不显示。页面上没有任何**资料**表单；今天唯一能提交的
   是页头「私信」那个小浮动窗（写私信这件事整个归 `notices`）。
 
 ## 4. 由来
