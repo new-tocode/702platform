@@ -383,6 +383,10 @@ def _open_review_stage(submission, *, reviewer_ids=None):
         ids = list(dict.fromkeys(int(pk) for pk in (reviewer_ids or ())))
     except (TypeError, ValueError):
         raise ReviewError(_("所选评审人无效，请重新指定。"))
+    # 主键是 64 位有符号整数：超出范围的值会让数据库绑定层直接抛 OverflowError／
+    # DataError（500），而不是像「查不到」那样走到下面的候选复核。
+    if any(pk < 1 or pk > 2**63 - 1 for pk in ids):
+        raise ReviewError(_("所选评审人无效，请重新指定。"))
     pool = eligible_holders(
         stage=lifecycle.STAGE_REVIEW,
         group=submission.group,

@@ -715,6 +715,23 @@ class ReviewerSelectionTests(ReviewTestCase):
                 preliminary = preliminary_task_of(submission)
                 self.assertEqual(preliminary.status, ReviewTask.PENDING)
 
+    def test_approval_refuses_an_out_of_range_id(self):
+        """超出 64 位主键范围的编号要变成业务提示，而不是数据库 500。"""
+        submission = self._open_round()
+
+        with self.assertRaises(ReviewError) as caught:
+            submit_verdict(
+                task=preliminary_task_of(submission),
+                reviewer=self.preliminary,
+                decision=ReviewTask.APPROVE,
+                comment="同意送审。",
+                reviewer_ids=[2**63, self.reviewer_one.pk],
+            )
+
+        self.assertIn("所选评审人无效", str(caught.exception))
+        submission.refresh_from_db()
+        self.assertEqual(submission.status, ProjectSubmission.PRELIMINARY_PENDING)
+
     def test_approval_refuses_a_named_person_who_cannot_take_the_task(self):
         submission = self._open_round()
 
