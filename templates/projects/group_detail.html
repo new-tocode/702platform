@@ -217,6 +217,13 @@
                                                     <dt>{% blocktranslate with number=forloop.counter %}评审人 {{ number }}{% endblocktranslate %}</dt>
                                                 {% endif %}
                                                 <dd>
+                                                    {% if user == submission.submitted_by and not assignment.is_override %}
+                                                        {# 只有提交人看得到初审人指定了谁；超级评审那一票仍匿名。 #}
+                                                        <div class="reviewer-contact">
+                                                            <span class="muted">{% translate "评审人" %}</span>
+                                                            <span class="who">{{ assignment.reviewer.profile.full_name|default:assignment.reviewer.username }}</span>
+                                                        </div>
+                                                    {% endif %}
                                                     {% if assignment.is_completed %}
                                                         {{ assignment.get_decision_display }} · {{ assignment.comment|default:"—" }}
                                                         {% if assignment.reply_file %}

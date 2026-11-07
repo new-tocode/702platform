@@ -15,7 +15,7 @@ from ..models import (
     ProjectSubmission,
     preliminary_task_of,
 )
-from ..services import submit_verdict
+from ..services import override_review, submit_verdict
 from .base import (
     TWO_REVIEWER_TYPE,
     ReviewTestCase,
@@ -25,6 +25,7 @@ from .factories import (
     make_group,
     make_preliminary_reviewer,
     make_reviewer,
+    make_super_reviewer,
     make_user,
     materials_upload,
 )
@@ -444,3 +445,50 @@ class ReviewerPickerPageTests(ReviewTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, "初审老师")
         self.assertNotContains(response, "data-direct-compose")
+
+    def test_the_submitter_sees_the_specified_reviewers_names(self):
+        """发起人看得到初审人指定了谁；组内其他成员仍然只看到位置编号。"""
+        self.reviewer_one.profile.full_name = "评审老师甲"
+        self.reviewer_one.profile.save(update_fields=["full_name"])
+        self.reviewer_two.profile.full_name = "评审老师乙"
+        self.reviewer_two.profile.save(update_fields=["full_name"])
+        submission = self._open_round()
+        self._pass_preliminary(
+            submission, reviewers=[self.reviewer_one, self.reviewer_two]
+        )
+
+        self.client.force_login(self.contact)
+        submitter_view = self.client.get(
+            reverse("projects:group_detail", args=(self.group.pk,))
+        )
+        self.assertContains(submitter_view, "评审老师甲")
+        self.assertContains(submitter_view, "评审老师乙")
+        self.assertContains(submitter_view, "评审人 1")
+
+        self.client.force_login(self.member)
+        member_view = self.client.get(
+            reverse("projects:group_detail", args=(self.group.pk,))
+        )
+        self.assertNotContains(member_view, "评审老师甲")
+        self.assertNotContains(member_view, "评审老师乙")
+
+    def test_the_submitter_still_sees_super_review_anonymously(self):
+        """姓名例外只覆盖初审人指定的评审人，不覆盖超级评审那一票。"""
+        super_reviewer = make_super_reviewer("picker-super")
+        super_reviewer.profile.full_name = "超级老师"
+        super_reviewer.profile.save(update_fields=["full_name"])
+        submission = self._open_round()
+        override_review(
+            submission=submission,
+            super_reviewer=super_reviewer,
+            decision=ReviewTask.APPROVE,
+            comment="直接通过。",
+        )
+        self.client.force_login(self.contact)
+
+        response = self.client.get(
+            reverse("projects:group_detail", args=(self.group.pk,))
+        )
+
+        self.assertContains(response, "超级评审")
+        self.assertNotContains(response, "超级老师")
