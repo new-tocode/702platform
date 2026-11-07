@@ -84,14 +84,14 @@ class DefenseTestBase(TestCase):
 
 
 class DefenseRequestCreateTests(DefenseTestBase):
-    """发起入口在项目组管理页；能管这个组的人才能发起。"""
+    """发起入口在项目组详情页；能管这个组的人才能发起。"""
 
-    def test_group_manage_page_shows_the_entry_and_existing_requests(self):
+    def test_group_detail_page_shows_the_entry_and_existing_requests(self):
         existing = self._request()
         self._login(self.contact)
 
         response = self.client.get(
-            reverse("projects:group_manage", args=(self.group.pk,))
+            reverse("projects:group_detail", args=(self.group.pk,))
         )
 
         self.assertEqual(response.status_code, 200)
@@ -101,6 +101,39 @@ class DefenseRequestCreateTests(DefenseTestBase):
             reverse("defenses:request_create", args=(self.group.pk,)),
         )
         self.assertContains(response, reverse("defenses:detail", args=(existing.pk,)))
+        self.assertContains(response, reverse("defenses:schedule"))
+
+    def test_group_member_sees_the_panel_but_not_the_create_entry(self):
+        existing = self._request()
+        self._login(self.member)
+
+        response = self.client.get(
+            reverse("projects:group_detail", args=(self.group.pk,))
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, reverse("defenses:detail", args=(existing.pk,)))
+        self.assertContains(response, "本组的线下模拟答辩申请都在这里")
+        self.assertNotContains(
+            response,
+            reverse("defenses:request_create", args=(self.group.pk,)),
+        )
+        self.assertNotContains(response, "申请线下模拟答辩")
+
+    def test_group_manage_page_no_longer_shows_the_panel(self):
+        self._login(self.contact)
+
+        response = self.client.get(
+            reverse("projects:group_manage", args=(self.group.pk,))
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(
+            response,
+            reverse("defenses:request_create", args=(self.group.pk,)),
+        )
+        self.assertNotContains(response, "需要线下模拟答辩时在这里发起申请")
+        self.assertNotContains(response, "本组的线下模拟答辩申请都在这里")
 
     def test_contact_can_open_the_form_and_see_the_time_and_place_hint(self):
         self._login(self.contact)
@@ -335,7 +368,7 @@ class DefenseNotificationTests(DefenseTestBase):
 class DefenseScheduleTests(DefenseTestBase):
     """两块列表、排序与准入。"""
 
-    def test_reviewers_and_admins_can_open_the_schedule_but_outsiders_cannot(self):
+    def test_all_logged_in_members_can_open_the_schedule_but_guests_are_redirected(self):
         url = reverse("defenses:schedule")
 
         for user in (
@@ -343,15 +376,34 @@ class DefenseScheduleTests(DefenseTestBase):
             self.reviewer,
             self.preliminary,
             self.super_reviewer,
+            self.member,
+            self.outsider,
+            self.contact,
         ):
             with self.subTest(user=user.username):
                 self._login(user)
                 self.assertEqual(self.client.get(url).status_code, 200)
 
-        for user in (self.member, self.outsider):
-            with self.subTest(user=user.username):
-                self._login(user)
-                self.assertEqual(self.client.get(url).status_code, 403)
+        self.client.logout()
+        self.assertEqual(self.client.get(url).status_code, 302)
+
+    def test_a_plain_member_gets_member_center_navigation_not_reviews(self):
+        self._login(self.member)
+
+        response = self.client.get(reverse("defenses:schedule"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "返回成员中心")
+        self.assertNotContains(response, "返回评审")
+        self.assertNotContains(response, reverse("reviews:queue"))
+
+    def test_member_home_has_the_schedule_entry_for_plain_members(self):
+        self._login(self.member)
+
+        response = self.client.get(reverse("accounts:member_home"))
+
+        self.assertContains(response, reverse("defenses:schedule"))
+        self.assertContains(response, "线下答辩")
 
     def test_new_request_is_in_open_and_closing_moves_it_to_closed(self):
         defense_request = self._request()
@@ -410,9 +462,10 @@ class DefenseScheduleTests(DefenseTestBase):
 class DefenseViewBoundaryTests(DefenseTestBase):
     """「能看」与「能评论／能改／能关」分开：三个边界各钉一条。"""
 
-    def test_current_contact_can_view_but_not_comment_on_someone_elses_request(self):
+    def test_other_group_member_can_view_but_not_comment(self):
         defense_request = self._request(applicant=self.other_contact)
-        self._login(self.contact)
+        self.other_group.members.add(self.outsider)
+        self._login(self.outsider)
 
         response = self.client.get(
             reverse("defenses:detail", args=(defense_request.pk,))
@@ -425,10 +478,31 @@ class DefenseViewBoundaryTests(DefenseTestBase):
         self.assertEqual(
             self.client.post(
                 reverse("defenses:comment_create", args=(defense_request.pk,)),
-                {"body": "联系人路过说一句。"},
+                {"body": "别的组路过说一句。"},
             ).status_code,
             403,
         )
+
+    def test_group_member_can_comment_on_the_groups_request(self):
+        defense_request = self._request()
+        self._login(self.member)
+
+        detail = self.client.get(
+            reverse("defenses:detail", args=(defense_request.pk,))
+        )
+        self.assertTrue(detail.context["can_comment"])
+        self.assertContains(
+            detail,
+            reverse("defenses:comment_create", args=(defense_request.pk,)),
+        )
+
+        response = self.client.post(
+            reverse("defenses:comment_create", args=(defense_request.pk,)),
+            {"body": "本组成员确认时间。"},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(DefenseComment.objects.get().author, self.member)
 
     def test_applicant_without_any_review_qualification_still_owns_the_thread(self):
         defense_request = self._request(applicant=self.outsider)
@@ -442,10 +516,10 @@ class DefenseViewBoundaryTests(DefenseTestBase):
         self.assertTrue(response.context["can_edit"])
         self.assertTrue(response.context["can_comment"])
         self.assertTrue(response.context["can_close"])
-        self.assertFalse(response.context["can_browse_schedule"])
-        # 没有排期表权限时，面包屑不能把「reviews / defenses」渲染成死链。
+        self.assertTrue(response.context["can_browse_schedule"])
+        # 没有评审资格时，面包屑不能把「reviews」渲染成死链；排期表本身可以进。
         self.assertNotContains(response, 'href="/member/reviews/"')
-        self.assertNotContains(response, 'href="/member/defenses/"')
+        self.assertContains(response, 'href="/member/defenses/"')
 
     def test_group_link_is_hidden_when_the_viewer_cannot_open_the_group(self):
         defense_request = self._request()
@@ -465,7 +539,7 @@ class DefenseViewBoundaryTests(DefenseTestBase):
         self.assertTrue(response.context["can_view_group"])
         self.assertContains(response, group_url)
 
-    def test_real_transfer_leaves_old_applicant_able_to_act_and_new_contact_read_only(self):
+    def test_transfer_keeps_new_contact_able_to_comment_but_not_edit_or_close(self):
         from projects.services import transfer_contact
 
         defense_request = self._request()
@@ -480,15 +554,15 @@ class DefenseViewBoundaryTests(DefenseTestBase):
             reverse("defenses:detail", args=(defense_request.pk,))
         )
         self.assertEqual(response.status_code, 200)
-        self.assertFalse(response.context["can_comment"])
+        self.assertTrue(response.context["can_comment"])
         self.assertFalse(response.context["can_edit"])
         self.assertFalse(response.context["can_close"])
         self.assertEqual(
             self.client.post(
                 reverse("defenses:comment_create", args=(defense_request.pk,)),
-                {"body": "新联系人路过。"},
+                {"body": "新联系人确认时间。"},
             ).status_code,
-            403,
+            302,
         )
 
         # 申请人仍是旧联系人：转让不会把「谁写的」一起转走。
@@ -502,7 +576,7 @@ class DefenseViewBoundaryTests(DefenseTestBase):
 
 
 class DefenseCommentTests(DefenseTestBase):
-    """评审、管理员与申请人能评论；关闭后不能；别人不能。"""
+    """发起项目组成员、评审、管理员与申请人能评论；关闭后不能；其他组普通成员不能。"""
 
     def test_reviewer_can_comment_and_lands_on_the_new_comment(self):
         defense_request = self._request()
@@ -533,10 +607,11 @@ class DefenseCommentTests(DefenseTestBase):
                 self.assertEqual(response.status_code, 302)
         self.assertEqual(DefenseComment.objects.count(), 2)
 
-    def test_outsider_and_plain_member_cannot_comment(self):
+    def test_non_member_outsider_and_other_group_member_cannot_comment(self):
         defense_request = self._request()
+        self.other_group.members.add(self.outsider)
 
-        for user in (self.outsider, self.member):
+        for user in (self.outsider, self.other_contact):
             with self.subTest(user=user.username):
                 self._login(user)
                 response = self.client.post(

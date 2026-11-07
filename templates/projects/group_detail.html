@@ -69,6 +69,44 @@
 
             <div class="panel">
                 <div class="panel-head">
+                    <h2>{% translate "线下模拟答辩" %}</h2>
+                    <span class="count">{{ defense_requests|length }} requests</span>
+                </div>
+                <div class="panel-body">
+                    {% if can_manage %}
+                        <p class="help">{% translate "需要线下模拟答辩时在这里发起申请，写明时间和地点。排期与讨论在「线下答辩」中，申请人可以随时修改正文，直到申请被关闭。" %}</p>
+                    {% else %}
+                        <p class="help">{% translate "本组的线下模拟答辩申请都在这里；打开详情可查看安排与讨论。" %}</p>
+                    {% endif %}
+                    {% if defense_requests %}
+                        <div class="queue">
+                            {% for item in defense_requests %}
+                                <div class="qitem">
+                                    <span class="idx">#{{ item.pk }}</span>
+                                    <div class="grow">
+                                        <div>
+                                            <a class="who" href="{% url 'defenses:detail' item.pk %}">{{ item.get_status_display }}</a>
+                                            <span class="when">{{ item.created_at|date:"Y-m-d H:i" }}</span>
+                                        </div>
+                                        <div class="msg">{{ item.content|truncatechars:80|linebreaksbr }}</div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="empty">{% translate "本组暂无线下模拟答辩申请。" %}</div>
+                    {% endif %}
+                    <div class="form-actions">
+                        {% if can_manage %}
+                            <a class="btn btn-primary" href="{% url 'defenses:request_create' group.pk %}">{% translate "申请线下模拟答辩" %}</a>
+                        {% endif %}
+                        <a class="btn" href="{% url 'defenses:schedule' %}">{% translate "查看全部排期" %}</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-head">
                     <h2>{% translate "成员" %}</h2>
                     <span class="count">{{ group.members.all|length }} members</span>
                 </div>

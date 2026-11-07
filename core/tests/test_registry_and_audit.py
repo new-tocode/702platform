@@ -41,6 +41,7 @@ class OperationRegistryAcceptanceTests(TestCase):
                 "notices.internal",
                 "projects.groups",
                 "competitions.registration",
+                "defenses.schedule",
                 "reviews.queue",
                 "equipment.borrow",
                 "equipment.records",
@@ -58,6 +59,7 @@ class OperationRegistryAcceptanceTests(TestCase):
                 "notices.internal",
                 "projects.groups",
                 "competitions.registration",
+                "defenses.schedule",
                 "equipment.records",
             },
         )

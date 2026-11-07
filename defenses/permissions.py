@@ -3,14 +3,22 @@
 判定放在这里而不是视图里，模板与视图两边都从这里取口径（双层权限控制：
 模板隐藏入口只影响展示，真正的边界在视图的第二道校验）。
 
-三种「评审」资格与管理员的口径**不在这里重写**：能不能进排期表问的是
-:func:`reviews.permissions.can_open_queue`（它与「评审」页入口同一个判据），
-能不能管理项目组问的是 :func:`projects.permissions.can_manage_group`。
+排期表与申请详情对**所有登录成员**开放；评论只给该申请所属项目组的成员、
+申请人本人，以及三种「评审」资格或管理员。后者的口径**不在这里重写**，问的是
+:func:`reviews.permissions.can_open_queue`。能不能管理项目组问的是
+:func:`projects.permissions.can_manage_group`。
 """
 
 from core.permissions import is_admin
 
 from .models import DefenseRequest
+
+
+def can_open_reviews(user):
+    """三种评审资格或管理员；与「评审」页入口同一个判据。"""
+    from reviews.permissions import can_open_queue
+
+    return can_open_queue(user)
 
 
 def can_create_request(user, group):
@@ -21,36 +29,20 @@ def can_create_request(user, group):
 
 
 def can_access_schedule(user):
-    """排期表的准入：三种评审资格中的任意一种，或管理员。
+    """排期表的准入：所有登录成员。
 
-    与「评审」页入口同一个口径——入口就长在那一页上，能进那一页的人就能进
-    排期表，不必再定义第二种「谁算评审」。
+    排期表是社团内部的公开安排表，普通成员也能查看；评论权限另见
+    :func:`can_comment`，不跟着这里一起放开。
     """
-    from reviews.permissions import can_open_queue
-
-    return can_open_queue(user)
+    return bool(user and user.is_authenticated)
 
 
 def can_view_request(user, defense_request):
-    """一条申请对谁可见：排期表可进的人、申请人本人，以及该组当前的管理者。
+    """一条申请对谁可见：排期表可进的登录成员都能看详情。
 
-    后两支都不能省：
-
-    * 申请人把项目组转让出去以后就不再能管理该组，但他仍是这条申请的申请人，
-      仍要能回来看自己写过的内容与讨论；
-    * 组管理页会列出本组的申请，当前联系人点进去不能得到 403——他能管理这个组，
-      就该看得到这个组的排期。「能看」不等于「能评论／能改／能关闭」，后三件事
-      各有自己的判据。
+    查看与评论已经是两个口径：非本组的普通成员能看讨论，但发不了言。
     """
-    if not (user and user.is_authenticated and defense_request):
-        return False
-    if can_access_schedule(user):
-        return True
-    if defense_request.applicant_id == user.pk:
-        return True
-    from projects.permissions import can_manage_group
-
-    return can_manage_group(user, defense_request.group)
+    return bool(user and user.is_authenticated and defense_request)
 
 
 def can_edit_request(user, defense_request):
@@ -67,8 +59,8 @@ def can_edit_request(user, defense_request):
 def can_comment(user, defense_request):
     """关闭即归档：已确定的申请不再接受新评论。
 
-    能评论的只有三类评审资格、管理员与申请人本人；**当前联系人看一眼不算参与
-    讨论**——他能看（见 :func:`can_view_request`），但评论仍按身份走。
+    能评论的是该申请所属项目组的成员、申请人本人，以及三类评审资格或管理员。
+    其他项目组的普通成员可以看排期与讨论，但发不了言。
     """
     if not (
         user
@@ -79,7 +71,9 @@ def can_comment(user, defense_request):
         return False
     if defense_request.applicant_id == user.pk:
         return True
-    return can_access_schedule(user)
+    if defense_request.group.members.filter(pk=user.pk).exists():
+        return True
+    return can_open_reviews(user)
 
 
 def can_close_request(user, defense_request):

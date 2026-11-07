@@ -9,8 +9,10 @@
         <div class="path">
             <a href="{% url 'accounts:member_home' %}">/member</a>
             {% if can_browse_schedule %}
-                <span>/</span>
-                <a href="{% url 'reviews:queue' %}">reviews</a>
+                {% if can_open_reviews %}
+                    <span>/</span>
+                    <a href="{% url 'reviews:queue' %}">reviews</a>
+                {% endif %}
                 <span>/</span>
                 <a href="{% url 'defenses:schedule' %}">defenses</a>
             {% endif %}
@@ -131,7 +133,7 @@
                     {% elif defense_request.is_closed %}
                         <p class="help">{% translate "该申请已确定，正文与讨论都已归档，不能再修改或评论。" %}</p>
                     {% else %}
-                        <p class="help">{% translate "只有申请人、管理员与持有评审资格的成员可以发表评论。" %}</p>
+                        <p class="help">{% translate "只有发起项目组的成员、申请人、管理员与持有评审资格的成员可以发表评论。" %}</p>
                     {% endif %}
                 </div>
             </div>

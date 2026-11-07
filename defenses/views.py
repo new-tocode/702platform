@@ -52,8 +52,11 @@ def _detail_context(
         "can_comment": can_comment,
         "can_close": permissions.can_close_request(request.user, defense_request),
         "can_browse_schedule": permissions.can_access_schedule(request.user),
-        # 排期对所有评审可见，但项目组详情不是——没有这一支，详情页上的
-        # 「查看项目组」会给大多数评审人一个 403。
+        # 排期表对所有成员开放，但「评审」页仍只对评审资格／管理员开放；面包屑和
+        # 返回按钮据此选落点，别把普通成员送到 403。
+        "can_open_reviews": permissions.can_open_reviews(request.user),
+        # 排期对所有登录成员可见，但项目组详情不是——没有这一支，详情页上的
+        # 「查看项目组」会给大多数评审人或普通成员一个 403。
         "can_view_group": can_view_group(request.user, defense_request.group),
         "edit_form": edit_form,
         "comment_form": comment_form,
@@ -84,13 +87,14 @@ def schedule(request):
         {
             "open_requests": open_requests,
             "closed_requests": closed_requests,
+            "can_open_reviews": permissions.can_open_reviews(request.user),
         },
     )
 
 
 @login_required
 def request_create(request, group_pk):
-    """从项目组管理页进来，给这个组发起一条答辩申请。"""
+    """从项目组详情页进来，给这个组发起一条答辩申请。"""
     group = get_object_or_404(
         ProjectGroup.objects.select_related("leader__profile"),
         pk=group_pk,
@@ -116,7 +120,7 @@ def request_create(request, group_pk):
             if created:
                 messages.success(
                     request,
-                    _("已提交线下模拟答辩申请，评审人可在「线下答辩」中查看并讨论。"),
+                    _("已提交线下模拟答辩申请，可在「线下答辩」中查看并讨论。"),
                 )
             else:
                 messages.info(
@@ -124,7 +128,7 @@ def request_create(request, group_pk):
                     _("同样的申请刚刚提交过，已为你打开那一条。"),
                 )
             return redirect("defenses:detail", pk=defense_request.pk)
-        return redirect("projects:group_manage", pk=group.pk)
+        return redirect("projects:group_detail", pk=group.pk)
 
     return render(
         request,

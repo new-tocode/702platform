@@ -33,7 +33,7 @@ def closed_requests():
 
 
 def requests_for_group(group):
-    """某个项目组自己的申请，新的在前——项目组管理页的入口面板用。"""
+    """某个项目组自己的申请，新的在前——项目组详情页的入口面板用。"""
     return (
         DefenseRequest.objects.filter(group=group)
         .select_related("applicant__profile")

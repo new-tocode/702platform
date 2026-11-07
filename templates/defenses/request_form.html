@@ -9,7 +9,7 @@
         <div class="path">
             <a href="{% url 'projects:group_list' %}">/member/projects</a>
             <span>/</span>
-            <a href="{% url 'projects:group_manage' group.pk %}">{{ group.name }}</a>
+            <a href="{% url 'projects:group_detail' group.pk %}">{{ group.name }}</a>
             <span>/</span>
             <span>defense</span>
         </div>
@@ -17,11 +17,11 @@
             <div>
                 <h1>{% translate "申请线下模拟答辩" %}</h1>
                 <div class="sub">
-                    {% blocktranslate with name=group.name %}为「{{ name }}」申请一次线下模拟答辩。请在申请里写明答辩的时间和地点，方便评审人安排。{% endblocktranslate %}
+                    {% blocktranslate with name=group.name %}为「{{ name }}」申请一次线下模拟答辩。请在申请里写明答辩的时间和地点，方便安排。{% endblocktranslate %}
                 </div>
             </div>
             <div class="head-actions">
-                <a class="btn" href="{% url 'projects:group_manage' group.pk %}">{% translate "返回项目组管理" %}</a>
+                <a class="btn" href="{% url 'projects:group_detail' group.pk %}">{% translate "返回项目组" %}</a>
             </div>
         </div>
     </div>
@@ -39,7 +39,7 @@
                 </div>
                 <div class="form-actions">
                     <button class="btn btn-primary" type="submit">{% translate "提交申请" %}</button>
-                    <a class="btn" href="{% url 'projects:group_manage' group.pk %}">{% translate "取消" %}</a>
+                    <a class="btn" href="{% url 'projects:group_detail' group.pk %}">{% translate "取消" %}</a>
                 </div>
             </form>
         </div>
