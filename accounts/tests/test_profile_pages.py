@@ -35,6 +35,73 @@ class ProfilePageAcceptanceTests(TestCase):
 
         self.assertEqual(rows[0], ["full_name", "student_id"])
         self.assertEqual(rows[1], ["college", "major"])
+        self.assertEqual(rows[2], ["email", "phone"])
+
+    def test_email_is_prefilled_with_the_account_address(self):
+        self.user.email = "old@example.com"
+        self.user.save(update_fields=["email"])
+
+        response = self.client.get(reverse("accounts:profile"))
+
+        self.assertContains(response, 'name="email"')
+        self.assertContains(response, 'value="old@example.com"')
+
+    def test_member_can_change_their_own_email(self):
+        self.user.email = "old@example.com"
+        self.user.save(update_fields=["email"])
+
+        response = self.client.post(
+            reverse("accounts:profile"),
+            {
+                "email": "new@example.com",
+                "full_name": "成员一",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.email, "new@example.com")
+
+    def test_invalid_email_is_rejected_and_the_account_keeps_the_old_one(self):
+        self.user.email = "old@example.com"
+        self.user.save(update_fields=["email"])
+
+        response = self.client.post(
+            reverse("accounts:profile"),
+            {"email": "not-an-email"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.email, "old@example.com")
+
+    def test_email_longer_than_the_column_limit_is_rejected(self):
+        self.user.email = "old@example.com"
+        self.user.save(update_fields=["email"])
+        too_long = "a" * 243 + "@example.com"
+
+        self.assertEqual(len(too_long), 255)
+        response = self.client.post(
+            reverse("accounts:profile"),
+            {"email": too_long},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.email, "old@example.com")
+
+    def test_blank_email_is_allowed(self):
+        self.user.email = "old@example.com"
+        self.user.save(update_fields=["email"])
+
+        response = self.client.post(
+            reverse("accounts:profile"),
+            {"email": ""},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.email, "")
 
     def test_phone_is_the_only_narrow_field_and_comes_before_specialty(self):
         names = [cell["field"].name for cell in self.cells()]
@@ -76,11 +143,11 @@ class ProfilePageAcceptanceTests(TestCase):
         response = self.client.get(reverse("accounts:profile"))
 
         html = response.content.decode()
-        # 两行两项，手机号、特长、其他联系方式、个人简介各占一行。
+        # 三行两项（邮箱与手机号并排），特长、其他联系方式、个人简介各占一行。
         self.assertEqual(html.count('class="field-row"'), 6)
         # 独占一行的字段横跨两列：特长仍是整幅的单行输入，个人简介的框也只受这一处约束。
         self.assertEqual(html.count('class="field field-full"'), 3)
-        self.assertIn('class="field field-full field-short"', html)
+        self.assertIn('class="field field-short"', html)
 
     def test_member_can_save_a_bio(self):
         response = self.client.post(

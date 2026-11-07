@@ -29,8 +29,8 @@
                 <form method="post">
                     {% csrf_token %}
                     {{ form.non_field_errors }}
-                    {# 分行与宽窄由 ProfileForm.rows 给出：姓名｜学号、学院｜专业两列并排， #}
-                    {# 手机号收窄，特长与个人简介各自整行。#}
+                    {# 分行与宽窄由 ProfileForm.rows 给出：姓名｜学号、学院｜专业、邮箱｜手机号 #}
+                    {# 两列并排；手机号收窄；特长、其他联系方式与个人简介各自整行。#}
                     {% for row in form.rows %}
                         <div class="field-row">
                             {% for cell in row %}

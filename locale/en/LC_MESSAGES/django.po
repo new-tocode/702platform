@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 702platform\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-07 16:51+0800\n"
+"POT-Creation-Date: 2026-11-07 19:55+0800\n"
 "PO-Revision-Date: 2026-09-19 18:39\n"
 "Last-Translator: 702platform\n"
 "Language-Team: 702platform\n"
@@ -58,37 +58,41 @@ msgstr ""
 msgid "登录已锁定"
 msgstr "Login locked"
 
-#: accounts/forms.py:159 accounts/models.py:105 accounts/validators.py:40
+#: accounts/forms.py:104
+msgid "邮箱"
+msgstr "Email"
+
+#: accounts/forms.py:190 accounts/models.py:105 accounts/validators.py:40
 #: templates/accounts/profile.html:57
 msgid "头像"
 msgstr "Avatar"
 
-#: accounts/forms.py:163 accounts/forms.py:190 accounts/services.py:200
+#: accounts/forms.py:194 accounts/forms.py:221 accounts/services.py:200
 #: core/uploads.py:140
 msgid "请选择要上传的图片。"
 msgstr "Please choose an image to upload."
 
-#: accounts/forms.py:181 accounts/models.py:194
+#: accounts/forms.py:212 accounts/models.py:194
 msgid "图像"
 msgstr "Image"
 
-#: accounts/forms.py:202
+#: accounts/forms.py:233
 msgid "当前密码"
 msgstr "Current password"
 
-#: accounts/forms.py:207
+#: accounts/forms.py:238
 msgid "新密码"
 msgstr "New password"
 
-#: accounts/forms.py:212
+#: accounts/forms.py:243
 msgid "确认新密码"
 msgstr "Confirm new password"
 
-#: accounts/forms.py:224
+#: accounts/forms.py:255
 msgid "当前密码不正确。"
 msgstr "The current password is incorrect."
 
-#: accounts/forms.py:232
+#: accounts/forms.py:263
 msgid "两次输入的新密码不一致。"
 msgstr "The two new passwords do not match."
 

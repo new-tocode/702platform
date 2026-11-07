@@ -98,8 +98,21 @@ class ProfileForm(forms.ModelForm):
     按字段名做判断，字段一动两边都要改。
     """
 
+    #: 邮箱住在 ``User`` 上，不是 ``Profile`` 的列；成员页把它和资料一起收，
+    #: 保存时再写回账号（见 :meth:`save`）。
+    email = forms.EmailField(
+        label=_("邮箱"),
+        max_length=254,
+        required=False,
+        widget=forms.EmailInput(attrs={"autocomplete": "email"}),
+    )
+
     #: 一行放两项的字段对；不在此列的字段各占一行，顺序仍看 :attr:`Meta.fields`。
-    field_rows = (("full_name", "student_id"), ("college", "major"))
+    field_rows = (
+        ("full_name", "student_id"),
+        ("college", "major"),
+        ("email", "phone"),
+    )
     #: 值短、输入框跟着收窄的字段。
     narrow_fields = ("phone",)
 
@@ -123,6 +136,24 @@ class ProfileForm(forms.ModelForm):
             "phone": forms.TelInput(attrs={"autocomplete": "tel"}),
             "bio": forms.Textarea(attrs={"rows": 8}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance.pk:
+            self.initial["email"] = self.instance.user.email
+
+    def save(self, commit=True):
+        """资料与邮箱一起保存：邮箱写在 ``User`` 上，不另存一份。
+
+        ``commit=False`` 时只返回资料实例，邮箱留在这个表单的 ``cleaned_data`` 里；
+        当前只有成员页一处调用，始终是默认的立即保存。
+        """
+        profile = super().save(commit=commit)
+        if commit:
+            user = profile.user
+            user.email = self.cleaned_data["email"]
+            user.save(update_fields=["email"])
+        return profile
 
     def rows(self):
         """把字段切成页面上的一行行，供模板逐格渲染。
