@@ -377,6 +377,9 @@ input[type="url"], input[type="tel"], input[type="search"] {
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 textarea { min-height: 88px; resize: vertical; line-height: 1.7; }
+/* 论文「说明」的浅色提示：点进输入框开始编辑就隐去，免得和已输入的内容混在一起。 */
+.hint-input::placeholder { color: var(--ink-3); opacity: 1; }
+.hint-input:focus::placeholder { color: transparent; }
 select[multiple] { min-height: 168px; padding: 6px; }
 select[multiple] option { padding: 4px 6px; }
 select:focus, textarea:focus,

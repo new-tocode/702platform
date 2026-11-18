@@ -126,7 +126,7 @@ def search_papers(*, query=""):
         return papers
 
     condition = _search_condition(
-        keyword, ("title", "authors", "venue", "doi", "abstract")
+        keyword, ("title", "authors", "venue", "doi", "note", "abstract")
     )
     paper_type = _choice_value(PAPER_TYPE_CHOICES, keyword, PAPER_TYPE_ALIASES)
     if paper_type:

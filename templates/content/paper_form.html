@@ -18,7 +18,7 @@
         <div class="head-row">
             <div>
                 <h1>{% translate "添加论文" %}</h1>
-                <div class="sub">{% translate "题目、作者、期刊或会议、年份与论文类型必填；收录情况、原文链接与摘要可稍后补充。提交后立即显示在学术论文页面上。" %}</div>
+                <div class="sub">{% translate "题目、作者、期刊或会议、年份与论文类型必填；收录情况、说明、原文链接与摘要可稍后补充。提交后立即显示在学术论文页面上。" %}</div>
             </div>
         </div>
     </div>
@@ -68,6 +68,11 @@
                     {{ form.doi }}
                     <p class="help">{% translate "可填 DOI（10.xxxx/…），也可填 https:// 开头的原文地址。" %}</p>
                     {{ form.doi.errors }}
+                </div>
+                <div class="field">
+                    <label for="{{ form.note.id_for_label }}">{{ form.note.label }}</label>
+                    {{ form.note }}
+                    {{ form.note.errors }}
                 </div>
                 <div class="field">
                     <label for="{{ form.abstract.id_for_label }}">{{ form.abstract.label }}</label>

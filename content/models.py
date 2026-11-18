@@ -124,6 +124,7 @@ class AcademicPaper(models.Model):
     )
     # 可以填 DOI（10.xxxx/…），也可以直接填原文地址；展示时由 external_url 统一。
     doi = models.CharField("DOI / 原文链接", max_length=300, blank=True)
+    note = models.CharField("说明", max_length=300, blank=True)
     abstract = models.TextField("摘要", max_length=2000, blank=True)
     created_at = models.DateTimeField("创建时间", auto_now_add=True)
 
@@ -152,6 +153,35 @@ class AcademicPaper(models.Model):
         if lowered.startswith("doi:"):
             value = value[4:].strip()
         return f"https://doi.org/{value}"
+
+
+class ContentSettings(models.Model):
+    """后台维护的成果表单提示文案。单例：没有记录时用代码里的默认值。
+
+    存在的理由只有一条：提示语要能在后台改，而不必改代码重新部署。默认值放在
+    代码里用惰性译文，英文界面才会跟着翻译；管理员填过之后就用管理员填的那份。
+    """
+
+    paper_note_hint = models.CharField(
+        "论文「说明」提示",
+        max_length=200,
+        blank=True,
+        help_text="显示在论文“说明”输入框内的浅色提示；留空则使用默认文案。",
+    )
+
+    class Meta:
+        verbose_name = "成果设置"
+        verbose_name_plural = "成果设置"
+
+    def __str__(self):
+        return "成果设置"
+
+    @classmethod
+    def paper_note_placeholder(cls):
+        row = cls.objects.only("paper_note_hint").first()
+        if row is not None and row.paper_note_hint.strip():
+            return row.paper_note_hint.strip()
+        return _("见刊年卷期页码、发表日期、录用日期等")
 
 
 #: 专利类型与当前状态。区块名叫「发明专利」，但队里真正拿到的可能是实用新型

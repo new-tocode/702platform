@@ -31,7 +31,7 @@
     <form class="list-toolbar" method="get" role="search">
         <div class="list-search">
             <input type="search" name="q" value="{{ keyword }}" autocomplete="off"
-                   placeholder="{% translate '搜索题目、作者、期刊、类别或年份' %}"
+                   placeholder="{% translate '搜索题目、作者、期刊、说明、类别或年份' %}"
                    aria-label="{% translate '搜索论文' %}">
             {% if per_page != per_page_options.0 %}
                 <input type="hidden" name="per_page" value="{{ per_page }}">
@@ -72,6 +72,9 @@
                             <dt>{% translate "DOI / 原文链接" %}</dt>
                             <dd><a class="achievement-link" href="{{ paper.external_url }}" target="_blank" rel="noopener noreferrer">{{ paper.doi }}</a></dd>
                         </div>
+                    {% endif %}
+                    {% if paper.note %}
+                        <div><dt>{% translate "说明" %}</dt><dd>{{ paper.note|linebreaksbr }}</dd></div>
                     {% endif %}
                 </dl>
                 {% if paper.abstract %}

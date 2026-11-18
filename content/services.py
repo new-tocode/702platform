@@ -56,6 +56,7 @@ def create_paper(
     paper_type,
     indexing="",
     doi="",
+    note="",
     abstract="",
     user,
     request=None,
@@ -92,6 +93,7 @@ def create_paper(
         paper_type=paper_type,
         indexing=indexing,
         doi=doi,
+        note=note,
         abstract=abstract,
     )
     record_audit(

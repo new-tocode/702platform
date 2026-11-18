@@ -6,7 +6,15 @@ from django.contrib import admin
 
 from core.audit import record_audit
 
-from .models import AcademicPaper, Award, ContentPage, HomeSlide, Patent, Showcase
+from .models import (
+    AcademicPaper,
+    Award,
+    ContentPage,
+    ContentSettings,
+    HomeSlide,
+    Patent,
+    Showcase,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -78,7 +86,7 @@ class AwardAdmin(admin.ModelAdmin):
 class AcademicPaperAdmin(admin.ModelAdmin):
     list_display = ("title", "venue", "year", "paper_type", "indexing", "authors")
     list_filter = ("year", "paper_type", "indexing")
-    search_fields = ("title", "authors", "venue", "doi")
+    search_fields = ("title", "authors", "venue", "doi", "note")
     readonly_fields = ("created_at",)
     ordering = ("-year", "-created_at", "-id")
 
@@ -126,6 +134,33 @@ class PatentAdmin(admin.ModelAdmin):
             obj.title,
             obj.year,
             not change,
+            extra={"request_id": getattr(request, "request_id", "-")},
+        )
+
+
+@admin.register(ContentSettings)
+class ContentSettingsAdmin(admin.ModelAdmin):
+    """只有一行配置：没有时允许新增，建好之后只能改，不能删也不能再加。"""
+
+    def has_add_permission(self, request):
+        return not ContentSettings.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        record_audit(
+            action="content.settings.update",
+            user=request.user,
+            target=obj,
+            detail={"paper_note_hint": obj.paper_note_hint},
+            request=request,
+        )
+        logger.info(
+            "admin.content_settings.save operator=%s settings_id=%s",
+            request.user.get_username(),
+            obj.pk,
             extra={"request_id": getattr(request, "request_id", "-")},
         )
 

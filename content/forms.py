@@ -12,7 +12,7 @@ from django.utils.translation import gettext_lazy as _
 
 from core.forms import MultipleFileInput, MultipleImageField
 
-from .models import AcademicPaper, Award, Patent
+from .models import AcademicPaper, Award, ContentSettings, Patent
 from .selectors import find_duplicate_paper
 from .validators import (
     IMAGE_LIMIT,
@@ -131,6 +131,14 @@ class AwardForm(AchievementFormMixin, forms.ModelForm):
 class PaperForm(AchievementFormMixin, forms.ModelForm):
     """成员登记一篇学术论文。"""
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # 提示语由后台配置；空配置回落为带惰性译文的默认文案。这里在实例化时取，
+        # 后台改完下一次打开表单就生效，不需要重启。
+        self.fields["note"].widget.attrs["placeholder"] = (
+            ContentSettings.paper_note_placeholder()
+        )
+
     class Meta:
         model = AcademicPaper
         fields = (
@@ -141,6 +149,7 @@ class PaperForm(AchievementFormMixin, forms.ModelForm):
             "paper_type",
             "indexing",
             "doi",
+            "note",
             "abstract",
         )
         # 与 AwardForm 同一规矩：标签在表单里点名，模型上的中文只给后台看。
@@ -153,11 +162,14 @@ class PaperForm(AchievementFormMixin, forms.ModelForm):
             "paper_type": _("论文类型"),
             "indexing": _("收录情况"),
             "doi": _("DOI / 原文链接"),
+            "note": _("说明"),
             "abstract": _("摘要"),
         }
         widgets = {
             "year": forms.NumberInput(attrs={"min": EARLIEST_YEAR}),
             "authors": forms.Textarea(attrs={"rows": 2}),
+            # 只在获得焦点时隐去提示字，别让浅色文案与已输入的内容混在一起。
+            "note": forms.TextInput(attrs={"class": "hint-input"}),
             "abstract": forms.Textarea(attrs={"rows": 6}),
         }
 
@@ -199,6 +211,7 @@ class PaperForm(AchievementFormMixin, forms.ModelForm):
             "paper_type": self.cleaned_data["paper_type"],
             "indexing": self.cleaned_data["indexing"],
             "doi": self.cleaned_data["doi"],
+            "note": self.cleaned_data["note"],
             "abstract": self.cleaned_data["abstract"],
         }
 

@@ -2,8 +2,8 @@
 
 > 公开展示内容：通用公开页 `ContentPage`（含顶栏固定的 `/about/`）、社团成果聚合页
 > `/achievements/`（把历年获奖 `Award`、学术论文 `AcademicPaper`、发明专利 `Patent`
-> 三类汇总成入口）、成员风采 `Showcase`、首页轮播 `HomeSlide`，以及全站共用的
-> Markdown 渲染过滤器 `render_markdown`。
+> 三类汇总成入口）、成员风采 `Showcase`、首页轮播 `HomeSlide`、后台可改的成果表单
+> 提示 `ContentSettings`，以及全站共用的 Markdown 渲染过滤器 `render_markdown`。
 > **不碰媒体文件本身**——`MediaFile` 归 `media`；**不定义「谁能做什么」**——`permissions.py`
 > 只有一条委托；**不负责首页**——轮播由 `accounts.views.home` 查、在 `templates/home.html` 里渲染。
 
@@ -80,6 +80,9 @@
 - **专利号在数据库里大小写不敏感唯一**：`Patent.Meta.constraints` 用 `Lower("patent_number")` 兜底；
   前台表单与模型 `clean()` 先去掉空白，表单另给一句可读的重复提示。这套归一化只管
   大小写与空白——连字符等格式变体、直接走 ORM 的写入仍可能重复。
+- **论文「说明」的提示语只有一个来源**：`ContentSettings.paper_note_placeholder()`。
+  后台填了就用后台那份（管理员文案是数据，不再翻译）；留空或没有配置行时回落到模型里
+  带惰性译文的默认句，英文界面才会跟着翻译。不要再在模板或表单里写第二份默认提示。
 - **论文与专利没有附件字段**：不挂 `MediaFile`；论文页只把 DOI／原文地址交给 `external_url`，
   它只认 `http(s)` 与 DOI 前缀，其他 scheme 一律落到 `https://doi.org/` 解析器。
 - **聚合页统计只走一个入口**：`selectors.achievement_summary()` 各查一次聚合，模板不自己写查询；

@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 702platform\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-07 22:57+0800\n"
+"POT-Creation-Date: 2026-11-18 14:18+0800\n"
 "PO-Revision-Date: 2026-09-19 18:39\n"
 "Last-Translator: 702platform\n"
 "Language-Team: 702platform\n"
@@ -411,7 +411,7 @@ msgstr "Award name"
 msgid "赛事名称"
 msgstr "Competition"
 
-#: content/forms.py:87 content/forms.py:152 content/forms.py:224
+#: content/forms.py:87 content/forms.py:161 content/forms.py:237
 msgid "年份"
 msgstr "Year"
 
@@ -438,63 +438,68 @@ msgstr "Advisors"
 msgid "最多上传 %(limit)s 张，这次选了 %(count)s 张。"
 msgstr "Up to %(limit)s files — you selected %(count)s."
 
-#: content/forms.py:149
+#: content/forms.py:158
 msgid "论文题目"
 msgstr "Paper title"
 
-#: content/forms.py:150 templates/content/papers.html:68
+#: content/forms.py:159 templates/content/papers.html:68
 msgid "论文作者"
 msgstr "Authors"
 
-#: content/forms.py:151 templates/content/papers.html:69
+#: content/forms.py:160 templates/content/papers.html:69
 msgid "期刊 / 会议"
 msgstr "Journal / Conference"
 
-#: content/forms.py:153
+#: content/forms.py:162
 msgid "论文类型"
 msgstr "Paper type"
 
-#: content/forms.py:154
+#: content/forms.py:163
 msgid "收录情况"
 msgstr "Indexing"
 
-#: content/forms.py:155 templates/content/papers.html:72
+#: content/forms.py:164 templates/content/papers.html:72
 msgid "DOI / 原文链接"
 msgstr "DOI / Full text"
 
-#: content/forms.py:156 templates/content/papers.html:78
+#: content/forms.py:165 templates/content/papers.html:77
+#: templates/notices/message_list.html:43
+msgid "说明"
+msgstr "Details"
+
+#: content/forms.py:166 templates/content/papers.html:81
 msgid "摘要"
 msgstr "Abstract"
 
-#: content/forms.py:188 content/views.py:353
+#: content/forms.py:200 content/views.py:353
 msgid "已经登记过同一篇论文（题目、作者与年份相同）。"
 msgstr "This paper is already listed with the same title, authors, and year."
 
-#: content/forms.py:221
+#: content/forms.py:234
 msgid "专利名称"
 msgstr "Patent title"
 
-#: content/forms.py:222 templates/content/patents.html:66
+#: content/forms.py:235 templates/content/patents.html:66
 msgid "发明人"
 msgstr "Inventors"
 
-#: content/forms.py:223 templates/content/patents.html:67
+#: content/forms.py:236 templates/content/patents.html:67
 msgid "专利号 / 申请号"
 msgstr "Patent / Application No."
 
-#: content/forms.py:225
+#: content/forms.py:238
 msgid "专利类型"
 msgstr "Patent type"
 
-#: content/forms.py:226
+#: content/forms.py:239
 msgid "当前状态"
 msgstr "Status"
 
-#: content/forms.py:227 templates/content/patents.html:70
+#: content/forms.py:240 templates/content/patents.html:70
 msgid "简介"
 msgstr "Summary"
 
-#: content/forms.py:246 content/views.py:397
+#: content/forms.py:259 content/views.py:397
 msgid "这个专利号已经登记过了。"
 msgstr "This patent number is already registered."
 
@@ -534,30 +539,35 @@ msgstr "Other indexing"
 msgid "未收录"
 msgstr "Not indexed"
 
-#: content/models.py:160 templates/content/achievements.html:60
+#: content/models.py:184
+msgid "见刊年卷期页码、发表日期、录用日期等"
+msgstr ""
+"Publication year/volume/issue/pages, publication date, acceptance date, etc."
+
+#: content/models.py:190 templates/content/achievements.html:60
 #: templates/content/patent_form.html:14 templates/content/patents.html:4
 #: templates/content/patents.html:14 templates/content/patents.html:18
 #: templates/includes/achievement_tabs.html:22
 msgid "发明专利"
 msgstr "Invention Patent"
 
-#: content/models.py:161
+#: content/models.py:191
 msgid "实用新型"
 msgstr "Utility model"
 
-#: content/models.py:162
+#: content/models.py:192
 msgid "外观设计"
 msgstr "Design patent"
 
-#: content/models.py:166
+#: content/models.py:196
 msgid "已授权"
 msgstr "Granted"
 
-#: content/models.py:167
+#: content/models.py:197
 msgid "审查中"
 msgstr "Under review"
 
-#: content/models.py:168
+#: content/models.py:198
 msgid "已申请"
 msgstr "Applied"
 
@@ -2399,7 +2409,7 @@ msgstr "Add award"
 
 #: templates/content/achievements.html:84 templates/content/paper_form.html:4
 #: templates/content/paper_form.html:16 templates/content/paper_form.html:20
-#: templates/content/paper_form.html:79 templates/content/papers.html:23
+#: templates/content/paper_form.html:84 templates/content/papers.html:23
 msgid "添加论文"
 msgstr "Add paper"
 
@@ -2526,17 +2536,17 @@ msgstr "No awards yet."
 msgid "获奖记录分页"
 msgstr "Award pages"
 
-#: templates/content/awards.html:127 templates/content/papers.html:94
+#: templates/content/awards.html:127 templates/content/papers.html:97
 #: templates/content/patents.html:86 templates/discussion/space.html:197
 msgid "上一页"
 msgstr "Previous page"
 
-#: templates/content/awards.html:139 templates/content/papers.html:106
+#: templates/content/awards.html:139 templates/content/papers.html:109
 #: templates/content/patents.html:98 templates/discussion/space.html:201
 msgid "下一页"
 msgstr "Next page"
 
-#: templates/content/awards.html:143 templates/content/papers.html:110
+#: templates/content/awards.html:143 templates/content/papers.html:113
 #: templates/content/patents.html:102 templates/discussion/space.html:199
 #, python-format
 msgid "第 %(current)s / %(total)s 页"
@@ -2555,12 +2565,12 @@ msgstr "No more public pages yet."
 
 #: templates/content/paper_form.html:21
 msgid ""
-"题目、作者、期刊或会议、年份与论文类型必填；收录情况、原文链接与摘要可稍后补"
-"充。提交后立即显示在学术论文页面上。"
+"题目、作者、期刊或会议、年份与论文类型必填；收录情况、说明、原文链接与摘要可"
+"稍后补充。提交后立即显示在学术论文页面上。"
 msgstr ""
 "Title, authors, journal or conference, year, and paper type are required. "
-"Indexing, full-text link, and abstract can be added later. The paper appears "
-"on the Academic Papers page immediately after submission."
+"Indexing, details, full-text link, and abstract can be added later. The "
+"paper appears on the Academic Papers page immediately after submission."
 
 #: templates/content/paper_form.html:39
 msgid "多位作者用顿号分隔；顺序照论文上的署名。"
@@ -2581,11 +2591,11 @@ msgstr ""
 msgid "可填 DOI（10.xxxx/…），也可填 https:// 开头的原文地址。"
 msgstr "Enter a DOI (10.xxxx/…) or a full-text URL starting with https://."
 
-#: templates/content/paper_form.html:75
+#: templates/content/paper_form.html:80
 msgid "支持 Markdown。摘要会显示在论文列表里。"
 msgstr "Markdown is supported. The abstract appears in the paper list."
 
-#: templates/content/paper_form.html:80
+#: templates/content/paper_form.html:85
 msgid "返回学术论文"
 msgstr "Back to academic papers"
 
@@ -2597,23 +2607,23 @@ msgstr[0] "1 paper"
 msgstr[1] "%(counter)s papers"
 
 #: templates/content/papers.html:34
-msgid "搜索题目、作者、期刊、类别或年份"
-msgstr "Search title, authors, journal, category, or year"
+msgid "搜索题目、作者、期刊、说明、类别或年份"
+msgstr "Search title, authors, journal, details, category, or year"
 
 #: templates/content/papers.html:35
 msgid "搜索论文"
 msgstr "Search papers"
 
-#: templates/content/papers.html:85
+#: templates/content/papers.html:88
 #, python-format
 msgid "没有匹配「%(keyword)s」的论文。"
 msgstr "No papers match \"%(keyword)s\"."
 
-#: templates/content/papers.html:87
+#: templates/content/papers.html:90
 msgid "暂时没有论文记录。"
 msgstr "No papers yet."
 
-#: templates/content/papers.html:92
+#: templates/content/papers.html:95
 msgid "论文分页"
 msgstr "Paper pagination"
 
@@ -3242,10 +3252,6 @@ msgstr "Type"
 #: templates/notices/message_list.html:42
 msgid "来自"
 msgstr "From"
-
-#: templates/notices/message_list.html:43
-msgid "说明"
-msgstr "Details"
 
 #: templates/notices/message_list.html:44
 msgid "时间"

@@ -14,8 +14,8 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.db import IntegrityError, transaction
-from django.test import TestCase, override_settings
-from django.utils import timezone
+from django.test import RequestFactory, TestCase, override_settings
+from django.utils import timezone, translation
 from django.utils.functional import Promise
 from django.urls import reverse
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -26,7 +26,15 @@ from media.models import MediaFile
 
 from . import tier_rules
 from .forms import AwardForm, PaperForm, PatentForm
-from .models import AcademicPaper, Award, ContentPage, HomeSlide, Patent, Showcase
+from .models import (
+    AcademicPaper,
+    Award,
+    ContentPage,
+    ContentSettings,
+    HomeSlide,
+    Patent,
+    Showcase,
+)
 from .selectors import _choice_value
 from .services import DuplicatePaper, create_paper
 from .similarity import find_similar_award, normalize
@@ -1588,6 +1596,7 @@ def paper_payload(**overrides):
         "paper_type": "journal",
         "indexing": "core",
         "doi": "10.1234/gnn-survey",
+        "note": "2024 年第 3 期，页码 45-52。",
         "abstract": "一篇**综述**。",
     }
     values.update(overrides)
@@ -1768,6 +1777,7 @@ class PaperPublicListTests(TestCase):
             paper_type="journal",
             indexing="core",
             doi="10.1234/gnn-survey",
+            note="2024 年第 3 期，页码 45-52。",
             abstract="一篇**综述**。",
         )
         self.older = AcademicPaper.objects.create(
@@ -1790,6 +1800,7 @@ class PaperPublicListTests(TestCase):
         self.assertIn("中文核心", body)
         self.assertIn("会议论文", body)
         self.assertIn("https://doi.org/10.1234/gnn-survey", body)
+        self.assertIn("2024 年第 3 期，页码 45-52。", body)
         self.assertIn("<strong>综述</strong>", body)
 
     def test_keyword_matches_each_field(self):
@@ -1802,6 +1813,7 @@ class PaperPublicListTests(TestCase):
             "2023": "边缘计算调度",
             "24": "图神经网络综述",
             "gnn-survey": "图神经网络综述",  # DOI
+            "页码 45-52": "图神经网络综述",  # 说明
             "综述": "图神经网络综述",  # 摘要
         }
         for keyword, expected in cases.items():
@@ -1982,6 +1994,7 @@ class PaperContributionTests(TestCase):
         self.assertEqual(paper.authors, "张三、李四")
         self.assertEqual(paper.paper_type, "journal")
         self.assertEqual(paper.indexing, "core")
+        self.assertEqual(paper.note, "2024 年第 3 期，页码 45-52。")
         self.assertEqual(
             response.redirect_chain,
             [(f"{reverse('content:papers')}?q=%E5%9B%BE%E7%A5%9E%E7%BB%8F%E7%BD%91%E7%BB%9C%E7%BB%BC%E8%BF%B0", 302)],
@@ -2073,6 +2086,65 @@ class PaperContributionTests(TestCase):
         self.client.force_login(self.member)
         member = self.client.get(reverse("content:papers")).content.decode()
         self.assertIn(reverse("content:paper_create"), member)
+
+
+class PaperNoteHintTests(TestCase):
+    """说明输入框的浅色提示：默认值随界面语言，后台填过就以后台为准。"""
+
+    def setUp(self):
+        self.member = User.objects.create_user(
+            username="paper-hint-member", password="Member-Password-123!"
+        )
+        self.member.must_change_password = False
+        self.member.save(update_fields=["must_change_password"])
+        self.client.force_login(self.member)
+        self.url = reverse("content:paper_create")
+
+    def test_default_hint_is_shown_until_the_backend_sets_one(self):
+        body = self.client.get(self.url).content.decode()
+
+        self.assertIn('class="hint-input"', body)
+        self.assertIn('placeholder="见刊年卷期页码、发表日期、录用日期等"', body)
+
+    def test_backend_hint_overrides_the_default(self):
+        ContentSettings.objects.create(paper_note_hint="自定义：卷期页码与日期")
+
+        body = self.client.get(self.url).content.decode()
+
+        self.assertIn('placeholder="自定义：卷期页码与日期"', body)
+        self.assertNotIn("见刊年卷期页码", body)
+
+    def test_blank_backend_hint_falls_back_to_the_default(self):
+        ContentSettings.objects.create(paper_note_hint="   ")
+
+        body = self.client.get(self.url).content.decode()
+
+        self.assertIn("见刊年卷期页码、发表日期、录用日期等", body)
+
+    def test_default_hint_is_translated_on_the_english_site(self):
+        # 请求 /en/ 会激活并保留英文；用 override 包住，别把语言留给后面的测试类。
+        with translation.override("en"):
+            body = self.client.get(f"/en{self.url}").content.decode()
+
+        self.assertIn(
+            "Publication year/volume/issue/pages, publication date, "
+            "acceptance date, etc.",
+            body,
+        )
+
+    def test_backend_admin_allows_only_one_settings_row(self):
+        from django.contrib import admin
+
+        model_admin = admin.site._registry[ContentSettings]
+        request = RequestFactory().get("/admin/")
+        request.user = User.objects.create_superuser(
+            username="hint-admin", password="Admin-Password-123!"
+        )
+
+        self.assertTrue(model_admin.has_add_permission(request))
+        ContentSettings.objects.create(paper_note_hint="已配置")
+        self.assertFalse(model_admin.has_add_permission(request))
+        self.assertFalse(model_admin.has_delete_permission(request))
 
 
 class PatentContributionTests(TestCase):
