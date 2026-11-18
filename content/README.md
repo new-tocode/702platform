@@ -3,7 +3,7 @@
 > 公开展示内容：通用公开页 `ContentPage`（含顶栏固定的 `/about/`）、社团成果聚合页
 > `/achievements/`（把历年获奖 `Award`、学术论文 `AcademicPaper`、发明专利 `Patent`
 > 三类汇总成入口）、成员风采 `Showcase`、首页轮播 `HomeSlide`、后台可改的成果表单
-> 提示 `ContentSettings`，以及全站共用的 Markdown 渲染过滤器 `render_markdown`。
+> 提示 `ContentSettings`，以及全站共用的 Markdown 渲染过滤器 `render_markdown` 与预览端点。
 > **不碰媒体文件本身**——`MediaFile` 归 `media`；**不定义「谁能做什么」**——`permissions.py`
 > 只有一条委托；**不负责首页**——轮播由 `accounts.views.home` 查、在 `templates/home.html` 里渲染。
 
@@ -87,6 +87,12 @@
   它只认 `http(s)` 与 DOI 前缀，其他 scheme 一律落到 `https://doi.org/` 解析器。
 - **聚合页统计只走一个入口**：`selectors.achievement_summary()` 各查一次聚合，模板不自己写查询；
   卡片上的计数与最近年份必须来自同一份 summary。
+- **预览与发布是同一个渲染器**：`markdown_preview` 直接调用 `render_markdown`，包括 `<script>` 预处理
+  与 bleach 白名单。**不要为预览另开一条「更快／更宽松」的路径**——预览与发布后只要有一处不同，
+  这个功能就会变成误导。端点是 `POST` + 登录 + CSRF、上限 20000 字符（全站最长正文字段的上限），
+  **不落库、不写审计、不进日志**：草稿不是记录。
+- **预览只渲染正文**：帖子图片、通知附件是各自独立的上传字段，不在 Markdown 正文里，预览也不包含
+  它们；后台字段的预览与前台一样只覆盖 `markdown_fields` 点名的那些列。
 
 ## 3. 已知限制 / 当前不支持
 
@@ -98,6 +104,8 @@
 - **专利号只做大小写与空白归一**：数据库约束按 `Lower` 比，表单与模型 `clean()` 会去掉空白；
   `CN 2024…` 与 `CN-2024-…` 这类格式差异、以及绕过 `full_clean()` 的 ORM 写入仍会各存一条，
   需要人工在后台合并。
+- **预览不含附件与帖子图片**：它们不经过 `render_markdown`，预览面板只显示正文的渲染结果；
+  正文里的 `<img>` 也会被 bleach 白名单去掉（本来就不允许内嵌图片）。
 - **聚合页的统计不缓存**：每次打开都三次 `COUNT/MAX/MIN`；记录量大了再考虑缓存，别把计数做成
   容易过期的存储字段。
 - **论文/专利没有前台编辑与删除**：成员加错了要管理员在后台处理，与获奖同一条限制。
