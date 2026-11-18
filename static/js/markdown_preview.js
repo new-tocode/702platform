@@ -2,7 +2,7 @@
 //
 // 与发布后的正文共用 content.templatetags.rendering.render_markdown，不在浏览器
 // 里另写一套 Markdown 解析——两边语法一有出入，「预览」就会变成另一件事。
-// 按钮与面板由脚本插到 textarea 前后，输入框的 DOM 结构保持原样：
+// 按钮与面板由脚本插入，输入框的 DOM 结构保持原样：
 // mentions.js 依赖 textarea.parentElement 定位 @ 补全菜单，包一层容器会让菜单
 // 掉到下面去。没有脚本时输入框照常可用，只是没有预览。
 
