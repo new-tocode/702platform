@@ -14,7 +14,7 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.db import IntegrityError, transaction
-from django.test import RequestFactory, TestCase, override_settings
+from django.test import Client, RequestFactory, TestCase, override_settings
 from django.utils import timezone, translation
 from django.utils.functional import Promise
 from django.urls import reverse
@@ -2343,3 +2343,100 @@ class PaperExternalUrlTests(TestCase):
             self.paper("javascript:alert(1)").external_url,
             "https://doi.org/javascript:alert(1)",
         )
+
+
+class MarkdownPreviewTests(TestCase):
+    """输入框旁的「预览」：门槛、拒绝形态与发布后共用同一个渲染器。"""
+
+    def setUp(self):
+        self.member = User.objects.create_user(
+            username="markdown-preview-member",
+            password="Member-Password-123!",
+        )
+        self.member.must_change_password = False
+        self.member.save(update_fields=["must_change_password"])
+        self.url = reverse("content:markdown_preview")
+
+    def test_requires_login(self):
+        response = self.client.post(self.url, {"text": "**粗体**"})
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("accounts:login"), response.url)
+
+    def test_get_is_not_allowed(self):
+        self.client.force_login(self.member)
+        self.assertEqual(self.client.get(self.url).status_code, 405)
+
+    def test_renders_markdown_and_removes_unsafe_html(self):
+        self.client.force_login(self.member)
+        response = self.client.post(
+            self.url,
+            {"text": "# 标题\n\n**粗体**\n\n<script>alert(1)</script>"},
+        )
+        self.assertEqual(response.status_code, 200)
+        html = response.json()["html"]
+        self.assertIn("<h1>标题</h1>", html)
+        self.assertIn("<strong>粗体</strong>", html)
+        self.assertNotIn("<script>", html)
+        self.assertNotIn("alert", html)
+
+    def test_empty_text_returns_empty_html(self):
+        self.client.force_login(self.member)
+        response = self.client.post(self.url, {"text": ""})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"html": ""})
+
+    def test_rejects_text_over_the_limit(self):
+        self.client.force_login(self.member)
+        response = self.client.post(self.url, {"text": "x" * 20001})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"error": "too_long"})
+
+    def test_csrf_is_enforced(self):
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(self.member)
+        self.assertEqual(client.post(self.url, {"text": "**粗体**"}).status_code, 403)
+
+
+class MarkdownPreviewWidgetTests(TestCase):
+    """哪些字段带预览标记、按钮文案跟不跟语言走。"""
+
+    def test_front_forms_mark_only_their_markdown_fields(self):
+        for form_class, field_name in (
+            (AwardForm, "winners"),
+            (PaperForm, "abstract"),
+            (PatentForm, "summary"),
+        ):
+            with self.subTest(form=form_class.__name__):
+                form = form_class()
+                self.assertIn(
+                    'data-markdown-preview="1"', str(form[field_name])
+                )
+                self.assertNotIn(
+                    "data-markdown-preview", str(form["title"])
+                )
+
+    def test_button_labels_follow_the_active_language(self):
+        with translation.override("en"):
+            html = str(PaperForm()["abstract"])
+        self.assertIn('data-preview-label="Preview"', html)
+        self.assertIn('data-preview-hide-label="Hide preview"', html)
+
+    def test_admin_content_page_opts_into_preview(self):
+        from django.contrib import admin
+        from django.contrib.auth.models import AnonymousUser
+
+        from .admin import ContentPageAdmin
+
+        model_admin = ContentPageAdmin(ContentPage, admin.site)
+        request = RequestFactory().get("/admin/")
+        request.user = AnonymousUser()
+        form_class = model_admin.get_form(request)
+        with translation.override("en"):
+            html = str(form_class()["content"])
+        self.assertIn('data-markdown-preview="1"', html)
+        self.assertIn('data-preview-label="Preview"', html)
+
+    def test_base_template_exposes_preview_url(self):
+        response = self.client.get(reverse("accounts:home"))
+        self.assertContains(response, 'name="markdown-preview-url"')
+        self.assertContains(response, "js/markdown_preview.js")

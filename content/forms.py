@@ -11,6 +11,7 @@ from django.utils.text import format_lazy
 from django.utils.translation import gettext_lazy as _
 
 from core.forms import MultipleFileInput, MultipleImageField
+from core.widgets import MarkdownPreviewTextarea
 
 from .models import AcademicPaper, Award, ContentSettings, Patent
 from .selectors import find_duplicate_paper
@@ -92,7 +93,7 @@ class AwardForm(AchievementFormMixin, forms.ModelForm):
         }
         widgets = {
             "year": forms.NumberInput(attrs={"min": EARLIEST_YEAR}),
-            "winners": forms.Textarea(attrs={"rows": 2}),
+            "winners": MarkdownPreviewTextarea(attrs={"rows": 2}),
         }
 
     def award_kwargs(self):
@@ -170,7 +171,7 @@ class PaperForm(AchievementFormMixin, forms.ModelForm):
             "authors": forms.Textarea(attrs={"rows": 2}),
             # 只在获得焦点时隐去提示字，别让浅色文案与已输入的内容混在一起。
             "note": forms.TextInput(attrs={"class": "hint-input"}),
-            "abstract": forms.Textarea(attrs={"rows": 6}),
+            "abstract": MarkdownPreviewTextarea(attrs={"rows": 6}),
         }
 
     def clean(self):
@@ -242,7 +243,7 @@ class PatentForm(AchievementFormMixin, forms.ModelForm):
         widgets = {
             "year": forms.NumberInput(attrs={"min": EARLIEST_YEAR}),
             "inventors": forms.Textarea(attrs={"rows": 2}),
-            "summary": forms.Textarea(attrs={"rows": 5}),
+            "summary": MarkdownPreviewTextarea(attrs={"rows": 5}),
         }
 
     def clean_patent_number(self):

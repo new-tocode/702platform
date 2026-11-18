@@ -4,6 +4,7 @@ import logging
 
 from django.contrib import admin
 
+from core.admin import MarkdownPreviewAdminMixin
 from core.audit import record_audit
 
 from .models import (
@@ -21,7 +22,8 @@ logger = logging.getLogger(__name__)
 
 
 @admin.register(ContentPage)
-class ContentPageAdmin(admin.ModelAdmin):
+class ContentPageAdmin(MarkdownPreviewAdminMixin, admin.ModelAdmin):
+    markdown_fields = ("content",)
     list_display = ("title", "slug", "is_published", "updated_at")
     list_filter = ("is_published", "updated_at")
     search_fields = ("title", "slug", "content")
@@ -54,7 +56,8 @@ class ContentPageAdmin(admin.ModelAdmin):
 # 重复记录拦下，而「确实是另一条」（换个赛道之类）的例外正是从这里放行。
 # 这不是漏掉的检查——别顺手补上。
 @admin.register(Award)
-class AwardAdmin(admin.ModelAdmin):
+class AwardAdmin(MarkdownPreviewAdminMixin, admin.ModelAdmin):
+    markdown_fields = ("winners",)
     list_display = ("title", "competition", "year", "tier", "level", "advisor")
     list_filter = ("year", "tier", "level")
     search_fields = ("title", "competition", "level", "winners", "advisor")
@@ -83,7 +86,8 @@ class AwardAdmin(admin.ModelAdmin):
 
 
 @admin.register(AcademicPaper)
-class AcademicPaperAdmin(admin.ModelAdmin):
+class AcademicPaperAdmin(MarkdownPreviewAdminMixin, admin.ModelAdmin):
+    markdown_fields = ("abstract",)
     list_display = ("title", "venue", "year", "paper_type", "indexing", "authors")
     list_filter = ("year", "paper_type", "indexing")
     search_fields = ("title", "authors", "venue", "doi", "note")
@@ -111,7 +115,8 @@ class AcademicPaperAdmin(admin.ModelAdmin):
 
 
 @admin.register(Patent)
-class PatentAdmin(admin.ModelAdmin):
+class PatentAdmin(MarkdownPreviewAdminMixin, admin.ModelAdmin):
+    markdown_fields = ("summary",)
     list_display = ("title", "patent_number", "year", "patent_type", "status", "inventors")
     list_filter = ("year", "patent_type", "status")
     search_fields = ("title", "inventors", "patent_number", "summary")
@@ -199,7 +204,8 @@ class HomeSlideAdmin(admin.ModelAdmin):
 
 
 @admin.register(Showcase)
-class ShowcaseAdmin(admin.ModelAdmin):
+class ShowcaseAdmin(MarkdownPreviewAdminMixin, admin.ModelAdmin):
+    markdown_fields = ("intro",)
     list_display = ("member", "sort_order", "is_active", "photo")
     list_filter = ("is_active",)
     search_fields = ("member__username", "member__profile__full_name", "intro")

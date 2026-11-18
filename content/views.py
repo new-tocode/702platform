@@ -7,7 +7,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
-from django.http import FileResponse
+from django.http import FileResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -28,9 +28,15 @@ from .selectors import (
     search_patents,
 )
 from .services import DuplicateAward, DuplicatePaper, create_award, create_paper
+from .templatetags.rendering import render_markdown
 
 
 logger = logging.getLogger(__name__)
+
+#: 预览接受的最大字符数。全站最长的 Markdown 正文字段是 20000
+#: （通知、内容页面、帖子正文），这里按这条上限拒绝更大的输入——端点是公开
+#: 可打的 CPU 入口，不能让它替任意长度的文本跑解析器。
+MARKDOWN_PREVIEW_MAX_CHARS = 20000
 
 
 #: 每页条数的可选项与默认值。首个值是默认：选项由用户选，默认由代码定。
@@ -489,3 +495,18 @@ def showcase(request):
         extra={"request_id": getattr(request, "request_id", "-")},
     )
     return render(request, "content/showcase.html", {"showcases": showcase_list})
+
+
+@login_required
+@require_POST
+def markdown_preview(request):
+    """把一段 Markdown 渲染成预览 HTML，供输入框旁的「预览」按钮调用。
+
+    复用 ``render_markdown``：预览与发布后走的是同一套 Python-Markdown 扩展和
+    bleach 白名单，不会出现「预览好好的、保存后不一样」。请求体**不落库、不写
+    审计、也不进日志**——它只是尚未提交的草稿。
+    """
+    text = request.POST.get("text", "")
+    if len(text) > MARKDOWN_PREVIEW_MAX_CHARS:
+        return JsonResponse({"error": "too_long"}, status=400)
+    return JsonResponse({"html": str(render_markdown(text))})
