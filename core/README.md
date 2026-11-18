@@ -1,7 +1,8 @@
 # core 模块
 
 > 平台横向底座：跨应用权限口径（`is_admin` / 视图门槛 `require`）、审计日志、操作入口注册表、
-> 身份目录、通用上传校验、文件指纹、受保护件的存储与取件出口，以及成员中心的概览计数。
+> 身份目录、通用上传校验、文件指纹、受保护件的存储与取件出口、通用表单控件（Markdown 预览标记），
+> 以及成员中心的概览计数。
 > 它**只有一张表**（`AuditLog`），**没有页面**，也**不产出任何业务判定**——「谁能做什么」仍归
 > 各 app 的 `permissions`，这里只统一口径与样板。
 
@@ -60,6 +61,11 @@
   业务动作产生，这个区别决定了后台给不给分配入口。
 - **入口过滤的三层顺序**：未登录或 `must_change_password=True` → 一个入口都没有；然后才轮到
   `staff_only` / `required_permission` / `visible_when`。
+- **预览控件只加标记，不渲染内容**：`core.widgets.MarkdownPreviewTextarea` 只往 textarea 写
+  `data-*` 与已翻译的按钮文案，真正的渲染在 `content.markdown_preview`——core 不在加载期依赖
+  业务 app。文案必须在 `render()` 时取（理由见 [`../AGENTS.md`](../AGENTS.md) §4 的「惰性译文」）。
+  `MarkdownPreviewAdminMixin` 也只换 `markdown_fields` 点名的列：后台一张表里既有 Markdown 正文
+  也有作者、备注这类普通短文本，按字段类型一刀切会把它们都变成预览框。
 
 ## 3. 已知限制 / 当前不支持
 

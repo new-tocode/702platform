@@ -3,7 +3,7 @@
 > 公开展示内容：通用公开页 `ContentPage`（含顶栏固定的 `/about/`）、社团成果聚合页
 > `/achievements/`（把历年获奖 `Award`、学术论文 `AcademicPaper`、发明专利 `Patent`
 > 三类汇总成入口）、成员风采 `Showcase`、首页轮播 `HomeSlide`、后台可改的成果表单
-> 提示 `ContentSettings`，以及全站共用的 Markdown 渲染过滤器 `render_markdown`。
+> 提示 `ContentSettings`，以及全站共用的 Markdown 渲染过滤器 `render_markdown` 与预览端点 `markdown_preview`。
 > **不碰媒体文件本身**——`MediaFile` 归 `media`；**不定义「谁能做什么」**——`permissions.py`
 > 只有一条委托；**不负责首页**——轮播由 `accounts.views.home` 查、在 `templates/home.html` 里渲染。
 
@@ -87,6 +87,12 @@
   它只认 `http(s)` 与 DOI 前缀，其他 scheme 一律落到 `https://doi.org/` 解析器。
 - **聚合页统计只走一个入口**：`selectors.achievement_summary()` 各查一次聚合，模板不自己写查询；
   卡片上的计数与最近年份必须来自同一份 summary。
+- **预览与发布是同一个渲染器**：`markdown_preview` 直接调用 `render_markdown`，包括 `<script>` 预处理
+  与 bleach 白名单。**不要为预览另开一条「更快／更宽松」的路径**——预览与发布后只要有一处不同，
+  这个功能就会变成误导。端点的门槛、上限与「草稿不落库」见
+  [`../docs/更新维护/接口.md`](../docs/更新维护/接口.md) §Markdown 预览。
+- **预览只渲染正文**：帖子图片、通知附件是各自独立的上传字段，不在 Markdown 正文里，预览也不包含
+  它们。
 
 ## 3. 已知限制 / 当前不支持
 

@@ -4,6 +4,7 @@ from django.db.models.functions import Lower
 from django.utils.translation import gettext_lazy as _
 
 from core.forms import MultipleFileInput, MultipleImageField
+from core.widgets import MarkdownPreviewTextarea
 
 from .models import Board, Comment, Post, PostImage
 from .validators import (
@@ -52,7 +53,9 @@ class PostForm(forms.ModelForm):
         max_length=20000,
         # data-mentions 打开 @ 补全（static/js/mentions.js）；没脚本时手打 @姓名
         # 一样有效，服务端才是权威。
-        widget=forms.Textarea(attrs={"rows": 10, "data-mentions": "1"}),
+        widget=MarkdownPreviewTextarea(
+            attrs={"rows": 10, "data-mentions": "1"}
+        ),
     )
 
     class Meta:

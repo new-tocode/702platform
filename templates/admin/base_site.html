@@ -5,6 +5,8 @@
 
 {% block extrastyle %}{{ block.super }}<link rel="stylesheet" href="{% static 'css/admin.css' %}">{% endblock %}
 
+{% block extrahead %}{{ block.super }}<meta name="markdown-preview-url" content="{% url 'content:markdown_preview' %}">{% endblock %}
+
 {% block branding %}
 <div id="site-name"><a href="{% url 'admin:index' %}">竞赛社团管理后台</a></div>
 {% endblock %}

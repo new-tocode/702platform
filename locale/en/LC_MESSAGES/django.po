@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 702platform\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-18 14:18+0800\n"
+"POT-Creation-Date: 2026-11-18 20:30+0800\n"
 "PO-Revision-Date: 2026-09-19 18:39\n"
 "Last-Translator: 702platform\n"
 "Language-Team: 702platform\n"
@@ -377,129 +377,129 @@ msgstr "Registration withdrawn."
 msgid "获奖证书_%(date)s.zip"
 msgstr "Award certificates_%(date)s.zip"
 
-#: content/forms.py:44
+#: content/forms.py:45
 #, python-format
 msgid "年份需在 %(earliest)s 到 %(latest)s 之间。"
 msgstr "The year must be between %(earliest)s and %(latest)s."
 
-#: content/forms.py:55 content/validators.py:33
+#: content/forms.py:56 content/validators.py:33
 #: templates/content/awards.html:108
 msgid "获奖证书"
 msgstr "Award certificates"
 
-#: content/forms.py:59
+#: content/forms.py:60
 #, python-brace-format
 msgid "最多 {limit} 张，每张不超过 {mb} MB；可打包下载。"
 msgstr ""
 "Up to {limit} images, {mb} MB each; they can be downloaded as an archive."
 
-#: content/forms.py:66 content/validators.py:38
+#: content/forms.py:67 content/validators.py:38
 #: templates/content/awards.html:109
 msgid "参赛图片"
 msgstr "Competition photos"
 
-#: content/forms.py:70
+#: content/forms.py:71
 #, python-brace-format
 msgid "最多 {limit} 张，每张不超过 {mb} MB。"
 msgstr "Up to {limit} images, {mb} MB each."
 
-#: content/forms.py:85
+#: content/forms.py:86
 msgid "奖项名称"
 msgstr "Award name"
 
-#: content/forms.py:86 templates/content/awards.html:96
+#: content/forms.py:87 templates/content/awards.html:96
 msgid "赛事名称"
 msgstr "Competition"
 
-#: content/forms.py:87 content/forms.py:161 content/forms.py:237
+#: content/forms.py:88 content/forms.py:162 content/forms.py:238
 msgid "年份"
 msgstr "Year"
 
-#: content/forms.py:88
+#: content/forms.py:89
 msgid "获奖层级"
 msgstr "Award tier"
 
-#: content/forms.py:89
+#: content/forms.py:90
 msgid "证书上的级别写法"
 msgstr "Level wording on the certificate"
 
-#: content/forms.py:90 templates/content/awards.html:105
+#: content/forms.py:91 templates/content/awards.html:105
 msgid "获奖人 / 团队"
 msgstr "Winners / team"
 
-#: content/forms.py:91 templates/content/awards.html:101
+#: content/forms.py:92 templates/content/awards.html:101
 #: templates/projects/group_detail.html:65
 #: templates/projects/group_list.html:71
 msgid "指导老师"
 msgstr "Advisors"
 
-#: content/forms.py:125
+#: content/forms.py:126
 #, python-format
 msgid "最多上传 %(limit)s 张，这次选了 %(count)s 张。"
 msgstr "Up to %(limit)s files — you selected %(count)s."
 
-#: content/forms.py:158
+#: content/forms.py:159
 msgid "论文题目"
 msgstr "Paper title"
 
-#: content/forms.py:159 templates/content/papers.html:68
+#: content/forms.py:160 templates/content/papers.html:68
 msgid "论文作者"
 msgstr "Authors"
 
-#: content/forms.py:160 templates/content/papers.html:69
+#: content/forms.py:161 templates/content/papers.html:69
 msgid "期刊 / 会议"
 msgstr "Journal / Conference"
 
-#: content/forms.py:162
+#: content/forms.py:163
 msgid "论文类型"
 msgstr "Paper type"
 
-#: content/forms.py:163
+#: content/forms.py:164
 msgid "收录情况"
 msgstr "Indexing"
 
-#: content/forms.py:164 templates/content/papers.html:72
+#: content/forms.py:165 templates/content/papers.html:72
 msgid "DOI / 原文链接"
 msgstr "DOI / Full text"
 
-#: content/forms.py:165 templates/content/papers.html:77
+#: content/forms.py:166 templates/content/papers.html:77
 #: templates/notices/message_list.html:43
 msgid "说明"
 msgstr "Details"
 
-#: content/forms.py:166 templates/content/papers.html:81
+#: content/forms.py:167 templates/content/papers.html:81
 msgid "摘要"
 msgstr "Abstract"
 
-#: content/forms.py:200 content/views.py:353
+#: content/forms.py:201 content/views.py:359
 msgid "已经登记过同一篇论文（题目、作者与年份相同）。"
 msgstr "This paper is already listed with the same title, authors, and year."
 
-#: content/forms.py:234
+#: content/forms.py:235
 msgid "专利名称"
 msgstr "Patent title"
 
-#: content/forms.py:235 templates/content/patents.html:66
+#: content/forms.py:236 templates/content/patents.html:66
 msgid "发明人"
 msgstr "Inventors"
 
-#: content/forms.py:236 templates/content/patents.html:67
+#: content/forms.py:237 templates/content/patents.html:67
 msgid "专利号 / 申请号"
 msgstr "Patent / Application No."
 
-#: content/forms.py:238
+#: content/forms.py:239
 msgid "专利类型"
 msgstr "Patent type"
 
-#: content/forms.py:239
+#: content/forms.py:240
 msgid "当前状态"
 msgstr "Status"
 
-#: content/forms.py:240 templates/content/patents.html:70
+#: content/forms.py:241 templates/content/patents.html:70
 msgid "简介"
 msgstr "Summary"
 
-#: content/forms.py:259 content/views.py:397
+#: content/forms.py:260 content/views.py:403
 msgid "这个专利号已经登记过了。"
 msgstr "This patent number is already registered."
 
@@ -571,21 +571,21 @@ msgstr "Under review"
 msgid "已申请"
 msgstr "Applied"
 
-#: content/views.py:225
+#: content/views.py:231
 msgid "获奖记录已添加。"
 msgstr "The award has been added."
 
-#: content/views.py:251
+#: content/views.py:257
 #, python-format
 msgid "%(title)s（获奖人：%(winners)s）"
 msgstr "%(title)s (winners: %(winners)s)"
 
-#: content/views.py:256
+#: content/views.py:262
 #, python-format
 msgid "%(detail)s，层级：%(tier)s"
 msgstr "%(detail)s — tier: %(tier)s"
 
-#: content/views.py:261
+#: content/views.py:267
 #, python-format
 msgid ""
 "已有相似的获奖记录：%(detail)s。同一年、同一赛事、同一批获奖人下，每个层级只"
@@ -595,28 +595,28 @@ msgstr ""
 "and winners, only one record is needed per tier; if it really is a different "
 "one, ask an administrator to add it in the admin site."
 
-#: content/views.py:356
+#: content/views.py:362
 msgid "论文记录已添加。"
 msgstr "Paper added."
 
-#: content/views.py:406
+#: content/views.py:412
 msgid "专利记录已添加。"
 msgstr "Patent added."
 
-#: content/views.py:440
+#: content/views.py:446
 msgid "请先勾选要下载的获奖记录。"
 msgstr "Select the awards you want to download first."
 
-#: content/views.py:445
+#: content/views.py:451
 #, python-format
 msgid "一次最多打包 %(limit)s 条记录，请分批下载。"
 msgstr "At most %(limit)s records per archive — please download in batches."
 
-#: content/views.py:454
+#: content/views.py:460
 msgid "所选的记录里还没有上传获奖证书。"
 msgstr "The selected records have no award certificates yet."
 
-#: content/views.py:469
+#: content/views.py:475
 #, python-format
 msgid "有 %(count)s 个证书文件已不在服务器上，没有打进压缩包。"
 msgstr ""
@@ -676,6 +676,22 @@ msgstr "That file is not an image."
 msgid "请选择要上传的文件。"
 msgstr "Please choose a file to upload."
 
+#: core/widgets.py:28
+msgid "预览"
+msgstr "Preview"
+
+#: core/widgets.py:29
+msgid "收起预览"
+msgstr "Hide preview"
+
+#: core/widgets.py:30
+msgid "没有可预览的内容。"
+msgstr "There is nothing to preview."
+
+#: core/widgets.py:31
+msgid "预览生成失败，请稍后再试。"
+msgstr "Preview failed. Please try again."
+
 #: defenses/apps.py:17 notices/selectors.py:344
 #: templates/defenses/schedule.html:4 templates/defenses/schedule.html:20
 #: templates/reviews/queue.html:24
@@ -691,7 +707,7 @@ msgid "答辩安排"
 msgstr "Defense schedule"
 
 #: defenses/forms.py:28 defenses/forms.py:36 defenses/models.py:123
-#: discussion/forms.py:100 notices/selectors.py:148 notices/selectors.py:335
+#: discussion/forms.py:103 notices/selectors.py:148 notices/selectors.py:335
 #: templates/discussion/space.html:161 templates/discussion/space.html:162
 msgid "评论"
 msgstr "Comment"
@@ -768,45 +784,45 @@ msgstr "This request is already confirmed; no need to close it again."
 msgid "该申请已确定，正文与讨论进入只读状态。"
 msgstr "The request is now confirmed; its text and discussion are read-only."
 
-#: discussion/forms.py:18 discussion/models.py:14
+#: discussion/forms.py:19 discussion/models.py:14
 msgid "中文名称"
 msgstr "Chinese name"
 
-#: discussion/forms.py:38 discussion/services.py:171
+#: discussion/forms.py:39 discussion/services.py:171
 msgid "已有同名板块。"
 msgstr "A board with that name already exists."
 
-#: discussion/forms.py:44 discussion/models.py:89 discussion/models.py:100
+#: discussion/forms.py:45 discussion/models.py:89 discussion/models.py:100
 #: discussion/models.py:101 discussion/validators.py:54
 #: templates/discussion/space.html:137
 msgid "帖子图片"
 msgstr "Post image"
 
-#: discussion/forms.py:47
+#: discussion/forms.py:48
 msgid "最多 3 张，每张不超过 3 MB。"
 msgstr "Up to 3 images per post, no more than 3 MB each."
 
-#: discussion/forms.py:51 discussion/models.py:53
+#: discussion/forms.py:52 discussion/models.py:53
 msgid "正文"
 msgstr "Body"
 
-#: discussion/forms.py:70
+#: discussion/forms.py:73
 msgid "请输入帖子标题。"
 msgstr "Enter a post title."
 
-#: discussion/forms.py:76
+#: discussion/forms.py:79
 msgid "请输入帖子正文。"
 msgstr "Enter the post body."
 
-#: discussion/forms.py:83 discussion/services.py:84
+#: discussion/forms.py:86 discussion/services.py:84
 msgid "每篇帖子最多上传 3 张图片。"
 msgstr "A post can have at most 3 images."
 
-#: discussion/forms.py:92 discussion/services.py:275
+#: discussion/forms.py:95 discussion/services.py:275
 msgid "每篇帖子最多保留 3 张图片。"
 msgstr "A post can contain at most 3 images."
 
-#: discussion/forms.py:112
+#: discussion/forms.py:115
 msgid "请输入评论内容。"
 msgstr "Enter a comment."
 
@@ -1050,7 +1066,7 @@ msgstr "Everyone"
 msgid "仅项目组联系人"
 msgstr "Project contacts only"
 
-#: notices/selectors.py:102 notices/views.py:55 templates/base.html:28
+#: notices/selectors.py:102 notices/views.py:55 templates/base.html:30
 #: templates/home.html:45 templates/home.html:76
 msgid "公开通知"
 msgstr "Notices"
@@ -1787,13 +1803,13 @@ msgid "该评审任务没有评审回复。"
 msgstr "This review task has no review reply."
 
 #: templates/accounts/member_home.html:4 templates/accounts/member_home.html:12
-#: templates/base.html:46 templates/discussion/space.html:16
+#: templates/base.html:48 templates/discussion/space.html:16
 msgid "成员中心"
 msgstr "Member Center"
 
 #: templates/accounts/member_home.html:4
 #: templates/accounts/password_change.html:4 templates/accounts/profile.html:4
-#: templates/base.html:6 templates/base.html:74
+#: templates/base.html:6 templates/base.html:76
 #: templates/competitions/list.html:4 templates/competitions/register.html:4
 #: templates/content/about.html:4 templates/content/achievements.html:4
 #: templates/content/award_form.html:4 templates/content/awards.html:4
@@ -1849,7 +1865,7 @@ msgstr "No"
 msgid "初审资格"
 msgstr "Preliminary reviewer role"
 
-#: templates/accounts/member_home.html:49 templates/base.html:46
+#: templates/accounts/member_home.html:49 templates/base.html:48
 #, python-format
 msgid "1 条未读消息"
 msgid_plural "%(counter)s 条未读消息"
@@ -1957,7 +1973,7 @@ msgstr "Stop accepting %(role)s tasks"
 msgid "恢复接收%(role)s任务"
 msgstr "Start accepting %(role)s tasks"
 
-#: templates/accounts/member_profile_readonly.html:10 templates/base.html:30
+#: templates/accounts/member_profile_readonly.html:10 templates/base.html:32
 #: templates/discussion/post_form.html:4 templates/discussion/space.html:4
 #: templates/discussion/space.html:18 templates/discussion/space.html:22
 msgid "社团空间"
@@ -2125,21 +2141,21 @@ msgstr "Delete"
 msgid "图册还是空的，从上面选一张图开始。"
 msgstr "Your gallery is empty — start by choosing an image above."
 
-#: templates/base.html:18
+#: templates/base.html:20
 msgid "竞赛社团平台"
 msgstr "Competition Club"
 
-#: templates/base.html:23 templates/home.html:4
+#: templates/base.html:25 templates/home.html:4
 msgid "首页"
 msgstr "Home"
 
-#: templates/base.html:24 templates/content/about.html:4
+#: templates/base.html:26 templates/content/about.html:4
 #: templates/content/about.html:12 templates/content/about.html:16
 #: templates/home.html:72
 msgid "社团简介"
 msgstr "About"
 
-#: templates/base.html:25 templates/content/achievements.html:4
+#: templates/base.html:27 templates/content/achievements.html:4
 #: templates/content/achievements.html:12
 #: templates/content/achievements.html:17 templates/content/award_form.html:12
 #: templates/content/awards.html:17 templates/content/paper_form.html:12
@@ -2148,40 +2164,40 @@ msgstr "About"
 msgid "社团成果"
 msgstr "Achievements"
 
-#: templates/base.html:26 templates/content/showcase.html:4
+#: templates/base.html:28 templates/content/showcase.html:4
 #: templates/content/showcase.html:12 templates/content/showcase.html:16
 #: templates/home.html:74
 msgid "成员风采"
 msgstr "Members"
 
-#: templates/base.html:27 templates/content/page_index.html:4
+#: templates/base.html:29 templates/content/page_index.html:4
 #: templates/content/page_index.html:12 templates/content/page_index.html:16
 #: templates/home.html:75
 msgid "更多页面"
 msgstr "Pages"
 
-#: templates/base.html:38
+#: templates/base.html:40
 msgid "切换到中文"
 msgstr "Switch to Chinese"
 
-#: templates/base.html:40
+#: templates/base.html:42
 msgid "切换到英文"
 msgstr "Switch to English"
 
-#: templates/base.html:47
+#: templates/base.html:49
 msgid "管理后台"
 msgstr "Admin"
 
-#: templates/base.html:50
+#: templates/base.html:52
 msgid "退出"
 msgstr "Log out"
 
-#: templates/base.html:53 templates/home.html:88
+#: templates/base.html:55 templates/home.html:88
 #: templates/registration/login.html:4 templates/registration/login.html:18
 msgid "成员登录"
 msgstr "Member Login"
 
-#: templates/base.html:75
+#: templates/base.html:77
 msgid "账号由管理员统一发放，不开放公开注册"
 msgstr "Accounts are issued by administrators; there is no public sign-up"
 

@@ -22,4 +22,5 @@ urlpatterns = [
     path("patents/", views.patents, name="patents"),
     path("patents/new/", views.patent_create, name="patent_create"),
     path("showcase/", views.showcase, name="showcase"),
+    path("markdown/preview/", views.markdown_preview, name="markdown_preview"),
 ]

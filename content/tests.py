@@ -14,7 +14,7 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.db import IntegrityError, transaction
-from django.test import RequestFactory, TestCase, override_settings
+from django.test import Client, RequestFactory, TestCase, override_settings
 from django.utils import timezone, translation
 from django.utils.functional import Promise
 from django.urls import reverse
@@ -37,6 +37,7 @@ from .models import (
 )
 from .selectors import _choice_value
 from .services import DuplicatePaper, create_paper
+from .views import MARKDOWN_PREVIEW_MAX_CHARS
 from .similarity import find_similar_award, normalize
 from .validators import IMAGE_LIMIT, MAX_IMAGE_MB
 
@@ -2121,16 +2122,20 @@ class PaperNoteHintTests(TestCase):
 
         self.assertIn("见刊年卷期页码、发表日期、录用日期等", body)
 
-    def test_default_hint_is_translated_on_the_english_site(self):
-        # 请求 /en/ 会激活并保留英文；用 override 包住，别把语言留给后面的测试类。
-        with translation.override("en"):
-            body = self.client.get(f"/en{self.url}").content.decode()
+    def test_default_hint_is_a_lazy_translation(self):
+        """默认提示必须是惰性译文；渲染出来的英文不在 CI 上断言。
 
-        self.assertIn(
-            "Publication year/volume/issue/pages, publication date, "
-            "acceptance date, etc.",
-            body,
-        )
+        ``.mo`` 不进版本库、CI 也不编译（见 ``.github/workflows/ci.yml``），
+        请求 ``/en/`` 拿到的仍是中文；拿渲染结果断言英文在 CI 上必然假红。
+        译文本身由 ``core.tests.InterfaceTranslationAcceptanceTests`` 解析
+        ``.po`` 兜底。
+        """
+        from django.utils.functional import Promise
+
+        with translation.override("en"):
+            placeholder = ContentSettings.paper_note_placeholder()
+
+        self.assertIsInstance(placeholder, Promise)
 
     def test_backend_admin_allows_only_one_settings_row(self):
         from django.contrib import admin
@@ -2343,3 +2348,135 @@ class PaperExternalUrlTests(TestCase):
             self.paper("javascript:alert(1)").external_url,
             "https://doi.org/javascript:alert(1)",
         )
+
+
+class MarkdownPreviewTests(TestCase):
+    """输入框旁的「预览」：门槛、拒绝形态与发布后共用同一个渲染器。"""
+
+    def setUp(self):
+        self.member = User.objects.create_user(
+            username="markdown-preview-member",
+            password="Member-Password-123!",
+        )
+        self.member.must_change_password = False
+        self.member.save(update_fields=["must_change_password"])
+        self.url = reverse("content:markdown_preview")
+
+    def test_requires_login(self):
+        response = self.client.post(self.url, {"text": "**粗体**"})
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("accounts:login"), response.url)
+
+    def test_get_is_not_allowed(self):
+        self.client.force_login(self.member)
+        self.assertEqual(self.client.get(self.url).status_code, 405)
+
+    def test_renders_markdown_and_removes_unsafe_html(self):
+        self.client.force_login(self.member)
+        response = self.client.post(
+            self.url,
+            {"text": "# 标题\n\n**粗体**\n\n<script>alert(1)</script>"},
+        )
+        self.assertEqual(response.status_code, 200)
+        html = response.json()["html"]
+        self.assertIn("<h1>标题</h1>", html)
+        self.assertIn("<strong>粗体</strong>", html)
+        self.assertNotIn("<script>", html)
+        self.assertNotIn("alert", html)
+
+    def test_empty_text_returns_empty_html(self):
+        self.client.force_login(self.member)
+        response = self.client.post(self.url, {"text": ""})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"html": ""})
+
+    def test_rejects_text_over_the_limit(self):
+        self.client.force_login(self.member)
+        response = self.client.post(
+            self.url, {"text": "x" * (MARKDOWN_PREVIEW_MAX_CHARS + 1)}
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"error": "too_long"})
+
+    def test_csrf_is_enforced(self):
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(self.member)
+        self.assertEqual(client.post(self.url, {"text": "**粗体**"}).status_code, 403)
+
+
+class MarkdownPreviewWidgetTests(TestCase):
+    """哪些字段带预览标记、按钮文案跟不跟语言走。"""
+
+    def test_front_forms_mark_only_their_markdown_fields(self):
+        for form_class, field_name in (
+            (AwardForm, "winners"),
+            (PaperForm, "abstract"),
+            (PatentForm, "summary"),
+        ):
+            with self.subTest(form=form_class.__name__):
+                form = form_class()
+                self.assertIn(
+                    'data-markdown-preview="1"', str(form[field_name])
+                )
+                self.assertNotIn(
+                    "data-markdown-preview", str(form["title"])
+                )
+
+    def test_widget_renders_the_preview_copy_hooks(self):
+        """只认属性，不认渲染后的英文。
+
+        ``.mo`` 不进版本库、CI 也不编译（见 ``.github/workflows/ci.yml``），
+        渲染出来一律是中文；拿渲染结果断言英文在 CI 上必然假红。译文本身由
+        ``core.tests.InterfaceTranslationAcceptanceTests`` 解析 ``.po`` 兜底。
+        """
+        html = str(PaperForm()["abstract"])
+        for attribute in (
+            "data-preview-label",
+            "data-preview-hide-label",
+            "data-preview-empty",
+            "data-preview-error",
+        ):
+            self.assertIn(attribute, html)
+
+    def test_every_admin_markdown_field_opts_into_preview(self):
+        from django.contrib import admin
+        from django.contrib.auth.models import AnonymousUser
+
+        from notices.admin import NoticeAdmin
+        from notices.models import Notice
+
+        from .admin import (
+            AcademicPaperAdmin,
+            AwardAdmin,
+            ContentPageAdmin,
+            PatentAdmin,
+            ShowcaseAdmin,
+        )
+
+        request = RequestFactory().get("/admin/")
+        request.user = AnonymousUser()
+        cases = (
+            (ContentPageAdmin, ContentPage, "content"),
+            (AwardAdmin, Award, "winners"),
+            (AcademicPaperAdmin, AcademicPaper, "abstract"),
+            (PatentAdmin, Patent, "summary"),
+            (ShowcaseAdmin, Showcase, "intro"),
+            (NoticeAdmin, Notice, "content"),
+        )
+        for model_admin, model, field_name in cases:
+            with self.subTest(admin=model_admin.__name__):
+                form_class = model_admin(model, admin.site).get_form(request)
+                self.assertIn(
+                    'data-markdown-preview="1"', str(form_class()[field_name])
+                )
+
+        # 同一个后台表单里的普通短文本不该被一刀切换成预览框。
+        paper_form = AcademicPaperAdmin(AcademicPaper, admin.site).get_form(request)
+        self.assertNotIn(
+            "data-markdown-preview", str(paper_form()["authors"])
+        )
+
+    def test_base_template_exposes_preview_url(self):
+        response = self.client.get(reverse("accounts:home"))
+        self.assertContains(response, 'name="markdown-preview-url"')
+        self.assertContains(response, "js/markdown_preview.js")

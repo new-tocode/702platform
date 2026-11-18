@@ -380,6 +380,17 @@ textarea { min-height: 88px; resize: vertical; line-height: 1.7; }
 /* 论文「说明」的浅色提示：点进输入框开始编辑就隐去，免得和已输入的内容混在一起。 */
 .hint-input::placeholder { color: var(--ink-3); opacity: 1; }
 .hint-input:focus::placeholder { color: transparent; }
+
+/* Markdown 预览：按钮与面板由 static/js/markdown_preview.js 插在输入框前后，
+   脚本没跑时这两条也不存在。 */
+.markdown-field-toolbar { display: flex; justify-content: flex-end; margin-bottom: 6px; }
+.markdown-preview {
+  margin-top: 10px; padding: 12px 14px;
+  border: 1px solid var(--line); background: var(--surface-2);
+  max-height: 420px; overflow-y: auto; overflow-wrap: anywhere;
+}
+.markdown-preview[hidden] { display: none; }
+.markdown-preview-toggle:disabled { cursor: wait; opacity: 0.65; }
 select[multiple] { min-height: 168px; padding: 6px; }
 select[multiple] option { padding: 4px 6px; }
 select:focus, textarea:focus,
@@ -516,6 +527,8 @@ input[type="file"] { font: inherit; font-size: 13px; color: var(--ink-2); }
 .prose table { margin-bottom: 14px; }
 .prose th, .prose td { border: 1px solid var(--line); padding: 8px 12px; }
 .prose img { display: block; margin: 14px 0; border: 1px solid var(--line); }
+/* 预览面板跟输入框同宽；68ch 的阅读栏宽只留给正文展示。 */
+.prose.markdown-preview { max-width: none; }
 
 /* --- 媒体库 --- */
 .media-grid {

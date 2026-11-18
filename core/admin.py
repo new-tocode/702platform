@@ -1,9 +1,35 @@
 """Shared admin building blocks, plus the read-only view of the audit trail."""
 
+from django import forms
 from django.contrib import admin
 
 from .models import AuditLog
 from .roles import get_role
+from .widgets import MarkdownPreviewTextarea
+
+
+class MarkdownPreviewAdminMixin:
+    """把 ``markdown_fields`` 里的 TextField 换成带预览标记的 textarea。
+
+    字段名单由各 ``ModelAdmin`` 自己给：后台一张表里可能既有 Markdown 正文
+    （通知、页面、摘要），也有普通短文本（作者、发明人、备注），**不能按字段
+    类型一刀切**。替换时保留原 widget 的 ``attrs``——admin 的
+    ``vLargeTextField`` 类、``rows`` 与 ``maxlength`` 都在里面，丢了样式会变。
+    """
+
+    markdown_fields = ()
+
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        formfield = super().formfield_for_dbfield(db_field, request, **kwargs)
+        if (
+            db_field.name in self.markdown_fields
+            and formfield is not None
+            and isinstance(formfield.widget, forms.Textarea)
+        ):
+            formfield.widget = MarkdownPreviewTextarea(
+                attrs=dict(formfield.widget.attrs)
+            )
+        return formfield
 
 
 class ReadOnlyAdminMixin:

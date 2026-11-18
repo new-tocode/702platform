@@ -24,3 +24,10 @@ class DiscussionFormTests(TestCase):
 
         self.assertFalse(post_form.is_valid())
         self.assertFalse(comment_form.is_valid())
+
+    def test_post_content_opts_into_markdown_preview(self):
+        self.assertIn('data-markdown-preview="1"', str(PostForm()["content"]))
+        # 评论只做 linebreaksbr，不是 Markdown——加预览会让两边不一致。
+        self.assertNotIn(
+            "data-markdown-preview", str(CommentForm()["content"])
+        )

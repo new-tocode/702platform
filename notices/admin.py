@@ -9,7 +9,7 @@ import logging
 from django.contrib import admin
 from django.utils.text import Truncator
 
-from core.admin import ReadOnlyAdminMixin
+from core.admin import MarkdownPreviewAdminMixin, ReadOnlyAdminMixin
 from core.audit import record_audit
 
 from .forms import NoticeAdminForm
@@ -21,7 +21,8 @@ logger = logging.getLogger(__name__)
 
 
 @admin.register(Notice)
-class NoticeAdmin(admin.ModelAdmin):
+class NoticeAdmin(MarkdownPreviewAdminMixin, admin.ModelAdmin):
+    markdown_fields = ("content",)
     form = NoticeAdminForm
     fieldsets = (
         (
