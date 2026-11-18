@@ -34,8 +34,8 @@ from .templatetags.rendering import render_markdown
 logger = logging.getLogger(__name__)
 
 #: 预览接受的最大字符数。全站最长的 Markdown 正文字段是 20000
-#: （通知、内容页面、帖子正文），这里按这条上限拒绝更大的输入——端点是公开
-#: 可打的 CPU 入口，不能让它替任意长度的文本跑解析器。
+#: （通知、内容页面、帖子正文），这里按这条上限拒绝更大的输入——这是登录用户
+#: 可以反复调用的 CPU 入口，不能让它替任意长度的文本跑解析器。
 MARKDOWN_PREVIEW_MAX_CHARS = 20000
 
 

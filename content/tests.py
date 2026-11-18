@@ -37,6 +37,7 @@ from .models import (
 )
 from .selectors import _choice_value
 from .services import DuplicatePaper, create_paper
+from .views import MARKDOWN_PREVIEW_MAX_CHARS
 from .similarity import find_similar_award, normalize
 from .validators import IMAGE_LIMIT, MAX_IMAGE_MB
 
@@ -2387,7 +2388,9 @@ class MarkdownPreviewTests(TestCase):
 
     def test_rejects_text_over_the_limit(self):
         self.client.force_login(self.member)
-        response = self.client.post(self.url, {"text": "x" * 20001})
+        response = self.client.post(
+            self.url, {"text": "x" * (MARKDOWN_PREVIEW_MAX_CHARS + 1)}
+        )
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {"error": "too_long"})
 
@@ -2421,20 +2424,43 @@ class MarkdownPreviewWidgetTests(TestCase):
         self.assertIn('data-preview-label="Preview"', html)
         self.assertIn('data-preview-hide-label="Hide preview"', html)
 
-    def test_admin_content_page_opts_into_preview(self):
+    def test_every_admin_markdown_field_opts_into_preview(self):
         from django.contrib import admin
         from django.contrib.auth.models import AnonymousUser
 
-        from .admin import ContentPageAdmin
+        from notices.admin import NoticeAdmin
+        from notices.models import Notice
 
-        model_admin = ContentPageAdmin(ContentPage, admin.site)
+        from .admin import (
+            AcademicPaperAdmin,
+            AwardAdmin,
+            ContentPageAdmin,
+            PatentAdmin,
+            ShowcaseAdmin,
+        )
+
         request = RequestFactory().get("/admin/")
         request.user = AnonymousUser()
-        form_class = model_admin.get_form(request)
-        with translation.override("en"):
-            html = str(form_class()["content"])
-        self.assertIn('data-markdown-preview="1"', html)
-        self.assertIn('data-preview-label="Preview"', html)
+        cases = (
+            (ContentPageAdmin, ContentPage, "content"),
+            (AwardAdmin, Award, "winners"),
+            (AcademicPaperAdmin, AcademicPaper, "abstract"),
+            (PatentAdmin, Patent, "summary"),
+            (ShowcaseAdmin, Showcase, "intro"),
+            (NoticeAdmin, Notice, "content"),
+        )
+        for model_admin, model, field_name in cases:
+            with self.subTest(admin=model_admin.__name__):
+                form_class = model_admin(model, admin.site).get_form(request)
+                self.assertIn(
+                    'data-markdown-preview="1"', str(form_class()[field_name])
+                )
+
+        # 同一个后台表单里的普通短文本不该被一刀切换成预览框。
+        paper_form = AcademicPaperAdmin(AcademicPaper, admin.site).get_form(request)
+        self.assertNotIn(
+            "data-markdown-preview", str(paper_form()["authors"])
+        )
 
     def test_base_template_exposes_preview_url(self):
         response = self.client.get(reverse("accounts:home"))

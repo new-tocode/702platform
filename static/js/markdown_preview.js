@@ -48,16 +48,27 @@
     // 前台字段容器是普通块；Django admin 的字段在 `.flex-container` 里，直接
     // 把按钮插成它的兄弟会被挤成一条竖排文字。后台改插到 `.form-row`：按钮在
     // 整个字段行之上，面板在字段行之下，宽度都跟字段行一致。
+    //
+    // 前台的面板放在 `.field` 之后而不是 textarea 之后：mentions.js 把 @ 菜单
+    // 的定位基准设成 textarea 的父元素（`.field`），面板若在 `.field` 里面，
+    // 展开后菜单会掉到面板下方、离输入框几百像素。放进 `.field-row`（两列
+    // 网格）的字段例外，面板留在字段内，免得成为第三个网格项。
     const host = textarea.parentElement;
     const adminRow = host?.classList.contains("flex-container")
       ? host.closest(".form-row")
       : null;
+    const field = textarea.closest(".field");
     if (adminRow) {
       adminRow.prepend(toolbar);
       adminRow.append(panel);
     } else {
       textarea.before(toolbar);
-      textarea.after(panel);
+      const inGrid = field?.parentElement?.classList.contains("field-row");
+      if (field?.parentElement && !inGrid) {
+        field.after(panel);
+      } else {
+        textarea.after(panel);
+      }
     }
 
     let busy = false;
